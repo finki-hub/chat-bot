@@ -59,7 +59,6 @@ async def chat(
         db=db,
         query=payload.prompt,
         embedding_model=payload.embeddings_model,
-        use_reranker=payload.rerank_documents,
     )
 
     if not context:

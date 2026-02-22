@@ -23,14 +23,12 @@ async def get_retrieved_context(
     query: str,
     embedding_model: Model,
     *,
-    use_reranker: bool,
     initial_k: int = 30,
     top_k: int = 10,
 ) -> str:
     """
-    Performs a retrieval process. If use_reranker is True, it's a two-stage
-    process (vector search + re-ranking). Otherwise, it's a single-stage
-    vector search.
+    Retrieves context via two-stage retrieval: vector search over initial_k candidates
+    followed by cross-encoder reranking, falling back to vector order on failure.
     """
 
     logger.info(
@@ -60,8 +58,6 @@ async def get_retrieved_context(
     logger.info("Transformed query: '%s'", rewritten_query)
     logger.info("HyDE passage: '%s'", hyde_passage)
 
-    retrieval_limit = initial_k if use_reranker else top_k
-
     try:
         query_to_embed = (
             f"passage: {hyde_passage}"
@@ -73,7 +69,7 @@ async def get_retrieved_context(
             db,
             prompt_embedding,
             embedding_model,
-            limit=retrieval_limit,
+            limit=initial_k,
         )
 
         logger.info("Initial candidates retrieved: %d", len(initial_candidates))
@@ -105,45 +101,40 @@ async def get_retrieved_context(
         )
         context_docs.append(full_doc)
 
-    logger.info("Reranking enabled: %s", use_reranker)
+    try:
+        logger.info("Sending %d candidates to re-ranker...", len(rerank_docs))
 
-    if use_reranker:
-        try:
-            logger.info("Sending %d candidates to re-ranker...", len(rerank_docs))
+        rerank_payload = {
+            "query": rewritten_query,
+            "documents": rerank_docs,
+        }
 
-            rerank_payload = {
-                "query": rewritten_query,
-                "documents": rerank_docs,
-            }
+        client = get_http_client()
+        response = await client.post(
+            f"{settings.GPU_API_URL}/rerank/",
+            json=rerank_payload,
+        )
+        response.raise_for_status()
 
-            client = get_http_client()
-            response = await client.post(
-                f"{settings.GPU_API_URL}/rerank/",
-                json=rerank_payload,
-            )
-            response.raise_for_status()
+        ranked = response.json()["reranked_documents"]
 
-            ranked = response.json()["reranked_documents"]
+        rerank_to_context = dict(zip(rerank_docs, context_docs, strict=False))
 
-            rerank_to_context = dict(zip(rerank_docs, context_docs, strict=False))
+        final_docs: list[str] = [
+            rerank_to_context.get(doc, doc)
+            for item in ranked
+            if item["score"] >= RERANKER_MIN_SCORE
+            for doc in (str(item["document"]),)
+        ][:top_k]
 
-            final_docs: list[str] = [
-                rerank_to_context.get(doc, doc)
-                for item in ranked
-                if item["score"] >= RERANKER_MIN_SCORE
-                for doc in (str(item["document"]),)
-            ][:top_k]
-
-            logger.info(
-                "Selected %d documents after reranking and score filtering",
-                len(final_docs),
-            )
-        except Exception:
-            logger.exception(
-                "Reranking call failed. Using vector search order as a fallback",
-            )
-            final_docs = context_docs
-    else:
+        logger.info(
+            "Selected %d documents after reranking and score filtering",
+            len(final_docs),
+        )
+    except Exception:
+        logger.exception(
+            "Reranking call failed. Using vector search order as a fallback",
+        )
         final_docs = context_docs
 
     return "\n\n---\n\n".join(final_docs[:top_k])
