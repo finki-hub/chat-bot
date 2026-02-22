@@ -38,7 +38,7 @@ async def get_retrieved_context(
 
     query = await transform_query(
         query,
-        Model.GPT_4_1_MINI,
+        Model.GPT_4_1_NANO,
         temperature=0.0,
         top_p=1.0,
         max_tokens=512,
