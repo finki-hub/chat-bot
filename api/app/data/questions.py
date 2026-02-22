@@ -156,7 +156,7 @@ async def delete_question_query(db: Database, name: str) -> None:
 
 
 async def get_nth_question_query(db: Database, n: int) -> QuestionSchema | None:
-    query = "SELECT * FROM question OFFSET $1 LIMIT 1 ORDER BY name ASC"
+    query = "SELECT * FROM question ORDER BY name ASC LIMIT 1 OFFSET $1"
     result = await db.fetchrow(query, n)
 
     if result is None:
