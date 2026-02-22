@@ -8,16 +8,18 @@ from langgraph.graph.state import CompiledStateGraph
 
 logger = logging.getLogger(__name__)
 
+_SENTINEL = object()
+
 
 def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
     """Wrap a synchronous token generator as a Server-Sent Events StreamingResponse."""
 
     async def async_token_gen() -> AsyncGenerator[str]:
         while True:
-            chunk = await asyncio.to_thread(next, gen, None)
-            if chunk is None:
+            chunk = await asyncio.to_thread(next, gen, _SENTINEL)
+            if chunk is _SENTINEL:
                 break
-            preserved_chunk = chunk.replace("\n", "\\n")
+            preserved_chunk = str(chunk).replace("\n", "\\n")
             yield f"data: {preserved_chunk}\n\n"
 
     return StreamingResponse(
