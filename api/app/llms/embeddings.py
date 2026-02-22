@@ -136,7 +136,11 @@ async def stream_fill_embeddings(
 
                 try:
                     document_text = f"Наслов: {name}\nСодржина: {row['content']}"
-                    text_to_embed = f"преземи документ: {document_text}"
+                    text_to_embed = (
+                        f"passage: {document_text}"
+                        if current_model == Model.MULTILINGUAL_E5_LARGE
+                        else document_text
+                    )
 
                     embedding = await generate_embeddings(text_to_embed, current_model)
                     await db.execute(
