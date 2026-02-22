@@ -3,6 +3,10 @@ from pydantic import BaseModel, HttpUrl
 from app.data.connection import Database
 from app.schemas.links import CreateLinkSchema, LinkSchema
 
+_LINK_ALLOWED_COLUMNS: frozenset[str] = frozenset(
+    {"name", "url", "description", "user_id"},
+)
+
 
 async def get_links_query(db: Database) -> list[LinkSchema]:
     query = "SELECT * FROM link ORDER BY name ASC"
@@ -57,7 +61,12 @@ async def update_link_query(
     updates: dict,
 ) -> LinkSchema | None:
     if not updates:
-        return None
+        raise ValueError("No fields to update")
+
+    invalid = set(updates) - _LINK_ALLOWED_COLUMNS
+
+    if invalid:
+        raise ValueError(f"Invalid column(s) for update: {invalid}")
 
     for key, value in tuple(updates.items()):
         if isinstance(value, BaseModel):

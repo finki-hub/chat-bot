@@ -16,6 +16,10 @@ from app.schemas.questions import (
 )
 from app.utils.database import embedding_to_pgvector
 
+_QUESTION_ALLOWED_COLUMNS: frozenset[str] = frozenset(
+    {"name", "content", "user_id", "links"},
+)
+
 
 async def get_questions_query(db: Database) -> list[QuestionSchema]:
     query = "SELECT * FROM question ORDER BY name ASC"
@@ -119,6 +123,14 @@ async def update_question_query(
     question: UpdateQuestionSchema,
 ) -> QuestionSchema | None:
     updates = question.model_dump(exclude_unset=True)
+
+    if not updates:
+        raise ValueError("No fields to update")
+
+    invalid = set(updates) - _QUESTION_ALLOWED_COLUMNS
+
+    if invalid:
+        raise ValueError(f"Invalid column(s) for update: {invalid}")
 
     query = "UPDATE question SET "
 
