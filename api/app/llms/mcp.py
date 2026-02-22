@@ -31,10 +31,7 @@ def build_mcp_client() -> MultiServerMCPClient:
 
     connections: dict[str, Connection] = {}
 
-    mcp_http_urls = settings.MCP_HTTP_URLS.split(",") if settings.MCP_HTTP_URLS else []
-    mcp_sse_urls = settings.MCP_SSE_URLS.split(",") if settings.MCP_SSE_URLS else []
-
-    for url in mcp_http_urls:
+    for url in settings.mcp_http_url_list():
         logger.info(
             "Adding streamable HTTP connection to MCP client: %s",
             url,
@@ -46,7 +43,7 @@ def build_mcp_client() -> MultiServerMCPClient:
         }
         connections[url] = streamable_connection
 
-    for url in mcp_sse_urls:
+    for url in settings.mcp_sse_url_list():
         logger.info(
             "Adding SSE connection to MCP client: %s",
             url,

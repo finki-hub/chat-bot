@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -28,3 +29,15 @@ class Settings(BaseSettings):
 
     HOST: str = "0.0.0.0"  # noqa: S104
     PORT: int = 8880
+
+    @field_validator("MCP_HTTP_URLS", "MCP_SSE_URLS", mode="before")
+    @classmethod
+    def parse_comma_separated(cls, v: object) -> str:
+        """Normalise the value to a plain string — empty or comma-separated URLs."""
+        return str(v).strip() if v else ""
+
+    def mcp_http_url_list(self) -> list[str]:
+        return [u for u in self.MCP_HTTP_URLS.split(",") if u]
+
+    def mcp_sse_url_list(self) -> list[str]:
+        return [u for u in self.MCP_SSE_URLS.split(",") if u]
