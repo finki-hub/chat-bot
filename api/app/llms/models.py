@@ -51,6 +51,29 @@ GPU_API_MODELS: dict[Model, str] = {
     Model.QWEN2_5_7B_INSTRUCT: "Qwen/Qwen2.5-7B-Instruct",
 }
 
+CHAT_MODELS: frozenset[Model] = frozenset(
+    {
+        Model.LLAMA_3_3_70B,
+        Model.MISTRAL,
+        Model.DEEPSEEK_R1_70B,
+        Model.QWEN2_5_72B,
+        Model.DOMESTIC_YAK_8B_INSTRUCT_GGUF,
+        Model.VEZILKALLM_GGUF,
+        Model.GPT_4O_MINI,
+        Model.GPT_4_1,
+        Model.GPT_4_1_MINI,
+        Model.GPT_4_1_NANO,
+        Model.GPT_5_2,
+        Model.GPT_5_MINI,
+        Model.GPT_5_NANO,
+        Model.GEMINI_2_5_FLASH,
+        Model.GEMINI_2_5_PRO,
+        Model.GEMINI_3_FLASH_PREVIEW,
+        Model.QWEN2_1_5_B_INSTRUCT,
+        Model.QWEN2_5_7B_INSTRUCT,
+    },
+)
+
 HALFVEC_EMBEDDING_MODELS: frozenset[Model] = frozenset(
     {
         Model.TEXT_EMBEDDING_3_LARGE,

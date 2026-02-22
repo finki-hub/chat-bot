@@ -7,7 +7,7 @@ from app.data.connection import Database
 from app.data.db import get_db
 from app.llms.chat import handle_chat
 from app.llms.context import get_retrieved_context
-from app.llms.models import Model
+from app.llms.models import CHAT_MODELS
 from app.schemas.chat import ChatSchema
 
 logger = logging.getLogger(__name__)
@@ -85,4 +85,4 @@ async def chat(
     },
 )
 def list_models() -> list[str]:
-    return [m.value for m in Model]
+    return sorted(m.value for m in CHAT_MODELS)
