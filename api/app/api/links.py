@@ -1,7 +1,7 @@
 import urllib.parse
 
 from asyncpg import UniqueViolationError
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.data.connection import Database
 from app.data.db import get_db
