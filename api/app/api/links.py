@@ -1,5 +1,6 @@
 import urllib.parse
 
+from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.data.connection import Database
@@ -85,12 +86,13 @@ async def create_link(
     payload: CreateLinkSchema,
     db: Database = db_dep,
 ) -> LinkSchema:
-    if await get_link_by_name_query(db, payload.name):
+    try:
+        created = await create_link_query(db, payload)
+    except UniqueViolationError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Link '{payload.name}' already exists",
-        )
-    created = await create_link_query(db, payload)
+        ) from None
     if not created:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -167,7 +169,7 @@ async def delete_link(
 @router.get(
     "/nth/{n}",
     summary="Get the Nth link",
-    description="Return the Nth link in insertion order (0-based), or 404 if out of range.",
+    description="Return the Nth link in alphabetical order (0-based), or 404 if out of range.",
     response_model=LinkSchema,
     status_code=status.HTTP_200_OK,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Index out of range"}},

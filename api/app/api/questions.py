@@ -1,5 +1,6 @@
 import urllib.parse
 
+from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
@@ -131,12 +132,13 @@ async def create_question(
     payload: CreateQuestionSchema,
     db: Database = db_dep,
 ) -> QuestionSchema:
-    if await get_question_by_name_query(db, payload.name):
+    try:
+        created = await create_question_query(db, payload)
+    except UniqueViolationError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Question '{payload.name}' already exists",
-        )
-    created = await create_question_query(db, payload)
+        ) from None
     if not created:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -221,7 +223,7 @@ async def delete_question(
 @router.get(
     "/nth/{n}",
     summary="Get the Nth question",
-    description="Return the Nth question in insertion order (0-based), 404 if out of range.",
+    description="Return the Nth question in alphabetical order (0-based), 404 if out of range.",
     response_model=QuestionSchema,
     status_code=status.HTTP_200_OK,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Index out of range"}},
