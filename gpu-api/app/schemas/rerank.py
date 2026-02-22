@@ -8,7 +8,14 @@ class RerankRequestSchema(BaseModel):
     )
 
 
+class RankedDocument(BaseModel):
+    document: str = Field(description="The document text.")
+    score: float = Field(
+        description="Relevance score from the cross-encoder (higher is better).",
+    )
+
+
 class RerankResponseSchema(BaseModel):
-    reranked_documents: list[str] = Field(
-        description="The documents reordered by their relevance to the query.",
+    reranked_documents: list[RankedDocument] = Field(
+        description="The documents reordered by relevance score, highest first.",
     )

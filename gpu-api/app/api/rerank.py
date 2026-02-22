@@ -4,7 +4,7 @@ import logging
 from fastapi import APIRouter, status
 
 from app.llms.reranker import rerank_documents
-from app.schemas.rerank import RerankRequestSchema, RerankResponseSchema
+from app.schemas.rerank import RankedDocument, RerankRequestSchema, RerankResponseSchema
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +45,14 @@ async def handle_rerank(payload: RerankRequestSchema) -> RerankResponseSchema:
     if not payload.documents:
         return RerankResponseSchema(reranked_documents=[])
 
-    reranked_list = await asyncio.to_thread(
+    scored_list = await asyncio.to_thread(
         rerank_documents,
         payload.query,
         payload.documents,
     )
 
-    return RerankResponseSchema(reranked_documents=reranked_list)
+    return RerankResponseSchema(
+        reranked_documents=[
+            RankedDocument(document=doc, score=score) for score, doc in scored_list
+        ],
+    )

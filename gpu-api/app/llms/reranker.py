@@ -29,10 +29,12 @@ def init_reranker() -> None:
         logger.info("Reranker model initialized successfully on device: %s", device)
 
 
-def rerank_documents(query: str, documents: list[str]) -> list[str]:
+def rerank_documents(query: str, documents: list[str]) -> list[tuple[float, str]]:
     """
     Re-ranks a list of documents based on their relevance to a query
     using the pre-loaded cross-encoder model.
+
+    Returns a list of (score, document) tuples sorted by score descending.
     """
     logger.info(
         "Reranking %d documents for query: %s",
@@ -41,7 +43,7 @@ def rerank_documents(query: str, documents: list[str]) -> list[str]:
     )
 
     if not documents or not query:
-        return documents
+        return [(0.0, doc) for doc in documents]
     if _reranker_model is None:
         raise ModelNotReadyError
 
@@ -55,4 +57,4 @@ def rerank_documents(query: str, documents: list[str]) -> list[str]:
         reverse=True,
     )
 
-    return [doc for _, doc in scored_docs]
+    return [(float(score), doc) for score, doc in scored_docs]
