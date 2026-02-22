@@ -14,6 +14,7 @@ from app.api.links import router as links_router
 from app.api.questions import router as questions_router
 from app.data.connection import Database
 from app.llms.context import RetrievalError
+from app.utils.http_client import close_http_client, init_http_client
 from app.utils.logger import setup_logging
 from app.utils.settings import Settings
 
@@ -27,16 +28,18 @@ setup_logging(level=settings.LOG_LEVEL)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
-    App startup/shutdown: init DB and run migrations.
+    App startup/shutdown: init DB, shared HTTP client, and run migrations.
     """
     db = Database(dsn=settings.DATABASE_URL)
     app.state.db = db
 
     await db.init()
+    init_http_client()
 
     yield
 
     await db.disconnect()
+    await close_http_client()
 
 
 def make_app(settings: Settings) -> FastAPI:
