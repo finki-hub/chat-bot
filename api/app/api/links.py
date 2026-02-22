@@ -1,7 +1,7 @@
 import urllib.parse
 
 from asyncpg import UniqueViolationError
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.data.connection import Database
 from app.data.db import get_db
@@ -15,8 +15,10 @@ from app.data.links import (
     update_link_query,
 )
 from app.schemas.links import CreateLinkSchema, LinkSchema, UpdateLinkSchema
+from app.utils.auth import verify_api_key
 
 db_dep = Depends(get_db)
+api_key_dep = Depends(verify_api_key)
 
 router = APIRouter(
     prefix="/links",
@@ -79,7 +81,11 @@ async def get_link_by_name(name: str, db: Database = db_dep) -> LinkSchema:
         status.HTTP_400_BAD_REQUEST: {
             "description": "Link already exists or creation failed",
         },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Invalid or missing API Key",
+        },
     },
+    dependencies=[api_key_dep],
     operation_id="createLink",
 )
 async def create_link(
@@ -112,7 +118,9 @@ async def create_link(
             "description": "No updates provided or update failed",
         },
         status.HTTP_404_NOT_FOUND: {"description": "Link not found"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "Invalid or missing API Key"},
     },
+    dependencies=[api_key_dep],
     operation_id="updateLink",
 )
 async def update_link(
@@ -148,7 +156,11 @@ async def update_link(
     description="Delete the link, and return the deleted record.",
     response_model=LinkSchema,
     status_code=status.HTTP_200_OK,
-    responses={status.HTTP_404_NOT_FOUND: {"description": "Link not found"}},
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Link not found"},
+        status.HTTP_401_UNAUTHORIZED: {"description": "Invalid or missing API Key"},
+    },
+    dependencies=[api_key_dep],
     operation_id="deleteLink",
 )
 async def delete_link(
