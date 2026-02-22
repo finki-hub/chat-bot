@@ -5,13 +5,13 @@ from fastapi import HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from app.llms.models import Model
-from app.llms.qwen2_1_5_b_instruct import stream_qwen2_response
+from app.llms.qwen2_1_5_b_instruct import stream_qwen2_1_5b_response
 from app.llms.qwen2_5_7b_instruct import stream_qwen2_5_7b_response
 
 logger = logging.getLogger(__name__)
 
 streamers = {
-    Model.QWEN2_1_5_B_INSTRUCT: stream_qwen2_response,
+    Model.QWEN2_1_5_B_INSTRUCT: stream_qwen2_1_5b_response,
     Model.QWEN2_5_7B_INSTRUCT: stream_qwen2_5_7b_response,
 }
 
@@ -51,7 +51,8 @@ async def stream_response(
             top_p=top_p,
             max_tokens=max_tokens,
         ):
-            yield f"data: {token}\n\n"
+            preserved = token.replace("\n", "\\n")
+            yield f"data: {preserved}\n\n"
 
     return StreamingResponse(
         _sse_generator(),
