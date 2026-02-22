@@ -47,7 +47,8 @@ async def generate_embeddings(
     Pass is_document=True when indexing documents (only affects Gemini task_type).
     """
 
-    logger.info("Generating embeddings for text: '%s'", text[:100])
+    log_preview = text[:100] if isinstance(text, str) else f"[list of {len(text)} items]"
+    logger.info("Generating embeddings for text: '%s'", log_preview)
 
     match model:
         case Model.LLAMA_3_3_70B | Model.BGE_M3:
