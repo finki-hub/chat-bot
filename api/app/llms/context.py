@@ -49,7 +49,11 @@ async def get_retrieved_context(
     retrieval_limit = initial_k if use_reranker else top_k
 
     try:
-        query_to_embed = f"пребарување: {query}"
+        query_to_embed = (
+            f"query: {query}"
+            if embedding_model == Model.MULTILINGUAL_E5_LARGE
+            else query
+        )
         prompt_embedding = await generate_embeddings(query_to_embed, embedding_model)
         initial_candidates = await get_closest_questions(
             db,
@@ -67,7 +71,19 @@ async def get_retrieved_context(
         raise RetrievalError("Failed during initial vector search") from e
 
     candidate_docs = [
-        f"Наслов: {q.name}\nСодржина: {q.content}" for q in initial_candidates
+        "\n".join(
+            filter(
+                None,
+                [
+                    f"Наслов: {q.name}",
+                    f"Содржина: {q.content}",
+                    ("Извори: " + ", ".join(f"{k}: {v}" for k, v in q.links.items()))
+                    if q.links
+                    else None,
+                ],
+            ),
+        )
+        for q in initial_candidates
     ]
 
     logger.info("Reranking enabled: %s", use_reranker)
