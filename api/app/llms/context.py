@@ -41,7 +41,7 @@ async def get_retrieved_context(
         Model.GPT_4_1_NANO,
         temperature=0.0,
         top_p=1.0,
-        max_tokens=512,
+        max_tokens=128,
     )
 
     logger.info("Transformed query: '%s'", query)
