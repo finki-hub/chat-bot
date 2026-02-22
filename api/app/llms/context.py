@@ -6,6 +6,7 @@ from app.data.connection import Database
 from app.data.questions import get_closest_questions
 from app.llms.embeddings import generate_embeddings
 from app.llms.models import Model
+from app.llms.prompts import HYDE_SYSTEM_PROMPT
 from app.llms.query_transform import transform_query
 from app.utils.exceptions import RetrievalError
 from app.utils.settings import Settings
@@ -36,7 +37,7 @@ async def get_retrieved_context(
         embedding_model,
     )
 
-    query = await transform_query(
+    rewritten_query = await transform_query(
         query,
         Model.GPT_4_1_NANO,
         temperature=0.0,
@@ -44,15 +45,26 @@ async def get_retrieved_context(
         max_tokens=128,
     )
 
-    logger.info("Transformed query: '%s'", query)
+    logger.info("Transformed query: '%s'", rewritten_query)
+
+    hyde_passage = await transform_query(
+        rewritten_query,
+        Model.GPT_4_1_NANO,
+        system_prompt=HYDE_SYSTEM_PROMPT,
+        temperature=0.7,
+        top_p=0.9,
+        max_tokens=200,
+    )
+
+    logger.info("HyDE passage: '%s'", hyde_passage)
 
     retrieval_limit = initial_k if use_reranker else top_k
 
     try:
         query_to_embed = (
-            f"query: {query}"
+            f"passage: {hyde_passage}"
             if embedding_model == Model.MULTILINGUAL_E5_LARGE
-            else query
+            else hyde_passage
         )
         prompt_embedding = await generate_embeddings(query_to_embed, embedding_model)
         initial_candidates = await get_closest_questions(
@@ -93,7 +105,7 @@ async def get_retrieved_context(
             logger.info("Sending %d candidates to re-ranker...", len(candidate_docs))
 
             rerank_payload = {
-                "query": query,
+                "query": rewritten_query,
                 "documents": candidate_docs,
             }
 
