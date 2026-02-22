@@ -6,6 +6,7 @@ import httpx
 from fastapi.responses import StreamingResponse
 
 from app.llms.models import GPU_API_MODELS, Model
+from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -33,19 +34,18 @@ async def generate_gpu_api_embeddings(
         "embeddings_model": GPU_API_MODELS[model],
     }
 
-    async with httpx.AsyncClient(timeout=300) as client:
-        response = await client.post(
-            gpu_api_url,
-            json=payload,
-            headers={"Content-Type": "application/json"},
-        )
+    client = get_http_client()
+    response = await client.post(
+        gpu_api_url,
+        json=payload,
+        headers={"Content-Type": "application/json"},
+        timeout=300,
+    )
 
-        response.raise_for_status()
+    response.raise_for_status()
 
-        result = response.json()
-        embeddings = result.get("embeddings")
-
-        return embeddings
+    result = response.json()
+    return result.get("embeddings")
 
 
 def stream_gpu_api_response(
