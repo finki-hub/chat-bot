@@ -37,7 +37,7 @@ class ChatSchema(BaseModel):
         ),
     )
     temperature: float = Field(
-        0.7,
+        0.3,
         ge=0.0,
         le=1.0,
         examples=[0.7],
