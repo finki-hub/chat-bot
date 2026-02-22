@@ -27,7 +27,7 @@ async def get_questions_query(db: Database) -> list[QuestionSchema]:
             name=row["name"],
             content=row["content"],
             user_id=row["user_id"],
-            links=json.loads(row["links"]),
+            links=json.loads(row["links"]) if row["links"] else {},
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
@@ -54,7 +54,7 @@ async def get_question_by_name_query(db: Database, name: str) -> QuestionSchema 
         name=result["name"],
         content=result["content"],
         user_id=result["user_id"],
-        links=json.loads(result["links"]),
+        links=json.loads(result["links"]) if result["links"] else {},
         created_at=result["created_at"],
         updated_at=result["updated_at"],
     )
@@ -74,7 +74,7 @@ async def get_questions_without_embeddings_query(
             name=row["name"],
             content=row["content"],
             user_id=row["user_id"],
-            links=json.loads(row["links"]),
+            links=json.loads(row["links"]) if row["links"] else {},
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
@@ -107,7 +107,7 @@ async def create_question_query(
         name=result["name"],
         content=result["content"],
         user_id=result["user_id"],
-        links=json.loads(result["links"]),
+        links=json.loads(result["links"]) if result["links"] else {},
         created_at=result["created_at"],
         updated_at=result["updated_at"],
     )
@@ -144,7 +144,7 @@ async def update_question_query(
         name=result["name"],
         content=result["content"],
         user_id=result["user_id"],
-        links=json.loads(result["links"]),
+        links=json.loads(result["links"]) if result["links"] else {},
         created_at=result["created_at"],
         updated_at=result["updated_at"],
     )
@@ -167,7 +167,7 @@ async def get_nth_question_query(db: Database, n: int) -> QuestionSchema | None:
         name=result["name"],
         content=result["content"],
         user_id=result["user_id"],
-        links=json.loads(result["links"]),
+        links=json.loads(result["links"]) if result["links"] else {},
         created_at=result["created_at"],
         updated_at=result["updated_at"],
     )
