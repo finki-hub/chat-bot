@@ -112,20 +112,22 @@ async def stream_fill_embeddings(
             *questions,
         )
 
+    total_tasks: int
+
+    if question_rows:
+        total_tasks = len(question_rows) * len(models_to_process)
+    else:
+        total_tasks = 0
+        for m in models_to_process:
+            col = MODEL_EMBEDDINGS_COLUMNS[m]
+            count_result = await db.fetchval(
+                f"SELECT COUNT(*) FROM question WHERE {col} IS NULL",  # noqa: S608
+            )
+            if isinstance(count_result, int | str):
+                total_tasks += int(count_result)
+
     async def _gen() -> AsyncGenerator[str]:
         progress_counter = 0
-        total_tasks = 0
-
-        if question_rows:
-            total_tasks = len(question_rows) * len(models_to_process)
-        else:
-            for m in models_to_process:
-                col = MODEL_EMBEDDINGS_COLUMNS[m]
-                count_result = await db.fetchval(
-                    f"SELECT COUNT(*) FROM question WHERE {col} IS NULL",  # noqa: S608
-                )
-                if isinstance(count_result, int | str):
-                    total_tasks += int(count_result)
 
         for current_model in models_to_process:
             model_column = MODEL_EMBEDDINGS_COLUMNS[current_model]
