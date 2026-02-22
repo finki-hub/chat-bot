@@ -174,8 +174,8 @@ async def stream_google_agent_response(
         agent = create_agent(llm, tools)
 
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
         ]
 
         return StreamingResponse(

@@ -5,13 +5,13 @@ from typing import overload
 
 from fastapi.responses import StreamingResponse
 from langchain.agents import create_agent
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic import SecretStr
 
 from app.llms.agents import create_agent_token_generator, stream_sync_gen_as_sse
 from app.llms.mcp import build_mcp_client
 from app.llms.models import Model
-from app.llms.prompts import stitch_system_user
 from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -120,10 +120,14 @@ def stream_openai_response(
     )
 
     llm = get_openai_llm(model, temperature, top_p, max_tokens)
-    full_prompt = stitch_system_user(system_prompt, user_prompt)
+
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_prompt),
+    ]
 
     def sync_token_gen() -> Generator[str]:
-        for chunk in llm.stream(full_prompt):
+        for chunk in llm.stream(messages):
             yield str(chunk.content)
 
     return stream_sync_gen_as_sse(sync_token_gen())
@@ -162,8 +166,8 @@ async def stream_openai_agent_response(
         agent = create_agent(llm, tools)
 
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
         ]
 
         return StreamingResponse(
@@ -210,8 +214,8 @@ async def transform_query_with_openai(
         llm = get_openai_llm(model, temperature, top_p, max_tokens)
 
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": query},
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=query),
         ]
 
         response = await llm.ainvoke(messages)

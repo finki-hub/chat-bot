@@ -5,6 +5,7 @@ from typing import overload
 
 from fastapi.responses import StreamingResponse
 from langchain.agents import create_agent
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 from app.llms.agents import create_agent_token_generator, stream_sync_gen_as_sse
@@ -160,8 +161,8 @@ async def stream_ollama_agent_response(
         agent = create_agent(llm, tools)
 
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
         ]
 
         return StreamingResponse(

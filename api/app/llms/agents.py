@@ -3,7 +3,7 @@ import logging
 from collections.abc import AsyncGenerator, Generator
 
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessageChunk
+from langchain_core.messages import AIMessageChunk, BaseMessage
 from langgraph.graph.state import CompiledStateGraph
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
 
 async def create_agent_token_generator(
     agent: CompiledStateGraph,
-    messages: list[dict[str, str]],
+    messages: list[BaseMessage],
 ) -> AsyncGenerator[str]:
     """Generate SSE tokens from an agent stream."""
     try:
