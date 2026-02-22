@@ -24,10 +24,10 @@ def build_mcp_client() -> MultiServerMCPClient:
     """
     global mcp_client  # noqa: PLW0603
 
-    logger.info("Building MCP client...")
-
     if mcp_client is not None:
         return mcp_client
+
+    logger.info("Building MCP client...")
 
     connections: dict[str, Connection] = {}
 
