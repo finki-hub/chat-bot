@@ -1,4 +1,5 @@
 import logging
+import time
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.sessions import (
@@ -14,6 +15,8 @@ logger = logging.getLogger(__name__)
 settings = Settings()
 
 mcp_client: MultiServerMCPClient | None = None
+mcp_tools: list | None = None
+mcp_tools_fetched_at: float = 0.0
 
 
 def build_mcp_client() -> MultiServerMCPClient:
@@ -64,3 +67,31 @@ def build_mcp_client() -> MultiServerMCPClient:
     mcp_client = MultiServerMCPClient(connections=connections)
 
     return mcp_client
+
+
+async def get_mcp_tools() -> list:
+    """
+    Return a cached list of MCP tools, refreshing after MCP_TOOLS_TTL seconds.
+    This avoids creating a new MCP session on every request while still picking
+    up newly registered tools once the TTL expires.
+    """
+    global mcp_tools, mcp_tools_fetched_at  # noqa: PLW0603
+
+    now = time.monotonic()
+    ttl = settings.MCP_TOOLS_TTL
+
+    if mcp_tools is not None and (now - mcp_tools_fetched_at) < ttl:
+        return mcp_tools
+
+    client = build_mcp_client()
+    mcp_tools = await client.get_tools()
+    mcp_tools_fetched_at = now
+
+    logger.info(
+        "Fetched and cached %d MCP tools (TTL=%ds): %s",
+        len(mcp_tools),
+        ttl,
+        ", ".join(tool.name for tool in mcp_tools) if mcp_tools else "None",
+    )
+
+    return mcp_tools

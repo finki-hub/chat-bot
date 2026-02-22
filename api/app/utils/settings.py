@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     GPU_API_URL: str = "http://gpu-api:8888"
     MCP_HTTP_URLS: str = ""
     MCP_SSE_URLS: str = ""
+    MCP_TOOLS_TTL: int = 3600
 
     API_KEY: str = "your_api_key_here"
     DATABASE_URL: str = "postgresql+asyncpg://user:password@host:port/db"

@@ -10,7 +10,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic import SecretStr
 
 from app.llms.agents import create_agent_token_generator, stream_sync_gen_as_sse
-from app.llms.mcp import build_mcp_client
+from app.llms.mcp import get_mcp_tools
 from app.llms.models import Model
 from app.utils.settings import Settings
 
@@ -155,8 +155,7 @@ async def stream_openai_agent_response(
     try:
         llm = get_openai_llm(model, temperature, top_p, max_tokens)
 
-        client = build_mcp_client()
-        tools = await client.get_tools()
+        tools = await get_mcp_tools()
 
         logger.info(
             "Available tools: %s",
