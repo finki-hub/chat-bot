@@ -13,6 +13,11 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
+_STREAMING_TIMEOUT = httpx.Timeout(timeout=300.0)
+_SSE_ERROR_MESSAGE = (
+    "data: An error occurred while processing your request. Please try again.\n\n"
+)
+
 
 async def generate_gpu_api_embeddings(
     text: str | list[str],
@@ -45,7 +50,12 @@ async def generate_gpu_api_embeddings(
     response.raise_for_status()
 
     result = response.json()
-    return result.get("embeddings")
+    embeddings = result.get("embeddings")
+
+    if embeddings is None:
+        raise ValueError(f"GPU API response missing 'embeddings' key: {result}")
+
+    return embeddings
 
 
 def stream_gpu_api_response(
@@ -59,6 +69,7 @@ def stream_gpu_api_response(
 ) -> StreamingResponse:
     """
     Stream a response from the GPU API service.
+    Reuses the shared HTTP client with a per-request streaming timeout.
     """
     logger.info(
         "Streaming GPU API response for user prompt length: '%d' with model: %s",
@@ -78,16 +89,15 @@ def stream_gpu_api_response(
     }
 
     async def stream_from_gpu_api() -> AsyncGenerator[str]:
+        client = get_http_client()
         try:
-            async with (
-                httpx.AsyncClient(timeout=300) as client,
-                client.stream(
-                    "POST",
-                    gpu_api_url,
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
-                ) as response,
-            ):
+            async with client.stream(
+                "POST",
+                gpu_api_url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=_STREAMING_TIMEOUT,
+            ) as response:
                 if response.status_code != 200:
                     error_text = await response.aread()
                     logger.error(
@@ -95,7 +105,7 @@ def stream_gpu_api_response(
                         response.status_code,
                         error_text.decode(),
                     )
-                    yield "data: An error occurred while processing your request. Please try again.\n\n"
+                    yield _SSE_ERROR_MESSAGE
                     return
 
                 async for chunk in response.aiter_bytes():
@@ -104,14 +114,14 @@ def stream_gpu_api_response(
 
         except httpx.RequestError:
             logger.exception("Connection error to GPU API")
-            yield "data: An error occurred while processing your request. Please try again.\n\n"
+            yield _SSE_ERROR_MESSAGE
         except asyncio.CancelledError:
             logger.exception("Streaming cancelled from GPU API")
 
             raise
         except Exception:
             logger.exception("Unexpected error while streaming from GPU API")
-            yield "data: An error occurred while processing your request. Please try again.\n\n"
+            yield _SSE_ERROR_MESSAGE
 
     return StreamingResponse(
         stream_from_gpu_api(),
