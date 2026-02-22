@@ -37,23 +37,26 @@ async def get_retrieved_context(
         embedding_model,
     )
 
-    rewritten_query, hyde_passage = await asyncio.gather(
-        transform_query(
-            query,
-            Model.GPT_4_1_NANO,
-            temperature=0.0,
-            top_p=1.0,
-            max_tokens=128,
-        ),
-        transform_query(
-            query,
-            Model.GPT_4_1_NANO,
-            system_prompt=HYDE_SYSTEM_PROMPT,
-            temperature=0.7,
-            top_p=0.9,
-            max_tokens=200,
-        ),
-    )
+    try:
+        rewritten_query, hyde_passage = await asyncio.gather(
+            transform_query(
+                query,
+                Model.GPT_4_1_NANO,
+                temperature=0.0,
+                top_p=1.0,
+                max_tokens=128,
+            ),
+            transform_query(
+                query,
+                Model.GPT_4_1_NANO,
+                system_prompt=HYDE_SYSTEM_PROMPT,
+                temperature=0.7,
+                top_p=0.9,
+                max_tokens=200,
+            ),
+        )
+    except Exception as e:
+        raise RetrievalError("Failed during query transform / HyDE generation") from e
 
     logger.info("Transformed query: '%s'", rewritten_query)
     logger.info("HyDE passage: '%s'", hyde_passage)
