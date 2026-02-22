@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 async def generate_embeddings(
     text: str,
     model: Model,
+    *,
+    is_document: bool = ...,
 ) -> list[float]: ...
 
 
@@ -29,15 +31,20 @@ async def generate_embeddings(
 async def generate_embeddings(
     text: list[str],
     model: Model,
+    *,
+    is_document: bool = ...,
 ) -> list[list[float]]: ...
 
 
 async def generate_embeddings(
     text: str | list[str],
     model: Model,
+    *,
+    is_document: bool = False,
 ) -> list[float] | list[list[float]]:
     """
     Generate embeddings for the given text using the specified model.
+    Pass is_document=True when indexing documents (only affects Gemini task_type).
     """
 
     logger.info("Generating embeddings for text: '%s'", text[:100])
@@ -50,7 +57,11 @@ async def generate_embeddings(
             return await generate_openai_embeddings(text, model)
 
         case Model.GEMINI_EMBEDDING_001:
-            return await generate_google_embeddings(text, model)
+            return await generate_google_embeddings(
+                text,
+                model,
+                is_document=is_document,
+            )
 
         case Model.MULTILINGUAL_E5_LARGE | Model.BGE_M3_LOCAL:
             return await generate_gpu_api_embeddings(text, model)
@@ -142,7 +153,11 @@ async def stream_fill_embeddings(
                         else document_text
                     )
 
-                    embedding = await generate_embeddings(text_to_embed, current_model)
+                    embedding = await generate_embeddings(
+                        text_to_embed,
+                        current_model,
+                        is_document=True,
+                    )
                     await db.execute(
                         f"UPDATE question SET {model_column} = $1 WHERE id = $2",  # noqa: S608
                         embedding_to_pgvector(embedding),

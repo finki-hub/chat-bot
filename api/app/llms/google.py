@@ -20,20 +20,28 @@ settings = Settings()
 
 # Model, temperature, top_p, max_tokens -> LLM
 google_llm_clients: dict[tuple[str, float, float, int], ChatGoogleGenerativeAI] = {}
-google_embedders: dict[str, GoogleGenerativeAIEmbeddings] = {}
+# Model, is_document -> Embedder
+google_embedders: dict[tuple[str, bool], GoogleGenerativeAIEmbeddings] = {}
 
 
-def get_google_embedder(model: Model) -> GoogleGenerativeAIEmbeddings:
+def get_google_embedder(
+    model: Model,
+    *,
+    is_document: bool = False,
+) -> GoogleGenerativeAIEmbeddings:
     """
     Return a singleton GoogleGenerativeAIEmbeddings instance for the specified model.
     If the model is not already in the cache, create a new instance.
+    Uses task_type='RETRIEVAL_DOCUMENT' when indexing, 'RETRIEVAL_QUERY' when searching.
     """
-    key = model.value
+    key = (model.value, is_document)
 
     if key not in google_embedders:
+        task_type = "RETRIEVAL_DOCUMENT" if is_document else "RETRIEVAL_QUERY"
         google_embedders[key] = GoogleGenerativeAIEmbeddings(
             model=model.value,
             api_key=SecretStr(settings.GOOGLE_API_KEY),
+            task_type=task_type,
         )
 
     return google_embedders[key]
@@ -67,6 +75,8 @@ def get_google_llm(
 async def generate_google_embeddings(
     text: str,
     model: Model,
+    *,
+    is_document: bool = ...,
 ) -> list[float]: ...
 
 
@@ -74,12 +84,16 @@ async def generate_google_embeddings(
 async def generate_google_embeddings(
     text: list[str],
     model: Model,
+    *,
+    is_document: bool = ...,
 ) -> list[list[float]]: ...
 
 
 async def generate_google_embeddings(
     text: str | list[str],
     model: Model,
+    *,
+    is_document: bool = False,
 ) -> list[float] | list[list[float]]:
     """
     Generate embeddings for the given text using the specified Google model.
@@ -92,7 +106,7 @@ async def generate_google_embeddings(
         model.value,
     )
 
-    emb = get_google_embedder(model)
+    emb = get_google_embedder(model, is_document=is_document)
 
     if isinstance(text, str):
         return await asyncio.to_thread(emb.embed_query, text)
