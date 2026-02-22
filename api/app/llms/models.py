@@ -57,3 +57,12 @@ HALFVEC_EMBEDDING_MODELS: frozenset[Model] = frozenset(
         Model.GEMINI_EMBEDDING_001,
     },
 )
+
+MODEL_DISTANCE_THRESHOLDS: dict[Model, float] = {
+    Model.BGE_M3: 0.4,
+    Model.BGE_M3_LOCAL: 0.4,
+    Model.MULTILINGUAL_E5_LARGE: 0.45,
+    Model.TEXT_EMBEDDING_3_LARGE: 0.35,
+    Model.GEMINI_EMBEDDING_001: 0.35,
+    Model.LLAMA_3_3_70B: 0.5,
+}

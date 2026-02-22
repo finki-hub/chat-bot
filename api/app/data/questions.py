@@ -3,7 +3,12 @@
 import json
 
 from app.data.connection import Database
-from app.llms.models import HALFVEC_EMBEDDING_MODELS, MODEL_EMBEDDINGS_COLUMNS, Model
+from app.llms.models import (
+    HALFVEC_EMBEDDING_MODELS,
+    MODEL_DISTANCE_THRESHOLDS,
+    MODEL_EMBEDDINGS_COLUMNS,
+    Model,
+)
 from app.schemas.questions import (
     CreateQuestionSchema,
     QuestionSchema,
@@ -173,9 +178,12 @@ async def get_closest_questions(
     embedded_query: list[float],
     model: Model,
     limit: int = 8,
-    threshold: float = 0.5,
+    threshold: float | None = None,
 ) -> list[QuestionSchema]:
     embedding_column = MODEL_EMBEDDINGS_COLUMNS[model]
+
+    if threshold is None:
+        threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
 
     if model in HALFVEC_EMBEDDING_MODELS:
         dims = len(embedded_query)
