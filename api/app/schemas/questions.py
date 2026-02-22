@@ -91,6 +91,7 @@ class UpdateQuestionSchema(BaseModel):
 
 class FillEmbeddingsSchema(BaseModel):
     embeddings_model: Model = Field(
+        default=DEFAULT_EMBEDDINGS_MODEL,
         examples=[DEFAULT_EMBEDDINGS_MODEL.value],
         description="Which embedding model to use",
     )

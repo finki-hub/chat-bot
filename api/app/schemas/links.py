@@ -56,18 +56,22 @@ class CreateLinkSchema(BaseModel):
 
 class UpdateLinkSchema(BaseModel):
     name: str | None = Field(
+        default=None,
         description="New key/title for the link",
         examples=["example-updated"],
     )
     url: HttpUrl | None = Field(
+        default=None,
         description="New destination URL",
         examples=["https://example.org"],
     )
     description: str | None = Field(
+        default=None,
         description="Updated description",
         examples=["An updated example site"],
     )
     user_id: str | None = Field(
+        default=None,
         description="Updated user ID for the link",
         examples=["user_456"],
     )
