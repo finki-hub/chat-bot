@@ -1,8 +1,8 @@
 import logging
 
-from langchain_mcp_adapters.client import (  # type: ignore[import-untyped]
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.sessions import (
     Connection,
-    MultiServerMCPClient,
     SSEConnection,
     StreamableHttpConnection,
 )
