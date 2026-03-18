@@ -2,8 +2,9 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from typing import Any, overload
+from typing import overload
 
+from asyncpg import Record
 from fastapi import HTTPException, status
 from fastapi.responses import StreamingResponse
 
@@ -121,7 +122,7 @@ async def _count_unfilled_tasks(
 
 async def _process_question_row(
     db: Database,
-    row: Any,
+    row: Record,
     current_model: Model,
     model_column: str,
 ) -> tuple[str, str]:
@@ -172,7 +173,11 @@ async def stream_fill_embeddings(
     )
 
     models_to_process = _resolve_models(model, all_models=all_models)
-    question_rows = await _fetch_question_rows(db, questions, all_questions=all_questions)
+    question_rows = await _fetch_question_rows(
+        db,
+        questions,
+        all_questions=all_questions,
+    )
 
     if question_rows:
         total_tasks = len(question_rows) * len(models_to_process)
@@ -192,7 +197,10 @@ async def stream_fill_embeddings(
             for row in rows_for_this_model:
                 progress_counter += 1
                 result, error_detail = await _process_question_row(
-                    db, row, current_model, model_column,
+                    db,
+                    row,
+                    current_model,
+                    model_column,
                 )
 
                 payload = {
