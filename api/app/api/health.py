@@ -21,7 +21,6 @@ router = APIRouter(
     "/",
     summary="API Status",
     description="Returns a simple message if the API is up.",
-    response_model=RootStatus,
     status_code=status.HTTP_200_OK,
     response_description="A one-line liveness confirmation",
     operation_id="getApiStatus",

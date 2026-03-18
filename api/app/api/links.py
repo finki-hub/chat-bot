@@ -31,7 +31,6 @@ router = APIRouter(
     "/list",
     summary="List all links",
     description="Return a list of all stored links.",
-    response_model=list[LinkSchema],
     status_code=status.HTTP_200_OK,
     operation_id="listLinks",
 )
@@ -43,7 +42,6 @@ async def list_links(db: Database = db_dep) -> list[LinkSchema]:
     "/names",
     summary="List link names",
     description="Return only the names (keys) of all stored links.",
-    response_model=list[str],
     status_code=status.HTTP_200_OK,
     operation_id="listLinkNames",
 )
@@ -55,7 +53,6 @@ async def list_link_names(db: Database = db_dep) -> list[str]:
     "/name/{name:path}",
     summary="Fetch a link by name",
     description="Return the matching link, or 404 if not found.",
-    response_model=LinkSchema,
     status_code=status.HTTP_200_OK,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Link not found"}},
     operation_id="getLinkByName",
@@ -75,7 +72,6 @@ async def get_link_by_name(name: str, db: Database = db_dep) -> LinkSchema:
     "/",
     summary="Create a new link",
     description="Create a link with a unique name. Returns 400 if name already exists.",
-    response_model=LinkSchema,
     status_code=status.HTTP_201_CREATED,
     responses={
         status.HTTP_400_BAD_REQUEST: {
@@ -111,7 +107,6 @@ async def create_link(
     "/{name:path}",
     summary="Update an existing link",
     description="Apply partial updates, or 404 if missing.",
-    response_model=LinkSchema,
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_400_BAD_REQUEST: {
@@ -154,7 +149,6 @@ async def update_link(
     "/{name:path}",
     summary="Delete a link",
     description="Delete the link, and return the deleted record.",
-    response_model=LinkSchema,
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Link not found"},
@@ -182,7 +176,6 @@ async def delete_link(
     "/nth/{n}",
     summary="Get the Nth link",
     description="Return the Nth link in alphabetical order (0-based), or 404 if out of range.",
-    response_model=LinkSchema,
     status_code=status.HTTP_200_OK,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Index out of range"}},
     operation_id="getNthLink",

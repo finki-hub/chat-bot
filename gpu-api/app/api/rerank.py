@@ -21,7 +21,6 @@ router = APIRouter(
         "Accepts a query and a list of documents, and returns them re-ordered "
         "by their semantic relevance to the query."
     ),
-    response_model=RerankResponseSchema,
     status_code=status.HTTP_200_OK,
     operation_id="rerankDocuments",
     responses={

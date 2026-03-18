@@ -17,7 +17,6 @@ router = APIRouter(
     "/",
     summary="Service Status",
     description="Simple liveness probe; returns 200 if the service is up.",
-    response_model=RootStatus,
     status_code=status.HTTP_200_OK,
     response_description="One-line status message",
     operation_id="gpuApiStatus",

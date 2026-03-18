@@ -71,7 +71,6 @@ async def chat(
     "/models",
     summary="List available LLM models",
     description="Retrieve a list of all available LLM models for chat.",
-    response_model=list[str],
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_200_OK: {

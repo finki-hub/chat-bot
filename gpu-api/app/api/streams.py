@@ -41,7 +41,7 @@ async def stream(
         or "Ти си љубезен асистент кој помага на корисникот со неговите прашања."
     )
 
-    return await stream_response(
+    return stream_response(
         user_prompt=payload.prompt,
         model=payload.inference_model,
         system_prompt=system_prompt,

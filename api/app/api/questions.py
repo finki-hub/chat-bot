@@ -1,4 +1,5 @@
 import urllib.parse
+from typing import Annotated
 
 from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -44,7 +45,6 @@ router = APIRouter(
     "/list",
     summary="List all questions",
     description="Returns a list of all stored questions.",
-    response_model=list[QuestionSchema],
     status_code=status.HTTP_200_OK,
     operation_id="listQuestions",
 )
@@ -56,7 +56,6 @@ async def list_questions(db: Database = db_dep) -> list[QuestionSchema]:
     "/names",
     summary="List question names",
     description="Returns only the names of all stored questions.",
-    response_model=list[str],
     status_code=status.HTTP_200_OK,
     operation_id="listQuestionNames",
 )
@@ -68,13 +67,12 @@ async def list_question_names(db: Database = db_dep) -> list[str]:
     "/closest",
     summary="Find closest questions",
     description="Given a query and an embedding model, return the top N closest question names.",
-    response_model=list[QuestionSchema],
     status_code=status.HTTP_200_OK,
     responses={status.HTTP_404_NOT_FOUND: {"description": "No questions found"}},
     operation_id="getClosestQuestions",
 )
 async def closest_questions(
-    params: ClosestQuestionsSchema = Depends(),  # noqa: B008
+    params: Annotated[ClosestQuestionsSchema, Depends()],
     db: Database = db_dep,
 ) -> list[QuestionSchema]:
     prompt_embedding = await generate_embeddings(params.prompt, params.embeddings_model)
@@ -92,7 +90,6 @@ async def closest_questions(
     "/name/{name:path}",
     summary="Get question by name",
     description="Return the matching question, 404 if not found.",
-    response_model=QuestionSchema,
     status_code=status.HTTP_200_OK,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Question not found"}},
     operation_id="getQuestionByName",
@@ -115,7 +112,6 @@ async def get_question_by_name(
     "/",
     summary="Create a new question",
     description="Insert a new question. 400 if one with the same name exists.",
-    response_model=QuestionSchema,
     status_code=status.HTTP_201_CREATED,
     responses={
         status.HTTP_400_BAD_REQUEST: {
@@ -151,7 +147,6 @@ async def create_question(
     "/{name:path}",
     summary="Update an existing question",
     description="Apply partial updates, 404 if not found.",
-    response_model=QuestionSchema,
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_400_BAD_REQUEST: {
@@ -196,7 +191,6 @@ async def update_question(
     "/{name:path}",
     summary="Delete a question",
     description="Delete the question, and return the deleted record.",
-    response_model=QuestionSchema,
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Question not found"},
@@ -224,7 +218,6 @@ async def delete_question(
     "/nth/{n}",
     summary="Get the Nth question",
     description="Return the Nth question in alphabetical order (0-based), 404 if out of range.",
-    response_model=QuestionSchema,
     status_code=status.HTTP_200_OK,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Index out of range"}},
     operation_id="getNthQuestion",
@@ -272,7 +265,6 @@ async def fill_embeddings(
     "/unfilled",
     summary="List questions with unfilled embeddings",
     description="Returns a list of questions that have unfilled embeddings for the specified model.",
-    response_model=list[QuestionSchema],
     status_code=status.HTTP_200_OK,
     operation_id="listUnfilledQuestions",
     responses={
@@ -282,7 +274,7 @@ async def fill_embeddings(
     },
 )
 async def list_unfilled_questions(
-    model: Model = Query(description="The model to check for unfilled embeddings"),  # noqa: B008
+    model: Annotated[Model, Query(description="The model to check for unfilled embeddings")],
     db: Database = db_dep,
 ) -> list[QuestionSchema]:
     if model not in MODEL_EMBEDDINGS_COLUMNS:

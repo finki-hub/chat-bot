@@ -16,7 +16,7 @@ streamers = {
 }
 
 
-async def stream_response(
+def stream_response(
     user_prompt: str,
     model: Model,
     *,
