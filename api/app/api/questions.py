@@ -274,7 +274,10 @@ async def fill_embeddings(
     },
 )
 async def list_unfilled_questions(
-    model: Annotated[Model, Query(description="The model to check for unfilled embeddings")],
+    model: Annotated[
+        Model,
+        Query(description="The model to check for unfilled embeddings"),
+    ],
     db: Database = db_dep,
 ) -> list[QuestionSchema]:
     if model not in MODEL_EMBEDDINGS_COLUMNS:
