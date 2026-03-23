@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     MCP_HTTP_URLS: str = ""
     MCP_SSE_URLS: str = ""
     MCP_TOOLS_TTL: int = 3600
+    MCP_API_KEY: str = "SystemPass"
 
     API_KEY: str = "your_api_key_here"
     DATABASE_URL: str = "postgresql+asyncpg://user:password@host:port/db"

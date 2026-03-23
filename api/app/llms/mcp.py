@@ -34,6 +34,10 @@ def build_mcp_client() -> MultiServerMCPClient:
 
     connections: dict[str, Connection] = {}
 
+    headers: dict[str, str] | None = (
+        {"X-Api-Key": settings.MCP_API_KEY} if settings.MCP_API_KEY else None
+    )
+
     for url in settings.mcp_http_url_list():
         logger.info(
             "Adding streamable HTTP connection to MCP client: %s",
@@ -44,6 +48,8 @@ def build_mcp_client() -> MultiServerMCPClient:
             "url": url,
             "transport": "streamable_http",
         }
+        if headers:
+            streamable_connection["headers"] = headers
         connections[url] = streamable_connection
 
     for url in settings.mcp_sse_url_list():
@@ -56,6 +62,8 @@ def build_mcp_client() -> MultiServerMCPClient:
             "url": url,
             "transport": "sse",
         }
+        if headers:
+            sse_connection["headers"] = headers
         connections[url] = sse_connection
 
     logger.info(
