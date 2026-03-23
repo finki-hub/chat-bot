@@ -52,6 +52,7 @@ async def stream_response_with_agent(
             | Model.GPT_4_1
             | Model.GPT_4_1_MINI
             | Model.GPT_4_1_NANO
+            | Model.GPT_5_4_MINI
             | Model.GPT_5_2
             | Model.GPT_5_MINI
             | Model.GPT_5_NANO
