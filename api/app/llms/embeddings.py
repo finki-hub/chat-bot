@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from app.data.connection import Database
 from app.llms.google import generate_google_embeddings
 from app.llms.gpu_api import generate_gpu_api_embeddings
-from app.llms.models import MODEL_EMBEDDINGS_COLUMNS, Model
+from app.llms.models import MODEL_EMBEDDINGS_COLUMNS, MODEL_EMBEDDING_DIMENSIONS, Model
 from app.llms.ollama import generate_ollama_embeddings
 from app.llms.openai import generate_openai_embeddings
 from app.llms.text_utils import _prepare_text_for_embedding
@@ -147,7 +147,14 @@ async def _process_question_batch(
         return [("error", repr(e))] * len(batch)
 
     results: list[tuple[str, str]] = []
+    expected_dims = MODEL_EMBEDDING_DIMENSIONS.get(current_model)
     for row, embedding in zip(batch, embeddings, strict=True):
+        if expected_dims is not None and len(embedding) != expected_dims:
+            results.append((
+                "error",
+                f"Dimension mismatch: got {len(embedding)}, expected {expected_dims}",
+            ))
+            continue
         try:
             await db.execute(
                 f"UPDATE question SET {model_column} = $1 WHERE id = $2",  # noqa: S608

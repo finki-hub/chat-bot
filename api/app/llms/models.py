@@ -91,3 +91,12 @@ MODEL_DISTANCE_THRESHOLDS: dict[Model, float] = {
     Model.GEMINI_EMBEDDING_001: 0.35,
     Model.LLAMA_3_3_70B: 0.5,
 }
+
+MODEL_EMBEDDING_DIMENSIONS: dict[Model, int] = {
+    Model.LLAMA_3_3_70B: 8192,
+    Model.BGE_M3: 1024,
+    Model.BGE_M3_LOCAL: 1024,
+    Model.TEXT_EMBEDDING_3_LARGE: 3072,
+    Model.GEMINI_EMBEDDING_001: 3072,
+    Model.MULTILINGUAL_E5_LARGE: 1024,
+}
