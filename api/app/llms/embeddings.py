@@ -14,6 +14,7 @@ from app.llms.gpu_api import generate_gpu_api_embeddings
 from app.llms.models import MODEL_EMBEDDINGS_COLUMNS, Model
 from app.llms.ollama import generate_ollama_embeddings
 from app.llms.openai import generate_openai_embeddings
+from app.llms.text_utils import _prepare_text_for_embedding
 from app.utils.database import embedding_to_pgvector
 
 logger = logging.getLogger(__name__)
@@ -120,35 +121,44 @@ async def _count_unfilled_tasks(
     return total
 
 
-async def _process_question_row(
+EMBEDDING_BATCH_SIZE = 16
+
+
+async def _process_question_batch(
     db: Database,
-    row: Record,
+    batch: list[Record],
     current_model: Model,
     model_column: str,
-) -> tuple[str, str]:
-    """Embed a single question row and persist the result. Returns (status, error_detail)."""
-    try:
+) -> list[tuple[str, str]]:
+    texts = []
+    for row in batch:
         document_text = f"Наслов: {row['name']}\nСодржина: {row['content']}"
-        text_to_embed = (
-            f"passage: {document_text}"
-            if current_model == Model.MULTILINGUAL_E5_LARGE
-            else document_text
+        texts.append(
+            _prepare_text_for_embedding(document_text, current_model, is_document=True),
         )
 
-        embedding = await generate_embeddings(
-            text_to_embed,
+    try:
+        embeddings = await generate_embeddings(
+            texts,
             current_model,
             is_document=True,
         )
-        await db.execute(
-            f"UPDATE question SET {model_column} = $1 WHERE id = $2",  # noqa: S608
-            embedding_to_pgvector(embedding),
-            row["id"],
-        )
     except Exception as e:
-        return "error", repr(e)
+        return [("error", repr(e))] * len(batch)
 
-    return "ok", ""
+    results: list[tuple[str, str]] = []
+    for row, embedding in zip(batch, embeddings, strict=True):
+        try:
+            await db.execute(
+                f"UPDATE question SET {model_column} = $1 WHERE id = $2",  # noqa: S608
+                embedding_to_pgvector(embedding),
+                row["id"],
+            )
+            results.append(("ok", ""))
+        except Exception as e:
+            results.append(("error", repr(e)))
+
+    return results
 
 
 async def stream_fill_embeddings(
@@ -194,26 +204,25 @@ async def stream_fill_embeddings(
                 f"SELECT id, name, content FROM question WHERE {model_column} IS NULL",  # noqa: S608
             )
 
-            for row in rows_for_this_model:
-                progress_counter += 1
-                result, error_detail = await _process_question_row(
-                    db,
-                    row,
-                    current_model,
-                    model_column,
+            for batch_start in range(0, len(rows_for_this_model), EMBEDDING_BATCH_SIZE):
+                batch = rows_for_this_model[batch_start:batch_start + EMBEDDING_BATCH_SIZE]
+                results = await _process_question_batch(
+                    db, batch, current_model, model_column,
                 )
 
-                payload = {
-                    "status": result,
-                    "error": error_detail,
-                    "index": progress_counter,
-                    "total": total_tasks,
-                    "model": current_model.value,
-                    "id": str(row["id"]),
-                    "name": row["name"],
-                    "ts": datetime.now(UTC).isoformat() + "Z",
-                }
-                yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                for row, (result, error_detail) in zip(batch, results, strict=True):
+                    progress_counter += 1
+                    payload = {
+                        "status": result,
+                        "error": error_detail,
+                        "index": progress_counter,
+                        "total": total_tasks,
+                        "model": current_model.value,
+                        "id": str(row["id"]),
+                        "name": row["name"],
+                        "ts": datetime.now(UTC).isoformat() + "Z",
+                    }
+                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         _gen(),
