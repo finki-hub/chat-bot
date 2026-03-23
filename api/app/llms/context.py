@@ -7,6 +7,7 @@ from app.llms.embeddings import generate_embeddings
 from app.llms.models import Model
 from app.llms.prompts import HYDE_SYSTEM_PROMPT
 from app.llms.query_transform import transform_query
+from app.llms.text_utils import _prepare_text_for_embedding
 from app.utils.exceptions import RetrievalError
 from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
-RERANKER_MIN_SCORE: float = 0
+RERANKER_MIN_SCORE: float = 0.1
 
 
 async def get_retrieved_context(
@@ -62,10 +63,8 @@ async def get_retrieved_context(
     logger.info("HyDE passage: '%s'", hyde_passage)
 
     try:
-        query_to_embed = (
-            f"passage: {hyde_passage}"
-            if embedding_model == Model.MULTILINGUAL_E5_LARGE
-            else hyde_passage
+        query_to_embed = _prepare_text_for_embedding(
+            hyde_passage, embedding_model, is_document=True,
         )
         prompt_embedding = await generate_embeddings(query_to_embed, embedding_model)
         initial_candidates = await get_closest_questions(
@@ -83,8 +82,6 @@ async def get_retrieved_context(
     except Exception as e:
         raise RetrievalError("Failed during initial vector search") from e
 
-    # rerank_docs omits links to match the indexed text
-    # context_docs includes them for the LLM
     rerank_docs: list[str] = []
     context_docs: list[str] = []
 
@@ -121,14 +118,18 @@ async def get_retrieved_context(
 
         ranked = response.json()["reranked_documents"]
 
-        rerank_to_context = dict(zip(rerank_docs, context_docs, strict=False))
+        rerank_to_index = {doc: i for i, doc in enumerate(rerank_docs)}
 
-        final_docs: list[str] = [
-            rerank_to_context.get(doc, doc)
-            for item in ranked
-            if item["score"] >= RERANKER_MIN_SCORE
-            for doc in (str(item["document"]),)
-        ][:top_k]
+        final_docs: list[str] = []
+        for item in ranked:
+            if item["score"] < RERANKER_MIN_SCORE:
+                continue
+            doc_text = str(item["document"])
+            idx = rerank_to_index.get(doc_text)
+            if idx is not None:
+                final_docs.append(context_docs[idx])
+            if len(final_docs) >= top_k:
+                break
 
         logger.info(
             "Selected %d documents after reranking and score filtering",
@@ -138,6 +139,6 @@ async def get_retrieved_context(
         logger.exception(
             "Reranking call failed. Using vector search order as a fallback",
         )
-        final_docs = context_docs
+        final_docs = context_docs[:top_k]
 
-    return "\n\n---\n\n".join(final_docs[:top_k])
+    return "\n\n---\n\n".join(final_docs)
