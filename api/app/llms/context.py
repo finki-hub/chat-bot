@@ -1,6 +1,8 @@
 import asyncio
 import logging
 
+import httpx
+
 from app.data.connection import Database
 from app.data.questions import get_closest_questions
 from app.llms.embeddings import generate_embeddings
@@ -17,6 +19,31 @@ logger = logging.getLogger(__name__)
 settings = Settings()
 
 RERANKER_MIN_SCORE: float = 0.1
+_RERANKER_TIMEOUT = httpx.Timeout(timeout=30.0)
+_RERANKER_MAX_RETRIES: int = 1
+
+
+async def _post_rerank(payload: dict) -> httpx.Response:
+    client = get_http_client()
+    for attempt in range(_RERANKER_MAX_RETRIES + 1):
+        try:
+            response = await client.post(
+                f"{settings.GPU_API_URL}/rerank/",
+                json=payload,
+                timeout=_RERANKER_TIMEOUT,
+            )
+            response.raise_for_status()
+            return response
+        except (httpx.TimeoutException, httpx.HTTPStatusError) as exc:
+            if attempt < _RERANKER_MAX_RETRIES:
+                logger.warning(
+                    "Reranker attempt %d failed (%s), retrying...",
+                    attempt + 1,
+                    exc,
+                )
+                continue
+            raise
+    raise RuntimeError("Unreachable: reranker retry loop exited without return or raise")
 
 
 async def get_retrieved_context(
@@ -110,13 +137,7 @@ async def get_retrieved_context(
             "documents": rerank_docs,
         }
 
-        client = get_http_client()
-        response = await client.post(
-            f"{settings.GPU_API_URL}/rerank/",
-            json=rerank_payload,
-        )
-        response.raise_for_status()
-
+        response = await _post_rerank(rerank_payload)
         ranked = response.json()["reranked_documents"]
 
         # Build a mutable list of (index, text) so duplicate documents each

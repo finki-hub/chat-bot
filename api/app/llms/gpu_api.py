@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 settings = Settings()
 
 _STREAMING_TIMEOUT = httpx.Timeout(timeout=300.0)
+_EMBEDDINGS_TIMEOUT = httpx.Timeout(timeout=60.0)
 _SSE_ERROR_MESSAGE = (
     "data: An error occurred while processing your request. Please try again.\n\n"
 )
@@ -44,7 +45,7 @@ async def generate_gpu_api_embeddings(
         gpu_api_url,
         json=payload,
         headers={"Content-Type": "application/json"},
-        timeout=300,
+        timeout=_EMBEDDINGS_TIMEOUT,
     )
 
     response.raise_for_status()
