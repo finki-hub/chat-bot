@@ -10,6 +10,7 @@ from app.llms.models import Model
 from app.llms.prompts import HYDE_SYSTEM_PROMPT
 from app.llms.query_transform import transform_query
 from app.llms.text_utils import _prepare_text_for_embedding
+from app.schemas.questions import QuestionSchema
 from app.utils.exceptions import RetrievalError
 from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
@@ -46,6 +47,33 @@ async def _post_rerank(payload: dict) -> httpx.Response:
     raise RuntimeError("Unreachable: reranker retry loop exited without return or raise")
 
 
+async def _embed_and_search(
+    db: Database,
+    text: str,
+    embedding_model: Model,
+    limit: int,
+    *,
+    is_document: bool = False,
+) -> list[QuestionSchema]:
+    prepared = _prepare_text_for_embedding(text, embedding_model, is_document=is_document)
+    embedding = await generate_embeddings(prepared, embedding_model)
+    return await get_closest_questions(db, embedding, embedding_model, limit=limit)
+
+
+async def _merge_candidates(
+    candidate_lists: list[list[QuestionSchema]],
+) -> list[QuestionSchema]:
+    seen: set[str] = set()
+    merged: list[QuestionSchema] = []
+    for candidates in candidate_lists:
+        for q in candidates:
+            qid = str(q.id)
+            if qid not in seen:
+                seen.add(qid)
+                merged.append(q)
+    return merged
+
+
 async def get_retrieved_context(
     db: Database,
     query: str,
@@ -56,8 +84,10 @@ async def get_retrieved_context(
     top_k: int = 10,
 ) -> str:
     """
-    Retrieves context via two-stage retrieval: vector search over initial_k candidates
-    followed by cross-encoder reranking, falling back to vector order on failure.
+    Multi-query retrieval: generates a rewritten query and HyDE passage,
+    embeds all three variants (original, rewritten, HyDE) in parallel,
+    unions the candidate sets, and reranks with a cross-encoder.
+    Falls back to vector order on reranker failure.
     """
 
     logger.info(
@@ -90,25 +120,34 @@ async def get_retrieved_context(
     logger.info("Transformed query: '%s'", rewritten_query)
     logger.info("HyDE passage: '%s'", hyde_passage)
 
+    per_query_k = initial_k // 3 + 1
+
     try:
-        query_to_embed = _prepare_text_for_embedding(
-            hyde_passage, embedding_model, is_document=True,
-        )
-        prompt_embedding = await generate_embeddings(query_to_embed, embedding_model)
-        initial_candidates = await get_closest_questions(
-            db,
-            prompt_embedding,
-            embedding_model,
-            limit=initial_k,
+        original_results, rewritten_results, hyde_results = await asyncio.gather(
+            _embed_and_search(db, query, embedding_model, per_query_k),
+            _embed_and_search(db, rewritten_query, embedding_model, per_query_k),
+            _embed_and_search(
+                db, hyde_passage, embedding_model, per_query_k, is_document=True,
+            ),
         )
 
-        logger.info("Initial candidates retrieved: %d", len(initial_candidates))
+        initial_candidates = await _merge_candidates(
+            [hyde_results, rewritten_results, original_results],
+        )
+
+        logger.info(
+            "Multi-query candidates: %d (hyde=%d, rewritten=%d, original=%d)",
+            len(initial_candidates),
+            len(hyde_results),
+            len(rewritten_results),
+            len(original_results),
+        )
 
         if not initial_candidates:
             return ""
 
     except Exception as e:
-        raise RetrievalError("Failed during initial vector search") from e
+        raise RetrievalError("Failed during multi-query vector search") from e
 
     rerank_docs: list[str] = []
     context_docs: list[str] = []
