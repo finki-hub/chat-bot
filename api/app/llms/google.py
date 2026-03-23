@@ -155,6 +155,50 @@ def stream_google_response(
     return stream_sync_gen_as_sse(sync_token_gen())
 
 
+async def transform_query_with_google(
+    query: str,
+    model: Model,
+    *,
+    system_prompt: str,
+    temperature: float,
+    top_p: float,
+    max_tokens: int,
+) -> str:
+    """
+    Transform a query using the specified Google model and system prompt.
+    If the transformation fails, return the original query.
+    """
+
+    logger.info(
+        "Transforming query: '%s' with model: %s",
+        query,
+        model,
+    )
+
+    try:
+        llm = get_google_llm(model, temperature, top_p, max_tokens)
+
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=query),
+        ]
+
+        response = await llm.ainvoke(messages)
+        content = response.content
+        if isinstance(content, list):
+            text = "".join(
+                part.get("text", "") if isinstance(part, dict) else str(part)
+                for part in content
+            )
+        else:
+            text = str(content)
+        return text.strip()
+    except Exception:
+        logger.exception("Query transformation failed: %s. Using original query.")
+
+        return query
+
+
 async def stream_google_agent_response(
     user_prompt: str,
     model: Model,

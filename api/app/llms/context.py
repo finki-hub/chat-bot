@@ -23,6 +23,7 @@ async def get_retrieved_context(
     db: Database,
     query: str,
     embedding_model: Model,
+    query_transform_model: Model,
     *,
     initial_k: int = 30,
     top_k: int = 10,
@@ -42,14 +43,14 @@ async def get_retrieved_context(
         rewritten_query, hyde_passage = await asyncio.gather(
             transform_query(
                 query,
-                Model.GPT_4_1_NANO,
+                query_transform_model,
                 temperature=0.0,
                 top_p=1.0,
                 max_tokens=128,
             ),
             transform_query(
                 query,
-                Model.GPT_4_1_NANO,
+                query_transform_model,
                 system_prompt=HYDE_SYSTEM_PROMPT,
                 temperature=0.7,
                 top_p=0.9,
@@ -118,6 +119,8 @@ async def get_retrieved_context(
 
         ranked = response.json()["reranked_documents"]
 
+        # Index-based mapping: match reranked documents back to context_docs
+        # by their position rather than string equality to handle duplicates
         rerank_to_index = {doc: i for i, doc in enumerate(rerank_docs)}
 
         final_docs: list[str] = []

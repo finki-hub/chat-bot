@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from app.constants.defaults import (
     DEFAULT_EMBEDDINGS_MODEL,
     DEFAULT_INFERENCE_MODEL,
+    DEFAULT_QUERY_TRANSFORM_MODEL,
 )
 from app.llms.models import Model
 
@@ -34,6 +35,14 @@ class ChatSchema(BaseModel):
         description=(
             "Which Model to use for generating / streaming the response. "
             "Must be one of the values in `app.llms.models.Model`."
+        ),
+    )
+    query_transform_model: Model = Field(
+        DEFAULT_QUERY_TRANSFORM_MODEL,
+        examples=[DEFAULT_QUERY_TRANSFORM_MODEL.value],
+        description=(
+            "Which Model to use for query rewriting and HyDE passage generation "
+            "during retrieval. Must be a chat-capable model."
         ),
     )
     temperature: float = Field(

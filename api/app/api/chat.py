@@ -59,6 +59,7 @@ async def chat(
         db=db,
         query=payload.prompt,
         embedding_model=payload.embeddings_model,
+        query_transform_model=payload.query_transform_model,
     )
 
     if not context:
