@@ -119,18 +119,20 @@ async def get_retrieved_context(
 
         ranked = response.json()["reranked_documents"]
 
-        # Index-based mapping: match reranked documents back to context_docs
-        # by their position rather than string equality to handle duplicates
-        rerank_to_index = {doc: i for i, doc in enumerate(rerank_docs)}
+        # Build a mutable list of (index, text) so duplicate documents each
+        # map to their own original position instead of colliding in a dict.
+        available = list(enumerate(rerank_docs))
 
         final_docs: list[str] = []
         for item in ranked:
             if item["score"] < RERANKER_MIN_SCORE:
                 continue
             doc_text = str(item["document"])
-            idx = rerank_to_index.get(doc_text)
-            if idx is not None:
-                final_docs.append(context_docs[idx])
+            for pos, (orig_idx, candidate) in enumerate(available):
+                if candidate == doc_text:
+                    final_docs.append(context_docs[orig_idx])
+                    available.pop(pos)
+                    break
             if len(final_docs) >= top_k:
                 break
 
