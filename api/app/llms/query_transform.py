@@ -44,9 +44,7 @@ async def transform_query(
             )
 
         case (
-            Model.GEMINI_2_5_FLASH
-            | Model.GEMINI_2_5_PRO
-            | Model.GEMINI_3_FLASH_PREVIEW
+            Model.GEMINI_2_5_FLASH | Model.GEMINI_2_5_PRO | Model.GEMINI_3_FLASH_PREVIEW
         ):
             return await transform_query_with_google(
                 query,
