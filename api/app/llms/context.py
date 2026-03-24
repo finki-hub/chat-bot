@@ -34,7 +34,6 @@ async def _post_rerank(payload: dict) -> httpx.Response:
                 timeout=_RERANKER_TIMEOUT,
             )
             response.raise_for_status()
-            return response
         except (httpx.TimeoutException, httpx.HTTPStatusError) as exc:
             if attempt < _RERANKER_MAX_RETRIES:
                 logger.warning(
@@ -44,7 +43,11 @@ async def _post_rerank(payload: dict) -> httpx.Response:
                 )
                 continue
             raise
-    raise RuntimeError("Unreachable: reranker retry loop exited without return or raise")
+        else:
+            return response
+    raise RuntimeError(
+        "Unreachable: reranker retry loop exited without return or raise",
+    )
 
 
 async def _embed_and_search(
@@ -55,7 +58,11 @@ async def _embed_and_search(
     *,
     is_document: bool = False,
 ) -> list[QuestionSchema]:
-    prepared = _prepare_text_for_embedding(text, embedding_model, is_document=is_document)
+    prepared = _prepare_text_for_embedding(
+        text,
+        embedding_model,
+        is_document=is_document,
+    )
     embedding = await generate_embeddings(prepared, embedding_model)
     return await get_closest_questions(db, embedding, embedding_model, limit=limit)
 
@@ -127,7 +134,11 @@ async def get_retrieved_context(
             _embed_and_search(db, query, embedding_model, per_query_k),
             _embed_and_search(db, rewritten_query, embedding_model, per_query_k),
             _embed_and_search(
-                db, hyde_passage, embedding_model, per_query_k, is_document=True,
+                db,
+                hyde_passage,
+                embedding_model,
+                per_query_k,
+                is_document=True,
             ),
         )
 
