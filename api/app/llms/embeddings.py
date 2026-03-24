@@ -11,7 +11,11 @@ from fastapi.responses import StreamingResponse
 from app.data.connection import Database
 from app.llms.google import generate_google_embeddings
 from app.llms.gpu_api import generate_gpu_api_embeddings
-from app.llms.models import MODEL_EMBEDDINGS_COLUMNS, MODEL_EMBEDDING_DIMENSIONS, Model
+from app.llms.models import (
+    MODEL_EMBEDDING_DIMENSIONS,
+    MODEL_EMBEDDINGS_COLUMNS,
+    Model,
+)
 from app.llms.ollama import generate_ollama_embeddings
 from app.llms.openai import generate_openai_embeddings
 from app.llms.text_utils import _prepare_text_for_embedding
@@ -150,10 +154,12 @@ async def _process_question_batch(
     expected_dims = MODEL_EMBEDDING_DIMENSIONS.get(current_model)
     for row, embedding in zip(batch, embeddings, strict=True):
         if expected_dims is not None and len(embedding) != expected_dims:
-            results.append((
-                "error",
-                f"Dimension mismatch: got {len(embedding)}, expected {expected_dims}",
-            ))
+            results.append(
+                (
+                    "error",
+                    f"Dimension mismatch: got {len(embedding)}, expected {expected_dims}",
+                ),
+            )
             continue
         try:
             await db.execute(
@@ -212,9 +218,14 @@ async def stream_fill_embeddings(
             )
 
             for batch_start in range(0, len(rows_for_this_model), EMBEDDING_BATCH_SIZE):
-                batch = rows_for_this_model[batch_start:batch_start + EMBEDDING_BATCH_SIZE]
+                batch = rows_for_this_model[
+                    batch_start : batch_start + EMBEDDING_BATCH_SIZE
+                ]
                 results = await _process_question_batch(
-                    db, batch, current_model, model_column,
+                    db,
+                    batch,
+                    current_model,
+                    model_column,
                 )
 
                 for row, (result, error_detail) in zip(batch, results, strict=True):
