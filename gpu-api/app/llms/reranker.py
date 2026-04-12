@@ -2,6 +2,7 @@ import logging
 
 import torch
 from sentence_transformers import CrossEncoder
+from sentence_transformers.cross_encoder.model import PairInput
 
 from app.utils.exceptions import ModelNotReadyError
 
@@ -47,7 +48,7 @@ def rerank_documents(query: str, documents: list[str]) -> list[tuple[float, str]
     if _reranker_model is None:
         raise ModelNotReadyError
 
-    model_inputs = [[query, doc] for doc in documents]
+    model_inputs: list[PairInput] = [(query, doc) for doc in documents]
 
     scores = _reranker_model.predict(model_inputs)
 
