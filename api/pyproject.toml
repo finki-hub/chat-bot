@@ -14,7 +14,7 @@ dependencies = [
     "langchain-ollama>=1.0.1",
     "langchain-openai>=1.1.14",
     "langgraph>=1.1.8",
-    "pydantic>=2.13.1",
+    "pydantic>=2.13.2",
 ]
 
 [dependency-groups]
