@@ -5,7 +5,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
   "accelerate>=1.13.0",
-  "fastapi[all]>=0.136.0",
+  "fastapi[all]>=0.136.1",
   "gunicorn>=25.1.0",
   "langchain>=1.2.13",
   "langchain-huggingface>=1.2.2",
