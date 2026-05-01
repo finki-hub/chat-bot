@@ -68,7 +68,7 @@ requires-dist = [
     { name = "fastapi", extras = ["all"], specifier = ">=0.136.1" },
     { name = "gunicorn", specifier = ">=25.1.0" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "langchain", specifier = ">=1.2.16" },
+    { name = "langchain", specifier = ">=1.2.17" },
     { name = "langchain-google-genai", specifier = ">=4.2.2" },
     { name = "langchain-mcp-adapters", specifier = ">=0.2.2" },
     { name = "langchain-ollama", specifier = ">=1.0.1" },
@@ -738,16 +738,16 @@ wheels = [
 
 [[package]]
 name = "langchain"
-version = "1.2.16"
+version = "1.2.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain-core" },
     { name = "langgraph" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/04/34/47318136a1995aed51455a243db135eb244c5af97a9f5232f5f5f505da21/langchain-1.2.16.tar.gz", hash = "sha256:8a091122418a2b2ea12cf2a4ddc47f51012ee5ec3f9a93b5f351eeb8d1bc9c70", size = 577003, upload-time = "2026-04-29T21:02:44.666Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/46/35/322d13339acb61d7a733d03a73a9ade968c64ac0eb982f497d24e22a998f/langchain-1.2.17.tar.gz", hash = "sha256:c30b578c0eebbde8bec9247dbbbae1a791128557b99b65c8be1e007040975d09", size = 577779, upload-time = "2026-04-30T20:25:34.626Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bf/0c/1cafab69a16b7d949b71bde9b5ea8e7bfd5ad082718389bb47a2284e3787/langchain-1.2.16-py3-none-any.whl", hash = "sha256:d2cef7452fe54a12d587dbac93daf37b7bbfde0719e8a47a79fe576e1411c28c", size = 112903, upload-time = "2026-04-29T21:02:42.779Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/cf/b183dba8667f7b6d1be546fb8089a3bc3bc12b514f551f5317ae03815770/langchain-1.2.17-py3-none-any.whl", hash = "sha256:ff881cdfbe90e0b6afac42eea7999657c282cc73db059c910d803f4e9f8ff305", size = 113131, upload-time = "2026-04-30T20:25:32.895Z" },
 ]
 
 [[package]]
