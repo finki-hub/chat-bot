@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["mypy>=2.1.0", "ruff>=0.15.12"]
+dev = ["mypy>=2.1.0", "ruff>=0.15.13"]
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
