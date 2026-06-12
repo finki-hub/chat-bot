@@ -445,7 +445,7 @@ requires-dist = [
     { name = "accelerate", specifier = ">=1.13.0" },
     { name = "fastapi", extras = ["all"], specifier = ">=0.136.3" },
     { name = "gunicorn", specifier = ">=26.0.0" },
-    { name = "langchain", specifier = ">=1.3.7" },
+    { name = "langchain", specifier = ">=1.3.8" },
     { name = "langchain-huggingface", specifier = ">=1.2.2" },
     { name = "sentence-transformers", specifier = ">=5.5.1" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.10.0" },
@@ -644,21 +644,21 @@ wheels = [
 
 [[package]]
 name = "langchain"
-version = "1.3.7"
+version = "1.3.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain-core" },
     { name = "langgraph" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cd/9e/9354114081622b077e215a3ce66be6231cbe80ee022cdd7b30056749a2c5/langchain-1.3.7.tar.gz", hash = "sha256:49e1dd3a4ec96a09a2d901b5de4cf8cc69cf6bc41be76d9a838ad67a2af7982c", size = 621124, upload-time = "2026-06-10T18:20:35.036Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8a/71/b4980282e69b4b89cb8ad4a2ddf4c2fe71645dee014364dbf1f834a1da3b/langchain-1.3.8.tar.gz", hash = "sha256:7f34f42f9d946a8a4b0275382078dc340fe336ba6dbc1c0ebb4f225ada9853ce", size = 629985, upload-time = "2026-06-12T04:20:35.135Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/b8/12d4dce378eff231ef6a5db751380607b15d4b1feeb3397fbec043bf5f5e/langchain-1.3.7-py3-none-any.whl", hash = "sha256:7f6e13f6681068e3fb2323f9905c1f41da261c02f55337e23250de3e51d1f325", size = 131429, upload-time = "2026-06-10T18:20:33.069Z" },
+    { url = "https://files.pythonhosted.org/packages/12/e9/3f6977eee9ae43483d2df76dfb999c0f7315a5ed3d90864b121b57012272/langchain-1.3.8-py3-none-any.whl", hash = "sha256:d1baf2c766ffc805aa77c59750a50ede4119794cdcee237c55f1a7df0d148953", size = 132146, upload-time = "2026-06-12T04:20:33.266Z" },
 ]
 
 [[package]]
 name = "langchain-core"
-version = "1.4.0"
+version = "1.4.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonpatch" },
@@ -671,9 +671,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uuid-utils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/59/de/679a53472c25860837e32c0442c962fa86e95317a36460e2c9d5c91b17c2/langchain_core-1.4.0.tar.gz", hash = "sha256:1dc341eed802ed9c117c0df3923c991e5e9e226571e5725c194eeb5bd93d1a7f", size = 920260, upload-time = "2026-05-11T18:42:35.919Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/64/a7/1652f8f00e2a3ed8714a57c902670897c6d001b96488abe49625d8c7fa1b/langchain_core-1.4.6.tar.gz", hash = "sha256:fb8547f83587c8f646f2136b106b732a974ffbff5537799125d16ed4c326eb63", size = 949354, upload-time = "2026-06-11T07:09:54.464Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0f/1a/86c38c27b81913a1c6c12448cab55defb5a1097c7dc9a4cea83f55477a2d/langchain_core-1.4.0-py3-none-any.whl", hash = "sha256:23cbbdb46e38ddd1dd5247e6167e96013eae74bea4c5949c550809970a9e565c", size = 548120, upload-time = "2026-05-11T18:42:33.992Z" },
+    { url = "https://files.pythonhosted.org/packages/0c/63/6746479c3cc0b1ff793abd03d45e12ee689d14ee899fa4c7060c6e928e9f/langchain_core-1.4.6-py3-none-any.whl", hash = "sha256:84b73716aa9f8b529b426ea256bb71bcb55dea5980212e54c89c9a040fd50230", size = 554275, upload-time = "2026-06-11T07:09:53.085Z" },
 ]
 
 [[package]]
