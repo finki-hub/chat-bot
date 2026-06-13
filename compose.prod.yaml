@@ -14,9 +14,11 @@ services:
         condition: service_healthy
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
       API_KEY: ${API_KEY}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GOOGLE_BASE_URL: ${GOOGLE_BASE_URL:-}
       GPU_API_URL: ${GPU_API_URL}
       LOG_LEVEL: ${LOG_LEVEL}
       MCP_API_KEY: ${MCP_API_KEY}
@@ -24,6 +26,7 @@ services:
       MCP_SSE_URLS: ${MCP_SSE_URLS}
       OLLAMA_URL: ${OLLAMA_URL}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       TZ: ${TZ}
       WORKERS: ${WORKERS}
     image: ghcr.io/finki-hub/chat-bot-api:latest
