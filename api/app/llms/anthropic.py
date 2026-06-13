@@ -1,0 +1,193 @@
+import logging
+from collections.abc import Generator
+
+from fastapi.responses import StreamingResponse
+from langchain.agents import create_agent
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import SecretStr
+
+from app.llms.agents import create_agent_token_generator, stream_sync_gen_as_sse
+from app.llms.mcp import get_mcp_tools
+from app.llms.models import ANTHROPIC_NO_SAMPLING_MODELS, Model
+from app.utils.settings import Settings
+
+logger = logging.getLogger(__name__)
+
+settings = Settings()
+
+# Model, temperature, top_p, max_tokens -> LLM
+anthropic_llm_clients: dict[tuple[str, float, float, int], ChatAnthropic] = {}
+
+
+def get_anthropic_llm(
+    model: Model,
+    temperature: float,
+    top_p: float,
+    max_tokens: int,
+) -> ChatAnthropic:
+    """
+    Return a singleton ChatAnthropic instance for the specified model and sampling parameters.
+    If the model and parameters are not already in the cache, create a new instance.
+
+    Anthropic's API is stricter about sampling parameters than the other providers:
+    Claude Opus 4.7 / 4.8 reject `temperature`, `top_p`, and `top_k` outright (HTTP 400),
+    and every Claude 4+ model rejects requests that set both `temperature` and `top_p`.
+    To stay within those limits we never forward `top_p`, and forward `temperature` only
+    for models that accept it (see `ANTHROPIC_NO_SAMPLING_MODELS`).
+    """
+    key = (model.value, temperature, top_p, max_tokens)
+
+    if key not in anthropic_llm_clients:
+        temperature_arg = (
+            None if model in ANTHROPIC_NO_SAMPLING_MODELS else temperature
+        )
+        anthropic_llm_clients[key] = ChatAnthropic(
+            model=model.value,  # type: ignore[call-arg]
+            api_key=SecretStr(settings.ANTHROPIC_API_KEY),
+            temperature=temperature_arg,
+            max_tokens=max_tokens,  # type: ignore[call-arg]
+        )
+
+    return anthropic_llm_clients[key]
+
+
+def stream_anthropic_response(
+    user_prompt: str,
+    model: Model,
+    *,
+    system_prompt: str,
+    temperature: float,
+    top_p: float,
+    max_tokens: int,
+) -> StreamingResponse:
+    """
+    Stream a response from the specified Anthropic model using the provided prompts.
+    The response is formatted as Server-Sent Events (SSE).
+    This function is a direct parallel to stream_openai_response.
+    """
+    logger.info(
+        "Streaming Anthropic response for user prompt length: '%d' with model: %s",
+        len(user_prompt),
+        model.value,
+    )
+
+    llm = get_anthropic_llm(model, temperature, top_p, max_tokens)
+    prompt_messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_prompt),
+    ]
+
+    def sync_token_gen() -> Generator[str]:
+        for chunk in llm.stream(prompt_messages):
+            content = chunk.content
+            if isinstance(content, list):
+                text = "".join(
+                    part.get("text", "") if isinstance(part, dict) else str(part)
+                    for part in content
+                )
+            else:
+                text = str(content)
+            yield text
+
+    return stream_sync_gen_as_sse(sync_token_gen())
+
+
+async def transform_query_with_anthropic(
+    query: str,
+    model: Model,
+    *,
+    system_prompt: str,
+    temperature: float,
+    top_p: float,
+    max_tokens: int,
+) -> str:
+    """
+    Transform a query using the specified Anthropic model and system prompt.
+    If the transformation fails, return the original query.
+    """
+
+    logger.info(
+        "Transforming query: '%s' with model: %s",
+        query,
+        model,
+    )
+
+    try:
+        llm = get_anthropic_llm(model, temperature, top_p, max_tokens)
+
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=query),
+        ]
+
+        response = await llm.ainvoke(messages)
+        content = response.content
+        if isinstance(content, list):
+            text = "".join(
+                part.get("text", "") if isinstance(part, dict) else str(part)
+                for part in content
+            )
+        else:
+            text = str(content)
+        return text.strip()
+    except Exception:
+        logger.exception("Query transformation failed: %s. Using original query.")
+
+        return query
+
+
+async def stream_anthropic_agent_response(
+    user_prompt: str,
+    model: Model,
+    *,
+    system_prompt: str,
+    temperature: float,
+    top_p: float,
+    max_tokens: int,
+) -> StreamingResponse:
+    """
+    Stream a response from an Anthropic agent with MCP tools.
+    Falls back to regular response if MCP unavailable.
+    """
+    logger.info(
+        "Streaming Anthropic agent response for user prompt length: '%d' with model: %s",
+        len(user_prompt),
+        model.value,
+    )
+
+    try:
+        llm = get_anthropic_llm(model, temperature, top_p, max_tokens)
+
+        tools = await get_mcp_tools()
+
+        logger.info(
+            "Available tools: %s",
+            ", ".join(tool.name for tool in tools) if tools else "None",
+        )
+
+        agent = create_agent(llm, tools)
+
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
+        ]
+
+        return StreamingResponse(
+            create_agent_token_generator(agent, messages),
+            media_type="text/event-stream",
+        )
+
+    except Exception:
+        logger.exception(
+            "Failed to stream Anthropic agent response. Falling back to regular response",
+        )
+
+        return stream_anthropic_response(
+            user_prompt,
+            model,
+            system_prompt=system_prompt,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+        )

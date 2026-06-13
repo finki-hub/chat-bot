@@ -27,6 +27,11 @@ class Model(Enum):
     GEMINI_3_FLASH_PREVIEW = "gemini-3-flash-preview"
     GEMINI_EMBEDDING_001 = "gemini-embedding-001"
 
+    CLAUDE_OPUS_4_8 = "claude-opus-4-8"
+    CLAUDE_OPUS_4_7 = "claude-opus-4-7"
+    CLAUDE_SONNET_4_6 = "claude-sonnet-4-6"
+    CLAUDE_HAIKU_4_5 = "claude-haiku-4-5"
+
     DOMESTIC_YAK_8B_INSTRUCT_GGUF = "hf.co/LVSTCK/domestic-yak-8B-instruct-GGUF:Q8_0"
     VEZILKALLM_GGUF = "hf.co/mradermacher/VezilkaLLM-GGUF:Q8_0"
 
@@ -71,8 +76,24 @@ CHAT_MODELS: frozenset[Model] = frozenset(
         Model.GEMINI_2_5_FLASH,
         Model.GEMINI_2_5_PRO,
         Model.GEMINI_3_FLASH_PREVIEW,
+        Model.CLAUDE_OPUS_4_8,
+        Model.CLAUDE_OPUS_4_7,
+        Model.CLAUDE_SONNET_4_6,
+        Model.CLAUDE_HAIKU_4_5,
         Model.QWEN2_1_5_B_INSTRUCT,
         Model.QWEN2_5_7B_INSTRUCT,
+    },
+)
+
+# Anthropic models that reject sampling parameters (temperature / top_p / top_k).
+# Claude Opus 4.7 and 4.8 return HTTP 400 if any of these are sent, so no sampling
+# parameters are forwarded for them. Every Claude 4+ model additionally rejects
+# requests that set both temperature and top_p, which is why the Anthropic client
+# never forwards top_p for any Claude model.
+ANTHROPIC_NO_SAMPLING_MODELS: frozenset[Model] = frozenset(
+    {
+        Model.CLAUDE_OPUS_4_8,
+        Model.CLAUDE_OPUS_4_7,
     },
 )
 

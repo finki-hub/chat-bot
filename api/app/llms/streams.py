@@ -2,6 +2,7 @@ import logging
 
 from fastapi.responses import StreamingResponse
 
+from app.llms.anthropic import stream_anthropic_agent_response
 from app.llms.google import stream_google_agent_response
 from app.llms.gpu_api import stream_gpu_api_response
 from app.llms.models import Model
@@ -70,6 +71,21 @@ async def stream_response_with_agent(
             Model.GEMINI_2_5_FLASH | Model.GEMINI_2_5_PRO | Model.GEMINI_3_FLASH_PREVIEW
         ):
             return await stream_google_agent_response(
+                user_prompt,
+                model,
+                system_prompt=system_prompt,
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_tokens,
+            )
+
+        case (
+            Model.CLAUDE_OPUS_4_8
+            | Model.CLAUDE_OPUS_4_7
+            | Model.CLAUDE_SONNET_4_6
+            | Model.CLAUDE_HAIKU_4_5
+        ):
+            return await stream_anthropic_agent_response(
                 user_prompt,
                 model,
                 system_prompt=system_prompt,

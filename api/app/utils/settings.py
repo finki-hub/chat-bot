@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     OLLAMA_URL: str = "http://ollama:11434"
     OPENAI_API_KEY: str = "your_openai_api_key_here"
     GOOGLE_API_KEY: str = "your_google_api_key_here"
+    ANTHROPIC_API_KEY: str = "your_anthropic_api_key_here"
 
     ALLOWED_ORIGINS: list[str] = ["*"]
     EXPOSE_HEADERS: list[str] = ["*"]
