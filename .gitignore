@@ -14,3 +14,9 @@ hf_cache/
 
 ## MongoDB
 mongo-data/
+
+# mypy
+.mypy_cache/
+
+# OMC
+.omc/
