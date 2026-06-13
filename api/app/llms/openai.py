@@ -34,6 +34,7 @@ def get_openai_embedder(model: Model) -> OpenAIEmbeddings:
         openai_embedders[key] = OpenAIEmbeddings(
             model=model.value,
             api_key=SecretStr(settings.OPENAI_API_KEY),  # type: ignore[call-arg]
+            base_url=settings.OPENAI_BASE_URL or None,
         )
 
     return openai_embedders[key]
@@ -55,6 +56,7 @@ def get_openai_llm(
         openai_llm_clients[key] = ChatOpenAI(
             model=model.value,
             api_key=SecretStr(settings.OPENAI_API_KEY),
+            base_url=settings.OPENAI_BASE_URL or None,
             temperature=temperature,
             top_p=top_p,
             streaming=True,

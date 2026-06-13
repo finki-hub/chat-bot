@@ -45,6 +45,7 @@ def get_anthropic_llm(
         anthropic_llm_clients[key] = ChatAnthropic(
             model=model.value,  # type: ignore[call-arg]
             api_key=SecretStr(settings.ANTHROPIC_API_KEY),
+            base_url=settings.ANTHROPIC_BASE_URL or None,
             temperature=temperature_arg,
             max_tokens=max_tokens,  # type: ignore[call-arg]
         )

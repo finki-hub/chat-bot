@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str = "your_google_api_key_here"
     ANTHROPIC_API_KEY: str = "your_anthropic_api_key_here"
 
+    OPENAI_BASE_URL: str = ""
+    GOOGLE_BASE_URL: str = ""
+    ANTHROPIC_BASE_URL: str = ""
+
     ALLOWED_ORIGINS: list[str] = ["*"]
     EXPOSE_HEADERS: list[str] = ["*"]
 
