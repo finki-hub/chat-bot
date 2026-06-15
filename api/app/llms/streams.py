@@ -1,6 +1,7 @@
 import logging
 
 from fastapi.responses import StreamingResponse
+from langchain_core.messages import BaseMessage
 
 from app.llms.anthropic import stream_anthropic_agent_response
 from app.llms.google import stream_google_agent_response
@@ -17,6 +18,7 @@ async def stream_response_with_agent(
     model: Model,
     *,
     system_prompt: str,
+    history: list[BaseMessage],
     temperature: float,
     top_p: float,
     max_tokens: int,
@@ -25,9 +27,11 @@ async def stream_response_with_agent(
     Stream a response from the specified model using the provided user prompt and system prompt with agent.
     """
     logger.info(
-        "Streaming response with agent for user prompt length: '%d' with model: %s",
+        "Streaming response with agent for user prompt length: '%d' "
+        "with model: %s and %d prior turn(s)",
         len(user_prompt),
         model.value,
+        len(history),
     )
 
     match model:
@@ -43,6 +47,7 @@ async def stream_response_with_agent(
                 user_prompt,
                 model,
                 system_prompt=system_prompt,
+                history=history,
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
@@ -62,6 +67,7 @@ async def stream_response_with_agent(
                 user_prompt,
                 model,
                 system_prompt=system_prompt,
+                history=history,
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
@@ -74,6 +80,7 @@ async def stream_response_with_agent(
                 user_prompt,
                 model,
                 system_prompt=system_prompt,
+                history=history,
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
@@ -89,6 +96,7 @@ async def stream_response_with_agent(
                 user_prompt,
                 model,
                 system_prompt=system_prompt,
+                history=history,
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
@@ -99,6 +107,7 @@ async def stream_response_with_agent(
                 user_prompt,
                 model,
                 system_prompt=system_prompt,
+                history=history,
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,

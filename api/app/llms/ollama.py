@@ -5,13 +5,13 @@ from typing import overload
 
 from fastapi.responses import StreamingResponse
 from langchain.agents import create_agent
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 from app.llms.agents import create_agent_token_generator, stream_sync_gen_as_sse
 from app.llms.mcp import get_mcp_tools
 from app.llms.models import Model
-from app.llms.prompts import stitch_system_user
+from app.llms.prompts import build_agent_messages, stitch_conversation
 from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -102,14 +102,16 @@ def stream_ollama_response(
     model: Model,
     *,
     system_prompt: str,
+    history: list[BaseMessage] | None = None,
     temperature: float,
     top_p: float,
     max_tokens: int,
 ) -> StreamingResponse:
     """
     Stream a response from the specified Ollama model using the provided user prompt and system prompt.
-    This function constructs the full prompt by stitching the system and user prompts together,
-    initializes the LLM client, and streams the response as an async generator.
+    This function constructs the full prompt by stitching the system prompt, prior
+    conversation turns and the user prompt together, initializes the LLM client,
+    and streams the response as an async generator.
     The response is formatted as Server-Sent Events (SSE) for real-time updates.
     """
     logger.info(
@@ -119,7 +121,7 @@ def stream_ollama_response(
     )
 
     llm = get_llm(model, temperature, top_p, max_tokens)
-    full_prompt = stitch_system_user(system_prompt, user_prompt)
+    full_prompt = stitch_conversation(system_prompt, history or [], user_prompt)
 
     def sync_token_gen() -> Generator[str]:
         for chunk in llm.stream(full_prompt):
@@ -169,6 +171,7 @@ async def stream_ollama_agent_response(
     model: Model,
     *,
     system_prompt: str,
+    history: list[BaseMessage] | None = None,
     temperature: float,
     top_p: float,
     max_tokens: int,
@@ -195,10 +198,7 @@ async def stream_ollama_agent_response(
 
         agent = create_agent(llm, tools)
 
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt),
-        ]
+        messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
         return StreamingResponse(
             create_agent_token_generator(agent, messages),
@@ -214,6 +214,7 @@ async def stream_ollama_agent_response(
             user_prompt,
             model,
             system_prompt=system_prompt,
+            history=history,
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,

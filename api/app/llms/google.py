@@ -5,13 +5,14 @@ from typing import overload
 
 from fastapi.responses import StreamingResponse
 from langchain.agents import create_agent
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from pydantic import SecretStr
 
 from app.llms.agents import create_agent_token_generator, stream_sync_gen_as_sse
 from app.llms.mcp import get_mcp_tools
 from app.llms.models import Model
+from app.llms.prompts import build_agent_messages
 from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -121,6 +122,7 @@ def stream_google_response(
     model: Model,
     *,
     system_prompt: str,
+    history: list[BaseMessage] | None = None,
     temperature: float,
     top_p: float,
     max_tokens: int,
@@ -137,10 +139,7 @@ def stream_google_response(
     )
 
     llm = get_google_llm(model, temperature, top_p, max_tokens)
-    prompt_messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_prompt),
-    ]
+    prompt_messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
     def sync_token_gen() -> Generator[str]:
         for chunk in llm.stream(prompt_messages):
@@ -206,6 +205,7 @@ async def stream_google_agent_response(
     model: Model,
     *,
     system_prompt: str,
+    history: list[BaseMessage] | None = None,
     temperature: float,
     top_p: float,
     max_tokens: int,
@@ -232,10 +232,7 @@ async def stream_google_agent_response(
 
         agent = create_agent(llm, tools)
 
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt),
-        ]
+        messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
         return StreamingResponse(
             create_agent_token_generator(agent, messages),
@@ -251,6 +248,7 @@ async def stream_google_agent_response(
             user_prompt,
             model,
             system_prompt=system_prompt,
+            history=history,
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,

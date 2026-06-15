@@ -22,14 +22,16 @@ class Settings(BaseSettings):
     API_KEY: str = "your_api_key_here"
     DATABASE_URL: str = "postgresql+asyncpg://user:password@host:port/db"
 
-    OLLAMA_URL: str = "http://ollama:11434"
     OPENAI_API_KEY: str = "your_openai_api_key_here"
     GOOGLE_API_KEY: str = "your_google_api_key_here"
     ANTHROPIC_API_KEY: str = "your_anthropic_api_key_here"
 
+    OLLAMA_URL: str = "http://ollama:11434"
     OPENAI_BASE_URL: str = ""
     GOOGLE_BASE_URL: str = ""
     ANTHROPIC_BASE_URL: str = ""
+
+    CHAT_HISTORY_MAX_TURNS: int = 10
 
     ALLOWED_ORIGINS: list[str] = ["*"]
     EXPOSE_HEADERS: list[str] = ["*"]

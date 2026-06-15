@@ -4,8 +4,10 @@ from collections.abc import AsyncGenerator
 
 import httpx
 from fastapi.responses import StreamingResponse
+from langchain_core.messages import BaseMessage
 
 from app.llms.models import GPU_API_MODELS, Model
+from app.llms.prompts import history_transcript
 from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
 
@@ -64,6 +66,7 @@ def stream_gpu_api_response(
     model: Model,
     *,
     system_prompt: str,
+    history: list[BaseMessage] | None = None,
     temperature: float,
     top_p: float,
     max_tokens: int,
@@ -71,6 +74,9 @@ def stream_gpu_api_response(
     """
     Stream a response from the GPU API service.
     Reuses the shared HTTP client with a per-request streaming timeout.
+
+    The GPU API only accepts a single prompt string, so any prior conversation
+    turns are rendered into a transcript and prepended to the user prompt.
     """
     logger.info(
         "Streaming GPU API response for user prompt length: '%d' with model: %s",
@@ -80,8 +86,12 @@ def stream_gpu_api_response(
 
     gpu_api_url = f"{settings.GPU_API_URL}/stream/"
 
+    prompt = user_prompt
+    if history:
+        prompt = f"Претходен разговор:\n{history_transcript(history)}\n\n{user_prompt}"
+
     payload = {
-        "prompt": user_prompt,
+        "prompt": prompt,
         "inference_model": model.value,
         "system_prompt": system_prompt,
         "temperature": temperature,

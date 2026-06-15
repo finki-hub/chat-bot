@@ -57,7 +57,7 @@ async def chat(
 
     context = await get_retrieved_context(
         db=db,
-        query=payload.prompt,
+        query=payload.query,
         embedding_model=payload.embeddings_model,
         query_transform_model=payload.query_transform_model,
     )

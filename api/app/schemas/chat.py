@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
 
 from app.constants.defaults import (
     DEFAULT_EMBEDDINGS_MODEL,
@@ -8,10 +10,32 @@ from app.constants.defaults import (
 from app.llms.models import Model
 
 
-class ChatSchema(BaseModel):
-    prompt: str = Field(
+class ConversationTurn(BaseModel):
+    role: Literal["user", "assistant"] = Field(
+        examples=["user"],
+        description="Who produced this turn: 'user' or 'assistant' (the bot).",
+    )
+    content: str = Field(
         examples=["Where is FINKI located?"],
-        description="The user's free-text query to send to the chat system.",
+        description="The text content of this conversation turn.",
+    )
+
+
+class ChatSchema(BaseModel):
+    messages: list[ConversationTurn] = Field(
+        min_length=1,
+        examples=[
+            [
+                {"role": "user", "content": "Where is FINKI located?"},
+                {"role": "assistant", "content": "FINKI is located in Skopje."},
+                {"role": "user", "content": "How do I get there?"},
+            ],
+        ],
+        description=(
+            "The conversation, oldest first and ending with the current user turn. "
+            "The last (user) message drives retrieval; the earlier turns are passed "
+            "to the model as prior context."
+        ),
     )
     system_prompt: str | None = Field(
         None,
@@ -77,3 +101,36 @@ class ChatSchema(BaseModel):
             "This limits the length of the output."
         ),
     )
+
+    @field_validator("messages")
+    @classmethod
+    def _must_end_with_user(
+        cls,
+        value: list[ConversationTurn],
+    ) -> list[ConversationTurn]:
+        if value[-1].role != "user":
+            raise ValueError("the last message must be from the user")
+        return value
+
+    @property
+    def query(self) -> str:
+        """The latest user message; the text used to drive retrieval."""
+        return self.messages[-1].content
+
+    @property
+    def history(self) -> list[ConversationTurn]:
+        """All prior turns, excluding the latest user message."""
+        return self.messages[:-1]
+
+    def capped_history(self, max_turns: int) -> list[ConversationTurn]:
+        """
+        Prior turns limited to the most recent ``max_turns``, guaranteed to start
+        with a user turn so the conversation alternates cleanly for strict
+        providers (e.g. Anthropic). Returns an empty list when ``max_turns <= 0``.
+        """
+        if max_turns <= 0:
+            return []
+        turns = self.history[-max_turns:]
+        if turns and turns[0].role == "assistant":
+            turns = turns[1:]
+        return turns
