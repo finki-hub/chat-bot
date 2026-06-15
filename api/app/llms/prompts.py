@@ -90,8 +90,6 @@ def to_history_messages(
     'user' becomes a HumanMessage; anything else becomes an AIMessage.
     """
     return [
-        HumanMessage(content=content)
-        if role == "user"
-        else AIMessage(content=content)
+        HumanMessage(content=content) if role == "user" else AIMessage(content=content)
         for role, content in history
     ]

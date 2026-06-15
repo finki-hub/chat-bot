@@ -40,9 +40,7 @@ def get_anthropic_llm(
     key = (model.value, temperature, top_p, max_tokens)
 
     if key not in anthropic_llm_clients:
-        temperature_arg = (
-            None if model in ANTHROPIC_NO_SAMPLING_MODELS else temperature
-        )
+        temperature_arg = None if model in ANTHROPIC_NO_SAMPLING_MODELS else temperature
         anthropic_llm_clients[key] = ChatAnthropic(
             model=model.value,  # type: ignore[call-arg]
             api_key=SecretStr(settings.ANTHROPIC_API_KEY),
