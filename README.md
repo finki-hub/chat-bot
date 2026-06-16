@@ -29,7 +29,7 @@ The API will be running on port `8880`. This also brings up a `pgAdmin` instance
 
 ## Quick Setup (Development)
 
-Requires Python >= 3.13 and [`uv`](https://github.com/astral-sh/uv).
+Requires Python >= 3.14 and [`uv`](https://github.com/astral-sh/uv).
 
 1. Clone the repository: `git clone https://github.com/finki-hub/chat-bot.git`
 2. Install dependencies: in each directory (`api` and `gpu-api`), run `uv sync`
