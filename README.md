@@ -2,15 +2,15 @@
 
 RAG chat bot for the [`FINKI Hub`](https://discord.gg/finki-studenti-810997107376914444) Discord server, powered by [LangChain](https://github.com/langchain-ai/langchain) and [FastAPI](https://github.com/fastapi/fastapi). Uses [PostgreSQL](https://github.com/postgres/postgres) and [pgvector](https://github.com/pgvector/pgvector) for keeping documents. Has support for many LLMs.
 
-It currently works on a dataset of documents (FAQ). It is planned to support other types of data as well.
+It currently answers questions using a retrieval pipeline over an FAQ dataset (the `question` table), and separately manages a collection of links. Retrieval over additional document types is planned.
 
 ## Services
 
 This project comes as a monorepo of microservices:
 
 - API ([`/api`](/api)) for managing documents, links and chatting (default port: 8880)
-- GPU API ([`/gpu-api`](/gpu-api)) for locally executing GPU accelerated tasks like embeddings generation (default port: 8888)
-- Front-end (WIP)
+- GPU API ([`/gpu-api`](/gpu-api)) for locally executing GPU accelerated tasks like embeddings generation and reranking (default port: 8888)
+- Front-end (planned — not yet part of this repository)
 - Database (PostgreSQL + pgvector) for keeping documents and embeddings
 
 The API Docker image is available as [`ghcr.io/finki-hub/chat-bot-api`](https://github.com/finki-hub/chat-bot/pkgs/container/chat-bot-api), while the GPU API Docker image is available as [`ghcr.io/finki-hub/chat-bot-gpu-api`](https://github.com/finki-hub/chat-bot/pkgs/container/chat-bot-gpu-api).
@@ -29,22 +29,32 @@ The API will be running on port `8880`. This also brings up a `pgAdmin` instance
 
 ## Quick Setup (Development)
 
-Requires Python >= 3.14 and [`uv`](https://github.com/astral-sh/uv).
+Requires Python 3.14 (`>=3.14,<3.15`) and [`uv`](https://github.com/astral-sh/uv).
 
 1. Clone the repository: `git clone https://github.com/finki-hub/chat-bot.git`
 2. Install dependencies: in each directory (`api` and `gpu-api`), run `uv sync`
-3. Prepare env. variables by copying `env.sample` to `.env` - minimum setup requires the database configuration, it can be left as is
-4. Run it: `docker compose up -d`
+3. Prepare env. variables by copying `.env.sample` to `.env` - minimum setup requires the database configuration, it can be left as is
+4. Run it: `docker compose up -d`. Unlike production, the dev compose builds the `api` and `gpu-api` images locally from source (it does not pull from ghcr), so the first run builds the containers. The per-directory `uv sync` from step 2 is for local/IDE tooling only — the containers build their own environment.
 
-This also brings up an OpenAPI instance at `localhost:8880/docs`.
+This also brings up the FastAPI Swagger UI (OpenAPI docs) at `localhost:8880/docs`.
 
 ## Endpoints
 
-This is an incomplete list. You may view all available endpoints on the OpenAPI documentation.
+This is an incomplete list. You may view all available endpoints on the OpenAPI documentation (`/docs`).
+
+API (`/api`):
 
 - `/questions/list` - get all questions
 - `/questions/name/<name>` - get a question by its name
-- `/questions/embed` - generate embeddings for all questions for a given model
+- `/questions/fill` - generate (fill) embeddings for stored questions for a given model (streams progress via SSE)
+- `/links/list` - get all links
+- `/chat` - chat with the bot (streaming response); `/chat/models` lists available chat models
+- `/health` - detailed health check
+
+GPU API (`/gpu-api`):
+
+- `/embeddings/embed` - generate embedding vectors for given input text(s)
+- `/rerank` - re-rank documents by relevance to a query
 
 ## License
 
