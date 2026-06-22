@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.llms.models import Model
@@ -69,10 +69,12 @@ class ChunkSchema(BaseModel):
 
 class IngestDocumentSchema(BaseModel):
     name: str = Field(
+        min_length=1,
         examples=["statut-finki-2019"],
         description="Unique key or slug for the document",
     )
     title: str = Field(
+        min_length=1,
         examples=["Статут на ФИНКИ"],
         description="Human-readable document title",
     )
@@ -92,6 +94,14 @@ class IngestDocumentSchema(BaseModel):
         default=None,
         examples=["198249751001563136"],
     )
+
+    @field_validator("name", "title")
+    @classmethod
+    def _strip_required(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("must not be blank or whitespace-only")
+        return stripped
 
 
 class FillChunkEmbeddingsSchema(BaseModel):

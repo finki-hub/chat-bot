@@ -1,7 +1,7 @@
 import hashlib
 import urllib.parse
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
 
 from app.data.connection import Database
@@ -72,6 +72,9 @@ async def get_document_by_name(name: str, db: Database = db_dep) -> DocumentSche
     ),
     status_code=status.HTTP_201_CREATED,
     responses={
+        status.HTTP_200_OK: {
+            "description": "Content unchanged (same hash); existing document returned",
+        },
         status.HTTP_400_BAD_REQUEST: {
             "description": "Empty document / no chunks produced",
         },
@@ -82,6 +85,7 @@ async def get_document_by_name(name: str, db: Database = db_dep) -> DocumentSche
 )
 async def ingest_document(
     payload: IngestDocumentSchema,
+    response: Response,
     db: Database = db_dep,
     force: bool = Query(
         default=False,
@@ -92,6 +96,8 @@ async def ingest_document(
 
     existing = await get_document_by_name_query(db, payload.name)
     if existing and existing.source_hash == source_hash and not force:
+        # Unchanged content: nothing was created, so report 200 instead of the 201 default.
+        response.status_code = status.HTTP_200_OK
         return existing
 
     chunks = chunk_markdown(payload.content)
