@@ -134,3 +134,36 @@ MODEL_EMBEDDING_DIMENSIONS: dict[Model, int] = {
     Model.GEMINI_EMBEDDING_001: 3072,
     Model.MULTILINGUAL_E5_LARGE: 1024,
 }
+
+
+def _validate_model_maps() -> None:
+    """Fail fast at import on a silently-wrong embedding configuration.
+
+    A retrievable model with >2000 dims that is missing from HALFVEC_EMBEDDING_MODELS
+    builds no usable index (pgvector caps a vector HNSW index at 2000 dims) and silently
+    degrades to a sequential scan. Any per-model map keyed on a model with no embedding
+    column is dead configuration.
+    """
+    for model in ALL_MODELS_EMBEDDINGS:
+        dims = MODEL_EMBEDDING_DIMENSIONS.get(model)
+        if dims is not None and dims > 2000 and model not in HALFVEC_EMBEDDING_MODELS:
+            msg = (
+                f"{model.value} has {dims} dims but is not in HALFVEC_EMBEDDING_MODELS; "
+                "its index would exceed pgvector's 2000-dim vector limit and be unused"
+            )
+            raise RuntimeError(msg)
+
+    columns = set(MODEL_EMBEDDINGS_COLUMNS)
+    for name, mapping in (
+        ("HALFVEC_EMBEDDING_MODELS", HALFVEC_EMBEDDING_MODELS),
+        ("MODEL_DISTANCE_THRESHOLDS", MODEL_DISTANCE_THRESHOLDS),
+        ("MODEL_EMBEDDING_DIMENSIONS", MODEL_EMBEDDING_DIMENSIONS),
+    ):
+        unknown = set(mapping) - columns
+        if unknown:
+            names = ", ".join(sorted(m.value for m in unknown))
+            msg = f"{name} references models with no embedding column: {names}"
+            raise RuntimeError(msg)
+
+
+_validate_model_maps()
