@@ -19,8 +19,8 @@ OVERLAP_CHARS = 150
 _SEPARATORS = ["\n\n", "\n", ". ", "! ", "? ", "; ", ", ", " ", ""]
 
 _COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
-_MEMBER_HEAD_RE = re.compile(r"^#\s*(Член\s+\d+.*)$", re.MULTILINE)
-_MEMBER_SPLIT_RE = re.compile(r"(?=^#\s*Член\s+\d+)", re.MULTILINE)
+_MEMBER_HEAD_RE = re.compile(r"^#{1,6}\s*(Член\s+\d+.*)$", re.MULTILINE)
+_MEMBER_SPLIT_RE = re.compile(r"(?=^#{1,6}\s*Член\s+\d+)", re.MULTILINE)
 _HEADING_SPLIT_RE = re.compile(r"(?=^#{1,6}\s+\S)", re.MULTILINE)
 _HEAD_RE = re.compile(r"^#{1,6}\s+(.*)$")
 
