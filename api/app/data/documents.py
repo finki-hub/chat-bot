@@ -169,7 +169,7 @@ async def fetch_chunk_rows_for_fill(
     documents: list[str] | None,
     *,
     all_chunks: bool,
-) -> list:
+) -> list[Record]:
     """Chunk rows (with document title) needing this model's embedding."""
     select = """
         SELECT c.id, c.content, c.section, d.title AS document_title
@@ -191,10 +191,3 @@ async def fetch_chunk_rows_for_fill(
     return await db.fetch(
         f"{select} WHERE c.{model_column} IS NULL ORDER BY d.name, c.chunk_index",
     )
-
-
-async def count_unfilled_chunks(db: Database, model_column: str) -> int:
-    count = await db.fetchval(
-        f"SELECT COUNT(*) FROM chunk WHERE {model_column} IS NULL",  # noqa: S608
-    )
-    return int(count) if isinstance(count, int | str) else 0
