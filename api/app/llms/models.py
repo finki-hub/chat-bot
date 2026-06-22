@@ -50,6 +50,19 @@ MODEL_EMBEDDINGS_COLUMNS: dict[Model, str] = {
     Model.MULTILINGUAL_E5_LARGE: "embedding_multilingual_e5_large",
 }
 
+# Models filled by an `all_models` request: exactly one per *indexed, retrievable*
+# embedding column. Excludes LLAMA_3_3_70B (8192 dims -> unindexed, so it can never be
+# used for ANN retrieval) and resolves the BGE_M3 / BGE_M3_LOCAL pair (both target
+# embedding_bge_m3) to the gpu-api BGE_M3_LOCAL provider, so a column is never filled
+# twice. Without this, all_models would double-fill embedding_bge_m3 and waste compute
+# on the un-retrievable llama column.
+ALL_MODELS_EMBEDDINGS: tuple[Model, ...] = (
+    Model.BGE_M3_LOCAL,
+    Model.TEXT_EMBEDDING_3_LARGE,
+    Model.GEMINI_EMBEDDING_001,
+    Model.MULTILINGUAL_E5_LARGE,
+)
+
 GPU_API_MODELS: dict[Model, str] = {
     Model.BGE_M3_LOCAL: "BAAI/bge-m3",
     Model.MULTILINGUAL_E5_LARGE: "intfloat/multilingual-e5-large",

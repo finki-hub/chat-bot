@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -13,6 +14,7 @@ from app.data.documents import fetch_chunk_rows_for_fill
 from app.llms.google import generate_google_embeddings
 from app.llms.gpu_api import generate_gpu_api_embeddings
 from app.llms.models import (
+    ALL_MODELS_EMBEDDINGS,
     MODEL_EMBEDDING_DIMENSIONS,
     MODEL_EMBEDDINGS_COLUMNS,
     Model,
@@ -23,6 +25,37 @@ from app.llms.text_utils import _prepare_text_for_embedding
 from app.utils.database import embedding_to_pgvector
 
 logger = logging.getLogger(__name__)
+
+
+EMBEDDING_MAX_ATTEMPTS = 3
+_EMBEDDING_RETRY_BASE_DELAY = 0.5
+
+
+async def _dispatch_embeddings(
+    text: str | list[str],
+    model: Model,
+    *,
+    is_document: bool,
+) -> list[float] | list[list[float]]:
+    match model:
+        case Model.LLAMA_3_3_70B | Model.BGE_M3:
+            return await generate_ollama_embeddings(text, model)
+
+        case Model.TEXT_EMBEDDING_3_LARGE:
+            return await generate_openai_embeddings(text, model)
+
+        case Model.GEMINI_EMBEDDING_001:
+            return await generate_google_embeddings(
+                text,
+                model,
+                is_document=is_document,
+            )
+
+        case Model.MULTILINGUAL_E5_LARGE | Model.BGE_M3_LOCAL:
+            return await generate_gpu_api_embeddings(text, model)
+
+        case _:
+            raise ValueError(f"Unsupported model: {model}")
 
 
 @overload
@@ -52,6 +85,10 @@ async def generate_embeddings(
     """
     Generate embeddings for the given text using the specified model.
     Pass is_document=True when indexing documents (only affects Gemini task_type).
+
+    Transient provider failures (a 429 / 5xx / timeout during a full-corpus fill) are
+    retried with bounded exponential backoff so a single blip does not fail a whole
+    batch. An unsupported model is a permanent ValueError and is not retried.
     """
 
     log_preview = (
@@ -59,30 +96,38 @@ async def generate_embeddings(
     )
     logger.info("Generating embeddings for text: '%s'", log_preview)
 
-    match model:
-        case Model.LLAMA_3_3_70B | Model.BGE_M3:
-            return await generate_ollama_embeddings(text, model)
+    for attempt in range(1, EMBEDDING_MAX_ATTEMPTS + 1):
+        try:
+            return await _dispatch_embeddings(text, model, is_document=is_document)
+        except ValueError:
+            raise
+        except Exception:
+            if attempt >= EMBEDDING_MAX_ATTEMPTS:
+                logger.exception(
+                    "Embedding generation failed for model %s after %d attempts",
+                    model.value,
+                    attempt,
+                )
+                raise
 
-        case Model.TEXT_EMBEDDING_3_LARGE:
-            return await generate_openai_embeddings(text, model)
-
-        case Model.GEMINI_EMBEDDING_001:
-            return await generate_google_embeddings(
-                text,
-                model,
-                is_document=is_document,
+            delay = _EMBEDDING_RETRY_BASE_DELAY * 2 ** (attempt - 1)
+            logger.warning(
+                "Embedding attempt %d/%d for model %s failed; retrying in %.1fs",
+                attempt,
+                EMBEDDING_MAX_ATTEMPTS,
+                model.value,
+                delay,
             )
+            await asyncio.sleep(delay)
 
-        case Model.MULTILINGUAL_E5_LARGE | Model.BGE_M3_LOCAL:
-            return await generate_gpu_api_embeddings(text, model)
-
-        case _:
-            raise ValueError(f"Unsupported model: {model}")
+    raise RuntimeError(
+        "Unreachable: embedding retry loop exited without return or raise",
+    )
 
 
 def _resolve_models(model: Model, *, all_models: bool) -> list[Model]:
     if all_models:
-        return list(MODEL_EMBEDDINGS_COLUMNS.keys())
+        return list(ALL_MODELS_EMBEDDINGS)
 
     if model not in MODEL_EMBEDDINGS_COLUMNS:
         raise HTTPException(
