@@ -56,8 +56,6 @@ async def chat(
         payload.model_dump(mode="json", exclude_defaults=True),
     )
 
-    # Retrieval and the link catalog are independent, so fetch them concurrently — the
-    # catalog is a cheap global SELECT whose round-trip hides behind the retrieval pipeline.
     retrieved, links_context = await asyncio.gather(
         get_retrieved_context(
             db=db,
@@ -69,8 +67,8 @@ async def chat(
     )
 
     if not retrieved:
-        # Retrieval miss: keep the bare "nothing found" signal alone so the system
-        # prompt's tool-search directive fires cleanly, undiluted by the links catalog.
+        # On a miss, leave the bare "nothing found" context alone so the prompt's
+        # tool-search directive isn't diluted by the links catalog.
         context = "Не можев да пронајдам релевантни информации во базата на податоци."
     else:
         context = retrieved

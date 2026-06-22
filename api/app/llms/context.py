@@ -314,9 +314,7 @@ async def get_retrieved_context(
     return "\n\n---\n\n".join(c.context_text for c in final)
 
 
-# Bounds for the link-catalog context block. The catalog is "small and global", so these
-# caps are generous headroom whose real job is to stop a single user-editable row (or a
-# grown table) from dominating — or injecting structure into — every chat prompt.
+# Bound the user-editable catalog's footprint in every prompt.
 _LINKS_MAX_ROWS = 50
 _LINK_NAME_MAX = 80
 _LINK_URL_MAX = 2048
@@ -324,12 +322,7 @@ _LINK_DESC_MAX = 200
 
 
 def _sanitize_inline(text: str, max_len: int) -> str:
-    """Flatten a stored catalog field to one safe, bounded inline span for the prompt.
-
-    Strips control/format characters (newlines included) and collapses whitespace, so a
-    value cannot fabricate new lines or fake section headers (e.g. an injected
-    "Корисни линкови:"/"Извор:") inside the prompt, then truncates to ``max_len``.
-    """
+    """Flatten a field to a bounded inline span, stripping newlines/control chars so a stored value can't fabricate prompt structure (fake headers or bullets)."""
     spaced = "".join(" " if ch.isspace() else ch for ch in text)
     cleaned = "".join(
         ch for ch in spaced if not unicodedata.category(ch).startswith("C")
@@ -341,15 +334,7 @@ def _sanitize_inline(text: str, max_len: int) -> str:
 
 
 async def get_links_context(db: Database) -> str:
-    """Render the standing link catalog (the `link` table) as a context block.
-
-    The catalog is small, global, and not embedded, so the whole of it (capped to
-    ``_LINKS_MAX_ROWS``) is surfaced alongside the retrieved FAQ/document context rather
-    than being searched. Rows are user-editable, so every field is sanitized and
-    length-bounded before it reaches the prompt, and rendering is per-row so one bad row
-    cannot blank the catalog. A DB failure is non-fatal: links are supplementary, so we
-    log and return "" rather than break the answer.
-    """
+    """Render the whole (capped) `link` catalog as a context block; per-row and fault-tolerant, so one bad row or a DB error degrades to "" instead of a broken answer."""
     try:
         rows = await fetch_links_for_context(db, _LINKS_MAX_ROWS)
     except Exception:
