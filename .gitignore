@@ -15,8 +15,15 @@ hf_cache/
 ## MongoDB
 mongo-data/
 
+# Python
+__pycache__/
+*.py[cod]
+
 # mypy
 .mypy_cache/
 
 # OMC
 .omc/
+
+# Wrangler (Cloudflare CLI local state/cache)
+.wrangler/
