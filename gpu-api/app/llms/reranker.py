@@ -51,6 +51,16 @@ def rerank_documents(query: str, documents: list[str]) -> list[tuple[float, int]
 
     scores = _reranker_model.predict(model_inputs)
 
+    if logger.isEnabledFor(logging.DEBUG):
+        score_values = [float(s) for s in scores]
+        logger.debug(
+            "Rerank score distribution: min=%.4f max=%.4f mean=%.4f (n=%d)",
+            min(score_values),
+            max(score_values),
+            sum(score_values) / len(score_values),
+            len(score_values),
+        )
+
     return sorted(
         ((float(score), idx) for idx, score in enumerate(scores)),
         key=lambda x: x[0],
