@@ -33,7 +33,7 @@ _RERANKER_MAX_RETRIES: int = 1
 class _Candidate:
     key: str  # dedup key, namespaced 'Q:'/'C:' so a chunk never collides with a FAQ
     source: str  # 'faq' | 'chunk'
-    rerank_text: str  # sent to the cross-encoder; MUST be unique per candidate
+    rerank_text: str  # the candidate text scored by the cross-encoder
     context_text: str  # rendered into the final context string
 
 
@@ -112,11 +112,7 @@ def _question_candidate(q: QuestionSchema) -> _Candidate:
 
 def _chunk_candidate(c: ChunkSchema) -> _Candidate:
     label = f"{c.document_title} ({c.section})" if c.section else c.document_title
-    # Tag with document_id#chunk_index so two chunks with identical visible text are
-    # still distinct inputs to the cross-encoder (match-back itself is by index, not text).
-    rerank_text = (
-        f"Наслов: {label} [{c.document_id}#{c.chunk_index}]\nСодржина: {c.content}"
-    )
+    rerank_text = f"Наслов: {label}\nСодржина: {c.content}"
     context_text = f"Извор: {label}\nСодржина: {c.content}"
     return _Candidate(
         key=f"C:{c.id}",

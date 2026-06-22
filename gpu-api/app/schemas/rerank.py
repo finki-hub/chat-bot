@@ -10,8 +10,7 @@ class RerankRequestSchema(BaseModel):
 
 class RankedDocument(BaseModel):
     index: int = Field(
-        description="Position of this document in the original request list, so the "
-        "caller can map it back without matching on the (re-serialized) text.",
+        description="Position of this document in the original request list.",
     )
     document: str = Field(description="The document text.")
     score: float = Field(

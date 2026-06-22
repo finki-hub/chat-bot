@@ -35,8 +35,6 @@ def rerank_documents(query: str, documents: list[str]) -> list[tuple[float, int]
     using the pre-loaded cross-encoder model.
 
     Returns a list of (score, original_index) tuples sorted by score descending.
-    The caller maps each index back to its document, so reordering never depends
-    on matching the (possibly re-serialized) document text.
     """
     logger.info(
         "Reranking %d documents for query: %s",

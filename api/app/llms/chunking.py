@@ -53,9 +53,8 @@ def _split_members(md: str) -> list[tuple[str | None, str]]:
         lines = part.splitlines()
         header = lines[0].lstrip("#").strip()
         body = "\n".join(lines[1:]).strip()
-        # A header with no body carries no retrievable content (the article label is
-        # kept in `section`); leave the body empty so chunk_markdown skips it rather
-        # than embedding a chunk whose text is just the header.
+        # No header fall-back: an empty body makes chunk_markdown skip this member
+        # instead of emitting a chunk whose only text is the label (kept in `section`).
         units.append((header, body))
     return units
 
