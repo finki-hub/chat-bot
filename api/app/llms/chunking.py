@@ -53,7 +53,10 @@ def _split_members(md: str) -> list[tuple[str | None, str]]:
         lines = part.splitlines()
         header = lines[0].lstrip("#").strip()
         body = "\n".join(lines[1:]).strip()
-        units.append((header, body or header))
+        # A header with no body carries no retrievable content (the article label is
+        # kept in `section`); leave the body empty so chunk_markdown skips it rather
+        # than embedding a chunk whose text is just the header.
+        units.append((header, body))
     return units
 
 
@@ -67,7 +70,7 @@ def _split_headings(md: str) -> list[tuple[str | None, str]]:
         head_match = _HEAD_RE.match(lines[0])
         if head_match:
             section: str | None = head_match.group(1).strip()
-            body = "\n".join(lines[1:]).strip() or section or ""
+            body = "\n".join(lines[1:]).strip()
         else:
             section = None
             body = part.strip()
