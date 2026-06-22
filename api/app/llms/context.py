@@ -35,6 +35,7 @@ class _Candidate:
     source: str  # 'faq' | 'chunk'
     rerank_text: str  # the candidate text scored by the cross-encoder
     context_text: str  # rendered into the final context string
+    distance: float | None = None  # carried only for the DEBUG trace
 
 
 async def _post_rerank(payload: dict) -> httpx.Response:
@@ -47,7 +48,7 @@ async def _post_rerank(payload: dict) -> httpx.Response:
                 timeout=_RERANKER_TIMEOUT,
             )
             response.raise_for_status()
-        except (httpx.TimeoutException, httpx.HTTPStatusError) as exc:
+        except httpx.HTTPError as exc:
             if attempt < _RERANKER_MAX_RETRIES:
                 logger.warning(
                     "Reranker attempt %d failed (%s), retrying...",
@@ -74,7 +75,7 @@ async def _embed_variant(
         embedding_model,
         is_document=is_document,
     )
-    return await generate_embeddings(prepared, embedding_model)
+    return await generate_embeddings(prepared, embedding_model, is_document=is_document)
 
 
 async def _search_both(
@@ -107,6 +108,7 @@ def _question_candidate(q: QuestionSchema) -> _Candidate:
         source="faq",
         rerank_text=rerank_text,
         context_text=context_text,
+        distance=q.distance,
     )
 
 
@@ -119,6 +121,7 @@ def _chunk_candidate(c: ChunkSchema) -> _Candidate:
         source="chunk",
         rerank_text=rerank_text,
         context_text=context_text,
+        distance=c.distance,
     )
 
 
@@ -158,13 +161,22 @@ def _select_with_faq_reservation(
 
     result = list(primary)
     needed = len(extra)
+    displaced: list[str] = []
     for i in range(len(result) - 1, -1, -1):
         if needed == 0:
             break
         if result[i].source == "chunk":
+            displaced.append(result[i].key)
             result.pop(i)
             needed -= 1
     result.extend(extra)
+
+    if displaced and logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            "FAQ reservation displaced %s to insert FAQs %s",
+            displaced,
+            [c.key for c in extra],
+        )
 
     order = {c.key: i for i, c in enumerate(ranked)}
     result.sort(key=lambda c: order[c.key])
@@ -209,6 +221,11 @@ async def get_retrieved_context(
     except Exception as e:
         raise RetrievalError("Failed during query transform / HyDE generation") from e
 
+    # transform_query can return an empty/whitespace string on a refusal; a blank
+    # rewrite makes the cross-encoder score every candidate 0.0 and bypass reranking.
+    rewritten_query = rewritten_query.strip() or query
+    hyde_passage = hyde_passage.strip() or query
+
     logger.info("Transformed query: '%s'", rewritten_query)
     logger.info("HyDE passage: '%s'", hyde_passage)
 
@@ -239,6 +256,12 @@ async def get_retrieved_context(
             sum(1 for c in candidates if c.source == "chunk"),
         )
 
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Retrieved candidates (key, source, distance): %s",
+                [(c.key, c.source, c.distance) for c in candidates],
+            )
+
         if not candidates:
             return ""
 
@@ -258,8 +281,18 @@ async def get_retrieved_context(
         # The reranker returns each candidate's original index, so we map straight back
         # to the candidate list — no fragile text matching that could silently drop a
         # result on any whitespace/serialization difference.
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Rerank scores (key, score): %s",
+                [
+                    (candidates[item["index"]].key, round(item["score"], 4))
+                    for item in ranked
+                    if 0 <= item["index"] < len(candidates)
+                ],
+            )
+
         ranked_candidates: list[_Candidate] = []
-        dropped = 0
+        dropped: list[tuple[str, str, float]] = []
         for item in ranked:
             idx = item["index"]
             if not 0 <= idx < len(candidates):
@@ -270,16 +303,22 @@ async def get_retrieved_context(
                 )
                 continue
             if item["score"] < settings.RERANKER_MIN_SCORE:
-                dropped += 1
+                dropped.append(
+                    (candidates[idx].key, candidates[idx].source, item["score"]),
+                )
                 continue
             ranked_candidates.append(candidates[idx])
 
         if dropped:
             logger.info(
                 "Reranker dropped %d/%d candidates below RERANKER_MIN_SCORE=%.2f",
-                dropped,
+                len(dropped),
                 len(ranked),
                 settings.RERANKER_MIN_SCORE,
+            )
+            logger.debug(
+                "Dropped candidates (key, source, score): %s",
+                [(key, source, round(score, 4)) for key, source, score in dropped],
             )
 
         if not ranked_candidates and ranked:
