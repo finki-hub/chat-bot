@@ -21,7 +21,8 @@ def init_reranker() -> None:
     logger.info("Initializing reranker model...")
 
     if _reranker_model is None:
-        model_name = "BAAI/bge-reranker-large"
+        # Multilingual cross-encoder (bge-m3 backbone); the v1 "large" was tuned for zh/en only.
+        model_name = "BAAI/bge-reranker-v2-m3"
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
