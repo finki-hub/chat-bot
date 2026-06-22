@@ -2,7 +2,7 @@
 
 RAG chat bot for the [`FINKI Hub`](https://discord.gg/finki-studenti-810997107376914444) Discord server, powered by [LangChain](https://github.com/langchain-ai/langchain) and [FastAPI](https://github.com/fastapi/fastapi). Uses [PostgreSQL](https://github.com/postgres/postgres) and [pgvector](https://github.com/pgvector/pgvector) for keeping documents. Has support for many LLMs.
 
-It currently answers questions using a retrieval pipeline over an FAQ dataset (the `question` table), and separately manages a collection of links. Retrieval over additional document types is planned.
+It answers questions using a retrieval pipeline over an FAQ dataset (the `question` table) and over chunked source-of-truth documents (the `document` / `chunk` tables — laws, rulebooks, procedures), retrieved together in a single reranked pass. It also separately manages a collection of links.
 
 ## Services
 
@@ -47,6 +47,9 @@ API (`/api`):
 - `/questions/list` - get all questions
 - `/questions/name/<name>` - get a question by its name
 - `/questions/fill` - generate (fill) embeddings for stored questions for a given model (streams progress via SSE)
+- `/documents/list` - list ingested source-of-truth documents (with chunk counts)
+- `/documents` (POST) - ingest/replace a document from Markdown; it is chunked into the `chunk` table (idempotent by name)
+- `/documents/fill` - generate (fill) embeddings for stored chunks for a given model (streams progress via SSE)
 - `/links/list` - get all links
 - `/chat` - chat with the bot (streaming response); `/chat/models` lists available chat models
 - `/health` - detailed health check
