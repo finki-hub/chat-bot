@@ -72,7 +72,9 @@ async def get_document_by_name(name: str, db: Database = db_dep) -> DocumentSche
     ),
     status_code=status.HTTP_201_CREATED,
     responses={
-        status.HTTP_400_BAD_REQUEST: {"description": "Empty document / no chunks produced"},
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "Empty document / no chunks produced",
+        },
         status.HTTP_401_UNAUTHORIZED: {"description": "Invalid or missing API Key"},
     },
     dependencies=[api_key_dep],

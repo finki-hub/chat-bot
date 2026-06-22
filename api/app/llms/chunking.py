@@ -80,9 +80,7 @@ def chunk_markdown(markdown: str) -> list[Chunk]:
     if not md:
         return []
 
-    units = (
-        _split_members(md) if _MEMBER_HEAD_RE.search(md) else _split_headings(md)
-    )
+    units = _split_members(md) if _MEMBER_HEAD_RE.search(md) else _split_headings(md)
 
     splitter = _splitter()
     chunks: list[Chunk] = []

@@ -181,7 +181,10 @@ async def fetch_chunk_rows_for_fill(
         where = f"WHERE d.name IN ({placeholders})"
         if not all_chunks:
             where += f" AND c.{model_column} IS NULL"
-        return await db.fetch(f"{select} {where} ORDER BY d.name, c.chunk_index", *documents)
+        return await db.fetch(
+            f"{select} {where} ORDER BY d.name, c.chunk_index",
+            *documents,
+        )
 
     if all_chunks:
         return await db.fetch(f"{select} ORDER BY d.name, c.chunk_index")

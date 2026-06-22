@@ -70,7 +70,11 @@ async def _embed_variant(
     *,
     is_document: bool,
 ) -> list[float]:
-    prepared = _prepare_text_for_embedding(text, embedding_model, is_document=is_document)
+    prepared = _prepare_text_for_embedding(
+        text,
+        embedding_model,
+        is_document=is_document,
+    )
     return await generate_embeddings(prepared, embedding_model)
 
 
@@ -130,7 +134,10 @@ def _build_candidates(
     seen: set[str] = set()
     merged: list[_Candidate] = []
     for questions, chunks in zip(question_lists, chunk_lists, strict=True):
-        for cand in (*map(_question_candidate, questions), *map(_chunk_candidate, chunks)):
+        for cand in (
+            *map(_question_candidate, questions),
+            *map(_chunk_candidate, chunks),
+        ):
             if cand.key not in seen:
                 seen.add(cand.key)
                 merged.append(cand)
