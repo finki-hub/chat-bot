@@ -1,7 +1,10 @@
 import logging
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 import anyio
 from asyncpg import Pool, Record, create_pool
+from asyncpg.pool import PoolConnectionProxy
 
 from app.constants.db import SCHEMA_PATH
 
@@ -108,6 +111,13 @@ class Database:
         pool = await self._ensure_pool()
         async with pool.acquire() as conn:
             return await conn.execute(query, *args)
+
+    @asynccontextmanager
+    async def transaction(self) -> AsyncGenerator[PoolConnectionProxy[Record]]:
+        """Acquire a connection and open a transaction for multi-statement atomic work."""
+        pool = await self._ensure_pool()
+        async with pool.acquire() as conn, conn.transaction():
+            yield conn
 
     async def run_migrations(self) -> None:
         """
