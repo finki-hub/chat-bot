@@ -65,6 +65,7 @@ services:
       HF_HOME: /huggingface_cache
       LOG_LEVEL: ${LOG_LEVEL}
       PRELOAD_BGEM3: ${PRELOAD_BGEM3}
+      RERANKER_MODEL: ${RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
       TZ: ${TZ}
     gpus: all
     image: ghcr.io/finki-hub/chat-bot-gpu-api:latest

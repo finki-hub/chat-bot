@@ -11,19 +11,17 @@ logger = logging.getLogger(__name__)
 _reranker_model: CrossEncoder | None = None
 
 
-def init_reranker() -> None:
+def init_reranker(model_name: str) -> None:
     """
-    Initializes the BGE Re-ranker model during application startup.
-    This function should be called from the lifespan manager.
+    Initialize the cross-encoder reranker during application startup.
+    Called from the lifespan manager. The default (bge-reranker-v2-m3) is
+    multilingual; the v1 "large" was tuned for Chinese/English only.
     """
     global _reranker_model  # noqa: PLW0603
 
-    logger.info("Initializing reranker model...")
+    logger.info("Initializing reranker model: %s", model_name)
 
     if _reranker_model is None:
-        # Multilingual cross-encoder (bge-m3 backbone); the v1 "large" was tuned for zh/en only.
-        model_name = "BAAI/bge-reranker-v2-m3"
-
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
         _reranker_model = CrossEncoder(model_name, device=device)

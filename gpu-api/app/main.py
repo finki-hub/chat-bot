@@ -28,7 +28,7 @@ setup_logging(level=settings.LOG_LEVEL)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    tasks = [to_thread(init_reranker)]
+    tasks = [to_thread(init_reranker, settings.RERANKER_MODEL)]
     if settings.PRELOAD_BGEM3:
         tasks.append(to_thread(init_bge_m3_embedder))
 

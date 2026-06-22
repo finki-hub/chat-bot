@@ -16,6 +16,8 @@ class Settings(BaseSettings):
 
     PRELOAD_BGEM3: bool = True
 
+    RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
+
     ALLOWED_ORIGINS: list[str] = ["*"]
     EXPOSE_HEADERS: list[str] = ["*"]
 
