@@ -30,6 +30,7 @@ services:
       OLLAMA_URL: ${OLLAMA_URL}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      RERANKER_MIN_SCORE: ${RERANKER_MIN_SCORE:-0.1}
       TZ: ${TZ}
       WORKERS: ${WORKERS}
     image: finki-hub/chat-bot-api:latest

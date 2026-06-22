@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
-RERANKER_MIN_SCORE: float = 0.1
 # Guarantee at least this many FAQ answers in the final context (if available), so a
 # long document's many chunks cannot crowd FAQ out of the shared rerank pool.
 RESERVED_FAQ_SLOTS: int = 3
@@ -266,7 +265,7 @@ async def get_retrieved_context(
 
         ranked_candidates: list[_Candidate] = []
         for item in ranked:
-            if item["score"] < RERANKER_MIN_SCORE:
+            if item["score"] < settings.RERANKER_MIN_SCORE:
                 continue
             doc_text = str(item["document"])
             for pos, (orig_idx, candidate_text) in enumerate(available):
