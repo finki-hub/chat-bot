@@ -52,6 +52,7 @@ async def handle_rerank(payload: RerankRequestSchema) -> RerankResponseSchema:
 
     return RerankResponseSchema(
         reranked_documents=[
-            RankedDocument(document=doc, score=score) for score, doc in scored_list
+            RankedDocument(index=idx, document=payload.documents[idx], score=score)
+            for score, idx in scored_list
         ],
     )

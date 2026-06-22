@@ -112,8 +112,8 @@ def _question_candidate(q: QuestionSchema) -> _Candidate:
 
 def _chunk_candidate(c: ChunkSchema) -> _Candidate:
     label = f"{c.document_title} ({c.section})" if c.section else c.document_title
-    # Include document_id#chunk_index so the rerank_text is unique even when two chunks
-    # share identical visible text — the cross-encoder match-back relies on string equality.
+    # Tag with document_id#chunk_index so two chunks with identical visible text are
+    # still distinct inputs to the cross-encoder (match-back itself is by index, not text).
     rerank_text = (
         f"Наслов: {label} [{c.document_id}#{c.chunk_index}]\nСодржина: {c.content}"
     )
@@ -259,20 +259,45 @@ async def get_retrieved_context(
         )
         ranked = response.json()["reranked_documents"]
 
-        # Build a mutable list of (index, text) so duplicate documents each map to their
-        # own original position instead of colliding in a dict.
-        available = list(enumerate(rerank_texts))
-
+        # The reranker returns each candidate's original index, so we map straight back
+        # to the candidate list — no fragile text matching that could silently drop a
+        # result on any whitespace/serialization difference.
         ranked_candidates: list[_Candidate] = []
+        dropped = 0
         for item in ranked:
-            if item["score"] < settings.RERANKER_MIN_SCORE:
+            idx = item["index"]
+            if not 0 <= idx < len(candidates):
+                logger.warning(
+                    "Reranker returned out-of-range index %d (have %d candidates)",
+                    idx,
+                    len(candidates),
+                )
                 continue
-            doc_text = str(item["document"])
-            for pos, (orig_idx, candidate_text) in enumerate(available):
-                if candidate_text == doc_text:
-                    ranked_candidates.append(candidates[orig_idx])
-                    available.pop(pos)
-                    break
+            if item["score"] < settings.RERANKER_MIN_SCORE:
+                dropped += 1
+                continue
+            ranked_candidates.append(candidates[idx])
+
+        if dropped:
+            logger.info(
+                "Reranker dropped %d/%d candidates below RERANKER_MIN_SCORE=%.2f",
+                dropped,
+                len(ranked),
+                settings.RERANKER_MIN_SCORE,
+            )
+
+        if not ranked_candidates and ranked:
+            # Everything was scored but nothing cleared the floor — rather than return
+            # empty context, keep the single best-scored candidate (ranked is desc).
+            best_idx = ranked[0]["index"]
+            if 0 <= best_idx < len(candidates):
+                logger.warning(
+                    "All %d reranked candidates were below RERANKER_MIN_SCORE=%.2f; "
+                    "keeping the top-scored one",
+                    len(ranked),
+                    settings.RERANKER_MIN_SCORE,
+                )
+                ranked_candidates = [candidates[best_idx]]
 
         final = _select_with_faq_reservation(ranked_candidates, top_k)
 
