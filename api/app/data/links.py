@@ -1,3 +1,4 @@
+from asyncpg import Record
 from pydantic import BaseModel, HttpUrl
 
 from app.data.connection import Database
@@ -13,6 +14,18 @@ async def get_links_query(db: Database) -> list[LinkSchema]:
     result = await db.fetch(query)
 
     return [LinkSchema(**row) for row in result]
+
+
+async def fetch_links_for_context(db: Database, limit: int) -> list[Record]:
+    """Capped raw link rows (name, url, description) for prompt-context rendering.
+
+    Returns Records rather than LinkSchema so a single malformed row cannot blank the
+    whole catalog: the caller sanitizes and skips per row. `limit` bounds the block size.
+    """
+    return await db.fetch(
+        "SELECT name, url, description FROM link ORDER BY name ASC LIMIT $1",
+        limit,
+    )
 
 
 async def get_link_names_query(db: Database) -> list[str]:

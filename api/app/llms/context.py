@@ -1,11 +1,13 @@
 import asyncio
 import logging
+import unicodedata
 from dataclasses import dataclass
 
 import httpx
 
 from app.data.connection import Database
 from app.data.documents import get_closest_chunks
+from app.data.links import fetch_links_for_context
 from app.data.questions import get_closest_questions
 from app.llms.embeddings import generate_embeddings
 from app.llms.models import Model
@@ -310,3 +312,63 @@ async def get_retrieved_context(
         final = _select_with_faq_reservation(candidates, top_k)
 
     return "\n\n---\n\n".join(c.context_text for c in final)
+
+
+# Bounds for the link-catalog context block. The catalog is "small and global", so these
+# caps are generous headroom whose real job is to stop a single user-editable row (or a
+# grown table) from dominating — or injecting structure into — every chat prompt.
+_LINKS_MAX_ROWS = 50
+_LINK_NAME_MAX = 80
+_LINK_URL_MAX = 2048
+_LINK_DESC_MAX = 200
+
+
+def _sanitize_inline(text: str, max_len: int) -> str:
+    """Flatten a stored catalog field to one safe, bounded inline span for the prompt.
+
+    Strips control/format characters (newlines included) and collapses whitespace, so a
+    value cannot fabricate new lines or fake section headers (e.g. an injected
+    "Корисни линкови:"/"Извор:") inside the prompt, then truncates to ``max_len``.
+    """
+    spaced = "".join(" " if ch.isspace() else ch for ch in text)
+    cleaned = "".join(
+        ch for ch in spaced if not unicodedata.category(ch).startswith("C")
+    )
+    collapsed = " ".join(cleaned.split())
+    if len(collapsed) > max_len:
+        collapsed = collapsed[:max_len].rstrip() + "…"
+    return collapsed
+
+
+async def get_links_context(db: Database) -> str:
+    """Render the standing link catalog (the `link` table) as a context block.
+
+    The catalog is small, global, and not embedded, so the whole of it (capped to
+    ``_LINKS_MAX_ROWS``) is surfaced alongside the retrieved FAQ/document context rather
+    than being searched. Rows are user-editable, so every field is sanitized and
+    length-bounded before it reaches the prompt, and rendering is per-row so one bad row
+    cannot blank the catalog. A DB failure is non-fatal: links are supplementary, so we
+    log and return "" rather than break the answer.
+    """
+    try:
+        rows = await fetch_links_for_context(db, _LINKS_MAX_ROWS)
+    except Exception:
+        logger.exception("Failed to load the link catalog for context")
+        return ""
+
+    lines: list[str] = []
+    for row in rows:
+        name = _sanitize_inline(row["name"] or "", _LINK_NAME_MAX)
+        url = _sanitize_inline(row["url"] or "", _LINK_URL_MAX)
+        if not name or not url:
+            continue
+        description = _sanitize_inline(row["description"] or "", _LINK_DESC_MAX)
+        line = f"- {name}: {url}"
+        if description:
+            line += f" ({description})"
+        lines.append(line)
+
+    if not lines:
+        return ""
+
+    return "Корисни линкови:\n" + "\n".join(lines)

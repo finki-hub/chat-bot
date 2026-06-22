@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, status
@@ -6,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from app.data.connection import Database
 from app.data.db import get_db
 from app.llms.chat import handle_chat
-from app.llms.context import get_retrieved_context
+from app.llms.context import get_links_context, get_retrieved_context
 from app.llms.models import CHAT_MODELS
 from app.schemas.chat import ChatSchema
 
@@ -55,15 +56,26 @@ async def chat(
         payload.model_dump(mode="json", exclude_defaults=True),
     )
 
-    context = await get_retrieved_context(
-        db=db,
-        query=payload.query,
-        embedding_model=payload.embeddings_model,
-        query_transform_model=payload.query_transform_model,
+    # Retrieval and the link catalog are independent, so fetch them concurrently — the
+    # catalog is a cheap global SELECT whose round-trip hides behind the retrieval pipeline.
+    retrieved, links_context = await asyncio.gather(
+        get_retrieved_context(
+            db=db,
+            query=payload.query,
+            embedding_model=payload.embeddings_model,
+            query_transform_model=payload.query_transform_model,
+        ),
+        get_links_context(db),
     )
 
-    if not context:
+    if not retrieved:
+        # Retrieval miss: keep the bare "nothing found" signal alone so the system
+        # prompt's tool-search directive fires cleanly, undiluted by the links catalog.
         context = "Не можев да пронајдам релевантни информации во базата на податоци."
+    else:
+        context = retrieved
+        if links_context:
+            context = f"{retrieved}\n\n{links_context}"
 
     return await handle_chat(payload, context)
 

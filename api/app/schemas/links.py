@@ -37,6 +37,7 @@ class LinkSchema(BaseModel):
 
 class CreateLinkSchema(BaseModel):
     name: str = Field(
+        max_length=80,
         description="Key or title for the new link",
         examples=["FINKI"],
     )
@@ -45,6 +46,7 @@ class CreateLinkSchema(BaseModel):
         examples=["https://finki.ukim.mk"],
     )
     description: str | None = Field(
+        max_length=200,
         description="Optional description of the link",
         examples=["FINKI homepage"],
     )
@@ -57,6 +59,7 @@ class CreateLinkSchema(BaseModel):
 class UpdateLinkSchema(BaseModel):
     name: str | None = Field(
         default=None,
+        max_length=80,
         description="New key/title for the link",
         examples=["example-updated"],
     )
@@ -67,6 +70,7 @@ class UpdateLinkSchema(BaseModel):
     )
     description: str | None = Field(
         default=None,
+        max_length=200,
         description="Updated description",
         examples=["An updated example site"],
     )
