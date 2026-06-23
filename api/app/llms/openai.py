@@ -220,6 +220,6 @@ async def transform_query_with_openai(
         response = await llm.ainvoke(messages)
         return str(response.content).strip()
     except Exception:
-        logger.exception("Query transformation failed: %s. Using original query.")
+        logger.exception("Query transformation failed; using the original query.")
 
         return query
