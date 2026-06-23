@@ -19,6 +19,7 @@ class Model(Enum):
     GPT_4_1 = "gpt-4.1"
     GPT_4_1_MINI = "gpt-4.1-mini"
     GPT_4_1_NANO = "gpt-4.1-nano"
+    GPT_5_4 = "gpt-5.4"
     GPT_5_4_MINI = "gpt-5.4-mini"
     TEXT_EMBEDDING_3_LARGE = "text-embedding-3-large"
 
@@ -82,6 +83,7 @@ CHAT_MODELS: frozenset[Model] = frozenset(
         Model.GPT_4_1,
         Model.GPT_4_1_MINI,
         Model.GPT_4_1_NANO,
+        Model.GPT_5_4,
         Model.GPT_5_4_MINI,
         Model.GPT_5_2,
         Model.GPT_5_MINI,
