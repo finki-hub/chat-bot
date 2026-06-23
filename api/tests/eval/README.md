@@ -15,13 +15,14 @@ chunks, cross-encoder rerank) and records:
 |---|---|
 | **ANN recall (ideal)** | expected source is in the top-N by raw cosine distance, **distance ceiling disabled** |
 | **ANN recall (prod)** | expected source survives the production `MODEL_DISTANCE_THRESHOLDS` cutoff |
-| **threshold drops** | ideal-hit **and** prod-miss — the source was close enough, but the cutoff discarded it. **The praksa class. A healthy config keeps this at 0.** |
+| **ceiling drops** | ideal-hit but past the distance cutoff — the source was relevant, but the ceiling discarded it. **The praksa class. A healthy config keeps this at 0.** |
+| **k-budget drops** | ideal-hit but crowded out of the per-query-k pool (closer competitors filled the budget) |
 | **final recall@k** | expected source is in the reranked, min-score-filtered context the LLM actually sees |
 | **MRR** | mean reciprocal rank of the expected source after reranking |
 
 Results are broken down by `source` (faq/chunk) and `difficulty` (easy/hard), and every
-final-recall miss is printed with a tag (`THRESHOLD-DROP` / `ANN-MISS` / `RERANK-MISS`)
-so failures are diagnosable, not just counted.
+final-recall miss is printed with a tag (`CEILING-DROP` / `KBUDGET-DROP` / `ANN-MISS` /
+`RERANK-MISS`) so failures are diagnosable, not just counted.
 
 ## Dataset — `golden.jsonl`
 

@@ -14,9 +14,10 @@ Two recalls are reported per example, and their gap is the headline signal:
                          lets through? (`MODEL_DISTANCE_THRESHOLDS`)
 * final recall@top_k   - is it in the reranked, min-score-filtered context?
 
-`threshold drops` = ideal-hit AND prod-miss. That count is exactly the "praksa" class of
-bug: a genuinely relevant source the ANN pre-filter silently discards before the reranker
-ever sees it. A healthy config keeps it at zero.
+The prod-miss gap (ideal-hit but absent from the prod pool) is split into `ceiling drops`
+(past the per-model distance cutoff — the "praksa" class: a relevant source silently
+discarded before the reranker sees it) and `k-budget drops` (crowded out of the
+per-query-k pool). A healthy config keeps ceiling drops at zero.
 
 Run it inside the api container (has DATABASE_URL, GPU/OpenAI access, app code):
 
