@@ -2,11 +2,12 @@ import asyncio
 import logging
 import unicodedata
 from dataclasses import dataclass
+from uuid import UUID
 
 import httpx
 
 from app.data.connection import Database
-from app.data.documents import get_closest_chunks
+from app.data.documents import get_chunks_window, get_closest_chunks
 from app.data.links import fetch_links_for_context
 from app.data.questions import get_closest_questions
 from app.llms.embeddings import generate_embeddings
@@ -29,6 +30,8 @@ settings = Settings()
 RESERVED_FAQ_SLOTS: int = 3
 _RERANKER_TIMEOUT = httpx.Timeout(timeout=30.0)
 _RERANKER_MAX_RETRIES: int = 1
+# Chunks pulled in on each side of a retrieved chunk, to give the model a contiguous passage.
+_NEIGHBOR_WINDOW: int = 1
 
 
 @dataclass(frozen=True)
@@ -38,6 +41,8 @@ class _Candidate:
     rerank_text: str  # the candidate text scored by the cross-encoder
     context_text: str  # rendered into the final context string
     distance: float | None = None  # carried only for the DEBUG trace
+    doc_id: UUID | None = None  # chunk identity for neighbor expansion (None for FAQ)
+    chunk_index: int | None = None
 
 
 async def _post_rerank(payload: dict) -> httpx.Response:
@@ -124,6 +129,8 @@ def _chunk_candidate(c: ChunkSchema) -> _Candidate:
         rerank_text=rerank_text,
         context_text=context_text,
         distance=c.distance,
+        doc_id=c.document_id,
+        chunk_index=c.chunk_index,
     )
 
 
@@ -350,7 +357,94 @@ async def get_retrieved_context(
         )
         final = _select_with_faq_reservation(candidates, top_k)
 
-    return "\n\n---\n\n".join(c.context_text for c in final)
+    return await _expand_and_render(db, final)
+
+
+async def _expand_and_render(db: Database, final: list[_Candidate]) -> str:
+    """Render the final candidates, stitching each retrieved chunk together with its
+    immediate neighbors into a single contiguous passage so an answer that spans a chunk
+    boundary reads as one block. Falls back to plain per-candidate rendering on error.
+    """
+    refs: list[tuple[UUID, int]] = [
+        (c.doc_id, c.chunk_index)
+        for c in final
+        if c.source == "chunk" and c.doc_id is not None and c.chunk_index is not None
+    ]
+
+    window_map: dict[tuple[UUID, int], ChunkSchema] = {}
+    if refs:
+        try:
+            for ch in await get_chunks_window(db, refs, window=_NEIGHBOR_WINDOW):
+                window_map[(ch.document_id, ch.chunk_index)] = ch
+        except Exception:
+            logger.exception("Neighbor expansion failed; rendering chunks unexpanded")
+
+    return _render_blocks(final, window_map)
+
+
+def _contiguous_runs(indices: list[int]) -> list[list[int]]:
+    """Split a sorted list of chunk indices into maximal consecutive runs."""
+    runs: list[list[int]] = []
+    for idx in indices:
+        if runs and idx == runs[-1][-1] + 1:
+            runs[-1].append(idx)
+        else:
+            runs.append([idx])
+    return runs
+
+
+def _render_passage(chunks: list[ChunkSchema]) -> str:
+    """Render a contiguous run of chunks (ordered by chunk_index) as one source block."""
+    title = chunks[0].document_title
+    sections = {c.section for c in chunks}
+    label = (
+        f"{title} ({chunks[0].section})"
+        if len(sections) == 1 and chunks[0].section
+        else title
+    )
+    body = "\n".join(c.content for c in chunks)
+    return f"Извор: {label}\nСодржина: {body}"
+
+
+def _render_blocks(
+    final: list[_Candidate],
+    window_map: dict[tuple[UUID, int], ChunkSchema],
+) -> str:
+    """Stitch each retrieved chunk together with its neighbors into a contiguous,
+    chunk-ordered passage; FAQ entries (and chunks whose window couldn't be fetched)
+    render unchanged. Each block keeps the rerank position of its best-ranked chunk.
+    Neighbors are unscored padding by design — acceptable at a ±1 window.
+    """
+    if not window_map:
+        return "\n\n---\n\n".join(c.context_text for c in final)
+
+    chunk_centers: dict[tuple[UUID, int], int] = {}
+    items: list[tuple[int, str]] = []
+    for rank, c in enumerate(final):
+        if c.source == "chunk" and c.doc_id is not None and c.chunk_index is not None:
+            ref = (c.doc_id, c.chunk_index)
+            if ref in window_map:
+                chunk_centers.setdefault(ref, rank)
+                continue
+        # FAQ, or a chunk whose window refetch came back short: never drop it.
+        items.append((rank, c.context_text))
+
+    included: dict[UUID, set[int]] = {}
+    for doc_id, idx in chunk_centers:
+        for delta in range(-_NEIGHBOR_WINDOW, _NEIGHBOR_WINDOW + 1):
+            if (doc_id, idx + delta) in window_map:
+                included.setdefault(doc_id, set()).add(idx + delta)
+
+    for doc_id, indices in included.items():
+        for run in _contiguous_runs(sorted(indices)):
+            run_rank = min(
+                chunk_centers[(doc_id, i)] for i in run if (doc_id, i) in chunk_centers
+            )
+            passage = _render_passage([window_map[(doc_id, i)] for i in run])
+            items.append((run_rank, passage))
+
+    items.sort(key=lambda item: item[0])
+    return "\n\n---\n\n".join(text for _, text in items)
 
 
 # Bound the user-editable catalog's footprint in every prompt.

@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Sequence
+from uuid import UUID
 
 from asyncpg import Record
 
@@ -160,6 +161,54 @@ async def get_closest_chunks(
             distance=row.get("distance", None),
         )
         for row in result
+    ]
+
+
+async def get_chunks_window(
+    db: Database,
+    refs: Sequence[tuple[UUID, int]],
+    window: int = 1,
+) -> list[ChunkSchema]:
+    """Chunks within ±window (by chunk_index, same document) of the given center refs,
+    including the centers themselves.
+
+    Lets contiguous retrieved chunks be stitched back into a single passage so an answer
+    that spans a chunk boundary — common for legal articles split mid-text — isn't
+    truncated. Only positions that actually exist are returned.
+    """
+    wanted: set[tuple[UUID, int]] = {
+        (doc_id, idx + delta)
+        for doc_id, idx in refs
+        for delta in range(-window, window + 1)
+    }
+    if not wanted:
+        return []
+
+    rows = await db.fetch(
+        """
+        SELECT c.id, c.document_id, c.chunk_index, c.content, c.section,
+               d.name AS document_name, d.title AS document_title
+        FROM chunk c
+        JOIN document d ON d.id = c.document_id
+        WHERE c.document_id = ANY($1::uuid[]) AND c.chunk_index = ANY($2::int[])
+        """,
+        list({doc_id for doc_id, _ in wanted}),
+        list({idx for _, idx in wanted}),
+    )
+
+    return [
+        ChunkSchema(
+            id=row["id"],
+            document_id=row["document_id"],
+            document_name=row["document_name"],
+            document_title=row["document_title"],
+            chunk_index=row["chunk_index"],
+            section=row["section"],
+            content=row["content"],
+            distance=None,
+        )
+        for row in rows
+        if (row["document_id"], row["chunk_index"]) in wanted
     ]
 
 
