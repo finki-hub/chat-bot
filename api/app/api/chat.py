@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, status
@@ -113,7 +114,13 @@ async def chat(
     today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
     context = f"Денешен датум: {today}.\n\n{context}"
 
-    return await handle_chat(payload, context)
+    # Set the header on the StreamingResponse returned by handle_chat: Starlette
+    # serializes headers only when the body starts streaming, so this lands first.
+    # Done at the one chokepoint because the default agent path skips the SSE wrapper.
+    response_id = uuid4()
+    response = await handle_chat(payload, context)
+    response.headers["X-Response-Id"] = str(response_id)
+    return response
 
 
 @router.get(
