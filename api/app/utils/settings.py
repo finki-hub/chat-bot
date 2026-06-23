@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     API_VERSION: str = "1.0.0"
 
     LOG_LEVEL: str = "INFO"
+    TZ: str = "Europe/Skopje"
 
     GPU_API_URL: str = "http://gpu-api:8888"
     # Minimum cross-encoder score (sentence-transformers CrossEncoder.predict applies a

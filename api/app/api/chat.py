@@ -1,5 +1,7 @@
 import asyncio
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import StreamingResponse
@@ -10,9 +12,13 @@ from app.llms.chat import handle_chat
 from app.llms.context import get_links_context, get_retrieved_context
 from app.llms.models import CHAT_MODELS
 from app.schemas.chat import ChatSchema
+from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
 
+settings = Settings()
+
+_TZ = ZoneInfo(settings.TZ)
 _HISTORY_TURNS_FOR_RETRIEVAL = 6
 _HISTORY_TURN_MAX_CHARS = 600
 
@@ -103,6 +109,9 @@ async def chat(
         context = retrieved
         if links_context:
             context = f"{retrieved}\n\n{links_context}"
+
+    today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
+    context = f"Денешен датум: {today}.\n\n{context}"
 
     return await handle_chat(payload, context)
 
