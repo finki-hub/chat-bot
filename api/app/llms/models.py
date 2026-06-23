@@ -119,12 +119,18 @@ HALFVEC_EMBEDDING_MODELS: frozenset[Model] = frozenset(
     },
 )
 
+# Cosine-distance ceiling for the ANN pre-filter, per embedding model. This is a
+# coarse RECALL gate; the cross-encoder reranker (RERANKER_MIN_SCORE) is the real
+# precision gate downstream, so it should err toward letting candidates through.
+# The 3072-dim API embedders produce lower absolute cosine similarities than bge-m3,
+# so they need a looser ceiling — 0.35 silently dropped genuinely relevant matches
+# (observed at ~0.38-0.42 distance) and returned empty context.
 MODEL_DISTANCE_THRESHOLDS: dict[Model, float] = {
     Model.BGE_M3: 0.4,
     Model.BGE_M3_LOCAL: 0.4,
     Model.MULTILINGUAL_E5_LARGE: 0.45,
-    Model.TEXT_EMBEDDING_3_LARGE: 0.35,
-    Model.GEMINI_EMBEDDING_001: 0.35,
+    Model.TEXT_EMBEDDING_3_LARGE: 0.5,
+    Model.GEMINI_EMBEDDING_001: 0.5,
     Model.LLAMA_3_3_70B: 0.5,
 }
 
