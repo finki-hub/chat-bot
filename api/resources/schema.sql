@@ -136,3 +136,27 @@ ADD COLUMN IF NOT EXISTS embedding_multilingual_e5_large vector (1024);
 CREATE INDEX IF NOT EXISTS chunk_embedding_multilingual_e5_large_idx ON chunk USING hnsw (
     embedding_multilingual_e5_large vector_cosine_ops
 );
+
+-- Response feedback (like/dislike). Consumer-agnostic, keyed by the response_id the
+-- chatbot mints per /chat and returns via the X-Response-Id header. question/answer/model
+-- columns are client-attested (the server stores what the consumer reports, unverified).
+
+CREATE TABLE IF NOT EXISTS feedback (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    response_id UUID NOT NULL,
+    client TEXT NOT NULL CHECK (client IN ('discord', 'web')),
+    user_id TEXT NOT NULL,
+    feedback_type TEXT NOT NULL CHECK (feedback_type IN ('like', 'dislike')),
+    client_ref TEXT,
+    channel_id TEXT,
+    guild_id TEXT,
+    question_text TEXT,
+    answer_text TEXT,
+    inference_model TEXT,
+    embeddings_model TEXT,
+    query_transform_model TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS feedback_response_client_user_idx ON feedback (response_id, client, user_id);

@@ -10,6 +10,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
+from app.api.feedback import router as feedback_router
 from app.api.health import router as health_router
 from app.api.links import router as links_router
 from app.api.questions import router as questions_router
@@ -73,6 +74,7 @@ def make_app(settings: Settings) -> FastAPI:
         lifespan=lifespan,
         openapi_tags=[
             {"name": "Chat", "description": "Chat with LLMs"},
+            {"name": "Feedback", "description": "Submit response feedback"},
             {"name": "Questions", "description": "Manage questions"},
             {"name": "Documents", "description": "Manage source-of-truth documents"},
             {"name": "Links", "description": "Manage links"},
@@ -101,6 +103,7 @@ def make_app(settings: Settings) -> FastAPI:
     app.include_router(documents_router)
     app.include_router(links_router)
     app.include_router(chat_router)
+    app.include_router(feedback_router)
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
