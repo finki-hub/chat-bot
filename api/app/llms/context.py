@@ -12,7 +12,7 @@ from app.data.links import fetch_links_for_context
 from app.data.questions import get_closest_questions
 from app.llms.embeddings import generate_embeddings
 from app.llms.models import Model
-from app.llms.prompts import HYDE_SYSTEM_PROMPT
+from app.llms.prompts import CONTEXTUALIZE_SYSTEM_PROMPT, HYDE_SYSTEM_PROMPT
 from app.llms.query_transform import transform_query
 from app.llms.text_utils import _prepare_text_for_embedding
 from app.schemas.documents import ChunkSchema
@@ -198,6 +198,7 @@ async def get_retrieved_context(
     embedding_model: Model,
     query_transform_model: Model,
     *,
+    history_text: str | None = None,
     initial_k: int = 30,
     top_k: int = 10,
 ) -> str:
@@ -209,17 +210,23 @@ async def get_retrieved_context(
         embedding_model,
     )
 
+    search_query = await _contextualize_query(
+        query,
+        query_transform_model,
+        history_text,
+    )
+
     try:
         rewritten_query, hyde_passage = await asyncio.gather(
             transform_query(
-                query,
+                search_query,
                 query_transform_model,
                 temperature=0.0,
                 top_p=1.0,
                 max_tokens=128,
             ),
             transform_query(
-                query,
+                search_query,
                 query_transform_model,
                 system_prompt=HYDE_SYSTEM_PROMPT,
                 temperature=0.7,
@@ -232,8 +239,8 @@ async def get_retrieved_context(
 
     # transform_query can return an empty/whitespace string on a refusal; a blank
     # rewrite makes the cross-encoder score every candidate 0.0 and bypass reranking.
-    rewritten_query = rewritten_query.strip() or query
-    hyde_passage = hyde_passage.strip() or query
+    rewritten_query = rewritten_query.strip() or search_query
+    hyde_passage = hyde_passage.strip() or search_query
 
     logger.info("Transformed query: '%s'", rewritten_query)
     logger.info("HyDE passage: '%s'", hyde_passage)
@@ -242,7 +249,7 @@ async def get_retrieved_context(
 
     try:
         emb_original, emb_rewritten, emb_hyde = await asyncio.gather(
-            _embed_variant(query, embedding_model, is_document=False),
+            _embed_variant(search_query, embedding_model, is_document=False),
             _embed_variant(rewritten_query, embedding_model, is_document=False),
             _embed_variant(hyde_passage, embedding_model, is_document=True),
         )
@@ -358,6 +365,36 @@ async def get_retrieved_context(
         final = _select_with_faq_reservation(candidates, top_k)
 
     return await _expand_and_render(db, final)
+
+
+async def _contextualize_query(
+    query: str,
+    query_transform_model: Model,
+    history_text: str | None,
+) -> str:
+    """Fold prior turns into a standalone retrieval query, so a follow-up like
+    'колку чини тоа?' retrieves on the full question rather than a context-free fragment.
+    Returns the raw query unchanged when there's no history or the rewrite fails.
+    """
+    if not history_text:
+        return query
+    try:
+        condensed = await transform_query(
+            f"Претходен разговор:\n{history_text}\n\nНово прашање: {query}",
+            query_transform_model,
+            system_prompt=CONTEXTUALIZE_SYSTEM_PROMPT,
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=128,
+        )
+    except Exception:
+        logger.exception("Query contextualization failed; using the raw query")
+        return query
+    condensed = condensed.strip()
+    if condensed and condensed != query:
+        logger.info("Contextualized query: '%s' -> '%s'", query, condensed)
+        return condensed
+    return query
 
 
 async def _expand_and_render(db: Database, final: list[_Candidate]) -> str:

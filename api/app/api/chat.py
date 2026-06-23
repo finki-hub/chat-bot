@@ -13,6 +13,32 @@ from app.schemas.chat import ChatSchema
 
 logger = logging.getLogger(__name__)
 
+_HISTORY_TURNS_FOR_RETRIEVAL = 6
+_HISTORY_TURN_MAX_CHARS = 600
+
+
+def _clip(text: str) -> str:
+    if len(text) <= _HISTORY_TURN_MAX_CHARS:
+        return text
+    return text[:_HISTORY_TURN_MAX_CHARS].rstrip() + "…"
+
+
+def _history_for_retrieval(payload: ChatSchema) -> str | None:
+    """Recent prior turns as a transcript, for history-aware retrieval (None if none).
+
+    Each turn's text is clipped so a few long turns can't bloat the contextualization
+    prompt (and blow a small local model's window) — reference resolution only needs the
+    gist of earlier turns, not their full text.
+    """
+    turns = payload.history[-_HISTORY_TURNS_FOR_RETRIEVAL:]
+    if not turns:
+        return None
+    return "\n".join(
+        f"{'Корисник' if t.role == 'user' else 'Асистент'}: {_clip(t.content)}"
+        for t in turns
+    )
+
+
 db_dep = Depends(get_db)
 
 router = APIRouter(
@@ -56,12 +82,15 @@ async def chat(
         payload.model_dump(mode="json", exclude_defaults=True),
     )
 
+    history_text = _history_for_retrieval(payload)
+
     retrieved, links_context = await asyncio.gather(
         get_retrieved_context(
             db=db,
             query=payload.query,
             embedding_model=payload.embeddings_model,
             query_transform_model=payload.query_transform_model,
+            history_text=history_text,
         ),
         get_links_context(db),
     )
