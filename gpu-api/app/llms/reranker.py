@@ -24,7 +24,15 @@ def init_reranker(model_name: str) -> None:
     if _reranker_model is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        _reranker_model = CrossEncoder(model_name, device=device)
+        # Load in fp16 on CUDA (Ampere+): halves VRAM and cuts rerank latency
+        # with negligible ranking-quality impact. CPU stays fp32 (no fast fp16).
+        model_kwargs = {"torch_dtype": torch.float16} if device == "cuda" else {}
+
+        _reranker_model = CrossEncoder(
+            model_name,
+            device=device,
+            model_kwargs=model_kwargs,
+        )
 
         logger.info("Reranker model initialized successfully on device: %s", device)
 
