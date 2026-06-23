@@ -92,14 +92,26 @@ async def get_mcp_tools() -> list:
         return mcp_tools
 
     client = build_mcp_client()
-    mcp_tools = await client.get_tools()
+    fetched = await client.get_tools()
+
+    if not fetched:
+        # Empty usually means the MCP server is unreachable/degraded. Keep the last-good
+        # tools and leave the timestamp stale so the next request retries, instead of
+        # caching a tool-less agent for the whole TTL.
+        logger.warning(
+            "MCP returned an empty tool list; keeping previously cached tools (if any) "
+            "and retrying on the next request instead of caching the empty result",
+        )
+        return mcp_tools if mcp_tools is not None else []
+
+    mcp_tools = fetched
     mcp_tools_fetched_at = now
 
     logger.info(
         "Fetched and cached %d MCP tools (TTL=%ds): %s",
         len(mcp_tools),
         ttl,
-        ", ".join(tool.name for tool in mcp_tools) if mcp_tools else "None",
+        ", ".join(tool.name for tool in mcp_tools),
     )
 
     return mcp_tools
