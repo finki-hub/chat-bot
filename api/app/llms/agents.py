@@ -15,12 +15,21 @@ def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
     """Wrap a synchronous token generator as a Server-Sent Events StreamingResponse."""
 
     async def async_token_gen() -> AsyncGenerator[str]:
-        while True:
-            chunk = await asyncio.to_thread(next, gen, _SENTINEL)
-            if chunk is _SENTINEL:
-                break
-            preserved_chunk = str(chunk).replace("\n", "\\n")
-            yield f"data: {preserved_chunk}\n\n"
+        emitted = False
+        try:
+            while True:
+                chunk = await asyncio.to_thread(next, gen, _SENTINEL)
+                if chunk is _SENTINEL:
+                    break
+                preserved_chunk = str(chunk).replace("\n", "\\n")
+                emitted = True
+                yield f"data: {preserved_chunk}\n\n"
+        except Exception:
+            logger.exception("Error while streaming the sync token generator")
+            if emitted:
+                yield "data: (Прекин: одговорот не може да се доврши поради грешка.)\n\n"
+            else:
+                yield "data: Се случи грешка при обработката на барањето. Обидете се повторно.\n\n"
 
     return StreamingResponse(
         async_token_gen(),
@@ -33,6 +42,7 @@ async def create_agent_token_generator(
     messages: list[BaseMessage],
 ) -> AsyncGenerator[str]:
     """Generate SSE tokens from an agent stream."""
+    emitted = False
     try:
         async for message, _metadata in agent.astream(
             {"messages": messages},
@@ -52,8 +62,13 @@ async def create_agent_token_generator(
             if not text:
                 continue
             preserved = text.replace("\n", "\\n")
+            emitted = True
             yield f"data: {preserved}\n\n"
 
     except Exception:
         logger.exception("Agent error occurred during streaming")
-        yield "data: An error occurred while processing your request. Please try again.\n\n"
+        # Tokens already streamed: "try again" would contradict the partial answer.
+        if emitted:
+            yield "data: (Прекин: одговорот не може да се доврши поради грешка.)\n\n"
+        else:
+            yield "data: Се случи грешка при обработката на барањето. Обидете се повторно.\n\n"
