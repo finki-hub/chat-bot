@@ -121,9 +121,13 @@ HALFVEC_EMBEDDING_MODELS: frozenset[Model] = frozenset(
 
 # Cosine-distance ceiling for the ANN pre-filter, per embedding model — a coarse RECALL
 # gate, not the precision gate (the cross-encoder reranker / RERANKER_MIN_SCORE is that),
-# so it errs toward letting candidates through. Kept generous on purpose: the eval harness
-# (api/tests/eval) found relevant bge-m3 sources at ~0.40-0.55 that a 0.40 ceiling dropped
-# before the reranker saw them (the "praksa" miss).
+# so it errs toward letting candidates through. Kept generous on purpose.
+#
+# Only the bge-m3 values are eval-calibrated: the harness (api/tests/eval) found relevant
+# bge-m3 sources at ~0.40-0.55 that the old 0.40 ceiling dropped before the reranker saw
+# them (the "praksa" miss). The other models share the same 0.5 as an untuned carry-over —
+# their cosine-distance distributions differ, so recalibrate each with
+# `run_eval.py --embedding-model <name>` before trusting the ceiling for that model.
 MODEL_DISTANCE_THRESHOLDS: dict[Model, float] = {
     Model.BGE_M3: 0.5,
     Model.BGE_M3_LOCAL: 0.5,
