@@ -206,7 +206,15 @@ async def get_closest_questions(
         param_expr = "$1"
 
     sql = f"""
-    SELECT *, {col_expr} <=> {param_expr} AS distance
+    SELECT
+        id,
+        name,
+        content,
+        user_id,
+        links,
+        created_at,
+        updated_at,
+        {col_expr} <=> {param_expr} AS distance
     FROM question
     WHERE {embedding_column} IS NOT NULL AND {col_expr} <=> {param_expr} < $3
     ORDER BY distance

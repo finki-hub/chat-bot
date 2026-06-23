@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     MCP_API_KEY: str = "SystemPass"
 
     API_KEY: str = "your_api_key_here"
-    DATABASE_URL: str = "postgresql+asyncpg://user:password@host:port/db"
+    DATABASE_URL: str = "postgresql://user:password@host:port/db"
 
     OPENAI_API_KEY: str = "your_openai_api_key_here"
     GOOGLE_API_KEY: str = "your_google_api_key_here"

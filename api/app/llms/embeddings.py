@@ -142,7 +142,7 @@ async def _fetch_question_rows(
     questions: list[str] | None,
     *,
     all_questions: bool,
-) -> list:
+) -> list[Record]:
     if all_questions:
         return await db.fetch("SELECT id, name, content FROM question")
 
