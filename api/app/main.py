@@ -25,12 +25,31 @@ settings = Settings()
 
 setup_logging(level=settings.LOG_LEVEL)
 
+# Auth secrets with guessable built-in defaults. Warn (not fail) at startup so dev still
+# boots, but a misconfigured prod doesn't silently ship a known key.
+_INSECURE_SECRET_DEFAULTS: dict[str, str] = {
+    "API_KEY": "your_api_key_here",
+    "MCP_API_KEY": "SystemPass",
+}
+
+
+def _warn_on_insecure_defaults(current: Settings) -> None:
+    for name, default in _INSECURE_SECRET_DEFAULTS.items():
+        if getattr(current, name) == default:
+            logger.warning(
+                "%s is using its insecure built-in default; set it via the environment "
+                "to protect authenticated endpoints.",
+                name,
+            )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     App startup/shutdown: init DB, shared HTTP client, and run migrations.
     """
+    _warn_on_insecure_defaults(settings)
+
     db = Database(dsn=settings.DATABASE_URL)
     app.state.db = db
 
@@ -64,10 +83,14 @@ def make_app(settings: Settings) -> FastAPI:
     )
     app.state.settings = settings
 
+    # Wildcard origin + credentials is browser-rejected and unsafe; enable credentials
+    # only for an explicit allowlist.
+    allow_credentials = "*" not in settings.ALLOWED_ORIGINS
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.ALLOWED_ORIGINS,
-        allow_credentials=True,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=settings.EXPOSE_HEADERS,
@@ -84,19 +107,10 @@ def make_app(settings: Settings) -> FastAPI:
         request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
-        raw = exc.body
-        if isinstance(raw, bytes | bytearray):
-            try:
-                body_str = raw.decode("utf-8")
-            except Exception:
-                body_str = repr(raw)
-        else:
-            body_str = raw
-
-        content = {"detail": exc.errors(), "body": body_str}
+        # Don't echo the raw request body back (avoids reflecting arbitrary/oversized input).
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=jsonable_encoder(content),
+            content=jsonable_encoder({"detail": exc.errors()}),
         )
 
     @app.exception_handler(RetrievalError)
