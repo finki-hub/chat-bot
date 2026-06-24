@@ -1,5 +1,7 @@
 import asyncio
+import json
 import logging
+from time import perf_counter
 
 from fastapi import APIRouter, status
 
@@ -44,10 +46,20 @@ async def handle_rerank(payload: RerankRequestSchema) -> RerankResponseSchema:
     if not payload.documents:
         return RerankResponseSchema(reranked_documents=[])
 
+    start = perf_counter()
     scored_list = await asyncio.to_thread(
         rerank_documents,
         payload.query,
         payload.documents,
+    )
+    logger.info(
+        "gpu.rerank %s",
+        json.dumps(
+            {
+                "docs": len(payload.documents),
+                "ms": round((perf_counter() - start) * 1000, 1),
+            },
+        ),
     )
 
     return RerankResponseSchema(

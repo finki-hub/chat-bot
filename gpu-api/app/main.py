@@ -3,6 +3,7 @@ from asyncio import gather, to_thread
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import torch
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -28,6 +29,15 @@ setup_logging(level=settings.LOG_LEVEL)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    if torch.cuda.is_available():
+        logger.info(
+            "gpu.cuda available=True device=%s count=%d",
+            torch.cuda.get_device_name(0),
+            torch.cuda.device_count(),
+        )
+    else:
+        logger.warning("gpu.cuda available=False - models will run on CPU")
+
     tasks = [to_thread(init_reranker, settings.RERANKER_MODEL)]
     if settings.PRELOAD_BGEM3:
         tasks.append(to_thread(init_bge_m3_embedder))
