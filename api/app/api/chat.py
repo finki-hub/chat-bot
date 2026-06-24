@@ -1,7 +1,9 @@
 import asyncio
+import json
 import logging
+from collections.abc import AsyncGenerator, AsyncIterable
 from datetime import datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, status
@@ -14,6 +16,12 @@ from app.llms.context import get_links_context, get_retrieved_context
 from app.llms.models import CHAT_MODELS
 from app.schemas.chat import ChatSchema
 from app.utils.settings import Settings
+from app.utils.timing import (
+    RequestTimings,
+    reset_request_timings,
+    start_request_timings,
+    timed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +52,38 @@ def _history_for_retrieval(payload: ChatSchema) -> str | None:
         f"{'Корисник' if t.role == 'user' else 'Асистент'}: {_clip(t.content)}"
         for t in turns
     )
+
+
+async def _instrument_stream(
+    body: AsyncIterable[bytes | str | memoryview],
+    *,
+    payload: ChatSchema,
+    response_id: UUID,
+    timings: RequestTimings,
+    retrieval_hit: bool,
+) -> AsyncGenerator[bytes | str | memoryview]:
+    """Pass the SSE body through untouched while stamping TTFT (first chunk) and total
+    (stream end), then emit one chat.timing log line with the latency breakdown.
+    """
+    try:
+        async for chunk in body:
+            timings.mark_ttft()
+            yield chunk
+    finally:
+        timings.mark_total()
+        logger.info(
+            "chat.timing %s",
+            json.dumps(
+                {
+                    "response_id": str(response_id),
+                    "inference_model": payload.inference_model.value,
+                    "embeddings_model": payload.embeddings_model.value,
+                    "query_transform_model": payload.query_transform_model.value,
+                    "retrieval_hit": retrieval_hit,
+                    **timings.as_record(),
+                },
+            ),
+        )
 
 
 db_dep = Depends(get_db)
@@ -91,36 +131,54 @@ async def chat(
 
     history_text = _history_for_retrieval(payload)
 
-    retrieved, links_context = await asyncio.gather(
-        get_retrieved_context(
-            db=db,
-            query=payload.query,
-            embedding_model=payload.embeddings_model,
-            query_transform_model=payload.query_transform_model,
-            history_text=history_text,
-        ),
-        get_links_context(db),
-    )
+    timings, token = start_request_timings()
+    try:
+        retrieved, links_context = await asyncio.gather(
+            get_retrieved_context(
+                db=db,
+                query=payload.query,
+                embedding_model=payload.embeddings_model,
+                query_transform_model=payload.query_transform_model,
+                history_text=history_text,
+            ),
+            get_links_context(db),
+        )
 
-    if not retrieved:
-        # On a miss, leave the bare "nothing found" context alone so the prompt's
-        # tool-search directive isn't diluted by the links catalog.
-        context = "Не можев да пронајдам релевантни информации во базата на податоци."
-    else:
-        context = retrieved
-        if links_context:
-            context = f"{retrieved}\n\n{links_context}"
+        if not retrieved:
+            # On a miss, leave the bare "nothing found" context alone so the prompt's
+            # tool-search directive isn't diluted by the links catalog.
+            context = (
+                "Не можев да пронајдам релевантни информации во базата на податоци."
+            )
+        else:
+            context = retrieved
+            if links_context:
+                context = f"{retrieved}\n\n{links_context}"
 
-    today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
-    context = f"Денешен датум: {today}.\n\n{context}"
+        today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
+        context = f"Денешен датум: {today}.\n\n{context}"
 
-    # Set the header on the StreamingResponse returned by handle_chat: Starlette
-    # serializes headers only when the body starts streaming, so this lands first.
-    # Done at the one chokepoint because the default agent path skips the SSE wrapper.
-    response_id = uuid4()
-    response = await handle_chat(payload, context)
-    response.headers["X-Response-Id"] = str(response_id)
-    return response
+        response_id = uuid4()
+        with timed("agent.setup"):
+            response = await handle_chat(payload, context)
+
+        response.body_iterator = _instrument_stream(
+            response.body_iterator,
+            payload=payload,
+            response_id=response_id,
+            timings=timings,
+            retrieval_hit=bool(retrieved),
+        )
+
+        # Set the header on the StreamingResponse returned by handle_chat: Starlette
+        # serializes headers only when the body starts streaming, so this lands first.
+        # Done at the one chokepoint because the default agent path skips the SSE wrapper.
+        response.headers["X-Response-Id"] = str(response_id)
+        return response
+    finally:
+        # The stream wrapper holds `timings` by closure, so the context var can be reset
+        # now (before streaming) without affecting the TTFT/total it records later.
+        reset_request_timings(token)
 
 
 @router.get(

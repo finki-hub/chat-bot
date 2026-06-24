@@ -9,6 +9,7 @@ from langchain_mcp_adapters.sessions import (
 )
 
 from app.utils.settings import Settings
+from app.utils.timing import timed
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,10 @@ async def get_mcp_tools() -> list:
         return mcp_tools
 
     client = build_mcp_client()
-    fetched = await client.get_tools()
+    # Timed only on an actual fetch (cache hits return above), so the span's presence on
+    # a request flags a refresh — and a degraded MCP server, which refetches every time.
+    with timed("agent.mcp_tools"):
+        fetched = await client.get_tools()
 
     if not fetched:
         # Empty usually means the MCP server is unreachable/degraded. Keep the last-good

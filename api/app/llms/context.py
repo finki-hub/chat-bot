@@ -20,6 +20,7 @@ from app.schemas.questions import QuestionSchema
 from app.utils.exceptions import RetrievalError
 from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
+from app.utils.timing import record_retrieval_shape, timed
 
 logger = logging.getLogger(__name__)
 
@@ -210,30 +211,32 @@ async def get_retrieved_context(
         embedding_model,
     )
 
-    search_query = await _contextualize_query(
-        query,
-        query_transform_model,
-        history_text,
-    )
+    with timed("retrieval.contextualize"):
+        search_query = await _contextualize_query(
+            query,
+            query_transform_model,
+            history_text,
+        )
 
     try:
-        rewritten_query, hyde_passage = await asyncio.gather(
-            transform_query(
-                search_query,
-                query_transform_model,
-                temperature=0.0,
-                top_p=1.0,
-                max_tokens=128,
-            ),
-            transform_query(
-                search_query,
-                query_transform_model,
-                system_prompt=HYDE_SYSTEM_PROMPT,
-                temperature=0.7,
-                top_p=0.9,
-                max_tokens=200,
-            ),
-        )
+        with timed("retrieval.rewrite_hyde"):
+            rewritten_query, hyde_passage = await asyncio.gather(
+                transform_query(
+                    search_query,
+                    query_transform_model,
+                    temperature=0.0,
+                    top_p=1.0,
+                    max_tokens=128,
+                ),
+                transform_query(
+                    search_query,
+                    query_transform_model,
+                    system_prompt=HYDE_SYSTEM_PROMPT,
+                    temperature=0.7,
+                    top_p=0.9,
+                    max_tokens=200,
+                ),
+            )
     except Exception as e:
         raise RetrievalError("Failed during query transform / HyDE generation") from e
 
@@ -248,21 +251,29 @@ async def get_retrieved_context(
     per_query_k = initial_k // 3 + 1
 
     try:
-        emb_original, emb_rewritten, emb_hyde = await asyncio.gather(
-            _embed_variant(search_query, embedding_model, is_document=False),
-            _embed_variant(rewritten_query, embedding_model, is_document=False),
-            _embed_variant(hyde_passage, embedding_model, is_document=True),
-        )
+        with timed("retrieval.embed"):
+            emb_original, emb_rewritten, emb_hyde = await asyncio.gather(
+                _embed_variant(search_query, embedding_model, is_document=False),
+                _embed_variant(rewritten_query, embedding_model, is_document=False),
+                _embed_variant(hyde_passage, embedding_model, is_document=True),
+            )
 
-        hyde_res, rewritten_res, original_res = await asyncio.gather(
-            _search_both(db, emb_hyde, embedding_model, per_query_k),
-            _search_both(db, emb_rewritten, embedding_model, per_query_k),
-            _search_both(db, emb_original, embedding_model, per_query_k),
-        )
+        with timed("retrieval.vector_search"):
+            hyde_res, rewritten_res, original_res = await asyncio.gather(
+                _search_both(db, emb_hyde, embedding_model, per_query_k),
+                _search_both(db, emb_rewritten, embedding_model, per_query_k),
+                _search_both(db, emb_original, embedding_model, per_query_k),
+            )
 
         candidates = _build_candidates(
             [hyde_res[0], rewritten_res[0], original_res[0]],
             [hyde_res[1], rewritten_res[1], original_res[1]],
+        )
+
+        distances = [c.distance for c in candidates if c.distance is not None]
+        record_retrieval_shape(
+            len(candidates),
+            min(distances) if distances else None,
         )
 
         logger.info(
@@ -289,9 +300,10 @@ async def get_retrieved_context(
     try:
         logger.info("Sending %d candidates to re-ranker...", len(rerank_texts))
 
-        response = await _post_rerank(
-            {"query": rewritten_query, "documents": rerank_texts},
-        )
+        with timed("retrieval.rerank"):
+            response = await _post_rerank(
+                {"query": rewritten_query, "documents": rerank_texts},
+            )
         ranked = response.json()["reranked_documents"]
 
         # The reranker returns each candidate's original index, so we map straight back
@@ -364,7 +376,8 @@ async def get_retrieved_context(
         )
         final = _select_with_faq_reservation(candidates, top_k)
 
-    return await _expand_and_render(db, final)
+    with timed("retrieval.expand"):
+        return await _expand_and_render(db, final)
 
 
 async def _contextualize_query(
@@ -506,7 +519,8 @@ def _sanitize_inline(text: str, max_len: int) -> str:
 async def get_links_context(db: Database) -> str:
     """Render the whole (capped) `link` catalog as a context block; per-row and fault-tolerant, so one bad row or a DB error degrades to "" instead of a broken answer."""
     try:
-        rows = await fetch_links_for_context(db, _LINKS_MAX_ROWS)
+        with timed("links"):
+            rows = await fetch_links_for_context(db, _LINKS_MAX_ROWS)
     except Exception:
         logger.exception("Failed to load the link catalog for context")
         return ""
