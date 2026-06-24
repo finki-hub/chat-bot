@@ -6,6 +6,7 @@ import httpx
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import BaseMessage
 
+from app.llms.agents import DONE_EVENT, error_event
 from app.llms.models import GPU_API_MODELS, Model
 from app.llms.prompts import history_transcript
 from app.utils.http_client import get_http_client
@@ -17,9 +18,7 @@ settings = Settings()
 
 _STREAMING_TIMEOUT = httpx.Timeout(timeout=300.0)
 _EMBEDDINGS_TIMEOUT = httpx.Timeout(timeout=60.0)
-_SSE_ERROR_MESSAGE = (
-    "data: An error occurred while processing your request. Please try again.\n\n"
-)
+_GPU_ERROR_MESSAGE = "Се случи грешка при обработката на барањето. Обидете се повторно."
 
 
 async def generate_gpu_api_embeddings(
@@ -116,23 +115,30 @@ def stream_gpu_api_response(
                         response.status_code,
                         error_text.decode(),
                     )
-                    yield _SSE_ERROR_MESSAGE
+                    yield error_event("agent_error", _GPU_ERROR_MESSAGE)
+                    yield DONE_EVENT
                     return
 
+                # Upstream emits bare `data:` text frames, which the client reads as
+                # answer tokens; we only wrap the terminal error/done in the protocol.
                 async for chunk in response.aiter_bytes():
                     if chunk:
                         yield chunk.decode("utf-8")
 
+            yield DONE_EVENT
+
         except httpx.RequestError:
             logger.exception("Connection error to GPU API")
-            yield _SSE_ERROR_MESSAGE
+            yield error_event("agent_error", _GPU_ERROR_MESSAGE)
+            yield DONE_EVENT
         except asyncio.CancelledError:
             logger.exception("Streaming cancelled from GPU API")
 
             raise
         except Exception:
             logger.exception("Unexpected error while streaming from GPU API")
-            yield _SSE_ERROR_MESSAGE
+            yield error_event("agent_error", _GPU_ERROR_MESSAGE)
+            yield DONE_EVENT
 
     return StreamingResponse(
         stream_from_gpu_api(),
