@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["asyncpg-stubs>=0.31.2", "mypy>=2.1.0", "ruff>=0.15.18"]
+dev = ["asyncpg-stubs>=0.31.2", "mypy>=2.1.0", "ruff>=0.15.19"]
 
 [tool.mypy]
 python_version = "3.14"
