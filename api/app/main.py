@@ -9,11 +9,14 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.chat import router as chat_router
+from app.api.diplomas import router as diplomas_router
 from app.api.documents import router as documents_router
 from app.api.feedback import router as feedback_router
+from app.api.groups import router as groups_router
 from app.api.health import router as health_router
 from app.api.links import router as links_router
 from app.api.questions import router as questions_router
+from app.api.recommendations import router as recommendations_router
 from app.data.connection import Database
 from app.utils.exceptions import RetrievalError
 from app.utils.http_client import close_http_client, init_http_client
@@ -77,6 +80,15 @@ def make_app(settings: Settings) -> FastAPI:
             {"name": "Feedback", "description": "Submit response feedback"},
             {"name": "Questions", "description": "Manage questions"},
             {"name": "Documents", "description": "Manage source-of-truth documents"},
+            {"name": "Diplomas", "description": "Manage diplomas"},
+            {
+                "name": "Recommendations",
+                "description": "Recommend thesis committees",
+            },
+            {
+                "name": "Groups",
+                "description": "Temporal staff groups (who works together, by era)",
+            },
             {"name": "Links", "description": "Manage links"},
             {"name": "Health", "description": "Health check and API status"},
         ],
@@ -101,6 +113,9 @@ def make_app(settings: Settings) -> FastAPI:
     app.include_router(health_router)
     app.include_router(questions_router)
     app.include_router(documents_router)
+    app.include_router(diplomas_router)
+    app.include_router(recommendations_router)
+    app.include_router(groups_router)
     app.include_router(links_router)
     app.include_router(chat_router)
     app.include_router(feedback_router)

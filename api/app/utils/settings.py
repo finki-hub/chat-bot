@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     TZ: str = "Europe/Skopje"
 
     GPU_API_URL: str = "http://gpu-api:8888"
+    DIPLOMAS_API_URL: str = "https://diplomski-api.finki-hub.com/diplomas"
     # Minimum cross-encoder score (sentence-transformers CrossEncoder.predict applies a
     # sigmoid for num_labels=1 rerankers like bge-reranker-v2-m3, so scores are 0..1) a
     # candidate must clear to enter the final context. Tune per reranker distribution.
