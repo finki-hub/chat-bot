@@ -2,6 +2,13 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/* Tailwind must scan Streamdown's dist to emit the classes its markdown uses. */
+@source '../node_modules/streamdown/dist/*.js';
+@source '../node_modules/@streamdown/code/dist/*.js';
+@source '../node_modules/@streamdown/cjk/dist/*.js';
+@source '../node_modules/@streamdown/math/dist/*.js';
+@source '../node_modules/@streamdown/mermaid/dist/*.js';
+
 @custom-variant dark ([data-kb-theme="dark"] &);
 
 @theme inline {

@@ -23,6 +23,7 @@ export const messages = {
   'sidebar.toggle': 'Прикажи/сокриј странична лента',
   'thread.emptyDescription': 'Прашај нешто за студиите на ФИНКИ.',
   'thread.emptyTitle': 'Започни разговор',
+  'thread.thinking': 'Размислувам…',
 } as const;
 
 export type TKey = keyof typeof messages;

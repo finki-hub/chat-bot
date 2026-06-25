@@ -8,6 +8,7 @@ import {
   MessageResponse,
 } from '@/components/ai-elements/message';
 import { SearchStatus } from '@/components/chat/search-status';
+import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { t } from '@/lib/i18n';
 
 export type AssistantMessageProps = {
@@ -15,6 +16,7 @@ export type AssistantMessageProps = {
   errorPart?: { code: string; message: string };
   message: MyUIMessage;
   onRetry?: () => void;
+  pending?: boolean;
   statusPart?: { label: string; tool?: string };
 };
 
@@ -31,10 +33,12 @@ export const AssistantMessage = ({
   errorPart,
   message,
   onRetry,
+  pending,
   statusPart,
 }: AssistantMessageProps) => {
   const text = lastText(message);
   const showChip = Boolean(statusPart) && !text;
+  const showDots = Boolean(pending) && !text && !statusPart && !errorPart;
   const isInterrupted = errorPart?.code === 'interrupted';
 
   return (
@@ -51,6 +55,7 @@ export const AssistantMessage = ({
             tool={statusPart.tool}
           />
         ) : null}
+        {showDots ? <TypingIndicator /> : null}
         {errorPart ? (
           <div
             className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm"
