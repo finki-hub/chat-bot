@@ -107,6 +107,7 @@ describe('AnswerActions feedback', () => {
     await waitFor(() => {
       expect(like).toHaveAttribute('aria-pressed', 'true');
     });
+
     expect(like.className).toContain('text-green-600');
     expect(like.className).not.toContain('text-muted-foreground');
   });

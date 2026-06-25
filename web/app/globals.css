@@ -2,6 +2,14 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/* Let Tailwind detect the utility classes Streamdown (and its plugins) emit
+   for rendered markdown — prose, code blocks, tables, math, mermaid. */
+@source '../node_modules/streamdown/dist/*.js';
+@source '../node_modules/@streamdown/code/dist/*.js';
+@source '../node_modules/@streamdown/cjk/dist/*.js';
+@source '../node_modules/@streamdown/math/dist/*.js';
+@source '../node_modules/@streamdown/mermaid/dist/*.js';
+
 @custom-variant dark ([data-kb-theme="dark"] &);
 
 @theme inline {
