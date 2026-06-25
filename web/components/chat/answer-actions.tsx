@@ -5,6 +5,7 @@ import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { t } from '@/lib/i18n';
 import { getAnonUserId } from '@/lib/user';
+import { cn } from '@/lib/utils';
 
 export type AnswerActionsProps = {
   message: MyUIMessage;
@@ -20,7 +21,7 @@ const answerText = (message: MyUIMessage): string => {
 };
 
 const BTN =
-  'inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted';
+  'inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
 
 export const AnswerActions = ({
   message,
@@ -110,7 +111,11 @@ export const AnswerActions = ({
       <button
         aria-label={t('actions.like')}
         aria-pressed={vote === 'like'}
-        className={`${BTN} ${vote === 'like' ? 'text-green-600' : ''}`}
+        className={cn(
+          BTN,
+          vote === 'like' &&
+            'bg-green-600/10 text-green-600 hover:bg-green-600/15 hover:text-green-600',
+        )}
         data-testid="like-button"
         onClick={() => {
           void sendFeedback('like');
@@ -119,13 +124,18 @@ export const AnswerActions = ({
       >
         <ThumbsUp
           aria-hidden="true"
-          className="size-4"
+          className={cn('size-4', vote === 'like' && 'fill-current')}
         />
       </button>
       <button
         aria-label={t('actions.dislike')}
         aria-pressed={vote === 'dislike'}
-        className={`${BTN} ${vote === 'dislike' ? 'text-red-600' : ''}`}
+        className={cn(
+          BTN,
+          vote === 'dislike' &&
+            'bg-red-600/10 text-red-600 hover:bg-red-600/15 hover:text-red-600',
+        )}
+        data-testid="dislike-button"
         onClick={() => {
           void sendFeedback('dislike');
         }}
@@ -133,7 +143,7 @@ export const AnswerActions = ({
       >
         <ThumbsDown
           aria-hidden="true"
-          className="size-4"
+          className={cn('size-4', vote === 'dislike' && 'fill-current')}
         />
       </button>
     </div>

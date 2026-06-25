@@ -179,6 +179,17 @@ describe('Thread', () => {
     expect(screen.queryByText(hasText('преамбула'))).not.toBeInTheDocument();
   });
 
+  it('shows a typing indicator while awaiting the assistant reply', () => {
+    render(
+      <Thread
+        messages={[userMessage('прашање')]}
+        status="submitted"
+      />,
+    );
+
+    expect(screen.getByTestId('typing-indicator')).toBeInTheDocument();
+  });
+
   it('passes the active status only to the LAST assistant message while streaming', () => {
     const messages: MyUIMessage[] = [
       userMessage('прашање'),

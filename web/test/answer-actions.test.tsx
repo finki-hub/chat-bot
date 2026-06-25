@@ -99,6 +99,18 @@ describe('AnswerActions feedback', () => {
     });
   });
 
+  it('paints the like button green once pressed', async () => {
+    render(<AnswerActions message={assistant('resp-9')} />);
+    const like = screen.getByRole('button', { name: 'Допаѓа' });
+    fireEvent.click(like);
+
+    await waitFor(() => {
+      expect(like).toHaveAttribute('aria-pressed', 'true');
+    });
+    expect(like.className).toContain('text-green-600');
+    expect(like.className).not.toContain('text-muted-foreground');
+  });
+
   it('reverts the optimistic vote when the request fails', async () => {
     vi.stubGlobal(
       'fetch',

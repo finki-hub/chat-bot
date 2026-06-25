@@ -14,6 +14,7 @@ import {
   MessageResponse,
 } from '@/components/ai-elements/message';
 import { AssistantMessage } from '@/components/chat/message';
+import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { t } from '@/lib/i18n';
 
 export type ThreadProps = {
@@ -41,6 +42,7 @@ export const Thread = ({
 }: ThreadProps) => {
   const lastAssistantId = messages.findLast((m) => m.role === 'assistant')?.id;
   const streaming = status === 'streaming' || status === 'submitted';
+  const awaitingReply = streaming && messages.at(-1)?.role !== 'assistant';
 
   return (
     <Conversation className="flex-1">
@@ -73,6 +75,7 @@ export const Thread = ({
                 key={m.id}
                 message={m}
                 onRetry={onRetry}
+                pending={isLastAssistant && streaming}
                 statusPart={
                   isLastAssistant && streaming ? activeStatus : undefined
                 }
@@ -80,6 +83,13 @@ export const Thread = ({
             );
           })
         )}
+        {awaitingReply ? (
+          <Message from="assistant">
+            <MessageContent>
+              <TypingIndicator />
+            </MessageContent>
+          </Message>
+        ) : null}
       </ConversationContent>
       <ConversationScrollButton />
     </Conversation>
