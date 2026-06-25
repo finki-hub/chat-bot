@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   act,
   fireEvent,
@@ -295,6 +296,19 @@ const sseChatResponse = (): Response => {
   });
 };
 
+// ChatPage now relies on the layout's QueryClientProvider (app/layout.tsx wraps
+// it in <Providers>), but these tests render the page in isolation, so wrap each
+// render in a fresh client of its own to keep useModels supplied.
+const renderChatPage = (): ReturnType<typeof rtlRender> => {
+  const queryClient = new QueryClient();
+
+  return rtlRender(
+    <QueryClientProvider client={queryClient}>
+      <ChatPage />
+    </QueryClientProvider>,
+  );
+};
+
 describe('ChatPage persistence', () => {
   beforeEach(async () => {
     await db.delete();
@@ -340,7 +354,7 @@ describe('ChatPage persistence', () => {
 
   it('sends a message, renders the streamed answer, and persists to Dexie', async () => {
     const user = userEvent.setup();
-    rtlRender(<ChatPage />);
+    renderChatPage();
 
     await user.type(screen.getByRole('textbox'), 'Прашање?');
     await user.keyboard('{Enter}');
@@ -407,7 +421,7 @@ describe('ChatPage persistence', () => {
       sidebarOpen: true,
     });
 
-    rtlRender(<ChatPage />);
+    renderChatPage();
 
     await expect(
       screen.findByText('Стар одговор'),

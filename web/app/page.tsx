@@ -1,7 +1,6 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   type ReactNode,
   useCallback,
@@ -17,6 +16,7 @@ import { Composer } from '@/components/chat/composer';
 import { Thread } from '@/components/chat/thread';
 import { Header } from '@/components/shell/header';
 import { Sidebar } from '@/components/shell/sidebar';
+import { fireAndForget } from '@/lib/async';
 import {
   type ConversationRow,
   createConversation,
@@ -31,8 +31,6 @@ import { deriveTitle } from '@/lib/messages';
 import { buildChatTransport } from '@/lib/transport';
 import { useUiStore } from '@/lib/ui-store';
 import { useModels } from '@/lib/use-models';
-
-const queryClient = new QueryClient();
 
 const fromRow = (row: MessageRow): MyUIMessage => ({
   id: row.id,
@@ -118,13 +116,13 @@ const ChatScreen = () => {
       },
       onFinish: ({ message }) => {
         setActiveStatus(undefined);
-        void persistFinished(message);
+        fireAndForget(persistFinished(message));
       },
       transport: buildChatTransport(() => ({ model })),
     });
 
   useEffect(() => {
-    void refreshConversations();
+    fireAndForget(refreshConversations());
   }, [refreshConversations]);
 
   // Hydrate when the active conversation changes.
@@ -140,7 +138,7 @@ const ChatScreen = () => {
           setMessages(loaded.map(fromRow));
         }
       };
-      void hydrate();
+      fireAndForget(hydrate());
     } else {
       setMessages([]);
     }
@@ -185,7 +183,7 @@ const ChatScreen = () => {
         role: 'user',
       };
       await saveMessages(cid, [userMessage]);
-      void sendMessage(userMessage);
+      fireAndForget(sendMessage(userMessage));
     },
     [model, refreshConversations, sendMessage, setActiveId],
   );
@@ -210,13 +208,13 @@ const ChatScreen = () => {
 
   const submitMessage = useCallback(
     (text: string) => {
-      void handleSubmit(text);
+      fireAndForget(handleSubmit(text));
     },
     [handleSubmit],
   );
 
   const retry = useCallback(() => {
-    void regenerate();
+    fireAndForget(regenerate());
   }, [regenerate]);
 
   const handleRename = useCallback(
@@ -263,10 +261,6 @@ const ChatScreen = () => {
   );
 };
 
-const ChatPage = () => (
-  <QueryClientProvider client={queryClient}>
-    <ChatScreen />
-  </QueryClientProvider>
-);
+const ChatPage = () => <ChatScreen />;
 
 export default ChatPage;

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 describe('toolchain smoke', () => {
-  it('runs vitest with the expected math', () => {
-    expect(1 + 1).toBe(2);
-  });
-
   it('has the jsdom environment available', () => {
     expect(document).toBeTypeOf('object');
     expect(document.createElement('div').tagName).toBe('DIV');

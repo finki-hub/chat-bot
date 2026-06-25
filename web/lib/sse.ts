@@ -71,6 +71,12 @@ const toStringChunks = async function* (
       ? chunk
       : decoder.decode(chunk, { stream: true });
   }
+
+  const iterableTail = decoder.decode();
+
+  if (iterableTail) {
+    yield iterableTail;
+  }
 };
 
 type Frame = { dataRaw: string; eventName: null | string };

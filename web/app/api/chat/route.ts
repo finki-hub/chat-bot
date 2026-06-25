@@ -47,46 +47,53 @@ const errorResponse = (meta: UiStreamMeta, code: string, message: string) => {
 };
 
 export const POST = async (req: Request): Promise<Response> => {
-  const clientBody = (await req.json()) as ChatClientBody;
-  const chatBody = toChatRequestBody(clientBody);
-  const inferenceModel = chatBody.inference_model;
+  try {
+    const clientBody = (await req.json()) as ChatClientBody;
+    const chatBody = toChatRequestBody(clientBody);
+    const inferenceModel = chatBody.inference_model;
 
-  const upstream = await fetch(`${API_BASE_URL}/chat/`, {
-    body: JSON.stringify(chatBody),
-    headers: { 'content-type': 'application/json' },
-    method: 'POST',
-  });
+    const upstream = await fetch(`${API_BASE_URL}/chat/`, {
+      body: JSON.stringify(chatBody),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
 
-  const contentType = upstream.headers.get('content-type') ?? '';
+    const contentType = upstream.headers.get('content-type') ?? '';
 
-  // Pre-stream JSON errors (422/503/500) are NOT SSE — branch before streaming.
-  if (!upstream.ok || !contentType.includes(SSE_CONTENT_TYPE)) {
-    const message = await readDetail(upstream);
+    // Pre-stream JSON errors (422/503/500) are NOT SSE — branch before streaming.
+    if (!upstream.ok || !contentType.includes(SSE_CONTENT_TYPE)) {
+      const message = await readDetail(upstream);
 
-    return errorResponse({ inferenceModel }, 'pre_stream', message);
+      return errorResponse({ inferenceModel }, 'pre_stream', message);
+    }
+
+    const responseId = upstream.headers.get('X-Response-Id') ?? undefined;
+    const upstreamBody = upstream.body;
+
+    if (upstreamBody === null) {
+      return errorResponse(
+        { inferenceModel, responseId },
+        'agent_error',
+        'Empty stream from API',
+      );
+    }
+
+    const stream = createUIMessageStream<MyUIMessage>({
+      execute: async ({ writer }) => {
+        await translateToUiStream(parseProtocolV2(upstreamBody), writer, {
+          inferenceModel,
+          responseId,
+        });
+      },
+      onError: (error) =>
+        error instanceof Error ? error.message : 'stream error',
+    });
+
+    return createUIMessageStreamResponse({ stream });
+  } catch {
+    // A thrown request-parse or fetch error would otherwise surface as a bare
+    // 500; emit the same transient data-error the pre-stream path uses so the
+    // client receives a structured error rather than an opaque status.
+    return errorResponse({}, 'internal', 'Request failed');
   }
-
-  const responseId = upstream.headers.get('X-Response-Id') ?? undefined;
-  const upstreamBody = upstream.body;
-
-  if (upstreamBody === null) {
-    return errorResponse(
-      { inferenceModel, responseId },
-      'agent_error',
-      'Empty stream from API',
-    );
-  }
-
-  const stream = createUIMessageStream<MyUIMessage>({
-    execute: async ({ writer }) => {
-      await translateToUiStream(parseProtocolV2(upstreamBody), writer, {
-        inferenceModel,
-        responseId,
-      });
-    },
-    onError: (error) =>
-      error instanceof Error ? error.message : 'stream error',
-  });
-
-  return createUIMessageStreamResponse({ stream });
 };
