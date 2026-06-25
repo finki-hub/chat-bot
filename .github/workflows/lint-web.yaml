@@ -1,0 +1,24 @@
+name: Linters (Web)
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tsc:
+    uses: finki-hub/.github/.github/workflows/tsc.yaml@main
+    with:
+      working-directory: ./web
+    secrets: inherit
+
+  eslint:
+    uses: finki-hub/.github/.github/workflows/eslint.yaml@main
+    with:
+      working-directory: ./web
+    secrets: inherit
