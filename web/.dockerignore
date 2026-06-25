@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+.git
+.env*.local
+*.log
+coverage
+playwright-report
+test-results
+.eslintcache
+*.tsbuildinfo
+Dockerfile
+.dockerignore

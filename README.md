@@ -13,7 +13,7 @@ This project comes as a monorepo of microservices:
 - Web ([`/web`](/web)) for the chat front-end — Next.js with a thin BFF (default port: 3000)
 - Database (PostgreSQL + pgvector) for keeping documents and embeddings
 
-The API Docker image is available as [`ghcr.io/finki-hub/chat-bot-api`](https://github.com/finki-hub/chat-bot/pkgs/container/chat-bot-api), while the GPU API Docker image is available as [`ghcr.io/finki-hub/chat-bot-gpu-api`](https://github.com/finki-hub/chat-bot/pkgs/container/chat-bot-gpu-api).
+The Docker images are available as [`ghcr.io/finki-hub/chat-bot-api`](https://github.com/finki-hub/chat-bot/pkgs/container/chat-bot-api), [`ghcr.io/finki-hub/chat-bot-gpu-api`](https://github.com/finki-hub/chat-bot/pkgs/container/chat-bot-gpu-api) and [`ghcr.io/finki-hub/chat-bot-web`](https://github.com/finki-hub/chat-bot/pkgs/container/chat-bot-web).
 
 ## Quick Setup (Production)
 
@@ -34,11 +34,13 @@ Requires Python 3.14 (`>=3.14,<3.15`) and [`uv`](https://github.com/astral-sh/uv
 1. Clone the repository: `git clone https://github.com/finki-hub/chat-bot.git`
 2. Install dependencies: in each directory (`api` and `gpu-api`), run `uv sync`
 3. Prepare env. variables by copying `.env.sample` to `.env` - minimum setup requires the database configuration, it can be left as is
-4. Run it: `docker compose up -d`. Unlike production, the dev compose builds the `api` and `gpu-api` images locally from source (it does not pull from ghcr), so the first run builds the containers. The per-directory `uv sync` from step 2 is for local/IDE tooling only — the containers build their own environment.
+4. Run it: `docker compose up -d`. Unlike production, the dev compose builds the `api`, `gpu-api` and `web` images locally from source (it does not pull from ghcr), so the first run builds the containers. The per-directory `uv sync` from step 2 is for local/IDE tooling only — the containers build their own environment.
 
 This also brings up the FastAPI Swagger UI (OpenAPI docs) at `localhost:8880/docs`.
 
-The web front-end ([`/web`](/web)) is a standalone npm app (Next.js, not yet wired into the compose). It requires Node `^24 || ^26`. To run it:
+The web front-end ([`/web`](/web)) runs as the `web` service (Next.js + BFF) on port `3000`; `docker compose up -d` builds and starts it with the rest of the stack. In the container it reaches the API at `http://api:8880` and reuses `API_KEY` as its `CHAT_API_KEY`.
+
+To run it standalone for local development (Node `^24 || ^26`):
 
 ```bash
 cd web
@@ -46,7 +48,7 @@ npm install
 npm run dev   # serves http://localhost:3000
 ```
 
-It needs `web/.env.local` with `API_BASE_URL` (the chat API base, e.g. `http://localhost:8880`) and `CHAT_API_KEY` (the master `x-api-key`, used only server-side by the BFF for feedback).
+Standalone, it needs `web/.env.local` with `API_BASE_URL` (the chat API base, e.g. `http://localhost:8880`) and `CHAT_API_KEY` (the master `x-api-key`, used only server-side by the BFF for feedback).
 
 ## Endpoints
 

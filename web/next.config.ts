@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Self-contained server bundle (.next/standalone) for the Docker runtime image.
+  output: 'standalone',
   // Pin the workspace root to web/ so an unrelated lockfile in a parent
   // directory does not get inferred as the file-tracing root.
   outputFileTracingRoot: import.meta.dirname,

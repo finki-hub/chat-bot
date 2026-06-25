@@ -97,3 +97,21 @@ services:
     restart: unless-stopped
     volumes:
       - ./pgadmin:/var/lib/pgadmin
+
+  web:
+    build:
+      context: ./web
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      API_BASE_URL: ${WEB_API_BASE_URL:-http://api:8880}
+      CHAT_API_KEY: ${API_KEY}
+      TZ: ${TZ}
+    image: finki-hub/chat-bot-web:latest
+    networks:
+      - finki_stack_dev
+    ports:
+      - "3000:3000"
+    pull_policy: never
+    restart: unless-stopped
