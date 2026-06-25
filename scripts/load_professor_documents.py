@@ -31,7 +31,9 @@ from app.llms.embeddings import stream_fill_professor_document_embeddings
 from app.utils.http_client import close_http_client, init_http_client
 from app.utils.settings import Settings
 
-_WS = re.compile(r"[^a-z0-9]+")
+# Collapse whitespace only — keep non-ASCII letters so Cyrillic titles without a DOI don't
+# normalize to an empty string (which would collide every such paper onto one external_id).
+_WS = re.compile(r"\s+")
 
 
 def _external_id(paper: dict) -> str:
@@ -73,18 +75,19 @@ async def _run(papers: list[dict]) -> int:
         ok = err = total = 0
         async for chunk in resp.body_iterator:
             text = chunk if isinstance(chunk, str) else bytes(chunk).decode("utf-8")
-            line = text.strip()
-            if not line.startswith("data:"):
-                continue
-            ev = json.loads(line[len("data:") :].strip())
-            total = ev.get("total", total)
-            if ev.get("status") == "ok":
-                ok += 1
-            else:
-                err += 1
-            done = ok + err
-            if done % 500 == 0 or done == total:
-                print(f"  fill {done}/{total}  ok={ok} err={err}")
+            for raw in text.splitlines():
+                line = raw.strip()
+                if not line.startswith("data:"):
+                    continue
+                ev = json.loads(line[len("data:") :].strip())
+                total = ev.get("total", total)
+                if ev.get("status") == "ok":
+                    ok += 1
+                else:
+                    err += 1
+                done = ok + err
+                if done % 500 == 0 or done == total:
+                    print(f"  fill {done}/{total}  ok={ok} err={err}")
         print(f"FILL DONE: ok={ok} err={err} total={total}")
 
         embedded = await db.fetchval(
