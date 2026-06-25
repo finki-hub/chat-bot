@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
 import Script from 'next/script';
@@ -7,17 +7,47 @@ import './globals.css';
 
 import { Providers } from '@/app/providers';
 
+const TITLE = 'ФИНКИ Хаб / Чат';
+const DESCRIPTION =
+  'Разговарај со ФИНКИ Хаб асистентот за прашања поврзани со студиите на ФИНКИ.';
+const SITE_URL = 'https://chat.finki-hub.com';
+const OG_IMAGE = `${SITE_URL}/favicon-96x96.png`;
+
 export const metadata: Metadata = {
-  description: 'FINKI Hub чат асистент',
-  icons: {
-    apple: '/apple-touch-icon.png',
-    icon: [
-      { rel: 'icon', url: '/favicon.ico' },
-      { type: 'image/svg+xml', url: '/favicon.svg' },
-      { sizes: '96x96', type: 'image/png', url: '/favicon-96x96.png' },
-    ],
+  alternates: {
+    canonical: SITE_URL,
   },
-  title: 'FINKI Hub Chat',
+  authors: [{ name: 'ФИНКИ Хаб' }],
+  description: DESCRIPTION,
+  icons: {
+    apple: { sizes: '180x180', url: '/apple-touch-icon.png' },
+    icon: [
+      { sizes: '96x96', type: 'image/png', url: '/favicon-96x96.png' },
+      { type: 'image/svg+xml', url: '/favicon.svg' },
+    ],
+    shortcut: '/favicon.ico',
+  },
+  manifest: '/site.webmanifest',
+  metadataBase: new URL(SITE_URL),
+  openGraph: {
+    description: DESCRIPTION,
+    images: [OG_IMAGE],
+    locale: 'mk_MK',
+    title: TITLE,
+    type: 'website',
+    url: SITE_URL,
+  },
+  title: TITLE,
+  twitter: {
+    card: 'summary',
+    description: DESCRIPTION,
+    images: [OG_IMAGE],
+    title: TITLE,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0a0a0a',
 };
 
 const noFlashTheme = `(() => {
