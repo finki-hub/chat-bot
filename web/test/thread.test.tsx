@@ -6,28 +6,7 @@ import type { MyUIMessage } from '@/lib/api-types';
 import { AssistantMessage } from '@/components/chat/message';
 import { SearchStatus } from '@/components/chat/search-status';
 import { Thread } from '@/components/chat/thread';
-
-// jsdom lacks ResizeObserver, which the vendored Conversation (use-stick-to-bottom)
-// constructs with `new`. Provide a constructable no-op stub.
-class ResizeObserverStub {
-  callbacks: ResizeObserverCallback[] = [];
-
-  constructor(callback: ResizeObserverCallback) {
-    this.callbacks.push(callback);
-  }
-
-  disconnect(): void {
-    this.callbacks = [];
-  }
-
-  observe(): void {
-    this.callbacks.at(0);
-  }
-
-  unobserve(): void {
-    this.callbacks.at(0);
-  }
-}
+import { ResizeObserverStub } from '@/test/helpers/dom-stubs';
 
 beforeAll(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);

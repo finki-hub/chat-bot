@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyUIMessage } from '@/lib/api-types';
 
 import { AnswerActions } from '@/components/chat/answer-actions';
+import { createMemoryStorage } from '@/test/helpers/dom-stubs';
 
 const assistant = (responseId?: string, text = 'Одговор'): MyUIMessage => ({
   id: 'a1',
@@ -26,29 +27,6 @@ const ack = Response.json(
 );
 
 const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
-
-// jsdom 26 only exposes localStorage for a concrete origin; under the default
-// vitest jsdom URL the origin is opaque, so we install an in-memory store.
-const createMemoryStorage = (): Storage => {
-  const store = new Map<string, string>();
-
-  return {
-    clear: () => {
-      store.clear();
-    },
-    getItem: (key) => store.get(key) ?? null,
-    key: (index) => store.keys().toArray()[index] ?? null,
-    get length() {
-      return store.size;
-    },
-    removeItem: (key) => {
-      store.delete(key);
-    },
-    setItem: (key, value) => {
-      store.set(key, value);
-    },
-  };
-};
 
 beforeEach(() => {
   vi.stubGlobal('localStorage', createMemoryStorage());

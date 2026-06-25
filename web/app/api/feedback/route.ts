@@ -54,22 +54,18 @@ const parsePayload = (value: unknown): null | ValidPayload => {
 
 const toSchema = (payload: ValidPayload): FeedbackSchema => ({
   client: 'web',
-  // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+  /* eslint-disable camelcase -- snake_case mirrors the Python API wire contract */
   feedback_type: payload.feedbackType,
-  // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
   response_id: payload.responseId,
-  // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
   user_id: payload.userId,
-  // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
   ...(payload.answerText !== undefined && { answer_text: payload.answerText }),
   ...(payload.inferenceModel !== undefined && {
-    // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
     inference_model: payload.inferenceModel,
   }),
   ...(payload.questionText !== undefined && {
-    // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
     question_text: payload.questionText,
   }),
+  /* eslint-enable camelcase -- snake_case mirrors the Python API wire contract */
 });
 
 const jsonError = (message: string, status: number): Response =>
