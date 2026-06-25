@@ -6,6 +6,7 @@ from asyncpg import Record
 
 from app.data.connection import Database
 from app.llms.models import (
+    HALFVEC_EMBEDDING_MODELS,
     MODEL_DISTANCE_THRESHOLDS,
     MODEL_EMBEDDINGS_COLUMNS,
     Model,
@@ -91,16 +92,24 @@ async def get_closest_professor_documents(
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
 
+    if model in HALFVEC_EMBEDDING_MODELS:
+        dims = len(embedded_query)
+        col_expr = f"{embedding_column}::halfvec({dims})"
+        param_expr = f"$1::halfvec({dims})"
+    else:
+        col_expr = embedding_column
+        param_expr = "$1"
+
     sql = f"""
     SELECT
         external_id,
         title,
         year,
         canonical_authors,
-        {embedding_column} <=> $1 AS distance
+        {col_expr} <=> {param_expr} AS distance
     FROM professor_document
     WHERE {embedding_column} IS NOT NULL
-        AND {embedding_column} <=> $1 < $3
+        AND {col_expr} <=> {param_expr} < $3
     ORDER BY distance
     LIMIT $2
     """  # noqa: S608
