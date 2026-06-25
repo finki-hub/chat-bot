@@ -1,6 +1,7 @@
 import type { ComponentProps } from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Composer } from '@/components/chat/composer';
@@ -90,18 +91,22 @@ describe('Composer', () => {
     expect(onStop).toHaveBeenCalledOnce();
   });
 
-  it('renders every model id as an option', () => {
+  it('renders every model id as an option', async () => {
     setup();
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('composer-model'));
 
-    expect(screen.getByRole('option', { name: CLAUDE })).toBeInTheDocument();
+    await expect(
+      screen.findByRole('option', { name: CLAUDE }),
+    ).resolves.toBeInTheDocument();
     expect(screen.getByRole('option', { name: GPT })).toBeInTheDocument();
   });
 
-  it('reports model changes', () => {
+  it('reports model changes', async () => {
     const { onModelChange } = setup();
-    fireEvent.change(screen.getByTestId('composer-model'), {
-      target: { value: GPT },
-    });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('composer-model'));
+    await user.click(await screen.findByRole('option', { name: GPT }));
 
     expect(onModelChange).toHaveBeenCalledWith(GPT);
   });

@@ -1,7 +1,16 @@
-import { ArrowUp, Loader2, Square } from 'lucide-react';
+import { ArrowUp, Loader2, Sparkles, Square } from 'lucide-react';
 import { type KeyboardEvent, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { t } from '@/lib/i18n';
 import { groupModelsByProvider } from '@/lib/use-models';
 
@@ -96,39 +105,43 @@ export const Composer = ({
             rows={1}
             value={value}
           />
-          <div className="flex items-center justify-between gap-2 px-2 pb-2">
-            <label
-              className="sr-only"
-              htmlFor="composer-model"
-            >
-              {t('composer.model')}
-            </label>
-            <select
-              className="max-w-[60%] truncate rounded-md border-0 bg-transparent px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              data-testid="composer-model"
+          <div className="flex items-center justify-end gap-1.5 px-2 pb-2">
+            <Select
               disabled={disabled}
-              id="composer-model"
-              onChange={(e) => {
-                onModelChange(e.target.value);
-              }}
+              onValueChange={onModelChange}
               value={model}
             >
-              {groups.map((g) => (
-                <optgroup
-                  key={g.provider}
-                  label={g.provider}
-                >
-                  {g.models.map((id) => (
-                    <option
-                      key={id}
-                      value={id}
-                    >
-                      {id}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+              <SelectTrigger
+                aria-label={t('composer.model')}
+                className="h-8 w-fit max-w-[55%] gap-1.5 rounded-full border-0 bg-transparent px-3 text-xs font-medium text-muted-foreground shadow-none hover:bg-muted hover:text-foreground sm:max-w-[240px]"
+                data-testid="composer-model"
+                size="sm"
+              >
+                <Sparkles
+                  aria-hidden="true"
+                  className="size-3.5"
+                />
+                <SelectValue placeholder={t('composer.model')} />
+              </SelectTrigger>
+              <SelectContent
+                align="end"
+                position="popper"
+              >
+                {groups.map((g) => (
+                  <SelectGroup key={g.provider}>
+                    <SelectLabel>{g.provider}</SelectLabel>
+                    {g.models.map((id) => (
+                      <SelectItem
+                        key={id}
+                        value={id}
+                      >
+                        {id}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               aria-label={isBusy ? t('composer.stop') : t('composer.send')}
               className="size-9 shrink-0 rounded-full"
