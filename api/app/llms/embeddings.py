@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import UTC, datetime
 from typing import overload
 
@@ -415,18 +415,25 @@ async def stream_fill_chunk_embeddings(
     )
 
 
-async def _process_professor_document_batch(
+def _row_text_diploma(row: Record) -> str:
+    return build_proposal_text(row["title"], row["description"])
+
+
+def _row_text_professor_document(row: Record) -> str:
+    return build_proposal_text(row["title"], row["abstract"])
+
+
+async def _process_corpus_batch(
     db: Database,
     batch: list[Record],
     current_model: Model,
     model_column: str,
+    *,
+    table: str,
+    text_of: Callable[[Record], str],
 ) -> list[tuple[str, str]]:
     texts = [
-        _prepare_text_for_embedding(
-            build_proposal_text(row["title"], row["abstract"]),
-            current_model,
-            is_document=True,
-        )
+        _prepare_text_for_embedding(text_of(row), current_model, is_document=True)
         for row in batch
     ]
 
@@ -448,7 +455,7 @@ async def _process_professor_document_batch(
             continue
         try:
             await db.execute(
-                f"UPDATE professor_document SET {model_column} = $1 WHERE id = $2",  # noqa: S608
+                f"UPDATE {table} SET {model_column} = $1 WHERE id = $2",  # noqa: S608
                 embedding_to_pgvector(embedding),
                 row["id"],
             )
@@ -457,6 +464,68 @@ async def _process_professor_document_batch(
             results.append(("error", repr(e)))
 
     return results
+
+
+async def _stream_fill_corpus_embeddings(
+    db: Database,
+    model: Model,
+    *,
+    table: str,
+    fetch_rows: Callable[[Database, str], Awaitable[list[Record]]],
+    text_of: Callable[[Record], str],
+    all_models: bool,
+) -> StreamingResponse:
+    """Generic per-row embedding fill (one diploma/professor_document row = one task),
+    parameterized by the table, its row-fetch query, and the row -> embed-text builder."""
+    logger.info(
+        "Filling %s embeddings for model: %s, all_models: %s",
+        table,
+        model,
+        all_models,
+    )
+
+    models_to_process = _resolve_models(model, all_models=all_models)
+
+    async def _gen() -> AsyncGenerator[str]:
+        per_model_rows: dict[Model, list[Record]] = {}
+        total_tasks = 0
+        for current_model in models_to_process:
+            model_column = MODEL_EMBEDDINGS_COLUMNS[current_model]
+            rows = await fetch_rows(db, model_column)
+            per_model_rows[current_model] = rows
+            total_tasks += len(rows)
+
+        progress_counter = 0
+        for current_model in models_to_process:
+            model_column = MODEL_EMBEDDINGS_COLUMNS[current_model]
+            rows = per_model_rows[current_model]
+
+            for batch_start in range(0, len(rows), EMBEDDING_BATCH_SIZE):
+                batch = rows[batch_start : batch_start + EMBEDDING_BATCH_SIZE]
+                results = await _process_corpus_batch(
+                    db,
+                    batch,
+                    current_model,
+                    model_column,
+                    table=table,
+                    text_of=text_of,
+                )
+
+                for row, (result, error_detail) in zip(batch, results, strict=True):
+                    progress_counter += 1
+                    payload = {
+                        "status": result,
+                        "error": error_detail,
+                        "index": progress_counter,
+                        "total": total_tasks,
+                        "model": current_model.value,
+                        "id": str(row["id"]),
+                        "name": row["title"],
+                        "ts": datetime.now(UTC).isoformat() + "Z",
+                    }
+                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(_gen(), media_type="text/event-stream")
 
 
 async def stream_fill_professor_document_embeddings(
@@ -465,99 +534,14 @@ async def stream_fill_professor_document_embeddings(
     *,
     all_models: bool = False,
 ) -> StreamingResponse:
-    logger.info(
-        "Filling professor_document embeddings for model: %s, all_models: %s",
+    return await _stream_fill_corpus_embeddings(
+        db,
         model,
-        all_models,
+        table="professor_document",
+        fetch_rows=fetch_professor_document_rows_for_fill,
+        text_of=_row_text_professor_document,
+        all_models=all_models,
     )
-
-    models_to_process = _resolve_models(model, all_models=all_models)
-
-    async def _gen() -> AsyncGenerator[str]:
-        per_model_rows: dict[Model, list[Record]] = {}
-        total_tasks = 0
-        for current_model in models_to_process:
-            model_column = MODEL_EMBEDDINGS_COLUMNS[current_model]
-            rows = await fetch_professor_document_rows_for_fill(db, model_column)
-            per_model_rows[current_model] = rows
-            total_tasks += len(rows)
-
-        progress_counter = 0
-        for current_model in models_to_process:
-            model_column = MODEL_EMBEDDINGS_COLUMNS[current_model]
-            rows = per_model_rows[current_model]
-
-            for batch_start in range(0, len(rows), EMBEDDING_BATCH_SIZE):
-                batch = rows[batch_start : batch_start + EMBEDDING_BATCH_SIZE]
-                results = await _process_professor_document_batch(
-                    db,
-                    batch,
-                    current_model,
-                    model_column,
-                )
-
-                for row, (result, error_detail) in zip(batch, results, strict=True):
-                    progress_counter += 1
-                    payload = {
-                        "status": result,
-                        "error": error_detail,
-                        "index": progress_counter,
-                        "total": total_tasks,
-                        "model": current_model.value,
-                        "id": str(row["id"]),
-                        "name": row["title"],
-                        "ts": datetime.now(UTC).isoformat() + "Z",
-                    }
-                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-
-    return StreamingResponse(
-        _gen(),
-        media_type="text/event-stream",
-    )
-
-
-async def _process_diploma_batch(
-    db: Database,
-    batch: list[Record],
-    current_model: Model,
-    model_column: str,
-) -> list[tuple[str, str]]:
-    texts = [
-        _prepare_text_for_embedding(
-            build_proposal_text(row["title"], row["description"]),
-            current_model,
-            is_document=True,
-        )
-        for row in batch
-    ]
-
-    try:
-        embeddings = await generate_embeddings(texts, current_model, is_document=True)
-    except Exception as e:
-        return [("error", repr(e))] * len(batch)
-
-    results: list[tuple[str, str]] = []
-    expected_dims = MODEL_EMBEDDING_DIMENSIONS.get(current_model)
-    for row, embedding in zip(batch, embeddings, strict=True):
-        if expected_dims is not None and len(embedding) != expected_dims:
-            results.append(
-                (
-                    "error",
-                    f"Dimension mismatch: got {len(embedding)}, expected {expected_dims}",
-                ),
-            )
-            continue
-        try:
-            await db.execute(
-                f"UPDATE diploma SET {model_column} = $1 WHERE id = $2",  # noqa: S608
-                embedding_to_pgvector(embedding),
-                row["id"],
-            )
-            results.append(("ok", ""))
-        except Exception as e:
-            results.append(("error", repr(e)))
-
-    return results
 
 
 async def stream_fill_diploma_embeddings(
@@ -566,52 +550,11 @@ async def stream_fill_diploma_embeddings(
     *,
     all_models: bool = False,
 ) -> StreamingResponse:
-    logger.info(
-        "Filling diploma embeddings for model: %s, all_models: %s",
+    return await _stream_fill_corpus_embeddings(
+        db,
         model,
-        all_models,
-    )
-
-    models_to_process = _resolve_models(model, all_models=all_models)
-
-    async def _gen() -> AsyncGenerator[str]:
-        per_model_rows: dict[Model, list[Record]] = {}
-        total_tasks = 0
-        for current_model in models_to_process:
-            model_column = MODEL_EMBEDDINGS_COLUMNS[current_model]
-            rows = await fetch_diploma_rows_for_fill(db, model_column)
-            per_model_rows[current_model] = rows
-            total_tasks += len(rows)
-
-        progress_counter = 0
-        for current_model in models_to_process:
-            model_column = MODEL_EMBEDDINGS_COLUMNS[current_model]
-            rows = per_model_rows[current_model]
-
-            for batch_start in range(0, len(rows), EMBEDDING_BATCH_SIZE):
-                batch = rows[batch_start : batch_start + EMBEDDING_BATCH_SIZE]
-                results = await _process_diploma_batch(
-                    db,
-                    batch,
-                    current_model,
-                    model_column,
-                )
-
-                for row, (result, error_detail) in zip(batch, results, strict=True):
-                    progress_counter += 1
-                    payload = {
-                        "status": result,
-                        "error": error_detail,
-                        "index": progress_counter,
-                        "total": total_tasks,
-                        "model": current_model.value,
-                        "id": str(row["id"]),
-                        "name": row["title"],
-                        "ts": datetime.now(UTC).isoformat() + "Z",
-                    }
-                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-
-    return StreamingResponse(
-        _gen(),
-        media_type="text/event-stream",
+        table="diploma",
+        fetch_rows=fetch_diploma_rows_for_fill,
+        text_of=_row_text_diploma,
+        all_models=all_models,
     )
