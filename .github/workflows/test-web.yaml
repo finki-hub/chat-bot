@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   vitest:
-    uses: finki-hub/.github/.github/workflows/vitest.yaml@766c1cef1421fc3fe4794d9fc000f47e6d34d43d # main
+    uses: finki-hub/.github/.github/workflows/vitest.yaml@main
     with:
       working-directory: ./web
+    secrets: inherit
