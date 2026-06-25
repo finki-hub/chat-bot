@@ -70,6 +70,8 @@ def _groups_for_source(
     window_years: int,
     min_weight: int,
 ) -> list[tuple[int, int, int, list[str], int]]:
+    if not records:
+        return []
     years = [year for _, year in records]
     out: list[tuple[int, int, int, list[str], int]] = []
     for window_start, window_end in _windows(years, window_years):
