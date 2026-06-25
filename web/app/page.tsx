@@ -2,7 +2,6 @@
 
 import { useChat } from '@ai-sdk/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { PanelLeft } from 'lucide-react';
 import {
   type ReactNode,
   useCallback,
@@ -16,6 +15,7 @@ import type { MyUIMessage } from '@/lib/api-types';
 import { AnswerActions } from '@/components/chat/answer-actions';
 import { Composer } from '@/components/chat/composer';
 import { Thread } from '@/components/chat/thread';
+import { Header } from '@/components/shell/header';
 import { Sidebar } from '@/components/shell/sidebar';
 import {
   type ConversationRow,
@@ -27,7 +27,6 @@ import {
   renameConversation,
   saveMessages,
 } from '@/lib/db';
-import { t } from '@/lib/i18n';
 import { deriveTitle } from '@/lib/messages';
 import { buildChatTransport } from '@/lib/transport';
 import { useUiStore } from '@/lib/ui-store';
@@ -229,48 +228,37 @@ const ChatScreen = () => {
   );
 
   return (
-    <div className="flex h-dvh w-full">
-      <Sidebar
-        activeId={activeId}
-        conversations={conversations}
-        onDelete={handleDelete}
-        onNewChat={handleNewChat}
-        onRename={handleRename}
-        onSelect={handleSelect}
-        open={sidebarOpen}
-      />
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-2 border-b border-border p-2">
-          <button
-            aria-label={t('sidebar.toggle')}
-            className="rounded p-1.5 hover:bg-muted"
-            onClick={toggleSidebar}
-            type="button"
-          >
-            <PanelLeft
-              aria-hidden="true"
-              className="size-4"
-            />
-          </button>
-          <span className="text-sm font-medium">{t('app.title')}</span>
-        </header>
-        <Thread
-          activeError={activeError}
-          activeStatus={activeStatus}
-          messages={messages}
-          onRetry={retry}
-          renderActions={renderAnswerActions(messages, status, regenerate)}
-          status={status}
+    <div className="flex h-dvh w-full flex-col">
+      <Header onToggleSidebar={toggleSidebar} />
+      <div className="flex min-h-0 flex-1">
+        <Sidebar
+          activeId={activeId}
+          conversations={conversations}
+          onDelete={handleDelete}
+          onNewChat={handleNewChat}
+          onRename={handleRename}
+          onSelect={handleSelect}
+          open={sidebarOpen}
         />
-        <Composer
-          model={model}
-          models={modelList ?? []}
-          onModelChange={setModel}
-          onStop={stop}
-          onSubmit={submitMessage}
-          status={status}
-        />
-      </main>
+        <main className="flex min-w-0 flex-1 flex-col">
+          <Thread
+            activeError={activeError}
+            activeStatus={activeStatus}
+            messages={messages}
+            onRetry={retry}
+            renderActions={renderAnswerActions(messages, status, regenerate)}
+            status={status}
+          />
+          <Composer
+            model={model}
+            models={modelList ?? []}
+            onModelChange={setModel}
+            onStop={stop}
+            onSubmit={submitMessage}
+            status={status}
+          />
+        </main>
+      </div>
     </div>
   );
 };
