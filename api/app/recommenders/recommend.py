@@ -1,6 +1,3 @@
-"""Pure committee-recommender core: no FastAPI/DB/httpx, so the backtest and the HTTP
-endpoint run the identical scoring and selection functions."""
-
 from __future__ import annotations
 
 import itertools
@@ -20,8 +17,6 @@ class Mode(Enum):
 
 @dataclass(frozen=True)
 class RetrievedDiploma:
-    """`similarity = 1 - distance` (KNN); `rerank_score` is None on a vector-order fallback."""
-
     id: UUID
     external_id: str
     mentor: str
@@ -34,9 +29,6 @@ class RetrievedDiploma:
 
 @dataclass(frozen=True)
 class RetrievedPaper:
-    """`coauthors` are CANONICAL names — the same namespace as defense mentor/member, so the
-    paper signals compose with the defense graph. `similarity = 1 - distance`."""
-
     external_id: str
     title: str
     coauthors: tuple[str, ...]
@@ -47,33 +39,27 @@ class RetrievedPaper:
 
 @dataclass(frozen=True)
 class ExpertiseIndex:
-    by_professor: dict[str, float]  # canonical name -> raw expertise score
-    supporting: dict[str, list[str]]  # name -> paper titles (evidence)
+    by_professor: dict[str, float]
+    supporting: dict[str, list[str]]
 
 
 @dataclass(frozen=True)
 class CoauthorIndex:
-    # undirected co-authorship edges among CANONICAL professors, topic+recency weighted.
-    # key = frozenset({canonical_a, canonical_b})  (mirrors the defense pair_score identity)
     edges: dict[frozenset[str], float]
     supporting: dict[
         frozenset[str],
         list[str],
-    ]  # pair -> shared paper titles (evidence)
+    ]
 
 
 @dataclass(frozen=True)
 class MentorPriorIndex:
-    """`by_mentor[mentor][member]` = how often `member` served on `mentor`'s committees.
-    Raw counts; min-max normalized at the point of use."""
-
     by_mentor: dict[str, dict[str, float]]
 
 
 def build_mentor_prior(
     defenses: Iterable[tuple[str | None, str | None, str | None]],
 ) -> MentorPriorIndex:
-    """Serving passes the full defended corpus; the backtest passes a leave-one-out view."""
     by_mentor: dict[str, dict[str, float]] = {}
     for mentor, member1, member2 in defenses:
         if not mentor:
@@ -86,9 +72,6 @@ def build_mentor_prior(
 
 
 def build_coauthor_prior(papers: Iterable[Sequence[str]]) -> MentorPriorIndex:
-    """Symmetric co-author graph in the mentor-prior shape (`by_mentor[a][b]` = shared papers).
-    Its value over the defense prior: it can surface a mentor's frequent co-authors who have
-    never served on a committee together (the cold-start gap)."""
     by_person: dict[str, dict[str, float]] = {}
     for authors in papers:
         uniq = sorted({a for a in authors if a})
@@ -102,27 +85,13 @@ def build_coauthor_prior(papers: Iterable[Sequence[str]]) -> MentorPriorIndex:
 
 @dataclass(frozen=True)
 class RankedPeople:
-    blended: dict[
-        str,
-        float,
-    ]  # per-person blended (defense + expertise [+ members-only buddy boost])
-    defense: dict[str, float]  # min-max normalized defense co-occurrence per person
-    expertise: dict[str, float]  # min-max normalized paper-expertise per person
-    coauthor: dict[frozenset[str], float]  # min-max normalized buddy EDGES (pairs)
-    mentor_score: dict[
-        str,
-        float,
-    ]  # raw per-person mentor co-occurrence (drives the FULL argmax)
-    pair_score: dict[
-        frozenset[str],
-        float,
-    ]  # raw defense pair co-occurrence (served-together)
-    supporting: dict[
-        str,
-        list[UUID],
-    ]  # name -> diploma ids that support this person (evidence)
-    # pair-objective weights captured at score time so select_committee/_best_unordered_pair
-    # need no separate `weights` arg (matches the plan's select_committee signature).
+    blended: dict[str, float]
+    defense: dict[str, float]
+    expertise: dict[str, float]
+    coauthor: dict[frozenset[str], float]
+    mentor_score: dict[str, float]
+    pair_score: dict[frozenset[str], float]
+    supporting: dict[str, list[UUID]]
     pair_affinity_weight: float = 0.0
     coauthor_weight: float = 0.0
     mentor_prior_weight: float = 0.0
@@ -133,20 +102,13 @@ class RankedPeople:
 class Recommendation:
     mode: Mode
     mentor: str | None
-    members: tuple[
-        str,
-        ...,
-    ]  # the unordered member pair (0-2 entries); identity is the frozenset
+    members: tuple[str, ...]
     mentor_is_given: bool
     supporting_diploma_ids: list[UUID] = field(default_factory=list)
-    # Final post-prior candidate score per recommended member. A prior-surfaced member (one
-    # the topical retrieval missed) has no `blended` entry, so this is the only place its
-    # real score lives; the endpoint reports it instead of a misleading None.
     member_scores: dict[str, float] = field(default_factory=dict)
 
 
 def _minmax[K](scores: Mapping[K, float]) -> dict[K, float]:
-    """Min-max normalize a score map to [0, 1]. Empty -> empty; all-equal -> all 0.0."""
     if not scores:
         return {}
     values = scores.values()
@@ -208,9 +170,6 @@ def _accumulate_defense_scores(
     dict[frozenset[str], float],
     dict[str, list[UUID]],
 ]:
-    """Raw defense co-occurrence over the retrieved defenses, returned as
-    (person_score, mentor_score, pair_score, supporting). A diploma whose mentor matches
-    `mentor_hint` is up-weighted by (1 + mentor_match_boost) (MEMBERS-ONLY; no-op at 0.0)."""
     person_score: dict[str, float] = {}
     mentor_score: dict[str, float] = {}
     pair_score: dict[frozenset[str], float] = {}
@@ -257,8 +216,6 @@ def build_expertise_index(
     canonical_set: Iterable[str] | None = None,
     now_year: int | None = None,
 ) -> ExpertiseIndex:
-    """Per-professor expertise = sum of their top-N retrieved-paper similarities (recency-decayed
-    if configured). `canonical_set` restricts to known names (None = all)."""
     canonical = set(canonical_set) if canonical_set is not None else None
     sims: dict[str, list[float]] = {}
     supporting: dict[str, list[str]] = {}
@@ -287,8 +244,6 @@ def _accumulate_coauthor_edges(
     canonical_set: Iterable[str] | None = None,
     now_year: int | None = None,
 ) -> CoauthorIndex:
-    """Topic+recency weighted co-author edges over the retrieved papers. `now_year` is injected
-    to keep this pure. `canonical_set` restricts participants (None = all)."""
     canonical = set(canonical_set) if canonical_set is not None else None
     edges: dict[frozenset[str], float] = {}
     supporting: dict[frozenset[str], list[str]] = {}
@@ -312,16 +267,6 @@ def _best_unordered_pair(
     *,
     exclude: Iterable[str] = (),
 ) -> tuple[str, ...]:
-    """Argmax over unordered candidate pairs of the pair objective.
-
-      pair_objective(a, b) = blended[a] + blended[b]
-                           + pair_affinity_weight * pair_score[{a,b}]   (served together)
-                           + coauthor_weight      * coauthor[{a,b}]     (published together)
-
-    `coauthor` is the already-min-max-normalized edge map (no re-normalization). The two
-    pair weights are carried on `ranked` (captured at score time). With coauthor_weight=0
-    the buddy term vanishes and FULL behavior is unchanged.
-    """
     excluded = set(exclude)
     pool = sorted(
         (n for n in candidates if n not in excluded),
@@ -329,7 +274,7 @@ def _best_unordered_pair(
         reverse=True,
     )
 
-    if len(pool) < 2:  # fewer than two distinct candidates -> return whatever exists
+    if len(pool) < 2:
         return tuple(pool)
 
     best_pair: tuple[str, str] | None = None
@@ -359,12 +304,6 @@ def score_people(
     *,
     now: date | None = None,
 ) -> RankedPeople:
-    """Blend defense + expertise(+cold-start boost) + buddy, min-max-normalized.
-
-    `coauthors=None` => buddy signal absent. In MEMBERS_ONLY the given mentor is dropped
-    from the candidate set (after the members-only buddy boost, so its edges can still
-    lift candidates).
-    """
     defense, mentor_score, pair_score, supporting = _accumulate_defense_scores(
         retrieved,
         weights,
@@ -386,8 +325,6 @@ def score_people(
             w_exp *= weights.cold_start_expertise_boost  # junior/cold-start boost
         blended[name] = d_norm.get(name, 0.0) + w_exp * e_norm.get(name, 0.0)
 
-    # MEMBERS-ONLY buddy boost — runs AFTER the blend loop and BEFORE the pop below, so the
-    # `n != given_mentor` guard is meaningful (given_mentor still in `blended` here).
     if mode is Mode.MEMBERS_ONLY and given_mentor is not None and coauthors is not None:
         b_raw = {
             n: coauthors.edges.get(frozenset((given_mentor, n)), 0.0)
@@ -396,7 +333,7 @@ def score_people(
         }
         b_norm = _minmax(b_raw)
         for n, s in b_norm.items():
-            blended[n] += weights.coauthor_member_boost * s  # additive; 0.0 => no-op
+            blended[n] += weights.coauthor_member_boost * s
 
     if mode is Mode.MEMBERS_ONLY and given_mentor is not None:
         blended.pop(given_mentor, None)
@@ -422,13 +359,6 @@ def _apply_prior(
     mentor: str | None,
     weight: float,
 ) -> dict[str, float]:
-    """Fold a per-person prior (mentor co-membership OR co-author) into candidate scores.
-
-    Adds `weight * minmax(prior[mentor])` to each associate of the resolved mentor, which
-    INTRODUCES associates the topical retrieval missed (the cold-start majority) as fresh
-    candidates. No-op when the weight is 0, the prior is absent/empty, or the mentor is
-    unknown.
-    """
     if prior_index is None or mentor is None or weight <= 0.0:
         return candidates
     prior = prior_index.by_mentor.get(mentor)
@@ -452,12 +382,6 @@ def select_committee(
     mentor_prior: MentorPriorIndex | None = None,
     coauthor_prior: MentorPriorIndex | None = None,
 ) -> Recommendation:
-    """FULL: argmax mentor within mentor_topk, then best unordered pair excluding the mentor.
-
-    MEMBERS_ONLY: fixed given mentor + best unordered pair excluding it. Both modes share the
-    pair-selection code (`_best_unordered_pair`); only the exclusion set and the skipped
-    argmax differ.
-    """
     excluded = set(exclude)
 
     if mode is Mode.MEMBERS_ONLY:
@@ -508,7 +432,6 @@ def _collect_supporting(
     mentor: str | None,
     members: Sequence[str],
 ) -> list[UUID]:
-    """De-duplicated diploma ids for the chosen people, order-preserved."""
     seen: dict[UUID, None] = {}
     for name in (mentor, *members):
         if name is None:

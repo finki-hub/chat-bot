@@ -24,7 +24,6 @@ async def upsert_professor_document(
     canonical_authors: list[str],
     sources: list[str],
 ) -> str:
-    """UPSERT one paper keyed on external_id (doi, or a title-hash when no doi)."""
     query = """
     INSERT INTO professor_document (
         external_id, title, abstract, year, topics, canonical_authors, sources
@@ -63,7 +62,6 @@ async def fetch_professor_document_rows_for_fill(
 
 
 async def get_all_paper_authors(db: Database) -> list[list[str]]:
-    """Every paper's canonical author list — the co-author prior source (the whole graph)."""
     rows = await db.fetch("SELECT canonical_authors FROM professor_document")
     out: list[list[str]] = []
     for row in rows:
@@ -81,13 +79,6 @@ async def get_closest_professor_documents(
     limit: int = 50,
     threshold: float | None = None,
 ) -> list[Record]:
-    """KNN over the paper corpus: the topically-nearest papers to the proposal title.
-
-    Returns (external_id, title, year, canonical_authors, distance). bge-m3 is strongly
-    cross-lingual, so a Macedonian title retrieves English papers; the ceiling is kept
-    generous because expertise/buddy aggregate many moderately-similar papers rather than
-    needing a precise top hit.
-    """
     embedding_column = MODEL_EMBEDDINGS_COLUMNS[model]
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)

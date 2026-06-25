@@ -1,14 +1,4 @@
-"""Compute temporal staff groups and store them in professor_group.
-
-"Staff groups by time": for each fixed time window, detect the cohorts of professors who
-repeatedly worked together — community detection (connected components over the >=min-weight
-co-occurrence graph) per window. Two sources:
-  defense  -> committee co-occurrence (diploma mentor+members, by date_of_submission)
-  coauthor -> paper co-authorship       (professor_document canonical_authors, by year)
-Groups shift as the window moves, which is the "buddies change over time" view.
-
-    cd api && uv run python ../scripts/compute_professor_groups.py --window-years 3 --min-weight 2
-"""
+"""cd api && uv run python ../scripts/compute_professor_groups.py --window-years 3 --min-weight 2"""
 
 # ruff: noqa: INP001 - standalone offline script; scripts/ is not an importable package
 
@@ -55,7 +45,6 @@ async def _coauthor_records(db: Database) -> list[tuple[list[str], int]]:
 
 
 def _windows(years: list[int], size: int) -> list[tuple[int, int]]:
-    """Non-overlapping [start, start+size-1] windows spanning the data, anchored at min year."""
     lo, hi = min(years), max(years)
     windows: list[tuple[int, int]] = []
     start = lo
@@ -104,7 +93,7 @@ async def _run(ns: argparse.Namespace) -> int:
                 f"-> {len(groups)} groups",
             )
             for window_start, window_end, group_index, members, _ in groups:
-                if group_index == 0:  # show the largest group per window
+                if group_index == 0:
                     preview = ", ".join(members[:6]) + (
                         "  …" if len(members) > 6 else ""
                     )

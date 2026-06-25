@@ -1,13 +1,4 @@
-"""Load the professor publication corpus into professor_document, then embed it.
-
-The corpus is a JSON array of papers (union of OpenAlex + UKIM-repo, deduped, with canonical
-FINKI author names) — built offline, not scraped live, so this is a script rather than an
-endpoint. Each record: {doi, title, year, abstract, topics[], sources[], canonicalAuthors[]}.
-external_id = the DOI when present, else a sha256 of the normalized title (the corpus is
-already deduped on that identity).
-
-    cd api && uv run python ../scripts/load_professor_documents.py --json /path/to/dataset_B_union.json
-"""
+"""cd api && uv run python ../scripts/load_professor_documents.py --json /path/to/dataset_B_union.json"""
 
 # ruff: noqa: INP001 - standalone offline script; scripts/ is not an importable package
 
@@ -31,8 +22,6 @@ from app.llms.embeddings import stream_fill_professor_document_embeddings
 from app.utils.http_client import close_http_client, init_http_client
 from app.utils.settings import Settings
 
-# Collapse whitespace only — keep non-ASCII letters so Cyrillic titles without a DOI don't
-# normalize to an empty string (which would collide every such paper onto one external_id).
 _WS = re.compile(r"\s+")
 
 

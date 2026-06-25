@@ -1,43 +1,4 @@
-"""Committee-recommender backtest — GATE A (the quality gate).
-
-Pure-read, offline. The real proof the feature works, run BEFORE the recommend endpoint
-is exposed in chat. It imports the production pure functions and the production retrieval
-orchestrator — it never reimplements scoring or retrieval, or it would measure the wrong
-thing.
-
-Run it inside the api project (it imports the app package and needs DATABASE_URL +
-gpu-api/reranker access), with cwd = api so `resources/` and Settings resolve:
-
-    cd api && uv run python ../scripts/backtest.py --sample-size 300
-    cd api && uv run python ../scripts/backtest.py --full --mode both
-
-Method — leave-one-out, single retrieval, multi-eval:
-  Population = defended diplomas with a non-null embedding + present mentor + BOTH members
-  (the only rows with fully-defined ground truth). For each held-out diploma we call
-  `retrieve_similar_diplomas(db, held.title, model, initial_k, top_k,
-  exclude_external_id=held.external_id)` ONCE — this re-embeds the held-out TITLE ONLY
-  (E5 `query:`; production realism: the input shape users actually send) and excludes the
-  held-out defense row (the leave-one-out leakage guard). From that single retrieved set
-  we evaluate BOTH modes:
-
-    FULL          -> score_people(..., Mode.FULL) -> select_committee(..., Mode.FULL)
-                     metrics: mentor hit@1, mentor hit@3, member-pair Jaccard
-    MEMBERS_ONLY  -> score_people(..., Mode.MEMBERS_ONLY, given_mentor=true_mentor)
-                     -> select_committee(..., given_mentor=true_mentor)
-                     metric: member-pair Jaccard only (mentor is GIVEN, not predicted)
-
-Baselines (reported alongside the model):
-  FULL mentor          -> globally-most-frequent mentor in the population
-  MEMBERS_ONLY pair    -> most-frequent co-members of the given mentor (defense graph)
-
-The GATE: the model must beat the most-frequent-mentor baseline (FULL mentor hit@1/@3),
-and both modes' member-pair Jaccard should beat their respective pair baselines.
-
-GATE A is defenses-only by construction: `expertise_weight` and `coauthor_weight` default
-to 0, so `score_people` is numerically identical to the original defense-only scorer until
-a paper/buddy knob is swept. `--no-papers`/`--no-buddies` force those to 0 explicitly
-(forward-compatible no-ops at GATE A; meaningful once the paper corpus lands at GATE B).
-"""
+"""cd api && uv run python ../scripts/backtest.py --sample-size 300"""
 
 # ruff: noqa: INP001 - standalone offline script; scripts/ is not an importable package
 
@@ -52,10 +13,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-# The `app` package is not installed; it is the `api/app` source tree resolved via cwd.
-# Run from `api` (`cd api && uv run python ../scripts/backtest.py`): Python seeds
-# sys.path[0] with this script's dir (scripts/), not the cwd, so add cwd if `app` is there
-# and not already importable. This mirrors `PYTHONPATH=/app` in the container invocation.
 if (Path.cwd() / "app").is_dir() and str(Path.cwd()) not in sys.path:
     sys.path.insert(0, str(Path.cwd()))
 
@@ -87,10 +44,6 @@ from app.utils.settings import Settings
 
 settings = Settings()
 
-# Empty paper-derived indexes: GATE A is defenses-only, so there is no expertise/buddy
-# signal. With expertise_weight=coauthor_weight=0 these are inert anyway, but they make
-# the "no paper corpus yet" reality explicit and keep the score_people call signature
-# identical to production.
 EMPTY_EXPERTISE = ExpertiseIndex(by_professor={}, supporting={})
 EMPTY_COAUTHORS = CoauthorIndex(edges={}, supporting={})
 
@@ -160,12 +113,6 @@ def stratified_sample(
     sample_size: int,
     rng: random.Random,
 ) -> list[HeldOut]:
-    """Stratified-by-mentor down-sample to ~sample_size cases.
-
-    Proportional allocation per mentor (at least one case per mentor that has any), so the
-    mentor distribution of the sample mirrors the full population rather than over-weighting
-    prolific mentors. Returns the full population unchanged if it already fits.
-    """
     if sample_size <= 0 or sample_size >= len(population):
         return list(population)
 
@@ -176,27 +123,17 @@ def stratified_sample(
     total = len(population)
     sampled: list[HeldOut] = []
     for cases in by_mentor.values():
-        # proportional quota, floored to >=1 so every mentor stratum is represented
         quota = max(1, round(sample_size * len(cases) / total))
         quota = min(quota, len(cases))
         sampled.extend(rng.sample(cases, quota))
 
-    # Flooring/rounding can overshoot; trim back down deterministically.
     rng.shuffle(sampled)
     return sampled[:sample_size]
 
 
 def weights_from_args(ns: argparse.Namespace) -> ScoringWeights:
-    """Build ScoringWeights from CLI overrides on top of the dataclass defaults.
-
-    `--no-papers` forces expertise_weight=0; `--no-buddies` forces coauthor_weight=0 and
-    coauthor_member_boost=0 (composes with --no-papers). At GATE A these are no-ops (both
-    already default to 0) but keep the script forward-compatible with the paper corpus.
-    """
     base = ScoringWeights()
 
-    # Each CLI value or the dataclass default; explicit kwargs keep the field types sound
-    # (every override here is a float field). --no-* ablation switches win over --*-weight.
     expertise_weight = (
         0.0 if ns.no_papers else _or(ns.expertise_weight, base.expertise_weight)
     )
@@ -238,12 +175,7 @@ def _or(override: float | None, default: float) -> float:
 
 
 def _loo_prior(global_prior: MentorPriorIndex, held: HeldOut) -> MentorPriorIndex:
-    """The global mentor prior with the held-out defense's own co-memberships removed.
-
-    Leave-one-out for the prior, mirroring the baseline fix: without it a held-out defense
-    leaks its own members into its mentor's prior. Only the held mentor's bucket needs
-    adjusting — the held-out defense contributes to no other mentor's counts.
-    """
+    # Without LOO, the held-out defense leaks its own members into its mentor's prior bucket.
     adjusted = dict(global_prior.by_mentor.get(held.mentor, {}))
     for member in (held.member1, held.member2):
         if member in adjusted:
@@ -269,14 +201,6 @@ def evaluate_case(
     coauthors: CoauthorIndex,
     coauthor_prior: MentorPriorIndex | None = None,
 ) -> CaseResult:
-    """Evaluate both modes for one held-out case from its single retrieved set.
-
-    Cold-start = the true mentor appears in FEWER than `cold_start_floor` of the retrieved
-    defenses (the held-out row is already excluded by retrieval), so the paper/buddy signals
-    would have to carry it. Baselines are computed against the same ground truth.
-    """
-    # cold-start: count the true mentor's OTHER retrieved defenses (any role excludes them
-    # being the same row — the held-out is excluded from retrieval).
     mentor_retrieved_defenses = sum(1 for r in retrieved if r.mentor == held.mentor)
     is_cold_start = mentor_retrieved_defenses < cold_start_floor
 
@@ -325,21 +249,11 @@ def evaluate_case(
         )
         members_pair_jaccard = _jaccard(rec_members.members, held.true_pair)
 
-    # --- baselines ---
     base_hit1 = global_top_mentor == held.mentor
     base_hit3 = (
         global_top_mentor == held.mentor
     )  # single-name baseline -> same as hit@1
-    # FULL pair baseline: the given mentor is NOT known in FULL, so the fairest naive
-    # member baseline is the most-frequent co-members of the model's chosen-or-true mentor.
-    # We use the held-out's true mentor's top co-members as the naive pair (the strongest
-    # naive baseline a FULL system could field if it nailed the mentor).
-    #
-    # Leave-one-out for the baseline TOO: subtract the held-out defense's own members from
-    # its mentor's co-membership counts. Without this, low-frequency mentors leak their true
-    # pair into the baseline (a mentor with a single defense would score Jaccard 1.0 for
-    # free), making the comparison unfair to the model, whose retrieval already excludes the
-    # held-out row.
+    # LOO for the baseline: subtract the held-out defense's members from its mentor's counts to avoid leaking the true pair into the baseline.
     mentor_counter = mentor_cofreq.get(held.mentor, Counter()).copy()
     mentor_counter[held.member1] -= 1
     mentor_counter[held.member2] -= 1
@@ -367,14 +281,6 @@ def evaluate_case(
 def compute_baselines(
     population: list[HeldOut],
 ) -> tuple[str, dict[str, Counter[str]]]:
-    """Naive baselines from the full population (NOT the sample, to be a fair global prior).
-
-    Returns:
-      global_top_mentor  -> the single most-frequent mentor (FULL mentor baseline).
-      mentor_cofreq      -> mentor -> Counter of co-members (how often each served with that
-                            mentor). Raw counts, not pre-sorted, so evaluate_case can do a
-                            per-case leave-one-out subtraction before taking the top pair.
-    """
     mentor_counts: Counter[str] = Counter(case.mentor for case in population)
     global_top_mentor = mentor_counts.most_common(1)[0][0] if mentor_counts else ""
 
@@ -460,7 +366,6 @@ def report(
     metric_block("OVERALL", results)
     metric_block("COLD-START SLICE", cold)
 
-    # --- explicit GATE verdict ---
     lines.append("=" * 72)
     if run_full:
         model_h1 = _mean([float(r.full_mentor_hit1) for r in results])
@@ -521,15 +426,11 @@ async def main_async(ns: argparse.Namespace) -> int:
         global_prior = build_mentor_prior(
             (case.mentor, case.member1, case.member2) for case in population
         )
-        # Only pay for paper retrieval when a paper-derived signal is actually on, so the
-        # defenses-only GATE A path stays a pure (and fast) no-paper run.
         use_papers = (
             weights.expertise_weight > 0
             or weights.coauthor_weight > 0
             or weights.coauthor_member_boost > 0
         )
-        # Global co-author prior (whole paper graph, built once; no leave-one-out — papers
-        # are independent of the held-out defense's committee ground truth).
         coauthor_prior = (
             build_coauthor_prior(await get_all_paper_authors(db))
             if weights.coauthor_prior_weight > 0
@@ -669,14 +570,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--concurrency", type=int, default=4)
     p.add_argument("--seed", type=int, default=1234, help="stratified-sample RNG seed")
 
-    # --- ScoringWeights overrides (None => keep the dataclass default) ---
     p.add_argument("--similarity-weight", type=float, default=None)
     p.add_argument("--rerank-weight", type=float, default=None)
     p.add_argument("--recency-half-life-days", type=float, default=None)
     p.add_argument("--pair-affinity-weight", type=float, default=None)
     p.add_argument("--mentor-prior-weight", type=float, default=None)
     p.add_argument("--coauthor-prior-weight", type=float, default=None)
-    # Off-by-default at GATE A; present so the script is forward-compatible with papers.
     p.add_argument("--expertise-weight", type=float, default=None)
     p.add_argument("--coauthor-weight", type=float, default=None)
     p.add_argument("--coauthor-member-boost", type=float, default=None)
@@ -688,7 +587,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="reference year for buddy recency decay (e.g. 2026); None = recency off",
     )
 
-    # --- ablation switches (force a signal to 0; no-ops at GATE A) ---
     p.add_argument(
         "--no-papers",
         action="store_true",

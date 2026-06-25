@@ -1,5 +1,3 @@
-"""Community detection over a co-occurrence graph: no DB, no graph library."""
-
 from __future__ import annotations
 
 import itertools
@@ -9,7 +7,6 @@ from collections.abc import Iterable, Mapping, Sequence
 def cooccurrence_edges(
     groupings: Iterable[Sequence[str]],
 ) -> dict[frozenset[str], int]:
-    """Count undirected co-occurrence over groupings (each = the people on one defense/paper)."""
     edges: dict[frozenset[str], int] = {}
     for people in groupings:
         uniq = sorted({p for p in people if p})
@@ -23,11 +20,6 @@ def detect_groups(
     edges: Mapping[frozenset[str], int],
     min_weight: int,
 ) -> list[list[str]]:
-    """Connected-component communities over edges with weight >= min_weight.
-
-    Edges below the threshold are dropped, so groups are cohorts who worked together
-    repeatedly — not everyone transitively linked by a single shared defense.
-    """
     parent: dict[str, str] = {}
 
     def find(node: str) -> str:
@@ -35,7 +27,7 @@ def detect_groups(
         root = node
         while parent[root] != root:
             root = parent[root]
-        while parent[node] != root:  # path compression
+        while parent[node] != root:
             parent[node], node = root, parent[node]
         return root
 

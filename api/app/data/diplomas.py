@@ -184,11 +184,6 @@ async def fetch_diploma_rows_for_fill(
 
 
 async def get_defended_committees(db: Database) -> list[Record]:
-    """All defended (mentor, member1, member2) triples — the mentor co-membership prior source.
-
-    Title-independent: the whole defense graph, not a retrieved subset. Members may be null;
-    the prior builder skips nulls.
-    """
     query = (
         "SELECT mentor, member1, member2 FROM diploma "
         "WHERE status = 'Одбрана' AND mentor IS NOT NULL"
@@ -206,12 +201,6 @@ async def get_backtest_population(
     db: Database,
     model: Model,
 ) -> list[Record]:
-    """Leave-one-out backtest population for the committee recommender.
-
-    Defended diplomas with a non-null embedding (for this model's column) AND a present
-    mentor AND both members — the only rows where the held-out ground truth (mentor +
-    member pair) is fully defined. Returns (external_id, title, mentor, member1, member2).
-    """
     embedding_column = MODEL_EMBEDDINGS_COLUMNS[model]
     query = f"""
     SELECT external_id, title, mentor, member1, member2

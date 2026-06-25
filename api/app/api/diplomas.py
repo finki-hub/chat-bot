@@ -21,7 +21,6 @@ settings = Settings()
 
 _DIPLOMAS_TIMEOUT = httpx.Timeout(timeout=60.0)
 
-# The corpus is the defended set; sync filters to this status by default.
 _DEFENDED_STATUS = "Одбрана"
 
 db_dep = Depends(get_db)

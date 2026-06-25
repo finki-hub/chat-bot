@@ -1,12 +1,3 @@
-"""Paper read-path retrieval: the professor_document analogue of retrieve_similar_diplomas.
-
-Embeds the bare proposal title (E5 query: prefix), KNN over the paper corpus, and returns
-RetrievedPaper candidates. The pure builders (build_expertise_index / _accumulate_coauthor_
-edges) turn these into the expertise + buddy indexes the scorer consumes. bge-m3 is strongly
-cross-lingual, so a Macedonian title retrieves the English paper corpus; no reranker here —
-the signals aggregate many moderately-similar papers rather than needing a precise top hit.
-"""
-
 import json
 import logging
 
@@ -19,9 +10,7 @@ from app.recommenders.recommend import RetrievedPaper
 
 logger = logging.getLogger(__name__)
 
-# Relaxed cross-lingual cosine ceiling for the paper KNN: a Macedonian title against English
-# abstracts sits farther out than same-language matches, and expertise/buddy aggregate many
-# papers, so the gate errs toward recall (the reranker/precision gate does not apply here).
+# Cross-lingual gap: Macedonian title vs English abstracts sits farther out than same-language matches; errs toward recall since expertise/buddy aggregate many papers.
 PAPER_DISTANCE_CEILING = 0.8
 
 

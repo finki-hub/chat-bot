@@ -137,10 +137,6 @@ CREATE INDEX IF NOT EXISTS chunk_embedding_multilingual_e5_large_idx ON chunk US
     embedding_multilingual_e5_large vector_cosine_ops
 );
 
--- Diploma defenses (committee corpus). One row = one defense = the retrieval unit.
--- Committee members are stored as canonical-name TEXT; their unordered nature is
--- enforced in scoring (frozenset), not DDL.
-
 CREATE TABLE IF NOT EXISTS diploma (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     external_id TEXT NOT NULL UNIQUE,
@@ -159,12 +155,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS diploma_external_id_idx ON diploma (external_i
 
 CREATE INDEX IF NOT EXISTS diploma_mentor_idx ON diploma (mentor);
 
--- Diploma embedding columns mirror `question`/`chunk` (same names/dims), reused by the MODEL_* maps.
-
 ALTER TABLE diploma
 ADD COLUMN IF NOT EXISTS embedding_llama3_3_70b vector (8192);
-
--- No indexing for llama3_3_70b because indexes support up to 2000 dimensions
 
 ALTER TABLE diploma
 ADD COLUMN IF NOT EXISTS embedding_bge_m3 vector (1024);
@@ -194,10 +186,6 @@ CREATE INDEX IF NOT EXISTS diploma_embedding_multilingual_e5_large_idx ON diplom
     embedding_multilingual_e5_large vector_cosine_ops
 );
 
--- Professor publications (paper corpus for the expertise + co-author "buddy" signals).
--- canonical_authors hold the SAME canonical-name strings as diploma mentor/member, so the
--- paper signals compose with the defense graph without a name-mapping layer at query time.
-
 CREATE TABLE IF NOT EXISTS professor_document (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     external_id TEXT NOT NULL UNIQUE,
@@ -213,12 +201,8 @@ CREATE TABLE IF NOT EXISTS professor_document (
 
 CREATE UNIQUE INDEX IF NOT EXISTS professor_document_external_id_idx ON professor_document (external_id);
 
--- Embedding columns mirror `question`/`chunk` (same names/dims), reused by the MODEL_* maps.
-
 ALTER TABLE professor_document
 ADD COLUMN IF NOT EXISTS embedding_llama3_3_70b vector (8192);
-
--- No indexing for llama3_3_70b because indexes support up to 2000 dimensions
 
 ALTER TABLE professor_document
 ADD COLUMN IF NOT EXISTS embedding_bge_m3 vector (1024);
@@ -247,10 +231,6 @@ ADD COLUMN IF NOT EXISTS embedding_multilingual_e5_large vector (1024);
 CREATE INDEX IF NOT EXISTS professor_document_embedding_multilingual_e5_large_idx ON professor_document USING hnsw (
     embedding_multilingual_e5_large vector_cosine_ops
 );
-
--- Temporal staff groups: clusters of professors who repeatedly served/published together
--- within a time window (community detection over the co-occurrence graph, per window).
--- Recomputed wholesale per source by compute_professor_groups.
 
 CREATE TABLE IF NOT EXISTS professor_group (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),

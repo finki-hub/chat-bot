@@ -34,14 +34,10 @@ from app.schemas.diplomas import (
 
 logger = logging.getLogger(__name__)
 
-# Retrieval breadth: pull a wide vector neighborhood, then rerank down to the scoring set.
 _INITIAL_K = 30
 _TOP_K = 10
-# Paper KNN breadth for the expertise signal (only used when a paper weight is on).
 _PAPER_K = 50
 
-# The mentor prior is title-independent (changes only on a corpus resync), so cache it
-# instead of rebuilding it from the full defense graph on every request.
 _PRIOR_CACHE_TTL = 3600.0
 _mentor_prior_cache: dict[str, tuple[float, MentorPriorIndex]] = {}
 
@@ -55,8 +51,6 @@ router = APIRouter(
 
 
 async def _get_mentor_prior(db: Database) -> MentorPriorIndex:
-    """Cached mentor co-membership prior; rebuilt from the full defense graph at most once
-    per TTL since it changes only when the diploma corpus is resynced."""
     cached = _mentor_prior_cache.get("prior")
     now = time.monotonic()
     if cached is not None and now - cached[0] < _PRIOR_CACHE_TTL:
@@ -74,10 +68,6 @@ def _person_score(
     ranked: RankedPeople,
     rec: Recommendation,
 ) -> PersonScoreSchema:
-    """`score` is the final candidate score (blended + mentor-prior); for a prior-surfaced
-    member (absent from `blended`) this is the only place the real score lives. `prior_score`
-    is the prior's contribution = final - blended.
-    """
     blended = ranked.blended.get(name)
     final = rec.member_scores.get(name, blended)
     prior = (final - (blended or 0.0)) if final is not None else 0.0
@@ -96,10 +86,8 @@ def _mentor_score(
     rec: Recommendation,
     ranked: RankedPeople,
 ) -> PersonScoreSchema:
-    """The mentor slot: chosen-with-scores in FULL; an echo of the given mentor in MEMBERS-ONLY."""
     name = rec.mentor or ""
     if rec.mentor_is_given:
-        # MEMBERS-ONLY: the mentor is given, never scored — echo it with empty scores.
         return PersonScoreSchema(
             name=name,
             score=None,
@@ -131,7 +119,6 @@ async def recommend_committee(
     mode = Mode.MEMBERS_ONLY if payload.mentor else Mode.FULL
     text = payload.title.strip()
 
-    # Embed the title once and reuse it for both diploma and paper retrieval.
     query_embedding = await generate_embeddings(
         _prepare_text_for_embedding(text, DEFAULT_EMBEDDINGS_MODEL, is_document=False),
         DEFAULT_EMBEDDINGS_MODEL,
@@ -146,9 +133,6 @@ async def recommend_committee(
         query_embedding=query_embedding,
     )
 
-    # FULL mode picks the mentor from the retrieved defenses, so with nothing retrieved there
-    # is no recommendation to make (corpus not ingested, or a very out-of-domain title).
-    # MEMBERS-ONLY can still fall back to the given mentor's prior, so only FULL fails here.
     if mode is Mode.FULL and not retrieved:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -157,11 +141,6 @@ async def recommend_committee(
 
     weights = ScoringWeights()
 
-    # Paper-derived signals from the professor_document corpus. The expertise signal gives
-    # members a gentle topical lift (and an explainability trail of supporting papers); the
-    # buddy/co-author signal is built but OFF by default — GATE B found co-authorship does not
-    # predict committee co-membership. Skip the paper KNN entirely when no paper signal is on
-    # (mirrors the backtest's use_papers, including the members-only buddy boost).
     use_papers = (
         weights.expertise_weight > 0
         or weights.coauthor_weight > 0
@@ -194,14 +173,8 @@ async def recommend_committee(
         given_mentor=payload.mentor,
     )
 
-    # Mentor-conditioned habitual co-membership prior (cached; title-independent). It surfaces
-    # the resolved mentor's frequent collaborators even when the topical retrieval missed them
-    # — the dominant member signal. No leave-one-out needed: the thesis is not in the corpus.
     mentor_prior = await _get_mentor_prior(db)
 
-    # Global co-author prior (the mentor's frequent co-authors). Built + ablatable but OFF by
-    # default (coauthor_prior_weight=0): co-authorship correlates with committee co-membership
-    # but adds noise on top of the defense prior, which already records who actually serves.
     coauthor_prior = (
         build_coauthor_prior(await get_all_paper_authors(db))
         if weights.coauthor_prior_weight > 0

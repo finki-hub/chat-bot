@@ -475,8 +475,6 @@ async def _stream_fill_corpus_embeddings(
     text_of: Callable[[Record], str],
     all_models: bool,
 ) -> StreamingResponse:
-    """Generic per-row embedding fill (one diploma/professor_document row = one task),
-    parameterized by the table, its row-fetch query, and the row -> embed-text builder."""
     logger.info(
         "Filling %s embeddings for model: %s, all_models: %s",
         table,
