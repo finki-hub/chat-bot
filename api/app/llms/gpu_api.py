@@ -121,9 +121,9 @@ def stream_gpu_api_response(
 
                 # Upstream emits bare `data:` text frames, which the client reads as
                 # answer tokens; we only wrap the terminal error/done in the protocol.
-                async for chunk in response.aiter_bytes():
+                async for chunk in response.aiter_text():
                     if chunk:
-                        yield chunk.decode("utf-8")
+                        yield chunk
 
             yield DONE_EVENT
 
