@@ -1,7 +1,7 @@
 import logging
 import time
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.data.connection import Database
@@ -146,13 +146,27 @@ async def recommend_committee(
         query_embedding=query_embedding,
     )
 
+    # FULL mode picks the mentor from the retrieved defenses, so with nothing retrieved there
+    # is no recommendation to make (corpus not ingested, or a very out-of-domain title).
+    # MEMBERS-ONLY can still fall back to the given mentor's prior, so only FULL fails here.
+    if mode is Mode.FULL and not retrieved:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No similar defended theses found to base a recommendation on.",
+        )
+
     weights = ScoringWeights()
 
     # Paper-derived signals from the professor_document corpus. The expertise signal gives
     # members a gentle topical lift (and an explainability trail of supporting papers); the
-    # buddy/co-author signal is built but OFF by default (coauthor_weight=0) — GATE B found
-    # co-authorship does not predict committee co-membership. Skip the paper KNN entirely
-    # when no paper signal is enabled.
+    # buddy/co-author signal is built but OFF by default — GATE B found co-authorship does not
+    # predict committee co-membership. Skip the paper KNN entirely when no paper signal is on
+    # (mirrors the backtest's use_papers, including the members-only buddy boost).
+    use_papers = (
+        weights.expertise_weight > 0
+        or weights.coauthor_weight > 0
+        or weights.coauthor_member_boost > 0
+    )
     papers = (
         await retrieve_professor_papers(
             db,
@@ -161,13 +175,13 @@ async def recommend_committee(
             _PAPER_K,
             query_embedding=query_embedding,
         )
-        if weights.expertise_weight > 0 or weights.coauthor_weight > 0
+        if use_papers
         else []
     )
     expertise = build_expertise_index(papers, weights)
     coauthors = (
         _accumulate_coauthor_edges(papers, weights)
-        if weights.coauthor_weight > 0
+        if weights.coauthor_weight > 0 or weights.coauthor_member_boost > 0
         else CoauthorIndex({}, {})
     )
 
