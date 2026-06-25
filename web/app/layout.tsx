@@ -10,7 +10,7 @@ import { Providers } from '@/app/providers';
 const TITLE = 'ФИНКИ Хаб / Чат';
 const DESCRIPTION =
   'Разговарај со ФИНКИ Хаб асистентот за прашања поврзани со студиите на ФИНКИ.';
-const SITE_URL = 'https://chat.finki-hub.com';
+const SITE_URL = process.env['SITE_URL'] ?? 'https://chat.finki-hub.com';
 const OG_IMAGE = `${SITE_URL}/favicon-96x96.png`;
 
 export const metadata: Metadata = {

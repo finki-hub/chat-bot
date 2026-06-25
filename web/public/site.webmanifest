@@ -1,6 +1,8 @@
 {
   "name": "ФИНКИ Хаб / Чат",
   "short_name": "Чат",
+  "start_url": "/",
+  "scope": "/",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
