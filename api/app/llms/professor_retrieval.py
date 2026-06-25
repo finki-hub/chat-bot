@@ -32,10 +32,15 @@ async def retrieve_professor_papers(
     limit: int,
     *,
     threshold: float = PAPER_DISTANCE_CEILING,
+    query_embedding: list[float] | None = None,
 ) -> list[RetrievedPaper]:
-    embedded = await generate_embeddings(
-        _prepare_text_for_embedding(query_text, model, is_document=False),
-        model,
+    embedded = (
+        query_embedding
+        if query_embedding is not None
+        else await generate_embeddings(
+            _prepare_text_for_embedding(query_text, model, is_document=False),
+            model,
+        )
     )
 
     rows = await get_closest_professor_documents(

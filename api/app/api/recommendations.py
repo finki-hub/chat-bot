@@ -1,4 +1,5 @@
 import logging
+import time
 
 from fastapi import APIRouter, Depends, status
 
@@ -8,10 +9,13 @@ from app.data.db import get_db
 from app.data.diplomas import get_defended_committees
 from app.data.professor_documents import get_all_paper_authors
 from app.llms.diploma_retrieval import retrieve_similar_diplomas
+from app.llms.embeddings import generate_embeddings
 from app.llms.professor_retrieval import retrieve_professor_papers
+from app.llms.text_utils import _prepare_text_for_embedding
 from app.recommenders.config import ScoringWeights
 from app.recommenders.recommend import (
     CoauthorIndex,
+    MentorPriorIndex,
     Mode,
     RankedPeople,
     Recommendation,
@@ -36,6 +40,11 @@ _TOP_K = 10
 # Paper KNN breadth for the expertise signal (only used when a paper weight is on).
 _PAPER_K = 50
 
+# The mentor prior is title-independent (changes only on a corpus resync), so cache it
+# instead of rebuilding it from the full defense graph on every request.
+_PRIOR_CACHE_TTL = 3600.0
+_mentor_prior_cache: tuple[float, MentorPriorIndex] | None = None
+
 db_dep = Depends(get_db)
 
 router = APIRouter(
@@ -43,6 +52,24 @@ router = APIRouter(
     tags=["Recommendations"],
     dependencies=[db_dep],
 )
+
+
+async def _get_mentor_prior(db: Database) -> MentorPriorIndex:
+    """Cached mentor co-membership prior; rebuilt from the full defense graph at most once
+    per TTL since it changes only when the diploma corpus is resynced."""
+    global _mentor_prior_cache  # noqa: PLW0603
+    now = time.monotonic()
+    if (
+        _mentor_prior_cache is not None
+        and now - _mentor_prior_cache[0] < _PRIOR_CACHE_TTL
+    ):
+        return _mentor_prior_cache[1]
+    committees = await get_defended_committees(db)
+    prior = build_mentor_prior(
+        (row["mentor"], row["member1"], row["member2"]) for row in committees
+    )
+    _mentor_prior_cache = (now, prior)
+    return prior
 
 
 def _person_score(
@@ -107,12 +134,19 @@ async def recommend_committee(
     mode = Mode.MEMBERS_ONLY if payload.mentor else Mode.FULL
     text = payload.title.strip()
 
+    # Embed the title once and reuse it for both diploma and paper retrieval.
+    query_embedding = await generate_embeddings(
+        _prepare_text_for_embedding(text, DEFAULT_EMBEDDINGS_MODEL, is_document=False),
+        DEFAULT_EMBEDDINGS_MODEL,
+    )
+
     retrieved = await retrieve_similar_diplomas(
         db,
         text,
         DEFAULT_EMBEDDINGS_MODEL,
         _INITIAL_K,
         _TOP_K,
+        query_embedding=query_embedding,
     )
 
     weights = ScoringWeights()
@@ -123,7 +157,13 @@ async def recommend_committee(
     # co-authorship does not predict committee co-membership. Skip the paper KNN entirely
     # when no paper signal is enabled.
     papers = (
-        await retrieve_professor_papers(db, text, DEFAULT_EMBEDDINGS_MODEL, _PAPER_K)
+        await retrieve_professor_papers(
+            db,
+            text,
+            DEFAULT_EMBEDDINGS_MODEL,
+            _PAPER_K,
+            query_embedding=query_embedding,
+        )
         if weights.expertise_weight > 0 or weights.coauthor_weight > 0
         else []
     )
@@ -143,14 +183,10 @@ async def recommend_committee(
         given_mentor=payload.mentor,
     )
 
-    # Mentor-conditioned habitual co-membership prior, built from the WHOLE defense graph
-    # (title-independent). It surfaces the resolved mentor's frequent collaborators even when
-    # the topical retrieval missed them — the dominant member signal until the paper/buddy
-    # corpus lands. No leave-one-out needed: the proposed thesis is not in the corpus.
-    committees = await get_defended_committees(db)
-    mentor_prior = build_mentor_prior(
-        (row["mentor"], row["member1"], row["member2"]) for row in committees
-    )
+    # Mentor-conditioned habitual co-membership prior (cached; title-independent). It surfaces
+    # the resolved mentor's frequent collaborators even when the topical retrieval missed them
+    # — the dominant member signal. No leave-one-out needed: the thesis is not in the corpus.
+    mentor_prior = await _get_mentor_prior(db)
 
     # Global co-author prior (the mentor's frequent co-authors). Built + ablatable but OFF by
     # default (coauthor_prior_weight=0): co-authorship correlates with committee co-membership

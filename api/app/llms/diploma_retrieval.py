@@ -43,17 +43,23 @@ async def retrieve_similar_diplomas(
     top_k: int,
     *,
     exclude_external_id: str | None = None,
+    query_embedding: list[float] | None = None,
 ) -> list[RetrievedDiploma]:
     """Retrieve the top_k historical defenses most similar to the proposal title.
 
     The query is the bare title (no description; E5 query: prefix). After KNN we rerank
     with the cross-encoder, keep candidates scoring >= RERANKER_MIN_SCORE, and take top_k.
     On any rerank failure we fall back to vector order (first top_k), mirroring
-    get_retrieved_context.
+    get_retrieved_context. `query_embedding` lets a caller reuse a title embedding it already
+    computed (the recommend endpoint embeds once for both diploma and paper retrieval).
     """
-    embedded = await generate_embeddings(
-        _prepare_text_for_embedding(query_text, model, is_document=False),
-        model,
+    embedded = (
+        query_embedding
+        if query_embedding is not None
+        else await generate_embeddings(
+            _prepare_text_for_embedding(query_text, model, is_document=False),
+            model,
+        )
     )
 
     candidates = await get_closest_diplomas(
