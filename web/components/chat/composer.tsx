@@ -88,7 +88,7 @@ export const Composer = ({
           {t('composer.model')}
         </label>
         <select
-          className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+          className="rounded-md border border-border bg-background px-2 py-1 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           data-testid="composer-model"
           disabled={disabled}
           id="composer-model"
@@ -117,7 +117,7 @@ export const Composer = ({
       <div className="flex items-end gap-2">
         <textarea
           aria-label={t('composer.message')}
-          className="min-h-[44px] flex-1 resize-none rounded-md border border-border bg-background px-3 py-2 text-sm"
+          className="min-h-[44px] flex-1 resize-none rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           data-testid="composer-input"
           disabled={disabled}
           onChange={(e) => {
@@ -130,7 +130,7 @@ export const Composer = ({
         />
         <button
           aria-label={isBusy ? t('composer.stop') : t('composer.send')}
-          className="inline-flex size-10 items-center justify-center rounded-md border border-border hover:bg-muted disabled:opacity-50"
+          className="inline-flex size-10 items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
           data-testid="composer-submit"
           disabled={
             (disabled ?? false) || (!isBusy && value.trim().length === 0)
