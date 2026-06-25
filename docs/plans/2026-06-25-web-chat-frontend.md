@@ -6,21 +6,21 @@
 
 **Architecture:** Browser runs a Next.js (App Router, React 19) client using useChat<MyUIMessage> + DefaultChatTransport, talking only to same-origin /api/* Route Handlers (the BFF). The BFF holds API_BASE_URL and the x-api-key, fetches the Python chat API at POST /chat/ (trailing slash), parses the protocol-v2 named SSE events (token/status/reset/error/done), and re-emits them through a manual createUIMessageStream writer (text-start/text-delta/text-end for the answer, transient data-status/data-error parts, and a start chunk carrying responseId/inferenceModel metadata). Dexie/IndexedDB owns multi-conversation history client-side in UIMessage shape.
 
-**Tech Stack:** Next.js (App Router, React 19, TypeScript); AI SDK v5 (ai + @ai-sdk/react) for createUIMessageStream/createUIMessageStreamResponse and useChat; AI Elements (shadcn registry, vendored into components/ai-elements) + Streamdown + Tailwind v4 + lucide-react; Dexie (IndexedDB) for local history; TanStack Query (models), Zustand (UI state); Vitest + React Testing Library + fake-indexeddb + Playwright; pnpm.
+**Tech Stack:** Next.js (App Router, React 19, TypeScript); AI SDK v5 (ai + @ai-sdk/react) for createUIMessageStream/createUIMessageStreamResponse and useChat; AI Elements (shadcn registry, vendored into components/ai-elements) + Streamdown + Tailwind v4 + lucide-react; Dexie (IndexedDB) for local history; TanStack Query (models), Zustand (UI state); Vitest + React Testing Library + fake-indexeddb + Playwright; npm.
 
 **Design spec:** `docs/superpowers/specs/2026-06-25-web-chat-frontend-design.md`
 
 ## Global Constraints
 
-- AI SDK v5 pinned: `ai` and `@ai-sdk/react` both ^5; AI Elements vendored at the matching v5 release and version-locked to the AI SDK.
-- Next.js App Router + React 19 + TypeScript; package manager is pnpm only.
+- AI SDK pinned: `ai@^5` with `@ai-sdk/react@^2` — the `@ai-sdk/react` major is decoupled from `ai`; the release that pairs with `ai@5` is the `2.x` line (there is NO `@ai-sdk/react@5` on npm). AI Elements vendored at the matching v5 release and version-locked to the AI SDK. NOTE: the ecosystem's latest major is now v6 (`ai@6` / `@ai-sdk/react@3`), so install AI Elements + shadcn pinned to v5-compatible versions, not blindly `@latest`.
+- Next.js App Router + React 19 + TypeScript; package manager is npm.
 - Python API has NO `/api` prefix; the streaming endpoint is `POST /chat/` WITH a trailing slash (a bare `/chat` 307-redirects and drops the body).
 - Browser calls ONLY same-origin Next.js `/api/*` routes; it never calls the Python API and never sees API_BASE_URL.
-- `x-api-key` (the master key, used only by POST /api/feedback) is server-only via CHAT_API_KEY; it must never reach the browser and there are NO NEXT_PUBLIC_* vars in v1.
+- `x-api-key` (the master key) is server-only via CHAT_API_KEY; the browser hits the same-origin BFF route `POST /api/feedback`, which injects the key and forwards to the Python upstream `POST /chat/feedback` (NOT `/api/feedback` — the Python API has no `/api` prefix). It must never reach the browser and there are NO NEXT_PUBLIC_* vars in v1.
 - Request caps the client enforces and the BFF re-validates: <= 50 messages total, <= 8000 chars per turn; messages oldest-first and the last element MUST be role:'user' (else API 422).
 - responseId comes ONLY from the `X-Response-Id` response header on POST /chat/; when absent, hide like/dislike for that turn.
 - Chrome/UI copy is Macedonian-only (structured so EN can be added later); answers are Macedonian Cyrillic.
-- Answer rendering: bare URLs only (autolinked), NO Markdown tables and no `[text](url)` links — Streamdown defaults suffice.
+- Answer rendering: bare URLs only (autolinked), NO Markdown tables and no `[text](url)` links. Streamdown renders GFM tables/links by DEFAULT, so "defaults suffice" only because the bot's output already avoids them — to HARD-enforce the no-table/no-link constraint, configure Streamdown's allowed components/remark plugins explicitly and verify against the installed version.
 - Feedback always sends client:'web' and a non-empty user_id (stable per-browser anon UUID from localStorage); upsert key is (response_id, client, user_id).
 - data parts are named EXACTLY `data-status` and `data-error`; both are written `transient:true` (delivered via onData, never persisted into message.parts).
 - MyUIMessage metadata is exactly { responseId?: string; inferenceModel?: string } and is attached via a manual `start` chunk's `messageMetadata`.
@@ -31,7 +31,7 @@
 
 ## AI SDK v5 + AI Elements + Dexie — verified cheat-sheet (copy from here)
 
-Verified against AI SDK v5 docs (`/websites/ai-sdk_dev_v5`), AI Elements (`/vercel/ai-elements`), Dexie (`/websites/dexie`). Installed packages: `ai@^5`, `@ai-sdk/react@^5`, AI Elements vendored at the matching v5 release.
+Verified against AI SDK v5 docs (`/websites/ai-sdk_dev_v5`), AI Elements (`/vercel/ai-elements`), Dexie (`/websites/dexie`). Installed packages: `ai@^5`, `@ai-sdk/react@^2` (the line that pairs with `ai@5`; there is no `@ai-sdk/react@5`), AI Elements vendored at the matching v5 release.
 
 ### 1) BFF — manual UI message stream WITHOUT streamText
 
@@ -177,7 +177,8 @@ db.version(1).stores({
 
 export const loadMessages = (cid: string) =>
   db.messages.where('conversationId').equals(cid).sortBy('createdAt');
-export const saveMessages = (rows: MessageRow[]) => db.messages.bulkPut(rows);
+// saveMessages(conversationId, messages: MyUIMessage[]) maps MyUIMessage[] -> MessageRow[]
+// and bumps the conversation's updatedAt in a txn — see Task 8 for the authoritative impl.
 ```
 
 ```ts
@@ -214,16 +215,16 @@ I have the full spec. Now I'll write Tasks 1, 2, and 3 with complete code and TD
 - Create: `web/app/layout.tsx`
 - Create: `web/app/page.tsx` (placeholder)
 - Create: `web/.gitignore`
-- Create: `web/next-env.d.ts` (generated by Next; checked in per Next convention)
+- Create: `web/next-env.d.ts` (generated by Next on `dev`/`build`; gitignored per Next convention and regenerated — NOT committed. If `tsc` runs on a clean checkout before a build, run `npx next typegen` first — see Step 15.)
 - Test: `web/test/smoke.test.ts`
 
 **Interfaces:**
 - Consumes: nothing (first task).
-- Produces: a working pnpm app rooted at `web/` with the `@/*` path alias (`@/* -> ./*`), Tailwind v4, and the test toolchain. Later tasks rely on: `pnpm` scripts `dev`/`build`/`typecheck`/`test`/`test:e2e`; Vitest config with `environment: 'jsdom'`, `setupFiles: ['./vitest.setup.ts']`, and the `@` alias resolving to the `web/` root; `fake-indexeddb/auto` loaded in setup (used by Tasks 8/13); `app/globals.css` importing Tailwind.
+- Produces: a working npm app rooted at `web/` with the `@/*` path alias (`@/* -> ./*`), Tailwind v4, and the test toolchain. Later tasks rely on: `npm` scripts `dev`/`build`/`typecheck`/`test`/`test:e2e`; Vitest config with `environment: 'jsdom'`, `setupFiles: ['./vitest.setup.ts']`, and the `@` alias resolving to the `web/` root; `fake-indexeddb/auto` loaded in setup (used by Tasks 8/13); `app/globals.css` importing Tailwind.
 
 **Steps:**
 
-- [ ] **Step 1: Create the `web/` directory and the pnpm manifest.** Create `web/package.json`. This pins AI SDK v5, React 19, Next.js, Tailwind v4, Dexie, TanStack Query, Zustand, and the test toolchain so every later task installs against the same versions.
+- [ ] **Step 1: Create the `web/` directory and the npm manifest.** Create `web/package.json`. This pins AI SDK v5, React 19, Next.js, Tailwind v4, Dexie, TanStack Query, Zustand, and the test toolchain so every later task installs against the same versions.
 
 ```json
 {
@@ -242,7 +243,7 @@ I have the full spec. Now I'll write Tasks 1, 2, and 3 with complete code and TD
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@ai-sdk/react": "^5.0.0",
+    "@ai-sdk/react": "^2.0.0",
     "@tanstack/react-query": "^5.59.0",
     "ai": "^5.0.0",
     "dexie": "^4.0.10",
@@ -379,7 +380,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'pnpm dev',
+    command: 'npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
@@ -438,10 +439,10 @@ next-env.d.ts
 - [ ] **Step 12: Install dependencies.** Run from inside `web/`:
 
 ```bash
-cd web && pnpm install
+cd web && npm install
 ```
 
-Expected: a `web/pnpm-lock.yaml` is created and `node_modules` is populated with no peer-dependency errors that block install.
+Expected: a `web/package-lock.json` is created and `node_modules` is populated with no peer-dependency errors that block install.
 
 - [ ] **Step 13: Write the failing smoke test.** Create `web/test/smoke.test.ts`.
 
@@ -467,7 +468,7 @@ describe('toolchain smoke', () => {
 - [ ] **Step 14: Run the smoke test — expect PASS (it is a self-contained sanity check).** Run from inside `web/`:
 
 ```bash
-cd web && pnpm test
+cd web && npm test
 ```
 
 Expected: `smoke.test.ts` passes 3 tests. If `indexedDB is not defined`, the setup file (Step 7) is not being loaded — fix `setupFiles` in `vitest.config.ts`. This single command verifies jsdom, the setup file, and the `fake-indexeddb` polyfill are all wired.
@@ -475,15 +476,15 @@ Expected: `smoke.test.ts` passes 3 tests. If `indexedDB is not defined`, the set
 - [ ] **Step 15: Verify the typecheck passes.** Run from inside `web/`:
 
 ```bash
-cd web && pnpm typecheck
+cd web && npm run typecheck
 ```
 
-Expected: `tsc --noEmit` exits 0 with no errors. (If `next-env.d.ts` is missing, run `pnpm build` once or `pnpm next typegen` to generate it, then re-run.)
+Expected: `tsc --noEmit` exits 0 with no errors. (If `next-env.d.ts` is missing, run `npm run build` once or `npx next typegen` to generate it, then re-run.)
 
 - [ ] **Step 16: Verify the production build succeeds.** Run from inside `web/`:
 
 ```bash
-cd web && pnpm build
+cd web && npm run build
 ```
 
 Expected: `next build` completes and reports a successful compile with the `/` route. This is the deliverable verification (typecheck + smoke test + build).
@@ -516,8 +517,10 @@ git commit -m "chore(web): scaffold standalone next.js app with vitest and playw
 - [ ] **Step 1: Initialize shadcn/ui.** Run from inside `web/` (non-interactive flags so it does not prompt). This writes `components.json`, creates `lib/utils.ts` with `cn`, appends the design tokens / base layer to `app/globals.css`, and installs `clsx` + `tailwind-merge`.
 
 ```bash
-cd web && pnpm dlx shadcn@latest init --base-color neutral --yes
+cd web && npx shadcn@latest init --yes
 ```
+
+NOTE: the shadcn CLI is version-sensitive — run `npx shadcn@latest init --help` FIRST to confirm flags. Current versions have NO `--base-color` flag (the base color `neutral` lives in `components.json`, Step 2); the real flags are `-d/--defaults`, `-b/--base <radix|base>`, `--css-variables`. Run it inside the existing `web/` (Task 1) so it configures the project in place rather than scaffolding a new one.
 
 Expected: `web/components.json` and `web/lib/utils.ts` exist; `app/globals.css` now contains `@layer base` tokens in addition to the Tailwind import.
 
@@ -546,8 +549,10 @@ Expected: `web/components.json` and `web/lib/utils.ts` exist; `app/globals.css` 
 - [ ] **Step 3: Vendor the AI Elements components from their registry.** Run from inside `web/`. This pulls the full AI Elements set into `components/ai-elements/` and any shadcn primitives they depend on (button, textarea, select, …) into `components/ui/`, and installs `streamdown` / `lucide-react` if not already present.
 
 ```bash
-cd web && pnpm dlx ai-elements@latest add --yes
+cd web && npx ai-elements@latest
 ```
+
+NOTE: bare `ai-elements@latest` (no `add`) installs the full component set; it prompts to scaffold only when there's no `package.json` (Task 1 already created one). Pin to a **v5-compatible** AI Elements release rather than `@latest` — latest now tracks `ai@6` / `@ai-sdk/react@3` and will MISMATCH the pinned `ai@5` + `@ai-sdk/react@2`. Verify the invocation with `npx ai-elements@latest --help`.
 
 Expected: `web/components/ai-elements/` contains at least `conversation.tsx`, `message.tsx`, and `prompt-input.tsx`; `web/components/ui/` contains the shadcn primitives they import.
 
@@ -581,15 +586,15 @@ describe('ai-elements smoke', () => {
 - [ ] **Step 6: Run the smoke test — expect PASS.** Run from inside `web/`:
 
 ```bash
-cd web && pnpm test ai-elements.smoke
+cd web && npm test -- ai-elements.smoke
 ```
 
-Expected: 1 test passes. If you hit `Cannot find module '@/components/ai-elements/message'`, Step 3 vendored to a different path — confirm the directory and adjust the import; if you hit a missing peer (e.g. `clsx`), run `pnpm install` and re-run. If `MessageContent` is not exported, render `Message` alone with a child `<span>` and assert on it.
+Expected: 1 test passes. If you hit `Cannot find module '@/components/ai-elements/message'`, Step 3 vendored to a different path — confirm the directory and adjust the import; if you hit a missing peer (e.g. `clsx`), run `npm install` and re-run. If `MessageContent` is not exported, render `Message` alone with a child `<span>` and assert on it.
 
 - [ ] **Step 7: Verify the typecheck still passes with the vendored sources.** Run from inside `web/`:
 
 ```bash
-cd web && pnpm typecheck
+cd web && npm run typecheck
 ```
 
 Expected: exit 0. Vendored AI Elements occasionally reference `@/lib/utils` — Step 1 created it, so this should pass; if a vendored file imports a primitive that was not installed, re-run Step 3.
@@ -597,7 +602,7 @@ Expected: exit 0. Vendored AI Elements occasionally reference `@/lib/utils` — 
 - [ ] **Step 8: Commit shadcn + AI Elements.**
 
 ```bash
-git add web/components.json web/lib/utils.ts web/app/globals.css web/components/ web/package.json web/pnpm-lock.yaml
+git add web/components.json web/lib/utils.ts web/app/globals.css web/components/ web/package.json web/package-lock.json
 git commit -m "chore(web): vendor shadcn/ui primitives and ai elements"
 ```
 
@@ -695,7 +700,7 @@ describe('lib/env', () => {
 - [ ] **Step 3: Run the env test — expect FAIL (module does not exist yet).** Run from inside `web/`:
 
 ```bash
-cd web && pnpm test env
+cd web && npm test -- env
 ```
 
 Expected: FAIL with `Failed to load url @/lib/env` / `Cannot find module '@/lib/env'` (the file does not exist yet).
@@ -732,7 +737,7 @@ export const env = { API_BASE_URL, CHAT_API_KEY } as const;
 - [ ] **Step 5: Run the env test — expect PASS.** Run from inside `web/`:
 
 ```bash
-cd web && pnpm test env
+cd web && npm test -- env
 ```
 
 Expected: 3 tests pass. If the "throws when …" cases instead resolve, the `server-only` alias from Step 1 is not applied — confirm `vitest.config.ts` has the `server-only` alias and re-run.
@@ -809,7 +814,7 @@ describe('lib/api-types', () => {
 - [ ] **Step 7: Run the api-types test — expect FAIL (module does not exist yet).** Run from inside `web/`:
 
 ```bash
-cd web && pnpm test api-types
+cd web && npm test -- api-types
 ```
 
 Expected: FAIL with `Failed to load url @/lib/api-types` / `Cannot find module '@/lib/api-types'`.
@@ -888,8 +893,8 @@ export interface FeedbackSchema {
 }
 
 export interface FeedbackAck {
-  id: number;
-  response_id: string;
+  id: string; // UUID — FeedbackAckSchema.id is a UUID, not an int
+  response_id: string; // UUID
   feedback_type: FeedbackType;
 }
 
@@ -923,7 +928,7 @@ export type MyUIMessage = UIMessage<MyMetadata, MyDataParts>;
 - [ ] **Step 9: Run the api-types test — expect PASS.** Run from inside `web/`:
 
 ```bash
-cd web && pnpm test api-types
+cd web && npm test -- api-types
 ```
 
 Expected: 5 tests pass. If `data-status` errors at typecheck because the part's `data` is inferred unknown, confirm `MyDataParts.status` is `{ label: string; tool?: string }` and that `MyUIMessage` is `UIMessage<MyMetadata, MyDataParts>` exactly as above.
@@ -931,7 +936,7 @@ Expected: 5 tests pass. If `data-status` errors at typecheck because the part's 
 - [ ] **Step 10: Verify the whole suite + typecheck pass together.** Run from inside `web/`:
 
 ```bash
-cd web && pnpm test && pnpm typecheck
+cd web && npm test && npm run typecheck
 ```
 
 Expected: all tests green (smoke + ai-elements + env + api-types) and `tsc --noEmit` exits 0. The `satisfies`/typed-`MyUIMessage` lines in the tests make a type regression fail `typecheck`, giving the type-level coverage the task requires.
@@ -1008,7 +1013,7 @@ A pure async-iterator parser that turns the Python chat API's SSE byte/text stre
   ```
 
 - [ ] **Step 2: Run the test, expect FAIL.**
-  Run `pnpm --filter web exec vitest run test/sse.test.ts` (or from `web/`: `pnpm exec vitest run test/sse.test.ts`).
+  Run `cd web && npx vitest run test/sse.test.ts` (or from `web/`: `npx vitest run test/sse.test.ts`).
   Expected failure: `Failed to resolve import "@/lib/sse"` / `parseProtocolV2 is not a function` — the module does not exist yet.
 
 - [ ] **Step 3: Minimal implementation of `parseProtocolV2`.**
@@ -1144,7 +1149,7 @@ A pure async-iterator parser that turns the Python chat API's SSE byte/text stre
   ```
 
 - [ ] **Step 4: Run the test, expect PASS.**
-  Run `pnpm exec vitest run test/sse.test.ts` from `web/`. Expected: the `parses a plain token stream ending in done` test passes.
+  Run `npx vitest run test/sse.test.ts` from `web/`. Expected: the `parses a plain token stream ending in done` test passes.
 
 - [ ] **Step 5: Write the failing test for the tool path (status → reset → answer) and chunk-splitting.**
   Append to `web/test/sse.test.ts`. This covers the agent tool sequence AND a frame split across two source chunks (the parser must buffer):
@@ -1174,7 +1179,7 @@ A pure async-iterator parser that turns the Python chat API's SSE byte/text stre
   ```
 
 - [ ] **Step 6: Run the test, expect PASS (no new implementation needed).**
-  Run `pnpm exec vitest run test/sse.test.ts` from `web/`. Expected: both new tests pass — buffering and the tool path are already handled by Step 3. If the split-chunk test fails, the buffer logic in `parseProtocolV2` is the culprit; do not change the tests.
+  Run `npx vitest run test/sse.test.ts` from `web/`. Expected: both new tests pass — buffering and the tool path are already handled by Step 3. If the split-chunk test fails, the buffer logic in `parseProtocolV2` is the culprit; do not change the tests.
 
 - [ ] **Step 7: Write the failing test for the error event and the legacy bare-`data:` fallback.**
   Append to `web/test/sse.test.ts`:
@@ -1205,7 +1210,7 @@ A pure async-iterator parser that turns the Python chat API's SSE byte/text stre
   ```
 
 - [ ] **Step 8: Run the test, expect PASS (no new implementation needed).**
-  Run `pnpm exec vitest run test/sse.test.ts` from `web/`. Expected: all SSE tests pass — `toErrorCode` clamps `"weird"` → `agent_error`, the eventless `data:` frame becomes a token with `\n` un-escaped, and `ping` is ignored. If any fail, fix `sse.ts` (not the tests).
+  Run `npx vitest run test/sse.test.ts` from `web/`. Expected: all SSE tests pass — `toErrorCode` clamps `"weird"` → `agent_error`, the eventless `data:` frame becomes a token with `\n` un-escaped, and `ping` is ignored. If any fail, fix `sse.ts` (not the tests).
 
 - [ ] **Step 9: Commit.**
   ```sh
@@ -1298,7 +1303,7 @@ The core piece. A **pure** function `translateToUiStream` drains an `AsyncIterab
   ```
 
 - [ ] **Step 2: Run the test, expect FAIL.**
-  Run `pnpm exec vitest run test/chat-translate.test.ts` from `web/`.
+  Run `npx vitest run test/chat-translate.test.ts` from `web/`.
   Expected failure: `Failed to resolve import "@/lib/chat-translate"` — the module does not exist.
 
 - [ ] **Step 3: Implement `toChatRequestBody` (and declare the shared types).**
@@ -1356,7 +1361,7 @@ The core piece. A **pure** function `translateToUiStream` drains an `AsyncIterab
   ```
 
 - [ ] **Step 4: Run the test, expect PASS.**
-  Run `pnpm exec vitest run test/chat-translate.test.ts` from `web/`. Expected: all four `toChatRequestBody` tests pass.
+  Run `npx vitest run test/chat-translate.test.ts` from `web/`. Expected: all four `toChatRequestBody` tests pass.
 
 - [ ] **Step 5: Write the failing test for `translateToUiStream` (token, tool path, error, done).**
   Append to `web/test/chat-translate.test.ts`. A `FakeWriter` records the emitted parts; a deterministic `idGen` makes `text-start` ids assertable. The test uses an async generator of `ParsedEvent` as input.
@@ -1567,7 +1572,7 @@ The core piece. A **pure** function `translateToUiStream` drains an `AsyncIterab
   ```
 
 - [ ] **Step 7: Run the test, expect PASS.**
-  Run `pnpm exec vitest run test/chat-translate.test.ts` from `web/`. Expected: all `translateToUiStream` tests pass. Note the assertions are tight — `reset` produces a fresh `text-start id: 't2'`, `interrupted` keeps a single `text-start/text-end` pair, and the pre-token `no_answer` case emits no text part at all.
+  Run `npx vitest run test/chat-translate.test.ts` from `web/`. Expected: all `translateToUiStream` tests pass. Note the assertions are tight — `reset` produces a fresh `text-start id: 't2'`, `interrupted` keeps a single `text-start/text-end` pair, and the pre-token `no_answer` case emits no text part at all.
 
 - [ ] **Step 8: Write the failing route test (mock global fetch with a fake Python SSE).**
   Create `web/test/api-chat.route.test.ts`. It mocks `@/lib/env` (so the route imports without real env vars), mocks `global.fetch` to return a `text/event-stream` body with an `X-Response-Id` header, calls the route's `POST`, and reads the resulting UI-message-stream back to assert the translated SSE contains the answer text and the response-id metadata.
@@ -1670,7 +1675,7 @@ The core piece. A **pure** function `translateToUiStream` drains an `AsyncIterab
   ```
 
 - [ ] **Step 9: Run the route test, expect FAIL.**
-  Run `pnpm exec vitest run test/api-chat.route.test.ts` from `web/`.
+  Run `npx vitest run test/api-chat.route.test.ts` from `web/`.
   Expected failure: `Failed to resolve import "@/app/api/chat/route"` — `route.ts` does not exist yet.
 
 - [ ] **Step 10: Implement the route handler.**
@@ -1749,10 +1754,10 @@ The core piece. A **pure** function `translateToUiStream` drains an `AsyncIterab
   Note: `translateToUiStream` and the `createUIMessageStream` `writer` agree on the part shapes used here (`start` with `messageMetadata`, `text-start`/`text-delta`/`text-end`, transient `data-status`/`data-error`); the `writer` accepts these AI SDK v5 UI-message-stream chunks directly, so no adapter is needed.
 
 - [ ] **Step 11: Run the route test, expect PASS.**
-  Run `pnpm exec vitest run test/api-chat.route.test.ts` from `web/`. Expected: both route tests pass — the happy path forwards the correct `ChatSchema` to `http://api:8880/chat/` and the translated stream contains `Здраво`, `text-delta`, and `resp-123`; the 503 path yields a `data-error` carrying the `detail`.
+  Run `npx vitest run test/api-chat.route.test.ts` from `web/`. Expected: both route tests pass — the happy path forwards the correct `ChatSchema` to `http://api:8880/chat/` and the translated stream contains `Здраво`, `text-delta`, and `resp-123`; the 503 path yields a `data-error` carrying the `detail`.
 
 - [ ] **Step 12: Typecheck the new modules.**
-  Run `pnpm exec tsc --noEmit` from `web/`. Expected: no type errors. If `translateToUiStream`'s `writer.write` argument is rejected by the AI SDK writer type in `route.ts`, the `UiStreamPart` union in `chat-translate.ts` is out of sync with the installed `ai` types — reconcile the part shapes (do not loosen with `any`).
+  Run `npx tsc --noEmit` from `web/`. Expected: no type errors. If `translateToUiStream`'s `writer.write` argument is rejected by the AI SDK writer type in `route.ts`, the `UiStreamPart` union in `chat-translate.ts` is out of sync with the installed `ai` types — reconcile the part shapes (do not loosen with `any`).
 
 - [ ] **Step 13: Commit.**
   ```sh
@@ -1872,7 +1877,7 @@ describe('GET /api/models', () => {
 - [ ] **Step 2: Run the test, expect FAIL.** Run:
 
 ```bash
-pnpm --dir web vitest run test/api-models.route.test.ts
+cd web && npx vitest run test/api-models.route.test.ts
 ```
 
 Expected failure: a module-resolution error, e.g. `Failed to resolve import "@/app/api/models/route"` (the route file does not exist yet).
@@ -1948,7 +1953,7 @@ export async function GET(): Promise<Response> {
 - [ ] **Step 4: Run the test, expect PASS.** Run:
 
 ```bash
-pnpm --dir web vitest run test/api-models.route.test.ts
+cd web && npx vitest run test/api-models.route.test.ts
 ```
 
 Expected: all 4 tests pass.
@@ -2149,7 +2154,7 @@ describe('POST /api/feedback', () => {
 - [ ] **Step 2: Run the test, expect FAIL.** Run:
 
 ```bash
-pnpm --dir web vitest run test/api-feedback.route.test.ts
+cd web && npx vitest run test/api-feedback.route.test.ts
 ```
 
 Expected failure: `Failed to resolve import "@/app/api/feedback/route"` (the route file does not exist yet).
@@ -2292,7 +2297,7 @@ export async function POST(req: Request): Promise<Response> {
 - [ ] **Step 4: Run the test, expect PASS.** Run:
 
 ```bash
-pnpm --dir web vitest run test/api-feedback.route.test.ts
+cd web && npx vitest run test/api-feedback.route.test.ts
 ```
 
 Expected: all 7 tests pass.
@@ -2385,7 +2390,7 @@ Let me verify a couple of API details against the cheat-sheet to make sure signa
 
   Command:
   ```bash
-  pnpm --dir web exec vitest run test/db.test.ts
+  cd web && npx vitest run test/db.test.ts
   ```
   Expected failure: `Failed to resolve import "@/lib/db"` (or `Cannot find module '@/lib/db'`), because `web/lib/db.ts` does not exist yet.
 
@@ -2487,7 +2492,7 @@ Let me verify a couple of API details against the cheat-sheet to make sure signa
 
   Command:
   ```bash
-  pnpm --dir web exec vitest run test/db.test.ts
+  cd web && npx vitest run test/db.test.ts
   ```
   Expected: the `conversations` describe block passes (3 tests green).
 
@@ -2547,7 +2552,7 @@ Let me verify a couple of API details against the cheat-sheet to make sure signa
 
   Command:
   ```bash
-  pnpm --dir web exec vitest run test/db.test.ts
+  cd web && npx vitest run test/db.test.ts
   ```
   Expected: all `conversations` + `messages` tests pass (no implementation change needed; Step 3 already covers them).
 
@@ -2614,7 +2619,7 @@ Let me verify a couple of API details against the cheat-sheet to make sure signa
 
   Command:
   ```bash
-  pnpm --dir web exec vitest run test/user.test.ts
+  cd web && npx vitest run test/user.test.ts
   ```
   Expected failure: `Failed to resolve import "@/lib/user"` — `web/lib/user.ts` does not exist yet.
 
@@ -2643,7 +2648,7 @@ Let me verify a couple of API details against the cheat-sheet to make sure signa
 
   Command:
   ```bash
-  pnpm --dir web exec vitest run test/user.test.ts
+  cd web && npx vitest run test/user.test.ts
   ```
   Expected: all 3 tests pass.
 
@@ -2727,7 +2732,7 @@ Let me verify a couple of API details against the cheat-sheet to make sure signa
 
   Command:
   ```bash
-  pnpm --dir web exec vitest run test/messages.test.ts
+  cd web && npx vitest run test/messages.test.ts
   ```
   Expected failure: `Failed to resolve import "@/lib/messages"` — `web/lib/messages.ts` does not exist yet.
 
@@ -2798,7 +2803,7 @@ Let me verify a couple of API details against the cheat-sheet to make sure signa
 
   Command:
   ```bash
-  pnpm --dir web exec vitest run test/messages.test.ts
+  cd web && npx vitest run test/messages.test.ts
   ```
   Expected: all `trimForRequest` + `deriveTitle` tests pass.
 
@@ -2930,7 +2935,7 @@ Let me verify a couple of API details against the cheat-sheet to make sure signa
 
   Command:
   ```bash
-  pnpm --dir web exec vitest run test/transport.test.ts
+  cd web && npx vitest run test/transport.test.ts
   ```
   Expected failure: `Failed to resolve import "@/lib/transport"` — `web/lib/transport.ts` does not exist yet.
 
@@ -2980,7 +2985,7 @@ Let me verify a couple of API details against the cheat-sheet to make sure signa
 
   Command:
   ```bash
-  pnpm --dir web exec vitest run test/transport.test.ts
+  cd web && npx vitest run test/transport.test.ts
   ```
   Expected: all 3 `buildChatTransport` tests pass.
 
@@ -3050,7 +3055,7 @@ describe('SearchStatus', () => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL.** Run `pnpm --dir web vitest run test/thread.test.tsx`. Expect failure: `Failed to resolve import "@/components/chat/search-status"` (module does not exist yet).
+- [ ] **Step 2: Run it, expect FAIL.** Run `cd web && npx vitest run test/thread.test.tsx`. Expect failure: `Failed to resolve import "@/components/chat/search-status"` (module does not exist yet).
 
 - [ ] **Step 3: Implement `SearchStatus`.** Create `web/components/chat/search-status.tsx`:
 
@@ -3070,6 +3075,7 @@ export function SearchStatus({ label, tool }: SearchStatusProps) {
     <div
       role="status"
       aria-live="polite"
+      data-testid="search-status"
       data-tool={tool}
       className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/60 px-3 py-1 text-sm text-muted-foreground"
     >
@@ -3080,7 +3086,7 @@ export function SearchStatus({ label, tool }: SearchStatusProps) {
 }
 ```
 
-- [ ] **Step 4: Run it, expect PASS.** Run `pnpm --dir web vitest run test/thread.test.tsx`. Expect the two `SearchStatus` tests to pass.
+- [ ] **Step 4: Run it, expect PASS.** Run `cd web && npx vitest run test/thread.test.tsx`. Expect the two `SearchStatus` tests to pass.
 
 - [ ] **Step 5: Commit.**
 ```bash
@@ -3151,7 +3157,7 @@ describe('AssistantMessage', () => {
 });
 ```
 
-- [ ] **Step 7: Run it, expect FAIL.** Run `pnpm --dir web vitest run test/thread.test.tsx`. Expect failure: `Failed to resolve import "@/components/chat/message"`.
+- [ ] **Step 7: Run it, expect FAIL.** Run `cd web && npx vitest run test/thread.test.tsx`. Expect failure: `Failed to resolve import "@/components/chat/message"`.
 
 - [ ] **Step 8: Implement `AssistantMessage`.** Create `web/components/chat/message.tsx`:
 
@@ -3187,7 +3193,7 @@ export function AssistantMessage({ message, statusPart, errorPart, onRetry, acti
   return (
     <Message from="assistant">
       <MessageContent>
-        {text ? <MessageResponse>{text}</MessageResponse> : null}
+        {text ? <div data-testid="answer-text"><MessageResponse>{text}</MessageResponse></div> : null}
         {showChip ? <SearchStatus label={statusPart!.label} tool={statusPart!.tool} /> : null}
         {errorPart ? (
           <div role="alert" className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
@@ -3216,7 +3222,7 @@ export function AssistantMessage({ message, statusPart, errorPart, onRetry, acti
 }
 ```
 
-- [ ] **Step 9: Run it, expect PASS.** Run `pnpm --dir web vitest run test/thread.test.tsx`. Expect all `AssistantMessage` tests to pass.
+- [ ] **Step 9: Run it, expect PASS.** Run `cd web && npx vitest run test/thread.test.tsx`. Expect all `AssistantMessage` tests to pass.
 
 - [ ] **Step 10: Commit.**
 ```bash
@@ -3279,7 +3285,7 @@ describe('Thread', () => {
 });
 ```
 
-- [ ] **Step 12: Run it, expect FAIL.** Run `pnpm --dir web vitest run test/thread.test.tsx`. Expect failure: `Failed to resolve import "@/components/chat/thread"`.
+- [ ] **Step 12: Run it, expect FAIL.** Run `cd web && npx vitest run test/thread.test.tsx`. Expect failure: `Failed to resolve import "@/components/chat/thread"`.
 
 - [ ] **Step 13: Implement `Thread`.** Create `web/components/chat/thread.tsx`:
 
@@ -3357,9 +3363,9 @@ export function Thread({ messages, status, activeStatus, activeError, onRetry, r
 }
 ```
 
-- [ ] **Step 14: Run the full file, expect PASS.** Run `pnpm --dir web vitest run test/thread.test.tsx`. Expect all `SearchStatus`, `AssistantMessage`, and `Thread` tests green.
+- [ ] **Step 14: Run the full file, expect PASS.** Run `cd web && npx vitest run test/thread.test.tsx`. Expect all `SearchStatus`, `AssistantMessage`, and `Thread` tests green.
 
-- [ ] **Step 15: Typecheck.** Run `pnpm --dir web exec tsc --noEmit`. Expect no errors.
+- [ ] **Step 15: Typecheck.** Run `cd web && npx tsc --noEmit`. Expect no errors.
 
 - [ ] **Step 16: Commit.**
 ```bash
@@ -3421,7 +3427,7 @@ describe('groupModelsByProvider', () => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL.** Run `pnpm --dir web vitest run test/composer.test.tsx`. Expect failure: `Failed to resolve import "@/lib/use-models"`.
+- [ ] **Step 2: Run it, expect FAIL.** Run `cd web && npx vitest run test/composer.test.tsx`. Expect failure: `Failed to resolve import "@/lib/use-models"`.
 
 - [ ] **Step 3: Implement `useModels` + `groupModelsByProvider`.** Create `web/lib/use-models.ts`:
 
@@ -3484,7 +3490,7 @@ export function groupModelsByProvider(ids: string[]): ModelGroup[] {
 }
 ```
 
-- [ ] **Step 4: Run it, expect PASS.** Run `pnpm --dir web vitest run test/composer.test.tsx`. Expect the three `groupModelsByProvider` tests to pass.
+- [ ] **Step 4: Run it, expect PASS.** Run `cd web && npx vitest run test/composer.test.tsx`. Expect the three `groupModelsByProvider` tests to pass.
 
 - [ ] **Step 5: Commit.**
 ```bash
@@ -3561,7 +3567,7 @@ describe('Composer', () => {
 });
 ```
 
-- [ ] **Step 7: Run it, expect FAIL.** Run `pnpm --dir web vitest run test/composer.test.tsx`. Expect failure: `Failed to resolve import "@/components/chat/composer"`.
+- [ ] **Step 7: Run it, expect FAIL.** Run `cd web && npx vitest run test/composer.test.tsx`. Expect failure: `Failed to resolve import "@/components/chat/composer"`.
 
 - [ ] **Step 8: Implement `Composer`.** Create `web/components/chat/composer.tsx`. A native `<textarea>` + native `<select>` keep the component testable with jsdom and free of AI-Elements internal portal quirks while still following the PromptInput submit-status contract (`status` drives the submit/stop button):
 
@@ -3640,6 +3646,7 @@ export function Composer({ model, models, onModelChange, onSubmit, onStop, statu
       <div className="flex items-end gap-2">
         <textarea
           aria-label="Порака"
+          data-testid="composer-input"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={onKeyDown}
@@ -3670,9 +3677,9 @@ export function Composer({ model, models, onModelChange, onSubmit, onStop, statu
 }
 ```
 
-- [ ] **Step 9: Run it, expect PASS.** Run `pnpm --dir web vitest run test/composer.test.tsx`. Expect all `Composer` tests to pass.
+- [ ] **Step 9: Run it, expect PASS.** Run `cd web && npx vitest run test/composer.test.tsx`. Expect all `Composer` tests to pass.
 
-- [ ] **Step 10: Typecheck.** Run `pnpm --dir web exec tsc --noEmit`. Expect no errors.
+- [ ] **Step 10: Typecheck.** Run `cd web && npx tsc --noEmit`. Expect no errors.
 
 - [ ] **Step 11: Commit.**
 ```bash
@@ -3695,7 +3702,7 @@ Consumes (Task 8, `@/lib/db`):
 - `renameConversation(id: string, title: string): Promise<void>`
 - `deleteConversation(id: string): Promise<void>`
 - `loadMessages(conversationId: string): Promise<MessageRow[]>`
-- `saveMessages(rows: MessageRow[]): Promise<void>`
+- `saveMessages(conversationId: string, messages: MyUIMessage[]): Promise<void>`
 - types `ConversationRow { id; title; model; createdAt; updatedAt }`, `MessageRow { id; conversationId; role; parts; metadata?; createdAt }`
 
 Consumes (Task 10, `@/lib/transport`): `buildChatTransport(): DefaultChatTransport<MyUIMessage>`.
@@ -3753,7 +3760,7 @@ describe('useUiStore', () => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL.** Run `pnpm --dir web vitest run test/shell.test.tsx`. Expect failure: `Failed to resolve import "@/lib/ui-store"`.
+- [ ] **Step 2: Run it, expect FAIL.** Run `cd web && npx vitest run test/shell.test.tsx`. Expect failure: `Failed to resolve import "@/lib/ui-store"`.
 
 - [ ] **Step 3: Implement `useUiStore`.** Create `web/lib/ui-store.ts`:
 
@@ -3784,7 +3791,7 @@ export const useUiStore = create<UiState>((set) => ({
 }));
 ```
 
-- [ ] **Step 4: Run it, expect PASS.** Run `pnpm --dir web vitest run test/shell.test.tsx`. Expect the three `useUiStore` tests to pass.
+- [ ] **Step 4: Run it, expect PASS.** Run `cd web && npx vitest run test/shell.test.tsx`. Expect the three `useUiStore` tests to pass.
 
 - [ ] **Step 5: Commit.**
 ```bash
@@ -3845,7 +3852,7 @@ describe('ConversationList', () => {
 });
 ```
 
-- [ ] **Step 7: Run it, expect FAIL.** Run `pnpm --dir web vitest run test/shell.test.tsx`. Expect failure: `Failed to resolve import "@/components/shell/conversation-list"`.
+- [ ] **Step 7: Run it, expect FAIL.** Run `cd web && npx vitest run test/shell.test.tsx`. Expect failure: `Failed to resolve import "@/components/shell/conversation-list"`.
 
 - [ ] **Step 8: Implement `ConversationList`.** Create `web/components/shell/conversation-list.tsx`:
 
@@ -3909,7 +3916,7 @@ export function ConversationList({ conversations, activeId, onSelect, onRename, 
 }
 ```
 
-- [ ] **Step 9: Run it, expect PASS.** Run `pnpm --dir web vitest run test/shell.test.tsx`. Expect the four `ConversationList` tests to pass.
+- [ ] **Step 9: Run it, expect PASS.** Run `cd web && npx vitest run test/shell.test.tsx`. Expect the four `ConversationList` tests to pass.
 
 - [ ] **Step 10: Commit.**
 ```bash
@@ -3958,7 +3965,7 @@ describe('Sidebar', () => {
 });
 ```
 
-- [ ] **Step 12: Run it, expect FAIL.** Run `pnpm --dir web vitest run test/shell.test.tsx`. Expect failure: `Failed to resolve import "@/components/shell/sidebar"`.
+- [ ] **Step 12: Run it, expect FAIL.** Run `cd web && npx vitest run test/shell.test.tsx`. Expect failure: `Failed to resolve import "@/components/shell/sidebar"`.
 
 - [ ] **Step 13: Implement `Sidebar`.** Create `web/components/shell/sidebar.tsx`:
 
@@ -4008,7 +4015,7 @@ export function Sidebar({ conversations, activeId, open, onNewChat, onSelect, on
 }
 ```
 
-- [ ] **Step 14: Run it, expect PASS.** Run `pnpm --dir web vitest run test/shell.test.tsx`. Expect the two `Sidebar` tests to pass.
+- [ ] **Step 14: Run it, expect PASS.** Run `cd web && npx vitest run test/shell.test.tsx`. Expect the two `Sidebar` tests to pass.
 
 - [ ] **Step 15: Commit.**
 ```bash
@@ -4026,13 +4033,25 @@ import ChatPage from '@/app/page';
 import { db } from '@/lib/db';
 
 function sseChatResponse(): Response {
-  const body = [
-    'event: token\ndata: {"text":"Здраво!"}\n\n',
-    'event: done\ndata: {}\n\n',
-  ].join('');
+  // The BFF (Task 5) returns an AI SDK *UI message stream*, NOT raw protocol-v2.
+  // useChat/DefaultChatTransport only parses this format, so the mock must emit it:
+  // start(messageMetadata) -> text-start -> text-delta{delta} -> text-end -> finish -> [DONE].
+  // (responseId reaches the client via the start chunk's messageMetadata, not the header.)
+  const chunks = [
+    { type: 'start', messageMetadata: { responseId: 'resp-123', inferenceModel: 'claude-sonnet-4-6' } },
+    { type: 'text-start', id: 'txt-1' },
+    { type: 'text-delta', id: 'txt-1', delta: 'Здраво!' },
+    { type: 'text-end', id: 'txt-1' },
+    { type: 'finish' },
+  ];
+  const body = `${chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('')}data: [DONE]\n\n`;
   return new Response(body, {
     status: 200,
-    headers: { 'content-type': 'text/event-stream', 'X-Response-Id': 'resp-123' },
+    headers: {
+      'content-type': 'text/event-stream',
+      'x-vercel-ai-ui-message-stream': 'v1',
+      'X-Response-Id': 'resp-123',
+    },
   });
 }
 
@@ -4099,7 +4118,7 @@ describe('ChatPage persistence', () => {
 });
 ```
 
-- [ ] **Step 17: Run it, expect FAIL.** Run `pnpm --dir web vitest run test/shell.test.tsx`. Expect failure resolving `@/app/page` as a usable component (the placeholder from Task 1 has no chat wiring) — the assertions on streamed text / Dexie rows fail.
+- [ ] **Step 17: Run it, expect FAIL.** Run `cd web && npx vitest run test/shell.test.tsx`. Expect failure resolving `@/app/page` as a usable component (the placeholder from Task 1 has no chat wiring) — the assertions on streamed text / Dexie rows fail.
 
 - [ ] **Step 18: Implement `web/app/page.tsx` (full chat screen).** Replace the placeholder. It wires `useChat` (transport from Task 10), TanStack Query for models, Dexie hydrate/persist, and the shell. Conversation creation is lazy (on first user send); persistence runs on `onFinish` and on user-send:
 
@@ -4181,8 +4200,9 @@ function ChatScreen() {
       if (!cid) {
         return;
       }
-      await saveMessages([toRow(message, cid, Date.now())]);
-      await renameConversation(cid, conversations.find((c) => c.id === cid)?.title ?? deriveTitle(''));
+      await saveMessages(cid, [message]);
+      // Title was already derived from the first user turn at creation (handleSubmit);
+      // re-deriving here off a stale `conversations` closure could blank it — so don't rename.
       await refreshConversations();
     },
   });
@@ -4235,7 +4255,7 @@ function ChatScreen() {
         parts: [{ type: 'text', text }],
         metadata: {},
       };
-      await saveMessages([toRow(userMessage, cid, Date.now())]);
+      await saveMessages(cid, [userMessage]);
       sendMessage(userMessage);
     },
     [model, refreshConversations, sendMessage, setActiveId],
@@ -4309,9 +4329,9 @@ export default function ChatPage() {
 }
 ```
 
-- [ ] **Step 19: Run the full file, expect PASS.** Run `pnpm --dir web vitest run test/shell.test.tsx`. Expect all `useUiStore`, `ConversationList`, `Sidebar`, and `ChatPage persistence` tests green. If the streamed-answer assertion races, the test already uses `findByText` (async) and `waitFor` to absorb the stream timing.
+- [ ] **Step 19: Run the full file, expect PASS.** Run `cd web && npx vitest run test/shell.test.tsx`. Expect all `useUiStore`, `ConversationList`, `Sidebar`, and `ChatPage persistence` tests green. If the streamed-answer assertion races, the test already uses `findByText` (async) and `waitFor` to absorb the stream timing.
 
-- [ ] **Step 20: Typecheck.** Run `pnpm --dir web exec tsc --noEmit`. Expect no errors.
+- [ ] **Step 20: Typecheck.** Run `cd web && npx tsc --noEmit`. Expect no errors.
 
 - [ ] **Step 21: Commit.**
 ```bash
@@ -4390,7 +4410,7 @@ describe('AnswerActions', () => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL.** Run `pnpm --dir web vitest run test/answer-actions.test.tsx`. Expect failure: `Failed to resolve import "@/components/chat/answer-actions"`.
+- [ ] **Step 2: Run it, expect FAIL.** Run `cd web && npx vitest run test/answer-actions.test.tsx`. Expect failure: `Failed to resolve import "@/components/chat/answer-actions"`.
 
 - [ ] **Step 3: Implement `AnswerActions` (copy + hidden case only first).** Create `web/components/chat/answer-actions.tsx`:
 
@@ -4469,6 +4489,7 @@ export function AnswerActions({ message, questionText, onRegenerate }: AnswerAct
       ) : null}
       <button
         type="button"
+        data-testid="like-button"
         aria-label="Допаѓа"
         aria-pressed={vote === 'like'}
         onClick={() => void sendFeedback('like')}
@@ -4490,7 +4511,7 @@ export function AnswerActions({ message, questionText, onRegenerate }: AnswerAct
 }
 ```
 
-- [ ] **Step 4: Run it, expect PASS.** Run `pnpm --dir web vitest run test/answer-actions.test.tsx`. Expect the hidden-case + copy tests to pass.
+- [ ] **Step 4: Run it, expect PASS.** Run `cd web && npx vitest run test/answer-actions.test.tsx`. Expect the hidden-case + copy tests to pass.
 
 - [ ] **Step 5: Commit.**
 ```bash
@@ -4545,9 +4566,9 @@ describe('AnswerActions feedback', () => {
 });
 ```
 
-- [ ] **Step 7: Run it, expect PASS.** Run `pnpm --dir web vitest run test/answer-actions.test.tsx`. The implementation from Step 3 already covers feedback, optimistic toggle, revert, and regenerate, so these pass without further code. If `getAnonUserId()` reads a different localStorage key than `finkiHub.anonUserId`, align the test's `localStorage.setItem` key with the one defined in Task 9 (`@/lib/user`) — the canonical key is `finkiHub.anonUserId` per spec §7.
+- [ ] **Step 7: Run it, expect PASS.** Run `cd web && npx vitest run test/answer-actions.test.tsx`. The implementation from Step 3 already covers feedback, optimistic toggle, revert, and regenerate, so these pass without further code. If `getAnonUserId()` reads a different localStorage key than `finkiHub.anonUserId`, align the test's `localStorage.setItem` key with the one defined in Task 9 (`@/lib/user`) — the canonical key is `finkiHub.anonUserId` per spec §7.
 
-- [ ] **Step 8: Typecheck.** Run `pnpm --dir web exec tsc --noEmit`. Expect no errors.
+- [ ] **Step 8: Typecheck.** Run `cd web && npx tsc --noEmit`. Expect no errors.
 
 - [ ] **Step 9: Wire `AnswerActions` into the thread via `page.tsx` `renderActions`.** Modify `web/app/page.tsx` to pass actions for finished assistant turns. Add the import and the `renderActions` prop on `<Thread>`:
 
@@ -4583,7 +4604,7 @@ Then change the `<Thread ... />` usage to include `renderActions` (replace the e
         />
 ```
 
-- [ ] **Step 10: Re-run the shell integration test to confirm no regression.** Run `pnpm --dir web vitest run test/shell.test.tsx test/answer-actions.test.tsx`. Expect both files green (the shell streamed-answer test still passes; `AnswerActions` appears only once `done` arrives and `status !== 'streaming'`).
+- [ ] **Step 10: Re-run the shell integration test to confirm no regression.** Run `cd web && npx vitest run test/shell.test.tsx test/answer-actions.test.tsx`. Expect both files green (the shell streamed-answer test still passes; `AnswerActions` appears only once `done` arrives and `status !== 'streaming'`).
 
 - [ ] **Step 11: Typecheck + commit.**
 ```bash
@@ -4663,7 +4684,7 @@ describe('i18n', () => {
 });
 ```
 
-- [ ] **Step 2: Run it, expect FAIL.** Run `pnpm --dir web vitest run test/i18n.test.ts`. Expect failure: `Failed to resolve import "@/lib/i18n"`.
+- [ ] **Step 2: Run it, expect FAIL.** Run `cd web && npx vitest run test/i18n.test.ts`. Expect failure: `Failed to resolve import "@/lib/i18n"`.
 
 - [ ] **Step 3: Implement `i18n`.** Create `web/lib/i18n.ts`:
 
@@ -4701,7 +4722,7 @@ export function t(key: TKey): string {
 }
 ```
 
-- [ ] **Step 4: Run it, expect PASS.** Run `pnpm --dir web vitest run test/i18n.test.ts`. Expect all three `i18n` tests to pass.
+- [ ] **Step 4: Run it, expect PASS.** Run `cd web && npx vitest run test/i18n.test.ts`. Expect all three `i18n` tests to pass.
 
 - [ ] **Step 5: Commit.**
 ```bash
@@ -4731,9 +4752,9 @@ Replace the `ConversationEmptyState` block:
 
 - [ ] **Step 9: Wire `t()` into `sidebar.tsx` and `conversation-list.tsx`.** In `web/components/shell/sidebar.tsx` add `import { t } from '@/lib/i18n';`, swap `aria-label="Странична лента"` (both occurrences) → `aria-label={t('sidebar.label')}` and the new-chat button text `Нов разговор` → `{t('sidebar.new')}`. In `web/components/shell/conversation-list.tsx` add the import and swap `aria-label="Преименувај"` → `aria-label={t('conversation.rename')}`, `aria-label="Избриши"` → `aria-label={t('conversation.delete')}`, and the prompt string `'Ново име на разговорот'` → `t('conversation.renamePrompt')`.
 
-- [ ] **Step 10: Run the affected component suites, expect PASS (no string drift).** Run `pnpm --dir web vitest run test/thread.test.tsx test/composer.test.tsx test/shell.test.tsx`. Expect all green — every swapped value equals the literal the tests already assert (`Започни разговор`, `Нов разговор`, `Обиди се повторно`, `Одговорот е прекинат.`, `Преименувај`, `Избриши`, `Порака`, etc.), so behavior is unchanged.
+- [ ] **Step 10: Run the affected component suites, expect PASS (no string drift).** Run `cd web && npx vitest run test/thread.test.tsx test/composer.test.tsx test/shell.test.tsx`. Expect all green — every swapped value equals the literal the tests already assert (`Започни разговор`, `Нов разговор`, `Обиди се повторно`, `Одговорот е прекинат.`, `Преименувај`, `Избриши`, `Порака`, etc.), so behavior is unchanged.
 
-- [ ] **Step 11: Typecheck.** Run `pnpm --dir web exec tsc --noEmit`. Expect no errors (the `t()` keys are checked against `TKey`, so a typo is a compile error).
+- [ ] **Step 11: Typecheck.** Run `cd web && npx tsc --noEmit`. Expect no errors (the `t()` keys are checked against `TKey`, so a typo is a compile error).
 
 - [ ] **Step 12: Commit.**
 ```bash
@@ -4752,7 +4773,7 @@ I have all the information needed. Now I'll write Tasks 16 and 17 as the markdow
 - Create: `web/e2e/chat.spec.ts` (the e2e spec)
 - Create: `web/e2e/helpers/sse.ts` (route-mock helper that builds protocol-v2 SSE bodies)
 - Modify: `web/package.json` (add the `e2e` and `e2e:install` scripts — only if Task 1 did not already add `e2e`)
-- Test: this task IS the test (Playwright spec); verified by running `pnpm e2e`.
+- Test: this task IS the test (Playwright spec); verified by running `npm run e2e`.
 
 **Interfaces:**
 
@@ -4765,7 +4786,7 @@ Consumes (from earlier tasks — these are the runtime seams the e2e exercises a
 - The AI SDK UI message stream wire format (the `/api/chat` response that `useChat` consumes): NDJSON-style `data: <json>\n\n` SSE chunks with chunk types `start`, `text-start`, `text-delta`, `text-end`, `data-status`, `data-error`, `finish`. The mock emits exactly the chunks the real BFF (Task 5) would, so we test the **client** rendering contract.
 
 Produces (used by Task 17's final checklist):
-- `pnpm e2e` runs green: a streaming tool sequence shows the search chip, drops the preamble, renders the final answer, and like posts to `/api/feedback`.
+- `npm run e2e` runs green: a streaming tool sequence shows the search chip, drops the preamble, renders the final answer, and like posts to `/api/feedback`.
 - `web/e2e/helpers/sse.ts` exporting `aiSdkStream(chunks: object[]): { body: string; contentType: string }` and `aiSdkChunks` factory helpers — reusable by future e2e specs.
 
 ---
@@ -4788,7 +4809,7 @@ Open `web/package.json` and ensure the `scripts` block contains these two entrie
 Run, expected PASS (script is now resolvable):
 
 ```bash
-cd web && pnpm run e2e:install
+cd web && npm run e2e:install
 ```
 
 Expected: Playwright downloads/installs the Chromium browser (or reports it is already installed). If `playwright.config.ts` from Task 1 sets `webServer` and `testDir: './e2e'`, no further config is needed here.
@@ -4857,7 +4878,7 @@ This file is a pure helper with no test of its own (it is exercised by the spec 
 - [ ] **Step 3: Run the (not-yet-written) spec to confirm Playwright resolves the test dir — expected FAIL (no tests).**
 
 ```bash
-cd web && pnpm e2e
+cd web && npm run e2e
 ```
 
 Expected: Playwright reports **"No tests found"** (or runs 0 tests) because `web/e2e/chat.spec.ts` does not exist yet. This confirms the runner and config are wired before we author the spec.
@@ -4924,17 +4945,17 @@ test.describe('chat streaming (mocked BFF)', () => {
     await page.goto('/');
 
     // submit a question via the composer (Macedonian placeholder from Task 15 i18n)
-    const input = page.getByTestid('composer-input');
+    const input = page.getByTestId('composer-input');
     await input.fill('Кога се објавуваат резултатите?');
     await input.press('Enter');
 
     // (1) the search chip appears for the tool call
-    const chip = page.getByTestid('search-status');
+    const chip = page.getByTestId('search-status');
     await expect(chip).toBeVisible();
     await expect(chip).toContainText('Пребарувам');
 
     // (3) the final answer renders (autolinked bare URL via Streamdown)
-    const answer = page.getByTestid('answer-text');
+    const answer = page.getByTestId('answer-text');
     await expect(answer).toContainText('Резултатите од испитите се објавуваат');
     await expect(answer.getByRole('link', { name: /finki\.ukim\.mk/ })).toBeVisible();
 
@@ -4942,7 +4963,7 @@ test.describe('chat streaming (mocked BFF)', () => {
     await expect(page.getByText(PREAMBLE)).toHaveCount(0);
 
     // (4) like posts to /api/feedback with the response id + feedback_type
-    await page.getByTestid('like-button').click();
+    await page.getByTestId('like-button').click();
     await expect.poll(() => feedbackBody).not.toBeNull();
     expect(feedbackBody).toMatchObject({
       responseId: RESPONSE_ID,
@@ -4957,7 +4978,7 @@ test.describe('chat streaming (mocked BFF)', () => {
 - [ ] **Step 5: Run the e2e — expected PASS.**
 
 ```bash
-cd web && pnpm e2e
+cd web && npm run e2e
 ```
 
 Expected: 1 passed. If a selector fails (`getByTestId` returns nothing), confirm Tasks 11/12/14 set the matching `data-testid` (`composer-input`, `search-status`, `answer-text`, `like-button`); the e2e is the source of truth for those hooks. If the chip is gone before the assertion (it is transient and disappears once the answer streams), assert it via `expect(chip).toBeVisible()` racing the stream is still safe because Playwright auto-waits on the first matching frame; if it flakes, slow the mock by chunking the stream body across multiple `route.fulfill` is not possible — instead split the answer into more `text-delta` chunks so the chip is observable longer (keep the chip assertion before the answer assertion, as written).
@@ -4976,14 +4997,14 @@ git commit -m "test(web): add Playwright e2e for mocked streaming chat (chip, pr
 **Files:**
 - Create: `web/README.md` (setup, env vars, scripts, architecture pointer)
 - Modify: none (this task only documents and runs the aggregate verification; it changes no app code)
-- Test: no new unit test; the deliverable is the documented commands all passing (`pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm e2e`).
+- Test: no new unit test; the deliverable is the documented commands all passing (`npm run typecheck`, `npm test`, `npm run build`, `npm run e2e`).
 
 **Interfaces:**
 
 Consumes (everything prior — this is the integration gate):
 - Scripts from `web/package.json` (Task 1: `dev`, `build`, `typecheck`, `test`; Task 16: `e2e`, `e2e:install`).
 - Env vars `API_BASE_URL` and `CHAT_API_KEY` from `@/lib/env` (Task 3, server-only; spec §13).
-- The full route/UI surface (Tasks 5–14) so `pnpm build` and `pnpm e2e` exercise the real app.
+- The full route/UI surface (Tasks 5–14) so `npm run build` and `npm run e2e` exercise the real app.
 
 Produces:
 - `web/README.md` — onboarding doc for an engineer with zero context.
@@ -5012,7 +5033,7 @@ The browser only ever calls same-origin `/api/*`; the Python API URL and the
 
 ## Prerequisites
 
-- Node.js 20+ and **pnpm** (this is a standalone pnpm app under `web/`).
+- Node.js 20+ and **npm** (ships with Node.js — no extra install). This is a standalone npm app under `web/`.
 - A reachable **protocol-v2** FINKI Hub chat API (see env below). The parser also
   tolerates the legacy bare-`data:` stream during the rollout window.
 
@@ -5020,8 +5041,8 @@ The browser only ever calls same-origin `/api/*`; the Python API URL and the
 
 ```bash
 cd web
-pnpm install
-pnpm e2e:install   # one-time: download the Playwright Chromium browser
+npm install
+npm run e2e:install   # one-time: download the Playwright Chromium browser
 ```
 
 ## Environment variables (server-only — never exposed to the browser)
@@ -5043,13 +5064,13 @@ Component.
 
 | Command | What it does |
 |---|---|
-| `pnpm dev` | Run the app at http://localhost:3000 (needs the env vars above). |
-| `pnpm build` | Production build (`next build`). |
-| `pnpm start` | Serve the production build. |
-| `pnpm typecheck` | `tsc --noEmit` against the strict config. |
-| `pnpm test` | Vitest unit/component suite (jsdom + fake-indexeddb). |
-| `pnpm e2e` | Playwright e2e (mocked BFF; no live API needed). |
-| `pnpm e2e:install` | One-time Playwright browser download. |
+| `npm run dev` | Run the app at http://localhost:3000 (needs the env vars above). |
+| `npm run build` | Production build (`next build`). |
+| `npm start` | Serve the production build. |
+| `npm run typecheck` | `tsc --noEmit` against the strict config. |
+| `npm test` | Vitest unit/component suite (jsdom + fake-indexeddb). |
+| `npm run e2e` | Playwright e2e (mocked BFF; no live API needed). |
+| `npm run e2e:install` | One-time Playwright browser download. |
 
 ## Project layout
 
@@ -5093,13 +5114,13 @@ pre-tool preamble is dropped) and shows the `data-status` chip via `onData`.
 
 Auth/login, rate-limiting, server-side conversation sync, the FAQ-links/recommender
 UI, attachments/voice, and the Docker image + `compose.yaml` wiring (the app is a
-standalone pnpm app for now).
+standalone npm app for now).
 ```
 
 - [ ] **Step 2: Verify the README's `typecheck` command passes.**
 
 ```bash
-cd web && pnpm typecheck
+cd web && npm run typecheck
 ```
 
 Expected: `tsc --noEmit` exits 0 with no errors. If anything fails, it is a real regression from an earlier task — fix the offending source before proceeding (do not edit the README to hide it).
@@ -5107,7 +5128,7 @@ Expected: `tsc --noEmit` exits 0 with no errors. If anything fails, it is a real
 - [ ] **Step 3: Verify the unit/component suite passes.**
 
 ```bash
-cd web && pnpm test
+cd web && npm test
 ```
 
 Expected: all Vitest suites green (Tasks 3–15). 0 failed, 0 skipped.
@@ -5123,7 +5144,7 @@ Expected: **no output** (grep exits non-zero / prints nothing). Any hit is a blo
 - [ ] **Step 5: Verify the production build succeeds.**
 
 ```bash
-cd web && pnpm build
+cd web && npm run build
 ```
 
 Expected: `next build` completes with no type or build errors and emits the route manifest including `/api/chat`, `/api/models`, `/api/feedback`, and `/`. `API_BASE_URL` / `CHAT_API_KEY` must be set in `web/.env.local` (Step 1 of setup) because `lib/env.ts` validates them — if the build trips the env guard, that confirms the server-only guard is wired correctly; set the vars and re-run.
@@ -5131,7 +5152,7 @@ Expected: `next build` completes with no type or build errors and emits the rout
 - [ ] **Step 6: Verify the e2e suite passes (mocked BFF — no live API needed).**
 
 ```bash
-cd web && pnpm e2e
+cd web && npm run e2e
 ```
 
 Expected: 1 passed (Task 16). This is the end-to-end proof that the search chip appears, the preamble is dropped, the answer renders, and like posts to `/api/feedback`.

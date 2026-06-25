@@ -253,11 +253,11 @@ web/
     sse.ts                       # protocol-v2 parser (+ legacy-text fallback)
     transport.ts                 # DefaultChatTransport config / prepareSendMessagesRequest
     env.ts                       # server-only env access
-  package.json                   # standalone pnpm app
+  package.json                   # standalone npm app
   ...config (tsconfig, tailwind, next, vitest, playwright)
 ```
 
-`web/` is a standalone pnpm app for now. Docker image + `compose.yaml` wiring is deferred to a later iteration (the implementation plan notes it as a follow-up, not v1).
+`web/` is a standalone npm app for now. Docker image + `compose.yaml` wiring is deferred to a later iteration (the implementation plan notes it as a follow-up, not v1).
 
 ## 13. Environment & config
 
