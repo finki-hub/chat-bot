@@ -43,7 +43,7 @@ _PAPER_K = 50
 # The mentor prior is title-independent (changes only on a corpus resync), so cache it
 # instead of rebuilding it from the full defense graph on every request.
 _PRIOR_CACHE_TTL = 3600.0
-_mentor_prior_cache: tuple[float, MentorPriorIndex] | None = None
+_mentor_prior_cache: dict[str, tuple[float, MentorPriorIndex]] = {}
 
 db_dep = Depends(get_db)
 
@@ -57,18 +57,15 @@ router = APIRouter(
 async def _get_mentor_prior(db: Database) -> MentorPriorIndex:
     """Cached mentor co-membership prior; rebuilt from the full defense graph at most once
     per TTL since it changes only when the diploma corpus is resynced."""
-    global _mentor_prior_cache  # noqa: PLW0603
+    cached = _mentor_prior_cache.get("prior")
     now = time.monotonic()
-    if (
-        _mentor_prior_cache is not None
-        and now - _mentor_prior_cache[0] < _PRIOR_CACHE_TTL
-    ):
-        return _mentor_prior_cache[1]
+    if cached is not None and now - cached[0] < _PRIOR_CACHE_TTL:
+        return cached[1]
     committees = await get_defended_committees(db)
     prior = build_mentor_prior(
         (row["mentor"], row["member1"], row["member2"]) for row in committees
     )
-    _mentor_prior_cache = (now, prior)
+    _mentor_prior_cache["prior"] = (now, prior)
     return prior
 
 
