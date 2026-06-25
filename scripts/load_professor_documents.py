@@ -103,8 +103,11 @@ def main() -> int:
     )
     parser.add_argument("--json", required=True, help="path to the union papers JSON")
     ns = parser.parse_args()
-    papers = json.loads(Path(ns.json).read_text(encoding="utf-8"))
-    print(f"loaded {len(papers)} papers from {ns.json}")
+    json_path = Path(ns.json).resolve()
+    if not json_path.is_file():
+        parser.error(f"--json must point to an existing file: {json_path}")
+    papers = json.loads(json_path.read_text(encoding="utf-8"))
+    print(f"loaded {len(papers)} papers from {json_path}")
     return asyncio.run(_run(papers))
 
 
