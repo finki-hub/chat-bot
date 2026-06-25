@@ -15,4 +15,5 @@ jobs:
       dockerfile: ./web/Dockerfile
       context: ./web
       package-name: chat-bot-web
+      cache-backend: registry
     secrets: inherit

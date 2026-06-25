@@ -15,6 +15,7 @@ jobs:
       dockerfile: ./gpu-api/Dockerfile
       context: ./gpu-api
       package-name: chat-bot-gpu-api
+      cache-backend: registry
       platforms: linux/amd64
       free-disk-space: true
     secrets: inherit

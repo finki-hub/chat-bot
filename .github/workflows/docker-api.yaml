@@ -15,4 +15,5 @@ jobs:
       dockerfile: ./api/Dockerfile
       context: ./api
       package-name: chat-bot-api
+      cache-backend: registry
     secrets: inherit
