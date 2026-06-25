@@ -1,8 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // Lint is a separate gate (`npm run lint`, eslint-config-imperium), matching the
-  // other finki-hub frontends whose build is type-check only. Type errors still fail the build.
+  // Lint is a separate gate (`npm run lint`); the build is type-check only, but type errors still fail it.
   eslint: {
     ignoreDuringBuilds: true,
   },

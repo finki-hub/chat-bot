@@ -2,9 +2,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-/* Matches the finki-hub brand theme (see finki-hub-homepage): green primary,
-   neutral grays, Inter / JetBrains Mono. Dark mode via the org's
-   `[data-kb-theme="dark"]` attribute on the root element. */
+/* Dark mode keys off the org-wide `[data-kb-theme="dark"]` root attribute. */
 @custom-variant dark ([data-kb-theme="dark"] &);
 
 @theme inline {

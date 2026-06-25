@@ -1,5 +1,4 @@
-// Flat Macedonian-Cyrillic chrome dictionary. Default (and only) locale in v1;
-// structured as a flat map so an EN locale can be added later without churn.
+// Flat map so a second locale can be added later without restructuring.
 export const messages = {
   'actions.copy': 'Копирај',
   'actions.dislike': 'Не допаѓа',

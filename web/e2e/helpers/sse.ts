@@ -1,7 +1,6 @@
-// Builds an AI SDK v5 "UI message stream" SSE body for Playwright route mocking.
-// This is the BFF->browser wire format that useChat parses: each chunk is a JSON
-// object emitted as `data: <json>\n\n`. We model exactly the chunks the real
-// /api/chat translator (lib/chat-translate.ts) writes for a tool run.
+// AI SDK v5 "UI message stream" wire format that useChat parses: each chunk is
+// a JSON object emitted as `data: <json>\n\n`, matching what the real /api/chat
+// translator (lib/chat-translate.ts) writes for a tool run.
 import { createServer, type Server } from 'node:http';
 import { type AddressInfo } from 'node:net';
 
@@ -25,7 +24,6 @@ export type UiChunk =
     }
   | { type: 'finish' };
 
-// Serialize chunks into an AI SDK UI-message-stream SSE body.
 export const aiSdkStream = (
   chunks: UiChunk[],
 ): { body: string; contentType: string } => {
@@ -33,13 +31,9 @@ export const aiSdkStream = (
   return { body: `${body}data: [DONE]\n\n`, contentType: 'text/event-stream' };
 };
 
-// Canonical "tool run" sequence, mirroring the real BFF translator
-// (lib/chat-translate.ts) order verified by test/chat-translate.test.ts:
-//   start(metadata) -> status chip -> preamble text part -> reset (new text part)
-//   -> answer tokens -> finish.
-// The status arrives BEFORE any text, so the client renders the chip while there
-// is no text yet; once the preamble (then the answer) streams the chip hides and
-// render-last drops the preamble, leaving only the answer on screen.
+// Status must arrive BEFORE any text so the client renders the chip while there
+// is no text yet; render-last then drops the preamble part once the answer part
+// resets in, leaving only the answer on screen.
 export const toolRunChunks = (opts: {
   answer: string;
   inferenceModel: string;
@@ -58,17 +52,14 @@ export const toolRunChunks = (opts: {
       },
       type: 'start',
     },
-    // tool starts -> transient status chip (no text yet, so the chip shows):
     {
       data: { label: opts.statusLabel, tool: opts.tool },
       transient: true,
       type: 'data-status',
     },
-    // preamble the model narrated before the tool resolved (dropped after reset):
     { id: preambleId, type: 'text-start' },
     { delta: opts.preamble, id: preambleId, type: 'text-delta' },
     { id: preambleId, type: 'text-end' },
-    // reset -> a brand-new answer text part (render-last keeps only this one):
     { id: answerId, type: 'text-start' },
     { delta: opts.answer, id: answerId, type: 'text-delta' },
     { id: answerId, type: 'text-end' },
@@ -76,14 +67,9 @@ export const toolRunChunks = (opts: {
   ];
 };
 
-// route.fulfill delivers its body atomically, so a single-shot mock lands the
-// status chunk and the answer in one network read and React never paints the
-// transient "searching…" chip on its own. To reproduce production timing (the
-// BFF flushes chunks as the Python API emits them) we serve the SSE from a tiny
-// local server that writes the head (start -> status), flushes, waits `gapMs`,
-// then writes the tail (preamble -> reset -> answer -> finish -> [DONE]). The
-// spec redirects the browser's same-origin POST /api/chat here, so the chip
-// gets a real frame before the answer arrives.
+// route.fulfill delivers atomically, landing status + answer in one network read
+// so React never paints the transient chip. Serving head/tail from a real server
+// with a `gapMs` flush in between reproduces the BFF's incremental timing.
 const serialize = (chunks: UiChunk[]): string =>
   chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('');
 

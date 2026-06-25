@@ -1,10 +1,5 @@
 import { createUIMessageStream, createUIMessageStreamResponse } from 'ai';
 
-// BFF: translate the client chat request -> Python ChatSchema, POST it to
-// {API_BASE_URL}/chat/, then re-stream the protocol-v2 SSE answer as an AI SDK
-// v5 UI-message-stream. Pre-stream JSON errors (422/503/500) are surfaced as a
-// transient data-error rather than crashing the stream. Server-only: API_BASE_URL
-// never reaches the browser; the route runs on Node (env + streaming fetch).
 import type { MyUIMessage } from '@/lib/api-types';
 
 import {
@@ -60,7 +55,7 @@ export const POST = async (req: Request): Promise<Response> => {
 
     const contentType = upstream.headers.get('content-type') ?? '';
 
-    // Pre-stream JSON errors (422/503/500) are NOT SSE — branch before streaming.
+    // Pre-stream errors (422/503/500) arrive as JSON, not SSE — branch before streaming.
     if (!upstream.ok || !contentType.includes(SSE_CONTENT_TYPE)) {
       const message = await readDetail(upstream);
 
@@ -91,9 +86,8 @@ export const POST = async (req: Request): Promise<Response> => {
 
     return createUIMessageStreamResponse({ stream });
   } catch {
-    // A thrown request-parse or fetch error would otherwise surface as a bare
-    // 500; emit the same transient data-error the pre-stream path uses so the
-    // client receives a structured error rather than an opaque status.
+    // Emit a transient data-error so the client gets a structured error instead
+    // of a bare 500 from a thrown parse/fetch error.
     return errorResponse({}, 'internal', 'Request failed');
   }
 };

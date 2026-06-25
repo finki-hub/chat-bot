@@ -47,7 +47,7 @@ export const AnswerActions = ({
 
   const sendFeedback = async (feedbackType: FeedbackType): Promise<void> => {
     const previous = vote;
-    setVote(feedbackType); // optimistic toggle
+    setVote(feedbackType);
     try {
       const res = await fetch('/api/feedback', {
         body: JSON.stringify({

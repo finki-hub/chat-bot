@@ -24,7 +24,6 @@ type PrepareTransport = {
   };
 };
 
-// The transport exposes prepareSendMessagesRequest as a configured option we can call.
 const getPrepare = (extras: ChatExtras) => {
   const transport = buildChatTransport(
     () => extras,

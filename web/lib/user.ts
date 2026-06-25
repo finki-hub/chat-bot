@@ -1,5 +1,4 @@
-// Stable anonymous per-browser id, persisted in localStorage. Sent to
-// /api/feedback as user_id (the backend requires a non-empty user_id, spec §7).
+// Sent to /api/feedback as user_id, which the backend requires to be non-empty.
 export const ANON_USER_ID_KEY = 'finkiHub.anonUserId';
 
 export const getAnonUserId = (): string => {

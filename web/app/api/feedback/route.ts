@@ -1,7 +1,4 @@
-// BFF: receive a camelCase FeedbackClientPayload from the browser, assemble the
-// snake_case FeedbackSchema (adding client:"web" and mapping userId->user_id),
-// inject the server-only x-api-key, and forward to POST {API_BASE_URL}/chat/feedback.
-// The API key lives only in this server process and never reaches the browser.
+// The x-api-key lives only in this server process and never reaches the browser.
 import type {
   FeedbackAck,
   FeedbackClientPayload,

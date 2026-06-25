@@ -1,6 +1,4 @@
-// Client-side request shaping: enforce the API caps (<= 50 messages,
-// <= 8000 chars/turn) before sending, and derive a conversation title.
-// The BFF re-validates; this keeps the UI honest and the payload small.
+// The BFF re-validates these caps; trimming here only keeps the payload small.
 import {
   MAX_CHARS_PER_TURN,
   MAX_MESSAGES,
@@ -22,7 +20,6 @@ const textLength = (message: MyUIMessage): number => {
   return total;
 };
 
-// Truncate a message's text parts so their combined length <= MAX_CHARS_PER_TURN.
 const capTextParts = (message: MyUIMessage): MyUIMessage => {
   if (textLength(message) <= MAX_CHARS_PER_TURN) {
     return message;
@@ -48,7 +45,6 @@ const capTextParts = (message: MyUIMessage): MyUIMessage => {
   return { ...message, parts };
 };
 
-// Enforce <= MAX_MESSAGES (keep the newest) and <= MAX_CHARS_PER_TURN per turn.
 export const trimForRequest = (messages: MyUIMessage[]): MyUIMessage[] => {
   const windowed =
     messages.length > MAX_MESSAGES
@@ -58,7 +54,6 @@ export const trimForRequest = (messages: MyUIMessage[]): MyUIMessage[] => {
   return windowed.map(capTextParts);
 };
 
-// First line of the first user message, trimmed to TITLE_MAX with an ellipsis.
 export const deriveTitle = (firstUserText: string): string => {
   const firstLine = firstUserText.split('\n', 1)[0]?.trim() ?? '';
 

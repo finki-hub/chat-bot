@@ -69,7 +69,6 @@ describe('POST /api/chat', () => {
 
     expect(res.headers.get('content-type')).toContain('text/event-stream');
 
-    // Assert the upstream python API was called correctly.
     expect(fetchMock).toHaveBeenCalledOnce();
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -86,7 +85,6 @@ describe('POST /api/chat', () => {
     ]);
     expect(sentBody.inference_model).toBe(MODEL);
 
-    // The translated UI stream carries the answer text and the response id.
     const out = await res.text();
 
     expect(out).toContain('Здраво');

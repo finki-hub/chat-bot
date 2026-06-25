@@ -1,13 +1,9 @@
-// BFF: proxy GET {API_BASE_URL}/chat/models -> a flat string[] of model ids.
-// Server-only (Route Handler): API_BASE_URL never reaches the browser.
-// The upstream list changes rarely, so we cache briefly. Any upstream failure
-// degrades to [] (the model picker falls back to its defaults) and is marked
-// with X-Models-Source: error so callers/tests can detect the fallback path.
+// Any upstream failure degrades to [] marked with x-models-source: error so
+// callers/tests can distinguish the fallback path from a genuinely empty list.
 import type { ModelId } from '@/lib/api-types';
 
 import { API_BASE_URL } from '@/lib/env';
 
-// Always run on the server; never statically prerender (needs server env).
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 

@@ -39,7 +39,6 @@ const fromRow = (row: MessageRow): MyUIMessage => ({
   role: row.role,
 });
 
-// The user turn that precedes a given assistant message, flattened to text.
 const priorUserText = (
   messages: MyUIMessage[],
   message: MyUIMessage,
@@ -53,7 +52,6 @@ const priorUserText = (
     .map((p) => p.text)
     .join('');
 
-// Per-answer actions, shown only for finished assistant turns (spec §9).
 const renderAnswerActions =
   (
     messages: MyUIMessage[],
@@ -125,7 +123,6 @@ const ChatScreen = () => {
     fireAndForget(refreshConversations());
   }, [refreshConversations]);
 
-  // Hydrate when the active conversation changes.
   useEffect(() => {
     convoIdRef.current = activeId;
     setActiveError(undefined);
@@ -166,8 +163,6 @@ const ChatScreen = () => {
           title: deriveTitle(text),
         });
         cid = convo.id;
-        // The id comes from the just-resolved create, not stale state; the ref
-        // write is intentionally synchronous with it.
         // eslint-disable-next-line require-atomic-updates -- fresh id, not a read-modify-write race
         convoIdRef.current = convo.id;
         setActiveId(convo.id);

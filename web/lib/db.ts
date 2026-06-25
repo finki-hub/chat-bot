@@ -1,5 +1,5 @@
-// Local (IndexedDB) conversation + message store. Stores messages in the AI SDK
-// UIMessage shape so metadata.responseId survives reloads (spec §7).
+// Messages are stored in the AI SDK UIMessage shape so metadata.responseId
+// survives reloads.
 import { Dexie, type EntityTable } from 'dexie';
 
 import type { MyUIMessage } from '@/lib/api-types';
@@ -30,8 +30,8 @@ const createDb = (): ChatDb => {
   const instance = new Dexie('finkiHubChat') as ChatDb;
 
   instance.version(1).stores({
-    conversations: 'id, updatedAt', // primary key + index for ordered listing
-    messages: 'id, conversationId, createdAt', // query by conversation, ordered by time
+    conversations: 'id, updatedAt',
+    messages: 'id, conversationId, createdAt',
   });
 
   return instance;
@@ -39,9 +39,9 @@ const createDb = (): ChatDb => {
 
 export const db = createDb();
 
-// Monotonic millisecond clock: Date.now() can repeat within the same tick, which
-// would make two writes tie on updatedAt and lose their relative order. Advancing
-// past the last issued value guarantees a later write always sorts newer.
+// Monotonic clock: Date.now() can repeat within a tick, tying two writes on
+// updatedAt and losing their order; advancing past the last value keeps a later
+// write sorting newer.
 const nextNow = ((): (() => number) => {
   let last = 0;
 

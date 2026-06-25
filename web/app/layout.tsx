@@ -20,8 +20,7 @@ export const metadata: Metadata = {
   title: 'FINKI Hub Chat',
 };
 
-// Resolve the persisted/preferred theme before first paint to avoid a flash of
-// the wrong theme. Mirrors ThemeToggle's storage key and data attribute.
+// Resolve the theme before first paint to avoid a flash of the wrong theme.
 const noFlashTheme = `(() => {
   try {
     const stored = localStorage.getItem('theme');

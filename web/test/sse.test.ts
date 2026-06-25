@@ -7,7 +7,6 @@ const DONE_FRAME = 'event: done\ndata: {}\n\n';
 
 const token = (text: string): ParsedEvent => ({ text, type: 'token' });
 
-// Wraps fixture chunks as an AsyncIterable<string>, mimicking a decoded stream.
 const source = (chunks: string[]): AsyncIterable<string> => ({
   async *[Symbol.asyncIterator]() {
     for (const chunk of chunks) {

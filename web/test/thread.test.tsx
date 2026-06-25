@@ -49,9 +49,9 @@ const userMessage = (text: string): MyUIMessage => ({
   role: 'user',
 });
 
-// Streamdown may split Markdown across DOM nodes; match the innermost element
-// whose text content includes the needle (no child element also matches), so
-// the query resolves to a single node instead of every matching ancestor.
+// Streamdown may split Markdown across DOM nodes; match only the innermost
+// element containing the needle so the query resolves to one node, not every
+// matching ancestor.
 const hasText =
   (needle: string) =>
   (_content: string, element: Element | null): boolean => {

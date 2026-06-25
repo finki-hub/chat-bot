@@ -264,10 +264,9 @@ describe('Sidebar', () => {
   });
 });
 
-// The BFF (Task 5) returns an AI SDK *UI message stream*, NOT raw protocol-v2.
-// useChat/DefaultChatTransport only parses this format, so the mock must emit it:
-// start(messageMetadata) -> text-start -> text-delta{delta} -> text-end -> finish -> [DONE].
-// (responseId reaches the client via the start chunk's messageMetadata, not the header.)
+// useChat/DefaultChatTransport only parses the AI SDK UI message stream, so the
+// mock must emit that (not raw protocol-v2); responseId reaches the client via
+// the start chunk's messageMetadata, not the header.
 const sseChatResponse = (): Response => {
   const chunks = [
     {
@@ -296,9 +295,8 @@ const sseChatResponse = (): Response => {
   });
 };
 
-// ChatPage now relies on the layout's QueryClientProvider (app/layout.tsx wraps
-// it in <Providers>), but these tests render the page in isolation, so wrap each
-// render in a fresh client of its own to keep useModels supplied.
+// These tests render ChatPage in isolation (no layout provider), so wrap each
+// render in a fresh QueryClient to keep useModels supplied.
 const renderChatPage = (): ReturnType<typeof rtlRender> => {
   const queryClient = new QueryClient();
 

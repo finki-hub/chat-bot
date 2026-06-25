@@ -52,7 +52,7 @@ describe('toChatRequestBody', () => {
       msg(i % 2 === 0 ? 'user' : 'assistant', `m${i}`),
     );
 
-    messages[59] = msg('user', 'last'); // ensure last is a user turn
+    messages[59] = msg('user', 'last');
 
     const out = toChatRequestBody({ messages });
 

@@ -1,10 +1,5 @@
-// Pure translation logic for the BFF /api/chat route, unit-testable without
-// Next.js: (1) toChatRequestBody maps the client request -> Python ChatSchema;
-// (2) translateToUiStream drains protocol-v2 events into AI SDK UI-message-
-// stream parts (lazy text part, preamble drop on reset, transient data parts).
-// The UiStreamPart union is a structural subset of ai@5's UIMessageChunk for
-// MyUIMessage, so the real createUIMessageStream writer satisfies UiStreamWriter
-// without casts (see app/api/chat/route.ts).
+// UiStreamPart is a structural subset of ai@5's UIMessageChunk for MyUIMessage,
+// so the real createUIMessageStream writer satisfies UiStreamWriter without casts.
 import {
   type ChatRequestBody,
   type ConversationTurn,
@@ -84,8 +79,7 @@ export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
   };
 };
 
-// Tracks the single in-flight UI text part: lazy start, idempotent end. Keeps
-// translateToUiStream's switch flat and below the cognitive-complexity budget.
+// Lazy start, idempotent end for the single in-flight UI text part.
 const createTextPart = (writer: UiStreamWriter, idGen: () => string) => {
   let id: null | string = null;
 
@@ -147,15 +141,15 @@ export const translateToUiStream = async (
         });
 
         if (event.code !== 'interrupted') {
-          textPart.end(); // hard stop the text part
+          textPart.end();
           stopped = true;
         }
 
         break;
 
       case 'reset':
-        // Preamble drop: end the current part, lazily open a new one on the next
-        // token (render-last shows only the post-reset answer, spec §5.2).
+        // Preamble drop: render-last shows only the post-reset answer, so end the
+        // current part and lazily open a new one on the next token.
         textPart.end();
         break;
 
@@ -184,5 +178,5 @@ export const translateToUiStream = async (
 
   await drain(events, handleEvent);
 
-  textPart.end(); // finalize any still-open text part (e.g. interrupted, no done)
+  textPart.end(); // finalize a still-open part (e.g. interrupted, no done event)
 };

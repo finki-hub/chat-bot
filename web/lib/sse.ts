@@ -1,6 +1,5 @@
-// Protocol-v2 SSE parser. Frames are `event: <name>\ndata: <JSON>\n\n`.
 // Tolerant of the legacy bare `data: <text>` form (no event: line) -> token,
-// un-escaping literal `\n` to a real newline (spec §10). Buffers across chunks.
+// un-escaping literal `\n` to a real newline.
 import type { ChatErrorCode } from '@/lib/api-types';
 
 export type ParsedEvent =
@@ -34,7 +33,6 @@ const asString = (value: unknown): string =>
 const unescapeNewlines = (text: string): string =>
   text.replaceAll(String.raw`\n`, '\n');
 
-// Normalize any supported source into an async-iterable of decoded strings.
 const toStringChunks = async function* (
   source: SseSource,
 ): AsyncGenerator<string> {
@@ -81,7 +79,6 @@ const toStringChunks = async function* (
 
 type Frame = { dataRaw: string; eventName: null | string };
 
-// Split a raw frame into its event name and joined data payload.
 const splitFrame = (frame: string): Frame => {
   let eventName: null | string = null;
   const dataLines: string[] = [];
@@ -103,7 +100,6 @@ const splitFrame = (frame: string): Frame => {
   return { dataRaw: dataLines.join('\n'), eventName };
 };
 
-// Map a named event + its parsed JSON object to a typed ParsedEvent.
 const buildEvent = (
   eventName: string,
   obj: Record<string, unknown>,
@@ -133,7 +129,6 @@ const buildEvent = (
   }
 };
 
-// Parse one SSE frame (the text between blank-line separators) into an event.
 const parseFrame = (frame: string): null | ParsedEvent => {
   const { dataRaw, eventName } = splitFrame(frame);
 
@@ -170,7 +165,6 @@ export const parseProtocolV2 = async function* (
   let buffer = '';
 
   for await (const chunk of toStringChunks(source)) {
-    // SSE frames are separated by a blank line. Normalize CRLF first.
     buffer = (buffer + chunk).replaceAll('\r\n', '\n');
 
     let sepIndex = buffer.indexOf('\n\n');

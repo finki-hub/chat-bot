@@ -38,7 +38,6 @@ describe('trimForRequest', () => {
     const trimmed = trimForRequest(msgs);
 
     expect(trimmed).toHaveLength(MAX_MESSAGES);
-    // newest preserved, oldest dropped
     expect(trimmed[0]?.id).toBe('m5');
     expect(trimmed.at(-1)?.id).toBe(`m${MAX_MESSAGES + 4}`);
   });
