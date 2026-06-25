@@ -1,5 +1,3 @@
-// UiStreamPart is a structural subset of ai@5's UIMessageChunk for MyUIMessage,
-// so the real createUIMessageStream writer satisfies UiStreamWriter without casts.
 import {
   type ChatRequestBody,
   type ConversationTurn,
@@ -79,7 +77,6 @@ export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
   };
 };
 
-// Lazy start, idempotent end for the single in-flight UI text part.
 const createTextPart = (writer: UiStreamWriter, idGen: () => string) => {
   let id: null | string = null;
 
@@ -125,7 +122,7 @@ export const translateToUiStream = async (
   writer.write({ messageMetadata: meta, type: 'start' });
 
   const textPart = createTextPart(writer, idGen);
-  let stopped = false; // a non-interrupted error halts further text
+  let stopped = false;
 
   const handleEvent = (event: ParsedEvent): void => {
     switch (event.type) {
@@ -148,8 +145,6 @@ export const translateToUiStream = async (
         break;
 
       case 'reset':
-        // Preamble drop: render-last shows only the post-reset answer, so end the
-        // current part and lazily open a new one on the next token.
         textPart.end();
         break;
 
@@ -178,5 +173,5 @@ export const translateToUiStream = async (
 
   await drain(events, handleEvent);
 
-  textPart.end(); // finalize a still-open part (e.g. interrupted, no done event)
+  textPart.end();
 };

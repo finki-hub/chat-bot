@@ -1,4 +1,3 @@
-// The x-api-key lives only in this server process and never reaches the browser.
 import type {
   FeedbackAck,
   FeedbackClientPayload,

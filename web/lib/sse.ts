@@ -1,5 +1,3 @@
-// Tolerant of the legacy bare `data: <text>` form (no event: line) -> token,
-// un-escaping literal `\n` to a real newline.
 import type { ChatErrorCode } from '@/lib/api-types';
 
 export type ParsedEvent =
@@ -125,7 +123,7 @@ const buildEvent = (
     case 'token':
       return { text: asString(obj['text']), type: 'token' };
     default:
-      return null; // unknown event name -> ignore
+      return null;
   }
 };
 
@@ -136,7 +134,6 @@ const parseFrame = (frame: string): null | ParsedEvent => {
     return null;
   }
 
-  // Legacy fallback: a data-only frame with no event name is a token.
   if (eventName === null) {
     return { text: unescapeNewlines(dataRaw), type: 'token' };
   }
@@ -147,7 +144,6 @@ const parseFrame = (frame: string): null | ParsedEvent => {
     try {
       parsed = JSON.parse(dataRaw);
     } catch {
-      // Named frame with non-JSON data: only meaningful for token text.
       if (eventName === 'token') {
         return { text: unescapeNewlines(dataRaw), type: 'token' };
       }
@@ -184,7 +180,6 @@ export const parseProtocolV2 = async function* (
     }
   }
 
-  // Flush a trailing frame with no terminating blank line.
   const tail = buffer.replaceAll('\r\n', '\n').trim();
 
   if (tail) {

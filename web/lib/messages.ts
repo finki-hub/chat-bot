@@ -1,4 +1,3 @@
-// The BFF re-validates these caps; trimming here only keeps the payload small.
 import {
   MAX_CHARS_PER_TURN,
   MAX_MESSAGES,

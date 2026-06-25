@@ -1,20 +1,20 @@
 import type { UIMessage } from 'ai';
 
 export type ChatRequestBody = {
-  embeddings_model?: ModelId; // default BAAI/bge-m3
-  inference_model?: ModelId; // default claude-sonnet-4-6
-  max_tokens?: number; // >= 1 (default 4096)
-  messages: ConversationTurn[]; // 1..50, oldest-first, last is role:"user"
-  query_transform_model?: ModelId; // default gpt-5.4-mini
-  system_prompt?: null | string; // default null -> server FINKI agent prompt
-  temperature?: number; // 0.0..1.0 (default 0.3)
-  top_p?: number; // 0.0..1.0 (default 1.0)
+  embeddings_model?: ModelId;
+  inference_model?: ModelId;
+  max_tokens?: number;
+  messages: ConversationTurn[];
+  query_transform_model?: ModelId;
+  system_prompt?: null | string;
+  temperature?: number;
+  top_p?: number;
 };
 
 export type ConversationRole = 'assistant' | 'user';
 
 export type ConversationTurn = {
-  content: string; // <= 8000 chars
+  content: string;
   role: ConversationRole;
 };
 
@@ -28,18 +28,17 @@ export type ChatErrorCode = 'agent_error' | 'interrupted' | 'no_answer';
 
 export type FeedbackAck = {
   feedback_type: FeedbackType;
-  id: string; // UUID, not an int
+  id: string;
   response_id: string;
 };
 
-// The BFF adds client:"web", user_id, x-api-key.
 export type FeedbackClientPayload = {
   answerText?: string;
   feedbackType: FeedbackType;
   inferenceModel?: string;
   questionText?: string;
   responseId: string;
-  userId: string; // anon per-browser id (BFF maps to user_id)
+  userId: string;
 };
 
 export type FeedbackSchema = {
@@ -53,8 +52,8 @@ export type FeedbackSchema = {
   inference_model?: string;
   query_transform_model?: string;
   question_text?: string;
-  response_id: string; // UUID from X-Response-Id
-  user_id: string; // required, min length 1 (anon per-browser id)
+  response_id: string;
+  user_id: string;
 };
 
 export type FeedbackType = 'dislike' | 'like';

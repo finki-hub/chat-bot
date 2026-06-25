@@ -2,7 +2,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-/* Dark mode keys off the org-wide `[data-kb-theme="dark"]` root attribute. */
 @custom-variant dark ([data-kb-theme="dark"] &);
 
 @theme inline {

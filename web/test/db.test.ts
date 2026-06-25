@@ -64,7 +64,6 @@ describe('conversations', () => {
     const a = await createConversation({ id: 'a', model: 'm', title: 'A' });
     const b = await createConversation({ id: 'b', model: 'm', title: 'B' });
 
-    // bump a's updatedAt above b's
     await renameConversation('a', 'A2');
 
     const list = await listConversations();

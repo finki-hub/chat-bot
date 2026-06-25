@@ -18,7 +18,6 @@ export type AssistantMessageProps = {
   statusPart?: { label: string; tool?: string };
 };
 
-// Last text part only — drops the pre-tool preamble.
 const lastText = (message: MyUIMessage): null | string => {
   const texts = message.parts.filter(
     (p): p is { text: string; type: 'text' } => p.type === 'text',

@@ -30,8 +30,6 @@ const applyTheme = (theme: Theme) => {
 };
 
 export const ThemeToggle = () => {
-  // SSR-safe: default to 'light' during render and resolve the real theme on
-  // mount, so neither localStorage nor matchMedia is touched on the server.
   const [theme, setTheme] = useState<Theme>('light');
 
   useEffect(() => {

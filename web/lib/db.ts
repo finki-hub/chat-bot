@@ -1,5 +1,3 @@
-// Messages are stored in the AI SDK UIMessage shape so metadata.responseId
-// survives reloads.
 import { Dexie, type EntityTable } from 'dexie';
 
 import type { MyUIMessage } from '@/lib/api-types';
@@ -39,9 +37,6 @@ const createDb = (): ChatDb => {
 
 export const db = createDb();
 
-// Monotonic clock: Date.now() can repeat within a tick, tying two writes on
-// updatedAt and losing their order; advancing past the last value keeps a later
-// write sorting newer.
 const nextNow = ((): (() => number) => {
   let last = 0;
 
@@ -101,7 +96,7 @@ export const saveMessages = async (
   const base = nextNow();
   const rows: MessageRow[] = messages.map((m, i) => ({
     conversationId,
-    createdAt: base + i, // preserve send order within one batch
+    createdAt: base + i,
     id: m.id,
     metadata: m.metadata,
     parts: m.parts,

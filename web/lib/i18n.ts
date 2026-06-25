@@ -1,4 +1,3 @@
-// Flat map so a second locale can be added later without restructuring.
 export const messages = {
   'actions.copy': 'Копирај',
   'actions.dislike': 'Не допаѓа',

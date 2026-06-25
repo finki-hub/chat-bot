@@ -55,7 +55,6 @@ export const POST = async (req: Request): Promise<Response> => {
 
     const contentType = upstream.headers.get('content-type') ?? '';
 
-    // Pre-stream errors (422/503/500) arrive as JSON, not SSE — branch before streaming.
     if (!upstream.ok || !contentType.includes(SSE_CONTENT_TYPE)) {
       const message = await readDetail(upstream);
 
@@ -86,8 +85,6 @@ export const POST = async (req: Request): Promise<Response> => {
 
     return createUIMessageStreamResponse({ stream });
   } catch {
-    // Emit a transient data-error so the client gets a structured error instead
-    // of a bare 500 from a thrown parse/fetch error.
     return errorResponse({}, 'internal', 'Request failed');
   }
 };

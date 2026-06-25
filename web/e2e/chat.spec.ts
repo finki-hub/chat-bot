@@ -14,8 +14,6 @@ test.describe('chat streaming (mocked BFF)', () => {
   test('shows the search chip, drops the preamble, renders the answer, and likes', async ({
     page,
   }) => {
-    // Served from a local SSE server, not route.fulfill (which delivers
-    // atomically), so the transient "searching…" chip gets a real paint.
     const chunks = toolRunChunks({
       answer: ANSWER,
       inferenceModel: INFERENCE_MODEL,
@@ -72,8 +70,6 @@ test.describe('chat streaming (mocked BFF)', () => {
     await expect(chip).toBeVisible();
     await expect(chip).toContainText('Пребарувам');
 
-    // Streamdown v2 hardens links into `<button data-streamdown="link">`, not a
-    // raw anchor, so the autolinked URL surfaces as a button.
     const answer = page.getByTestId('answer-text');
     await expect(answer).toContainText('Резултатите од испитите се објавуваат');
     const autolink = answer.locator('[data-streamdown="link"]', {
@@ -81,7 +77,6 @@ test.describe('chat streaming (mocked BFF)', () => {
     });
     await expect(autolink).toBeVisible();
 
-    // render-last drops the preamble text part once the answer part resets in.
     await expect(page.getByText(PREAMBLE)).toHaveCount(0);
 
     await page.getByTestId('like-button').click();

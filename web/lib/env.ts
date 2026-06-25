@@ -1,5 +1,3 @@
-// NEVER import this from a Client Component; it must only run in Route Handlers /
-// server code.
 import 'server-only';
 
 const required = (name: string): string => {
@@ -15,7 +13,6 @@ const required = (name: string): string => {
   return value;
 };
 
-// No /API prefix; /chat/ has a trailing slash.
 export const API_BASE_URL = required('API_BASE_URL');
 
 export const CHAT_API_KEY = required('CHAT_API_KEY');

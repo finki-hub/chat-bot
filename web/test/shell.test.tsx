@@ -222,9 +222,6 @@ describe('Sidebar', () => {
   });
 });
 
-// useChat/DefaultChatTransport only parses the AI SDK UI message stream, so the
-// mock must emit that (not raw protocol-v2); responseId reaches the client via
-// the start chunk's messageMetadata, not the header.
 const sseChatResponse = (): Response => {
   const chunks = [
     {
@@ -253,8 +250,6 @@ const sseChatResponse = (): Response => {
   });
 };
 
-// These tests render ChatPage in isolation (no layout provider), so wrap each
-// render in a fresh QueryClient to keep useModels supplied.
 const renderChatPage = (): ReturnType<typeof rtlRender> => {
   const queryClient = new QueryClient();
 
@@ -274,8 +269,6 @@ describe('ChatPage persistence', () => {
       model: CLAUDE,
       sidebarOpen: true,
     });
-    // afterEach's unstubAllGlobals also clears the beforeAll ResizeObserver stub,
-    // so re-install it for every render in this block (Conversation needs it).
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     vi.stubGlobal('localStorage', createMemoryStorage());
     vi.stubGlobal(

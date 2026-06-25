@@ -1,5 +1,3 @@
-// Any upstream failure degrades to [] marked with x-models-source: error so
-// callers/tests can distinguish the fallback path from a genuinely empty list.
 import type { ModelId } from '@/lib/api-types';
 
 import { API_BASE_URL } from '@/lib/env';

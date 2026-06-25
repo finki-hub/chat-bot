@@ -1,5 +1,3 @@
-// jsdom lacks ResizeObserver, which the vendored Conversation (use-stick-to-bottom)
-// constructs with `new`. Provide a constructable no-op stub.
 export class ResizeObserverStub {
   callbacks: ResizeObserverCallback[] = [];
 
@@ -20,9 +18,6 @@ export class ResizeObserverStub {
   }
 }
 
-// jsdom 26 only exposes localStorage for a concrete origin; under the default
-// vitest jsdom URL the origin is opaque, so we install a conforming in-memory
-// store the transport's getAnonUserId can use.
 export const createMemoryStorage = (): Storage => {
   const store = new Map<string, string>();
 

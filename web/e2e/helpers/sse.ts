@@ -1,6 +1,3 @@
-// AI SDK v5 "UI message stream" wire format that useChat parses: each chunk is
-// a JSON object emitted as `data: <json>\n\n`, matching what the real /api/chat
-// translator (lib/chat-translate.ts) writes for a tool run.
 import { createServer, type Server } from 'node:http';
 import { type AddressInfo } from 'node:net';
 
@@ -31,9 +28,6 @@ export const aiSdkStream = (
   return { body: `${body}data: [DONE]\n\n`, contentType: 'text/event-stream' };
 };
 
-// Status must arrive BEFORE any text so the client renders the chip while there
-// is no text yet; render-last then drops the preamble part once the answer part
-// resets in, leaving only the answer on screen.
 export const toolRunChunks = (opts: {
   answer: string;
   inferenceModel: string;
@@ -67,9 +61,6 @@ export const toolRunChunks = (opts: {
   ];
 };
 
-// route.fulfill delivers atomically, landing status + answer in one network read
-// so React never paints the transient chip. Serving head/tail from a real server
-// with a `gapMs` flush in between reproduces the BFF's incremental timing.
 const serialize = (chunks: UiChunk[]): string =>
   chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('');
 

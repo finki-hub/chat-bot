@@ -1,7 +1,5 @@
 import { DefaultChatTransport } from 'ai';
 
-// Extras are read lazily so the active model can change between turns without
-// rebuilding the transport.
 import type { ModelId, MyUIMessage } from '@/lib/api-types';
 
 import { getAnonUserId } from '@/lib/user';

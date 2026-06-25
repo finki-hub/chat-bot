@@ -1,4 +1,3 @@
-// Sent to /api/feedback as user_id, which the backend requires to be non-empty.
 export const ANON_USER_ID_KEY = 'finkiHub.anonUserId';
 
 export const getAnonUserId = (): string => {

@@ -12,9 +12,6 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# The BFF route modules import the server-only env validator, evaluated during
-# `next build`. Pass placeholders for this RUN only (not persisted into the image);
-# real values are injected at runtime by the container environment.
 RUN API_BASE_URL="http://localhost:8880" CHAT_API_KEY="build-time-placeholder" npm run build
 
 FROM base AS runner
