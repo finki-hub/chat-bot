@@ -407,6 +407,12 @@ const renderChatPage = (): ReturnType<typeof rtlRender> => {
   );
 };
 
+const persistedAssistantFeedback = async (): Promise<string | undefined> => {
+  const stored = await db.messages.toArray();
+
+  return stored.find((m) => m.role === 'assistant')?.metadata?.feedback;
+};
+
 describe('ChatPage persistence', () => {
   beforeEach(async () => {
     await db.delete();
@@ -483,6 +489,59 @@ describe('ChatPage persistence', () => {
     expect(msgs.find((m) => m.role === 'assistant')?.metadata?.responseId).toBe(
       RESPONSE_ID,
     );
+  });
+
+  it('persists a like and restores it after a remount (refresh)', async () => {
+    const now = Date.now();
+    await db.conversations.put({
+      createdAt: now,
+      id: 'c-like',
+      model: CLAUDE,
+      title: 'Оценет разговор',
+      updatedAt: now,
+    });
+    await db.messages.bulkPut([
+      {
+        conversationId: 'c-like',
+        createdAt: now,
+        id: 'u-like',
+        parts: [{ text: 'Прашање за оцена', type: 'text' }],
+        role: 'user',
+      },
+      {
+        conversationId: 'c-like',
+        createdAt: now + 1,
+        id: 'a-like',
+        metadata: { responseId: 'resp-like' },
+        parts: [{ text: 'Одговор за оценување', type: 'text' }],
+        role: 'assistant',
+      },
+    ]);
+    useUiStore.setState({
+      activeConversationId: 'c-like',
+      model: CLAUDE,
+      sidebarOpen: true,
+    });
+
+    const user = userEvent.setup();
+    const view = renderChatPage();
+
+    await user.click(await screen.findByTestId('like-button'));
+
+    await waitFor(async () => {
+      await expect(persistedAssistantFeedback()).resolves.toBe('like');
+    });
+
+    // A refresh re-hydrates from Dexie; the vote must come back pressed.
+    view.unmount();
+    renderChatPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('like-button')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
   });
 
   it('regenerates an assistant answer in place and persists only the replacement', async () => {

@@ -1,6 +1,6 @@
 import { Dexie, type EntityTable } from 'dexie';
 
-import type { MyUIMessage } from '@/lib/api-types';
+import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 export type ConversationRow = {
   createdAt: number;
@@ -117,6 +117,19 @@ export const saveMessages = async (
   await db.transaction('rw', db.conversations, db.messages, async () => {
     await db.messages.bulkPut(rows);
     await db.conversations.update(conversationId, { updatedAt: nextNow() });
+  });
+};
+
+export const setMessageFeedback = async (
+  messageId: string,
+  feedback: FeedbackType,
+): Promise<void> => {
+  await db.transaction('rw', db.messages, async () => {
+    const row = await db.messages.get(messageId);
+    if (!row) {
+      return;
+    }
+    await db.messages.put({ ...row, metadata: { ...row.metadata, feedback } });
   });
 };
 

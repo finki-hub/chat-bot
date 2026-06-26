@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { MyUIMessage } from '@/lib/api-types';
+import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { AnswerActions } from '@/components/chat/answer-actions';
 import { createMemoryStorage } from '@/test/helpers/dom-stubs';
@@ -25,6 +25,8 @@ const ack = Response.json(
   },
   { headers: { 'content-type': 'application/json' }, status: 200 },
 );
+
+const PRESSED = 'aria-pressed';
 
 const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
 
@@ -95,7 +97,7 @@ describe('AnswerActions feedback', () => {
     fireEvent.click(dislike);
 
     await waitFor(() => {
-      expect(dislike).toHaveAttribute('aria-pressed', 'true');
+      expect(dislike).toHaveAttribute(PRESSED, 'true');
     });
   });
 
@@ -105,27 +107,80 @@ describe('AnswerActions feedback', () => {
     fireEvent.click(like);
 
     await waitFor(() => {
-      expect(like).toHaveAttribute('aria-pressed', 'true');
+      expect(like).toHaveAttribute(PRESSED, 'true');
     });
 
     expect(like.className).toContain('text-green-600');
     expect(like.className).not.toContain('text-muted-foreground');
   });
 
-  it('reverts the optimistic vote when the request fails', async () => {
+  it('restores the persisted vote from message metadata on mount', () => {
+    const message: MyUIMessage = {
+      ...assistant('resp-9'),
+      metadata: { feedback: 'like', responseId: 'resp-9' },
+    };
+    render(<AnswerActions message={message} />);
+
+    expect(screen.getByRole('button', { name: 'Допаѓа' })).toHaveAttribute(
+      PRESSED,
+      'true',
+    );
+  });
+
+  it('reports the vote to onVote once the request succeeds', async () => {
+    const onVote = vi.fn<(vote: FeedbackType) => void>();
+    render(
+      <AnswerActions
+        message={assistant('resp-9')}
+        onVote={onVote}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Допаѓа' }));
+
+    await waitFor(() => {
+      expect(onVote).toHaveBeenCalledWith('like');
+    });
+  });
+
+  it('reverts the vote and skips onVote when the request fails', async () => {
     vi.stubGlobal(
       'fetch',
       vi
         .fn<typeof fetch>()
         .mockResolvedValue(new Response('{}', { status: 500 })),
     );
-    render(<AnswerActions message={assistant('resp-9')} />);
+    const onVote = vi.fn<(vote: FeedbackType) => void>();
+    render(
+      <AnswerActions
+        message={assistant('resp-9')}
+        onVote={onVote}
+      />,
+    );
     const like = screen.getByRole('button', { name: 'Допаѓа' });
     fireEvent.click(like);
 
     await waitFor(() => {
-      expect(like).toHaveAttribute('aria-pressed', 'false');
+      expect(like).toHaveAttribute(PRESSED, 'false');
     });
+
+    expect(onVote).not.toHaveBeenCalled();
+  });
+
+  it('disables voting while the answer is still streaming', () => {
+    const onVote = vi.fn<(vote: FeedbackType) => void>();
+    render(
+      <AnswerActions
+        message={assistant('resp-9')}
+        onVote={onVote}
+        pending
+      />,
+    );
+    const like = screen.getByRole('button', { name: 'Допаѓа' });
+    fireEvent.click(like);
+
+    expect(like).toBeDisabled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(onVote).not.toHaveBeenCalled();
   });
 
   it('invokes onRegenerate when Регенерирај is clicked', () => {

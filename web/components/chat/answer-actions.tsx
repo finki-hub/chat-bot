@@ -11,20 +11,26 @@ import { cn } from '@/lib/utils';
 export type AnswerActionsProps = {
   message: MyUIMessage;
   onRegenerate?: () => void;
+  onVote?: (vote: FeedbackType) => void;
+  pending?: boolean;
   questionText?: string;
 };
 
 const BTN =
-  'inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
+  'inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40';
 
 export const AnswerActions = ({
   message,
   onRegenerate,
+  onVote,
+  pending = false,
   questionText,
 }: AnswerActionsProps) => {
   const responseId = message.metadata?.responseId;
   const [copied, setCopied] = useState(false);
-  const [vote, setVote] = useState<FeedbackType | null>(null);
+  const [vote, setVote] = useState<FeedbackType | null>(
+    message.metadata?.feedback ?? null,
+  );
 
   if (!responseId) {
     return null;
@@ -41,6 +47,9 @@ export const AnswerActions = ({
   };
 
   const sendFeedback = async (feedbackType: FeedbackType): Promise<void> => {
+    if (pending) {
+      return;
+    }
     const previous = vote;
     setVote(feedbackType);
     try {
@@ -58,7 +67,9 @@ export const AnswerActions = ({
       });
       if (!res.ok) {
         setVote(previous);
+        return;
       }
+      onVote?.(feedbackType);
     } catch {
       setVote(previous);
     }
@@ -111,6 +122,7 @@ export const AnswerActions = ({
             'bg-green-600/10 text-green-600 hover:bg-green-600/15 hover:text-green-600',
         )}
         data-testid="like-button"
+        disabled={pending}
         onClick={() => {
           void sendFeedback('like');
         }}
@@ -130,6 +142,7 @@ export const AnswerActions = ({
             'bg-red-600/10 text-red-600 hover:bg-red-600/15 hover:text-red-600',
         )}
         data-testid="dislike-button"
+        disabled={pending}
         onClick={() => {
           void sendFeedback('dislike');
         }}
