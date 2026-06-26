@@ -16,6 +16,7 @@ import { ElapsedTimer } from '@/components/chat/elapsed-timer';
 import { AssistantMessage } from '@/components/chat/message';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { t } from '@/lib/i18n';
+import { joinText } from '@/lib/message-parts';
 
 export type ThreadProps = {
   activeError?: { code: string; message: string };
@@ -27,12 +28,6 @@ export type ThreadProps = {
   status: 'error' | 'ready' | 'streaming' | 'submitted';
   streamStartedAt?: null | number;
 };
-
-const userText = (message: MyUIMessage): string =>
-  message.parts
-    .filter((p): p is { text: string; type: 'text' } => p.type === 'text')
-    .map((p) => p.text)
-    .join('');
 
 const SUGGESTIONS = [
   'Колку кредити ми требаат за да се запишам во наредна година?',
@@ -107,7 +102,7 @@ export const Thread = ({
                     key={m.id}
                   >
                     <MessageContent>
-                      <MessageResponse>{userText(m)}</MessageResponse>
+                      <MessageResponse>{joinText(m)}</MessageResponse>
                     </MessageContent>
                   </Message>
                 );

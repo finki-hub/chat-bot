@@ -26,6 +26,7 @@ import {
   renameConversation,
   saveMessages,
 } from '@/lib/db';
+import { hasText, joinText } from '@/lib/message-parts';
 import { deriveTitle } from '@/lib/messages';
 import { buildChatTransport } from '@/lib/transport';
 import { useUiStore } from '@/lib/ui-store';
@@ -40,22 +41,15 @@ const fromRow = (row: MessageRow): MyUIMessage => ({
 const priorUserText = (
   messages: MyUIMessage[],
   message: MyUIMessage,
-): string | undefined =>
-  messages
+): string | undefined => {
+  const prior = messages
     .slice(0, messages.indexOf(message))
-    .findLast((m) => m.role === 'user')
-    ?.parts.filter(
-      (p): p is { text: string; type: 'text' } => p.type === 'text',
-    )
-    .map((p) => p.text)
-    .join('');
+    .findLast((m) => m.role === 'user');
+  return prior ? joinText(prior) : undefined;
+};
 
 const hasAssistantText = (message: MyUIMessage): boolean =>
-  message.role === 'assistant' &&
-  message.parts.some(
-    (p): p is { text: string; type: 'text' } =>
-      p.type === 'text' && p.text.length > 0,
-  );
+  message.role === 'assistant' && hasText(message);
 
 const finalizeMessage = (
   message: MyUIMessage,

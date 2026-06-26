@@ -14,6 +14,7 @@ import { SearchStatus } from '@/components/chat/search-status';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { formatDuration } from '@/lib/duration';
 import { t } from '@/lib/i18n';
+import { textParts } from '@/lib/message-parts';
 
 export type AssistantMessageProps = {
   actions?: ReactNode;
@@ -26,13 +27,6 @@ export type AssistantMessageProps = {
 };
 
 type Timing = NonNullable<MyUIMessage['metadata']>['timing'];
-
-const textPartsOf = (
-  message: MyUIMessage,
-): Array<{ text: string; type: 'text' }> =>
-  message.parts.filter(
-    (p): p is { text: string; type: 'text' } => p.type === 'text',
-  );
 
 const MessageTiming = ({ timing }: { timing: Timing }) => {
   if (timing === undefined) {
@@ -97,14 +91,14 @@ export const AssistantMessage = ({
   statusPart,
   streamStartedAt,
 }: AssistantMessageProps) => {
-  const textParts = textPartsOf(message);
+  const parts = textParts(message);
   // While streaming with a tool status active, a text part that is still the
   // FIRST part is the model's pre-tool preamble (the backend discards it via a
   // `reset` once the real answer begins). Suppress it so it does not render and
   // then get swapped for the answer once the answer part starts.
   const inPreamble =
-    Boolean(pending) && Boolean(statusPart) && textParts.length <= 1;
-  const text = inPreamble ? null : (textParts.at(-1)?.text ?? null);
+    Boolean(pending) && Boolean(statusPart) && parts.length <= 1;
+  const text = inPreamble ? null : (parts.at(-1)?.text ?? null);
   const showChip = Boolean(statusPart) && !text;
   const showDots = Boolean(pending) && !text && !statusPart && !errorPart;
   const timing = message.metadata?.timing;

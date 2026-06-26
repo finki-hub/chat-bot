@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { t } from '@/lib/i18n';
+import { lastText } from '@/lib/message-parts';
 import { getAnonUserId } from '@/lib/user';
 import { cn } from '@/lib/utils';
 
@@ -11,13 +12,6 @@ export type AnswerActionsProps = {
   message: MyUIMessage;
   onRegenerate?: () => void;
   questionText?: string;
-};
-
-const answerText = (message: MyUIMessage): string => {
-  const texts = message.parts.filter(
-    (p): p is { text: string; type: 'text' } => p.type === 'text',
-  );
-  return texts.at(-1)?.text ?? '';
 };
 
 const BTN =
@@ -36,7 +30,7 @@ export const AnswerActions = ({
     return null;
   }
 
-  const text = answerText(message);
+  const text = lastText(message) ?? '';
 
   const copy = async (): Promise<void> => {
     await navigator.clipboard.writeText(text);
