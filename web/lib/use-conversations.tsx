@@ -62,11 +62,7 @@ export const useConversations = (model: string, disabled = false) => {
     [refreshConversations],
   );
 
-  // useChat captures the transport once (on the first render) and ignores any
-  // transport passed on later renders, so `model` must be read at send time via
-  // a ref rather than captured by value — otherwise the picked model never
-  // reaches the request. The transport is memoized so it stays the one instance
-  // useChat keeps.
+  // useChat keeps only the first transport, so read the model at send time.
   const modelRef = useRef(model);
   modelRef.current = model;
   const transport = useMemo(
@@ -86,10 +82,6 @@ export const useConversations = (model: string, disabled = false) => {
       onError: () => {
         regeneratingMessageIdRef.current = null;
         setRegeneratingMessageId(null);
-        // A thrown stream/transport error (no data-error part) would otherwise
-        // leave the user with a blank bubble; surface a generic fallback without
-        // clobbering a specific error already captured via onData. Aborts (stop)
-        // never reach onError, so this will not fire on user-initiated stop.
         setActiveError(
           (prev) =>
             prev ?? { code: 'network', message: t('error.description') },
@@ -140,9 +132,7 @@ export const useConversations = (model: string, disabled = false) => {
   });
 
   const handleNewChat = useCallback(() => {
-    // One Chat instance is shared across conversations, so an in-flight stream
-    // must be torn down before switching away or it would append into / persist
-    // against the wrong conversation.
+    // The Chat instance is shared across conversations; stop before leaving.
     void stop();
     setActiveId(null);
     setMessages([]);

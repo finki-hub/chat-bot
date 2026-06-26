@@ -51,8 +51,7 @@ export const POST = async (req: Request): Promise<Response> => {
       body: JSON.stringify(chatBody),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
-      // Forward the client abort so stopping the chat (or a disconnect) tears
-      // down the upstream LLM generation instead of letting it run to the end.
+      // Propagate client aborts so stopping the chat tears down upstream generation.
       signal: req.signal,
     });
 
@@ -82,9 +81,7 @@ export const POST = async (req: Request): Promise<Response> => {
           responseId,
         });
       },
-      // Keep this generic: the returned string is sent to the browser, so do
-      // not leak raw upstream/runtime error messages. Known protocol-v2 errors
-      // are surfaced separately as transient data-error parts.
+      // Generic: this string reaches the browser, so don't leak raw errors.
       onError: () => 'stream error',
     });
 

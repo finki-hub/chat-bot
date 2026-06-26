@@ -61,9 +61,7 @@ export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
   const trimmed = messagesForRequest(body).slice(-MAX_MESSAGES);
   const messages: ConversationTurn[] = trimmed.map((message) => {
     const role = message.role === 'assistant' ? 'assistant' : 'user';
-    // Assistants can carry multiple text parts (a `reset` discards a preamble by
-    // starting a fresh part); only the last part is the real answer and matches
-    // what the UI renders. User turns always have a single text part.
+    // Use the last assistant part: a `reset` discards a preamble into an earlier part.
     const content =
       (role === 'assistant' ? lastText(message) : joinText(message)) ?? '';
 
