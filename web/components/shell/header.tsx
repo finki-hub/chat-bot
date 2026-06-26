@@ -20,8 +20,8 @@ const GitHubIcon = () => (
 );
 
 export const Header = ({ onToggleSidebar }: HeaderProps) => (
-  <header className="border-b">
-    <div className="flex h-16 items-center gap-3 px-4">
+  <header className="z-30 shrink-0 border-b border-border/60 bg-background">
+    <div className="flex h-14 items-center gap-3 px-4">
       <IconButton
         aria-label={t('header.toggleSidebar')}
         onClick={onToggleSidebar}
@@ -33,10 +33,10 @@ export const Header = ({ onToggleSidebar }: HeaderProps) => (
       </IconButton>
       <img
         alt="ФИНКИ Хаб"
-        className="h-10 w-10 shrink-0 object-contain"
+        className="h-9 w-9 shrink-0 object-contain"
         src="/logo.png"
       />
-      <h1 className="min-w-0 flex-1 text-base font-bold leading-tight tracking-tight sm:text-xl">
+      <h1 className="min-w-0 flex-1 truncate text-base font-bold leading-tight tracking-tight sm:text-lg">
         {t('header.title')}
       </h1>
       <div className="ml-auto flex shrink-0 items-center gap-2">
