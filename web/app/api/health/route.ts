@@ -10,7 +10,7 @@ const result = (ok: boolean): Response =>
     { ok },
     {
       headers: { 'cache-control': 'no-store' },
-      status: 200,
+      status: ok ? 200 : 503,
     },
   );
 

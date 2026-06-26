@@ -421,7 +421,9 @@ const respondTo = (
 };
 
 const renderChatPage = (): ReturnType<typeof rtlRender> => {
-  const queryClient = new QueryClient();
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retryDelay: 0 } },
+  });
 
   return rtlRender(
     <QueryClientProvider client={queryClient}>
@@ -463,7 +465,7 @@ describe('ChatPage persistence', () => {
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
       const url = urlOf(input);
       if (url.endsWith('/api/health')) {
-        return Promise.resolve(jsonOk({ ok: false }));
+        return Promise.resolve(Response.json({ ok: false }, { status: 503 }));
       }
 
       return respondTo(url);
@@ -475,6 +477,7 @@ describe('ChatPage persistence', () => {
       screen.findByTestId('service-banner'),
     ).resolves.toBeInTheDocument();
     expect(screen.getByTestId('composer-input')).toBeDisabled();
+    expect(screen.getByTestId('composer-submit')).toBeDisabled();
   });
 
   it('sends a message, renders the streamed answer, and persists to Dexie', async () => {

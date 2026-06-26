@@ -21,6 +21,7 @@ const priorUserText = (
 };
 
 export type AnswerActionsContext = {
+  disabled: boolean;
   messages: MyUIMessage[];
   onVote: (messageId: string, vote: FeedbackType) => void;
   regenerate: (options: { messageId: string }) => void;
@@ -28,7 +29,7 @@ export type AnswerActionsContext = {
 };
 
 export const renderAnswerActions =
-  ({ messages, onVote, regenerate, status }: AnswerActionsContext) =>
+  ({ disabled, messages, onVote, regenerate, status }: AnswerActionsContext) =>
   (message: MyUIMessage): ReactNode => {
     if (message.role !== 'assistant') {
       return null;
@@ -41,7 +42,7 @@ export const renderAnswerActions =
         key={`${message.id}:${message.metadata?.responseId ?? ''}`}
         message={message}
         onRegenerate={
-          streaming
+          streaming || disabled
             ? undefined
             : () => {
                 regenerate({ messageId: message.id });

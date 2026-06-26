@@ -91,6 +91,24 @@ describe('Composer', () => {
     expect(onStop).toHaveBeenCalledOnce();
   });
 
+  it('keeps the Stop button clickable while streaming even when disabled', () => {
+    const { onStop } = setup({ disabled: true, status: 'streaming' });
+    const button = screen.getByTestId('composer-submit');
+
+    expect(button).toBeEnabled();
+
+    fireEvent.click(button);
+
+    expect(onStop).toHaveBeenCalledOnce();
+  });
+
+  it('disables the input and submit button when disabled and idle', () => {
+    setup({ disabled: true, status: 'ready' });
+
+    expect(screen.getByTestId('composer-input')).toBeDisabled();
+    expect(screen.getByTestId('composer-submit')).toBeDisabled();
+  });
+
   it('renders every model id as an option', async () => {
     setup();
     const user = userEvent.setup();

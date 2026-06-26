@@ -45,6 +45,7 @@ describe('GET /api/health', () => {
 
     const res = await GET();
 
+    expect(res.status).toBe(503);
     await expect(res.json()).resolves.toStrictEqual({ ok: false });
   });
 
@@ -57,7 +58,7 @@ describe('GET /api/health', () => {
 
     const res = await GET();
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(503);
     await expect(res.json()).resolves.toStrictEqual({ ok: false });
   });
 });

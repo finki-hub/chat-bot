@@ -40,7 +40,7 @@ const ChatScreen = () => {
     status,
     streamStartedAt,
     submitMessage,
-  } = useConversations(model);
+  } = useConversations(model, unavailable);
 
   return (
     <div className="flex h-dvh w-full flex-col">
@@ -66,7 +66,7 @@ const ChatScreen = () => {
             activeStatus={activeStatus}
             messages={messages}
             onPickSuggestion={submitMessage}
-            onRetry={retry}
+            onRetry={unavailable ? undefined : retry}
             renderActions={renderActions}
             status={status}
             streamStartedAt={streamStartedAt}
