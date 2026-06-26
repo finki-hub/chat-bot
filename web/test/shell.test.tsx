@@ -271,6 +271,7 @@ describe('Sidebar', () => {
 
     expect(aside).toHaveAttribute('data-collapsed', 'true');
     expect(aside).toHaveAttribute('aria-hidden', 'true');
+    expect(aside).toHaveAttribute('inert');
   });
 
   it('clears all conversations after confirmation', () => {

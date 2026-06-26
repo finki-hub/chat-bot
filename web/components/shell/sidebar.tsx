@@ -84,6 +84,7 @@ export const Sidebar = ({
             : '-translate-x-full md:w-0 md:translate-x-0',
         )}
         data-collapsed={!open}
+        inert={!open}
       >
         <div className="flex h-full w-64 flex-col gap-3 p-3">
           <button
@@ -119,6 +120,9 @@ export const Sidebar = ({
                     aria-label={t('sidebar.clearSearch')}
                     onClick={() => {
                       setQuery('');
+                    }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
                     }}
                     size="icon-xs"
                   >
