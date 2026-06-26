@@ -10,6 +10,7 @@ import {
   loadMessages,
   renameConversation,
   saveMessages,
+  setMessageFeedback,
 } from '@/lib/db';
 
 const UUID_LIKE = /[0-9a-f-]{36}/u;
@@ -109,6 +110,26 @@ describe('messages', () => {
     const updated = list.find((c) => c.id === 'c2');
 
     expect(updated?.updatedAt).toBeGreaterThanOrEqual(conv.updatedAt);
+  });
+
+  it('persists feedback into the message metadata, preserving prior fields', async () => {
+    await createConversation({ id: 'c4', model: 'm', title: 'C4' });
+    await saveMessages('c4', [assistantMsg('m1', 'одговор', 'resp-123')]);
+
+    await setMessageFeedback('m1', 'like');
+
+    const rows = await loadMessages('c4');
+
+    expect(rows[0]?.metadata).toStrictEqual({
+      feedback: 'like',
+      responseId: 'resp-123',
+    });
+  });
+
+  it('ignores feedback for an unknown message id', async () => {
+    await expect(
+      setMessageFeedback('missing', 'dislike'),
+    ).resolves.toBeUndefined();
   });
 
   it('deletes a conversation and its messages', async () => {

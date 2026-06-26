@@ -3,11 +3,12 @@
 import { useChat } from '@ai-sdk/react';
 import { useCallback, useRef, useState } from 'react';
 
-import type { MyUIMessage } from '@/lib/api-types';
+import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { fireAndForget } from '@/lib/async';
 import { renderAnswerActions } from '@/lib/conversation-actions';
 import {
+  applyFeedback,
   finalizeMessage,
   previewRegeneration,
   replaceFinishedMessage,
@@ -19,6 +20,7 @@ import {
   renameConversation,
   replaceConversationMessages,
   saveMessages,
+  setMessageFeedback,
 } from '@/lib/db';
 import { deriveTitle } from '@/lib/messages';
 import { buildChatTransport } from '@/lib/transport';
@@ -208,12 +210,21 @@ export const useConversations = (model: string) => {
     [refreshConversations],
   );
 
-  const visibleMessages = previewRegeneration(messages, regeneratingMessageId);
-  const renderActions = renderAnswerActions(
-    visibleMessages,
-    regenerateMessage,
-    status,
+  const recordFeedback = useCallback(
+    (messageId: string, vote: FeedbackType) => {
+      setMessages(applyFeedback(messageId, vote));
+      fireAndForget(setMessageFeedback(messageId, vote));
+    },
+    [setMessages],
   );
+
+  const visibleMessages = previewRegeneration(messages, regeneratingMessageId);
+  const renderActions = renderAnswerActions({
+    messages: visibleMessages,
+    onVote: recordFeedback,
+    regenerate: regenerateMessage,
+    status,
+  });
 
   return {
     activeError,

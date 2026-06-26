@@ -1,4 +1,4 @@
-import type { MyUIMessage } from '@/lib/api-types';
+import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 type FinishedReplacement = {
   readonly pruneAfterReplacement: boolean;
@@ -58,6 +58,15 @@ export const replaceFinishedMessage =
       return [message];
     });
   };
+
+export const applyFeedback =
+  (messageId: string, feedback: FeedbackType) =>
+  (messages: MyUIMessage[]): MyUIMessage[] =>
+    messages.map((message) =>
+      message.id === messageId
+        ? { ...message, metadata: { ...message.metadata, feedback } }
+        : message,
+    );
 
 export const previewRegeneration = (
   messages: MyUIMessage[],

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 
-import type { MyUIMessage } from '@/lib/api-types';
+import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { AnswerActions } from '@/components/chat/answer-actions';
 import { joinText } from '@/lib/message-parts';
@@ -20,23 +20,37 @@ const priorUserText = (
   return prior ? joinText(prior) : undefined;
 };
 
+export type AnswerActionsContext = {
+  messages: MyUIMessage[];
+  onVote: (messageId: string, vote: FeedbackType) => void;
+  regenerate: (options: { messageId: string }) => void;
+  status: ChatStatus;
+};
+
 export const renderAnswerActions =
-  (
-    messages: MyUIMessage[],
-    regenerate: (options: { messageId: string }) => void,
-    status: ChatStatus,
-  ) =>
-  (message: MyUIMessage): ReactNode =>
-    message.role === 'assistant' ? (
+  ({ messages, onVote, regenerate, status }: AnswerActionsContext) =>
+  (message: MyUIMessage): ReactNode => {
+    if (message.role !== 'assistant') {
+      return null;
+    }
+
+    const streaming = status === 'streaming' || status === 'submitted';
+
+    return (
       <AnswerActions
         message={message}
         onRegenerate={
-          status === 'streaming' || status === 'submitted'
+          streaming
             ? undefined
             : () => {
                 regenerate({ messageId: message.id });
               }
         }
+        onVote={(vote) => {
+          onVote(message.id, vote);
+        }}
+        pending={streaming && messages.at(-1)?.id === message.id}
         questionText={priorUserText(messages, message)}
       />
-    ) : null;
+    );
+  };

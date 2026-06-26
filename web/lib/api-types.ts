@@ -64,6 +64,7 @@ export type MyDataParts = {
 };
 
 export type MyMetadata = {
+  feedback?: FeedbackType;
   inferenceModel?: string;
   responseId?: string;
   timing?: { totalMs: number; ttftMs: null | number };
