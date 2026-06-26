@@ -66,6 +66,7 @@ export type MyDataParts = {
 export type MyMetadata = {
   inferenceModel?: string;
   responseId?: string;
+  timing?: { totalMs: number; ttftMs: null | number };
 };
 
 export type MyUIMessage = UIMessage<MyMetadata, MyDataParts>;

@@ -12,6 +12,7 @@ import {
   MessageContent,
   MessageResponse,
 } from '@/components/ai-elements/message';
+import { ElapsedTimer } from '@/components/chat/elapsed-timer';
 import { AssistantMessage } from '@/components/chat/message';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { t } from '@/lib/i18n';
@@ -24,6 +25,7 @@ export type ThreadProps = {
   onRetry?: () => void;
   renderActions?: (message: MyUIMessage) => ReactNode;
   status: 'error' | 'ready' | 'streaming' | 'submitted';
+  streamStartedAt?: null | number;
 };
 
 const userText = (message: MyUIMessage): string =>
@@ -84,6 +86,7 @@ export const Thread = ({
   onRetry,
   renderActions,
   status,
+  streamStartedAt,
 }: ThreadProps) => {
   const lastAssistantId = messages.findLast((m) => m.role === 'assistant')?.id;
   const streaming = status === 'streaming' || status === 'submitted';
@@ -122,13 +125,21 @@ export const Thread = ({
                   statusPart={
                     isLastAssistant && streaming ? activeStatus : undefined
                   }
+                  streamStartedAt={
+                    isLastAssistant ? streamStartedAt : undefined
+                  }
                 />
               );
             })}
             {awaitingReply ? (
               <Message from="assistant">
                 <MessageContent>
-                  <TypingIndicator />
+                  <div className="flex items-center gap-2">
+                    <TypingIndicator />
+                    {typeof streamStartedAt === 'number' ? (
+                      <ElapsedTimer startedAt={streamStartedAt} />
+                    ) : null}
+                  </div>
                 </MessageContent>
               </Message>
             ) : null}

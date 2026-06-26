@@ -3,6 +3,7 @@
 import { useChat } from '@ai-sdk/react';
 import {
   type ReactNode,
+  type RefObject,
   useCallback,
   useEffect,
   useRef,
@@ -47,6 +48,13 @@ const priorUserText = (
     .map((p) => p.text)
     .join('');
 
+const hasAssistantText = (message: MyUIMessage): boolean =>
+  message.role === 'assistant' &&
+  message.parts.some(
+    (p): p is { text: string; type: 'text' } =>
+      p.type === 'text' && p.text.length > 0,
+  );
+
 const renderAnswerActions =
   (
     messages: MyUIMessage[],
@@ -64,6 +72,41 @@ const renderAnswerActions =
       />
     ) : null;
 
+const useStreamTiming = ({
+  firstTokenAtRef,
+  messages,
+  setStreamStartedAt,
+  startedAtRef,
+  status,
+}: {
+  firstTokenAtRef: RefObject<null | number>;
+  messages: MyUIMessage[];
+  setStreamStartedAt: (value: null | number) => void;
+  startedAtRef: RefObject<null | number>;
+  status: 'error' | 'ready' | 'streaming' | 'submitted';
+}): void => {
+  useEffect(() => {
+    if (status === 'submitted') {
+      const now = Date.now();
+      startedAtRef.current = now;
+      firstTokenAtRef.current = null;
+      setStreamStartedAt(now);
+    } else if (status === 'ready' || status === 'error') {
+      setStreamStartedAt(null);
+    }
+  }, [status, firstTokenAtRef, setStreamStartedAt, startedAtRef]);
+
+  useEffect(() => {
+    if (firstTokenAtRef.current !== null || startedAtRef.current === null) {
+      return;
+    }
+    const last = messages.at(-1);
+    if (last !== undefined && hasAssistantText(last)) {
+      firstTokenAtRef.current = Date.now();
+    }
+  }, [messages, firstTokenAtRef, startedAtRef]);
+};
+
 export const useConversations = (model: string) => {
   const activeId = useUiStore((s) => s.activeConversationId);
   const setActiveId = useUiStore((s) => s.setActiveConversationId);
@@ -76,6 +119,9 @@ export const useConversations = (model: string) => {
     undefined | { code: string; message: string }
   >();
   const convoIdRef = useRef<null | string>(activeId);
+  const startedAtRef = useRef<null | number>(null);
+  const firstTokenAtRef = useRef<null | number>(null);
+  const [streamStartedAt, setStreamStartedAt] = useState<null | number>(null);
 
   const refreshConversations = useCallback(async () => {
     setConversations(await listConversations());
@@ -104,7 +150,27 @@ export const useConversations = (model: string) => {
       },
       onFinish: ({ message }) => {
         setActiveStatus(undefined);
-        fireAndForget(persistFinished(message));
+        const startedAt = startedAtRef.current;
+        const finalized: MyUIMessage =
+          startedAt === null
+            ? message
+            : {
+                ...message,
+                metadata: {
+                  ...message.metadata,
+                  timing: {
+                    totalMs: Date.now() - startedAt,
+                    ttftMs:
+                      firstTokenAtRef.current === null
+                        ? null
+                        : firstTokenAtRef.current - startedAt,
+                  },
+                },
+              };
+        setMessages((prev) =>
+          prev.map((m) => (m.id === finalized.id ? finalized : m)),
+        );
+        fireAndForget(persistFinished(finalized));
       },
       transport: buildChatTransport(() => ({ model })),
     });
@@ -112,6 +178,14 @@ export const useConversations = (model: string) => {
   useEffect(() => {
     fireAndForget(refreshConversations());
   }, [refreshConversations]);
+
+  useStreamTiming({
+    firstTokenAtRef,
+    messages,
+    setStreamStartedAt,
+    startedAtRef,
+    status,
+  });
 
   useEffect(() => {
     convoIdRef.current = activeId;
@@ -224,6 +298,7 @@ export const useConversations = (model: string) => {
     renderActions: renderAnswerActions(messages, status, regenerate),
     retry,
     status,
+    streamStartedAt,
     submitMessage,
   };
 };

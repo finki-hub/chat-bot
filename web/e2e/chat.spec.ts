@@ -69,6 +69,7 @@ test.describe('chat streaming (mocked BFF)', () => {
     const chip = page.getByTestId('search-status');
     await expect(chip).toBeVisible();
     await expect(chip).toContainText('Пребарувам');
+    await expect(page.getByTestId('elapsed-timer')).toBeVisible();
 
     const answer = page.getByTestId('answer-text');
     await expect(answer).toContainText('Резултатите од испитите се објавуваат');
@@ -78,6 +79,10 @@ test.describe('chat streaming (mocked BFF)', () => {
     await expect(autolink).toBeVisible();
 
     await expect(page.getByText(PREAMBLE)).toHaveCount(0);
+
+    const timing = page.getByTestId('message-timing');
+    await expect(timing).toBeVisible();
+    await expect(timing).toContainText('прв токен');
 
     await page.getByTestId('like-button').click();
     await expect.poll(() => feedbackBody).not.toBeNull();
