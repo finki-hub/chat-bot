@@ -132,7 +132,11 @@ export const replaceConversationMessages = async (
     const existing = new Map(
       existingRows.map((row) => [row.id, row.createdAt] as const),
     );
-    const base = nextNow();
+    let maxExisting = 0;
+    for (const row of existingRows) {
+      maxExisting = Math.max(maxExisting, row.createdAt);
+    }
+    const base = Math.max(nextNow(), maxExisting + 1);
     const rows: MessageRow[] = messages.map((message, index) => ({
       conversationId,
       createdAt: existing.get(message.id) ?? base + index,

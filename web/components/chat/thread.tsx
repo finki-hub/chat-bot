@@ -101,6 +101,7 @@ export const Thread = ({
             {messages.map((m) => {
               if (
                 m.role === 'assistant' &&
+                m.id === lastAssistantId &&
                 streaming &&
                 activeStatus === undefined &&
                 !hasText(m)
