@@ -23,6 +23,7 @@ import ChatPage from '@/app/page';
 import { ConversationList } from '@/components/shell/conversation-list';
 import { Sidebar } from '@/components/shell/sidebar';
 import { type ConversationRow, db } from '@/lib/db';
+import { lastText } from '@/lib/message-parts';
 import { useUiStore } from '@/lib/ui-store';
 import {
   createMemoryStorage,
@@ -37,6 +38,7 @@ const CLAUDE = 'claude-sonnet-4-6';
 const GPT = 'gpt-5.4-mini';
 const RESPONSE_ID = 'resp-123';
 const FIRST_TITLE = 'Прв разговор';
+const REGENERATE_CONVERSATION_ID = 'c-regenerate';
 
 const rows: ConversationRow[] = [
   {
@@ -299,17 +301,23 @@ describe('Sidebar', () => {
   });
 });
 
-const sseChatResponse = (): Response => {
+const sseChatResponse = ({
+  answer = 'Здраво!',
+  responseId = RESPONSE_ID,
+}: {
+  answer?: string;
+  responseId?: string;
+} = {}): Response => {
   const chunks = [
     {
       messageMetadata: {
         inferenceModel: CLAUDE,
-        responseId: RESPONSE_ID,
+        responseId,
       },
       type: 'start',
     },
     { id: 'txt-1', type: 'text-start' },
-    { delta: 'Здраво!', id: 'txt-1', type: 'text-delta' },
+    { delta: answer, id: 'txt-1', type: 'text-delta' },
     { id: 'txt-1', type: 'text-end' },
     { type: 'finish' },
   ];
@@ -320,7 +328,7 @@ const sseChatResponse = (): Response => {
   return new Response(body, {
     headers: {
       'content-type': 'text/event-stream',
-      'X-Response-Id': RESPONSE_ID,
+      'X-Response-Id': responseId,
       'x-vercel-ai-ui-message-stream': 'v1',
     },
     status: 200,
@@ -413,6 +421,203 @@ describe('ChatPage persistence', () => {
     expect(msgs.find((m) => m.role === 'assistant')?.metadata?.responseId).toBe(
       RESPONSE_ID,
     );
+  });
+
+  it('regenerates an assistant answer in place and persists only the replacement', async () => {
+    const now = Date.now();
+    await db.conversations.put({
+      createdAt: now,
+      id: REGENERATE_CONVERSATION_ID,
+      model: CLAUDE,
+      title: 'Прашање?',
+      updatedAt: now,
+    });
+    await db.messages.bulkPut([
+      {
+        conversationId: REGENERATE_CONVERSATION_ID,
+        createdAt: now,
+        id: 'u-regenerate',
+        parts: [{ text: 'Прашање?', type: 'text' }],
+        role: 'user',
+      },
+      {
+        conversationId: REGENERATE_CONVERSATION_ID,
+        createdAt: now + 1,
+        id: 'a-regenerate',
+        metadata: { responseId: 'resp-old' },
+        parts: [{ text: 'Стар одговор', type: 'text' }],
+        role: 'assistant',
+      },
+    ]);
+    useUiStore.setState({
+      activeConversationId: REGENERATE_CONVERSATION_ID,
+      model: CLAUDE,
+      sidebarOpen: true,
+    });
+
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = urlOf(input);
+      if (url.endsWith('/api/models')) {
+        return Promise.resolve(
+          Response.json([CLAUDE, GPT], {
+            headers: { 'content-type': 'application/json' },
+            status: 200,
+          }),
+        );
+      }
+      if (url.endsWith('/api/chat')) {
+        return Promise.resolve(
+          sseChatResponse({ answer: 'Нов одговор', responseId: 'resp-new' }),
+        );
+      }
+
+      return Promise.resolve(
+        new Response('{}', {
+          headers: { 'content-type': 'application/json' },
+          status: 200,
+        }),
+      );
+    });
+
+    const user = userEvent.setup();
+    renderChatPage();
+
+    await expect(
+      screen.findByText('Стар одговор'),
+    ).resolves.toBeInTheDocument();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Регенерирај' }),
+    );
+
+    await expect(screen.findByText('Нов одговор')).resolves.toBeInTheDocument();
+
+    const regenerated = await db.messages
+      .where('conversationId')
+      .equals(REGENERATE_CONVERSATION_ID)
+      .sortBy('createdAt');
+    const assistants = regenerated.filter((m) => m.role === 'assistant');
+
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0]?.id).toBe('a-regenerate');
+    expect(assistants[0] ? lastText(assistants[0]) : null).toBe('Нов одговор');
+    expect(assistants[0]?.metadata?.responseId).toBe('resp-new');
+  });
+
+  it('prunes trailing messages when regenerating a middle answer and persists only the survivors', async () => {
+    const now = Date.now();
+    const convId = 'c-multi-regenerate';
+    await db.conversations.put({
+      createdAt: now,
+      id: convId,
+      model: CLAUDE,
+      title: 'Повеќе пораки',
+      updatedAt: now,
+    });
+    await db.messages.bulkPut([
+      {
+        conversationId: convId,
+        createdAt: now,
+        id: 'u1',
+        parts: [{ text: 'Прво прашање', type: 'text' }],
+        role: 'user',
+      },
+      {
+        conversationId: convId,
+        createdAt: now + 1,
+        id: 'a1',
+        metadata: { responseId: 'resp-a1' },
+        parts: [{ text: 'Прв стар одговор', type: 'text' }],
+        role: 'assistant',
+      },
+      {
+        conversationId: convId,
+        createdAt: now + 2,
+        id: 'u2',
+        parts: [{ text: 'Второ прашање', type: 'text' }],
+        role: 'user',
+      },
+      {
+        conversationId: convId,
+        createdAt: now + 3,
+        id: 'a2',
+        metadata: { responseId: 'resp-a2' },
+        parts: [{ text: 'Втор стар одговор', type: 'text' }],
+        role: 'assistant',
+      },
+    ]);
+    useUiStore.setState({
+      activeConversationId: convId,
+      model: CLAUDE,
+      sidebarOpen: true,
+    });
+
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = urlOf(input);
+      if (url.endsWith('/api/models')) {
+        return Promise.resolve(
+          Response.json([CLAUDE, GPT], {
+            headers: { 'content-type': 'application/json' },
+            status: 200,
+          }),
+        );
+      }
+      if (url.endsWith('/api/chat')) {
+        return Promise.resolve(
+          sseChatResponse({
+            answer: 'Регенериран прв',
+            responseId: 'resp-a1-new',
+          }),
+        );
+      }
+
+      return Promise.resolve(
+        new Response('{}', {
+          headers: { 'content-type': 'application/json' },
+          status: 200,
+        }),
+      );
+    });
+
+    const user = userEvent.setup();
+    renderChatPage();
+
+    await expect(
+      screen.findByText('Втор стар одговор'),
+    ).resolves.toBeInTheDocument();
+
+    const regenerateButtons = await screen.findAllByRole('button', {
+      name: 'Регенерирај',
+    });
+    const firstRegenerate = regenerateButtons[0];
+    if (!firstRegenerate) {
+      throw new Error('expected a regenerate button for the first answer');
+    }
+    await user.click(firstRegenerate);
+
+    await expect(
+      screen.findByText('Регенериран прв'),
+    ).resolves.toBeInTheDocument();
+
+    await waitFor(async () => {
+      const count = await db.messages
+        .where('conversationId')
+        .equals(convId)
+        .count();
+
+      expect(count).toBe(2);
+    });
+
+    const persisted = await db.messages
+      .where('conversationId')
+      .equals(convId)
+      .sortBy('createdAt');
+    const ids = persisted.map((row) => row.id);
+    const a1 = persisted.find((m) => m.id === 'a1');
+
+    expect(ids).toStrictEqual(['u1', 'a1']);
+    expect(a1 ? lastText(a1) : null).toBe('Регенериран прв');
+    expect(a1?.metadata?.responseId).toBe('resp-a1-new');
   });
 
   it('hydrates an existing conversation on mount', async () => {

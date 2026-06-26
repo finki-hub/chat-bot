@@ -11,11 +11,13 @@ import { type ParsedEvent } from '@/lib/sse';
 export type ChatClientBody = {
   embeddingsModel?: string;
   maxTokens?: number;
+  messageId?: string;
   messages: MyUIMessage[];
   model?: string;
   queryTransformModel?: string;
   temperature?: number;
   topP?: number;
+  trigger?: string;
   userId?: string;
 };
 
@@ -41,8 +43,22 @@ export type UiStreamWriter = {
   write: (part: UiStreamPart) => void;
 };
 
+const messagesForRequest = (body: ChatClientBody): MyUIMessage[] => {
+  if (body.messageId === undefined || !body.trigger?.includes('regenerate')) {
+    return body.messages;
+  }
+
+  const messageIndex = body.messages.findIndex(
+    (message) => message.id === body.messageId,
+  );
+
+  return messageIndex === -1
+    ? body.messages
+    : body.messages.slice(0, messageIndex);
+};
+
 export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
-  const trimmed = body.messages.slice(-MAX_MESSAGES);
+  const trimmed = messagesForRequest(body).slice(-MAX_MESSAGES);
   const messages: ConversationTurn[] = trimmed.map((message) => ({
     content: joinText(message).slice(0, MAX_CHARS_PER_TURN),
     role: message.role === 'assistant' ? 'assistant' : 'user',

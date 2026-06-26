@@ -16,7 +16,7 @@ import { ElapsedTimer } from '@/components/chat/elapsed-timer';
 import { AssistantMessage } from '@/components/chat/message';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { t } from '@/lib/i18n';
-import { joinText } from '@/lib/message-parts';
+import { hasText, joinText } from '@/lib/message-parts';
 
 export type ThreadProps = {
   activeError?: { code: string; message: string };
@@ -85,7 +85,11 @@ export const Thread = ({
 }: ThreadProps) => {
   const lastAssistantId = messages.findLast((m) => m.role === 'assistant')?.id;
   const streaming = status === 'streaming' || status === 'submitted';
-  const awaitingReply = streaming && messages.at(-1)?.role !== 'assistant';
+  const lastMessage = messages.at(-1);
+  const awaitingReply =
+    streaming &&
+    (lastMessage?.role !== 'assistant' ||
+      (activeStatus === undefined && !hasText(lastMessage)));
 
   return (
     <Conversation className="flex-1">
@@ -95,6 +99,15 @@ export const Thread = ({
         ) : (
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
             {messages.map((m) => {
+              if (
+                m.role === 'assistant' &&
+                streaming &&
+                activeStatus === undefined &&
+                !hasText(m)
+              ) {
+                return null;
+              }
+
               if (m.role === 'user') {
                 return (
                   <Message
