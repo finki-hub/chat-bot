@@ -38,6 +38,7 @@ export const renderAnswerActions =
 
     return (
       <AnswerActions
+        key={`${message.id}:${message.metadata?.responseId ?? ''}`}
         message={message}
         onRegenerate={
           streaming
