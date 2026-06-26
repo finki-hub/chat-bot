@@ -29,7 +29,11 @@ import { useConversationHydration } from '@/lib/use-conversation-hydration';
 import { useConversationList } from '@/lib/use-conversation-list';
 import { useStreamTiming } from '@/lib/use-stream-timing';
 
-export const useConversations = (model: string, disabled = false) => {
+export const useConversations = (
+  model: string,
+  disabled = false,
+  reasoning = false,
+) => {
   const activeId = useUiStore((s) => s.activeConversationId);
   const setActiveId = useUiStore((s) => s.setActiveConversationId);
 
@@ -98,7 +102,7 @@ export const useConversations = (model: string, disabled = false) => {
           return next;
         });
       },
-      transport: buildChatTransport(() => ({ model })),
+      transport: buildChatTransport(() => ({ model, reasoning })),
     });
 
   useStreamTiming({

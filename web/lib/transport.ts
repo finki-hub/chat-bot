@@ -9,6 +9,7 @@ export type ChatExtras = {
   maxTokens?: number;
   model: ModelId;
   queryTransformModel?: ModelId;
+  reasoning?: boolean;
   temperature?: number;
   topP?: number;
 };

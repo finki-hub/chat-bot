@@ -15,6 +15,7 @@ export type ChatClientBody = {
   messages: MyUIMessage[];
   model?: string;
   queryTransformModel?: string;
+  reasoning?: boolean;
   temperature?: number;
   topP?: number;
   trigger?: string;
@@ -34,7 +35,10 @@ export type UiStreamPart =
       transient: true;
       type: 'data-status';
     }
+  | { delta: string; id: string; type: 'reasoning-delta' }
   | { delta: string; id: string; type: 'text-delta' }
+  | { id: string; type: 'reasoning-end' }
+  | { id: string; type: 'reasoning-start' }
   | { id: string; type: 'text-end' }
   | { id: string; type: 'text-start' }
   | { messageMetadata: UiStreamMeta; type: 'start' };
@@ -75,6 +79,7 @@ export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
     ...(body.queryTransformModel !== undefined && {
       query_transform_model: body.queryTransformModel,
     }),
+    ...(body.reasoning !== undefined && { reasoning: body.reasoning }),
     ...(body.temperature !== undefined && { temperature: body.temperature }),
     ...(body.topP !== undefined && { top_p: body.topP }),
     /* eslint-enable camelcase -- snake_case mirrors the Python API wire contract */
@@ -106,6 +111,31 @@ const createTextPart = (writer: UiStreamWriter, idGen: () => string) => {
   };
 };
 
+const createReasoningPart = (writer: UiStreamWriter, idGen: () => string) => {
+  let id: null | string = null;
+
+  return {
+    appendDelta(delta: string): void {
+      const ensuredId = id ?? idGen();
+
+      if (id === null) {
+        id = ensuredId;
+        writer.write({ id: ensuredId, type: 'reasoning-start' });
+      }
+
+      writer.write({ delta, id: ensuredId, type: 'reasoning-delta' });
+    },
+    end(): void {
+      if (id === null) {
+        return;
+      }
+
+      writer.write({ id, type: 'reasoning-end' });
+      id = null;
+    },
+  };
+};
+
 const drain = async (
   events: AsyncIterable<ParsedEvent>,
   handle: (event: ParsedEvent) => void,
@@ -126,11 +156,13 @@ export const translateToUiStream = async (
   writer.write({ messageMetadata: meta, type: 'start' });
 
   const textPart = createTextPart(writer, idGen);
+  const reasoningPart = createReasoningPart(writer, idGen);
   let stopped = false;
 
   const handleEvent = (event: ParsedEvent): void => {
     switch (event.type) {
       case 'done':
+        reasoningPart.end();
         textPart.end();
         break;
 
@@ -142,6 +174,7 @@ export const translateToUiStream = async (
         });
 
         if (event.code !== 'interrupted') {
+          reasoningPart.end();
           textPart.end();
           stopped = true;
         }
@@ -149,6 +182,7 @@ export const translateToUiStream = async (
         break;
 
       case 'reset':
+        // `reset` only delimits the dropped pre-tool text preamble — never reasoning.
         textPart.end();
         break;
 
@@ -163,8 +197,17 @@ export const translateToUiStream = async (
         });
         break;
 
+      case 'thinking':
+        if (!stopped) {
+          reasoningPart.appendDelta(event.text);
+        }
+
+        break;
+
       case 'token':
         if (!stopped) {
+          // Reasoning always precedes the answer; close it when answer text begins.
+          reasoningPart.end();
           textPart.appendDelta(event.text);
         }
 
@@ -177,5 +220,6 @@ export const translateToUiStream = async (
 
   await drain(events, handleEvent);
 
+  reasoningPart.end();
   textPart.end();
 };

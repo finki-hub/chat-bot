@@ -14,8 +14,10 @@ const STORAGE_KEY = 'finkiHub.ui';
 export type UiState = {
   activeConversationId: null | string;
   model: string;
+  reasoning: boolean;
   setActiveConversationId: (id: null | string) => void;
   setModel: (model: string) => void;
+  setReasoning: (reasoning: boolean) => void;
   setSidebarOpen: (open: boolean) => void;
   sidebarOpen: boolean;
   toggleSidebar: () => void;
@@ -56,11 +58,15 @@ export const useUiStore = create<UiState>()(
     (set) => ({
       activeConversationId: null,
       model: DEFAULT_MODEL,
+      reasoning: false,
       setActiveConversationId: (id) => {
         set({ activeConversationId: id });
       },
       setModel: (model) => {
         set({ model });
+      },
+      setReasoning: (reasoning) => {
+        set({ reasoning });
       },
       setSidebarOpen: (open) => {
         set({ sidebarOpen: open });
@@ -77,6 +83,7 @@ export const useUiStore = create<UiState>()(
       partialize: (state) => ({
         activeConversationId: state.activeConversationId,
         model: state.model,
+        reasoning: state.reasoning,
       }),
       // Hydrate manually after mount (see Providers) to avoid SSR/client
       // markup mismatches from persisted values.

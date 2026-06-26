@@ -96,4 +96,18 @@ describe('parseProtocolV2', () => {
 
     expect(events).toStrictEqual([DONE]);
   });
+
+  it('parses a thinking event into a thinking part', async () => {
+    const events = await collect(
+      'event: thinking\ndata: {"text":"размислувам"}\n\n',
+      'event: token\ndata: {"text":"одговор"}\n\n',
+      DONE_FRAME,
+    );
+
+    expect(events).toStrictEqual([
+      { text: 'размислувам', type: 'thinking' },
+      token('одговор'),
+      DONE,
+    ]);
+  });
 });
