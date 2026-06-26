@@ -197,7 +197,9 @@ export const Composer = ({
               className="size-9 shrink-0 rounded-full transition-transform active:scale-95"
               data-testid="composer-submit"
               disabled={
-                (disabled ?? false) || (!isBusy && value.trim().length === 0)
+                isBusy
+                  ? false
+                  : (disabled ?? false) || value.trim().length === 0
               }
               onClick={onButtonClick}
               size="icon"

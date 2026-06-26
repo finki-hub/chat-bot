@@ -1,11 +1,13 @@
 'use client';
 
 import { Composer } from '@/components/chat/composer';
+import { ServiceBanner } from '@/components/chat/service-banner';
 import { Thread } from '@/components/chat/thread';
 import { Header } from '@/components/shell/header';
 import { Sidebar } from '@/components/shell/sidebar';
 import { useUiStore } from '@/lib/ui-store';
 import { useConversations } from '@/lib/use-conversations';
+import { useHealth } from '@/lib/use-health';
 import { useModels } from '@/lib/use-models';
 
 const ChatScreen = () => {
@@ -15,6 +17,7 @@ const ChatScreen = () => {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
 
+  const { unavailable } = useHealth();
   const {
     data: modelList,
     isError: modelsError,
@@ -37,11 +40,12 @@ const ChatScreen = () => {
     status,
     streamStartedAt,
     submitMessage,
-  } = useConversations(model);
+  } = useConversations(model, unavailable);
 
   return (
     <div className="flex h-dvh w-full flex-col">
       <Header onToggleSidebar={toggleSidebar} />
+      {unavailable ? <ServiceBanner /> : null}
       <div className="flex min-h-0 flex-1">
         <Sidebar
           activeId={activeId}
@@ -62,12 +66,13 @@ const ChatScreen = () => {
             activeStatus={activeStatus}
             messages={messages}
             onPickSuggestion={submitMessage}
-            onRetry={retry}
+            onRetry={unavailable ? undefined : retry}
             renderActions={renderActions}
             status={status}
             streamStartedAt={streamStartedAt}
           />
           <Composer
+            disabled={unavailable}
             model={model}
             models={modelList ?? []}
             modelsError={modelsError}

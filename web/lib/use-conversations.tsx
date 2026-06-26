@@ -29,7 +29,7 @@ import { useConversationHydration } from '@/lib/use-conversation-hydration';
 import { useConversationList } from '@/lib/use-conversation-list';
 import { useStreamTiming } from '@/lib/use-stream-timing';
 
-export const useConversations = (model: string) => {
+export const useConversations = (model: string, disabled = false) => {
   const activeId = useUiStore((s) => s.activeConversationId);
   const setActiveId = useUiStore((s) => s.setActiveConversationId);
 
@@ -188,18 +188,24 @@ export const useConversations = (model: string) => {
   );
 
   const retry = useCallback(() => {
+    if (disabled) {
+      return;
+    }
     fireAndForget(regenerate());
-  }, [regenerate]);
+  }, [disabled, regenerate]);
 
   const regenerateMessage = useCallback(
     (options: { messageId: string }) => {
+      if (disabled) {
+        return;
+      }
       regeneratingMessageIdRef.current = options.messageId;
       setRegeneratingMessageId(options.messageId);
       void regenerate(options);
       setActiveError(undefined);
       setActiveStatus(undefined);
     },
-    [regenerate],
+    [disabled, regenerate],
   );
 
   const handleRename = useCallback(
@@ -220,6 +226,7 @@ export const useConversations = (model: string) => {
 
   const visibleMessages = previewRegeneration(messages, regeneratingMessageId);
   const renderActions = renderAnswerActions({
+    disabled,
     messages: visibleMessages,
     onVote: recordFeedback,
     regenerate: regenerateMessage,
