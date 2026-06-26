@@ -190,6 +190,7 @@ describe('Sidebar', () => {
       <Sidebar
         activeId="c1"
         conversations={rows}
+        onClose={noop()}
         onDelete={noop()}
         onNewChat={onNewChat}
         onRename={noop()}
@@ -205,11 +206,12 @@ describe('Sidebar', () => {
     expect(onNewChat).toHaveBeenCalledOnce();
   });
 
-  it('hides its content when collapsed', () => {
-    render(
+  it('marks the sidebar as collapsed when closed', () => {
+    const { container } = render(
       <Sidebar
         activeId={null}
         conversations={rows}
+        onClose={noop()}
         onDelete={noop()}
         onNewChat={noop()}
         onRename={noop()}
@@ -218,7 +220,10 @@ describe('Sidebar', () => {
       />,
     );
 
-    expect(screen.queryByText(FIRST_TITLE)).not.toBeInTheDocument();
+    const aside = container.querySelector('aside');
+
+    expect(aside).toHaveAttribute('data-collapsed', 'true');
+    expect(aside).toHaveAttribute('aria-hidden', 'true');
   });
 });
 

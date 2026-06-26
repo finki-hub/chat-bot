@@ -4,6 +4,8 @@ export const messages = {
   'actions.like': 'Допаѓа',
   'actions.regenerate': 'Регенерирај',
   'app.title': 'ФИНКИ Хаб',
+  'composer.disclaimer':
+    'ФИНКИ Хаб може да направи грешки. Проверете важни информации.',
   'composer.message': 'Порака',
   'composer.model': 'Модел',
   'composer.placeholder': 'Напиши порака…',
@@ -18,6 +20,7 @@ export const messages = {
   'header.theme': 'Промени тема',
   'header.title': 'ФИНКИ Хаб / Чат',
   'header.toggleSidebar': 'Прикажи/сокриј странична лента',
+  'sidebar.history': 'Разговори',
   'sidebar.label': 'Странична лента',
   'sidebar.new': 'Нов разговор',
   'sidebar.toggle': 'Прикажи/сокриј странична лента',
