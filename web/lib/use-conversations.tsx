@@ -87,11 +87,16 @@ export const useConversations = (model: string, disabled = false) => {
             prev ?? { code: 'network', message: t('error.description') },
         );
       },
-      onFinish: ({ message }) => {
+      onFinish: ({ isAbort, isError, message }) => {
         setActiveStatus(undefined);
         const replacementId = regeneratingMessageIdRef.current;
         regeneratingMessageIdRef.current = null;
         setRegeneratingMessageId(null);
+        // ai v7 also calls onFinish on abort/error; never finalize or persist a
+        // partial answer (it would ghost into a switched-away conversation).
+        if (isAbort || isError) {
+          return;
+        }
         const finalizedBase = finalizeMessage(
           message,
           startedAtRef.current,
@@ -173,10 +178,13 @@ export const useConversations = (model: string, disabled = false) => {
 
   const handleSelect = useCallback(
     (id: string) => {
-      void stop();
+      // Only tear down the stream when actually leaving the active conversation.
+      if (id !== activeId) {
+        void stop();
+      }
       setActiveId(id);
     },
-    [setActiveId, stop],
+    [activeId, setActiveId, stop],
   );
 
   const handleDelete = useCallback(
@@ -207,6 +215,7 @@ export const useConversations = (model: string, disabled = false) => {
     if (disabled) {
       return;
     }
+    setActiveError(undefined);
     fireAndForget(regenerate());
   }, [disabled, regenerate]);
 
