@@ -397,6 +397,29 @@ const sseChatResponse = ({
   });
 };
 
+const jsonOk = (body: unknown): Response =>
+  Response.json(body, {
+    headers: { 'content-type': 'application/json' },
+    status: 200,
+  });
+
+const respondTo = (
+  url: string,
+  chat?: { answer?: string; responseId?: string },
+): Promise<Response> => {
+  if (url.endsWith('/api/models')) {
+    return Promise.resolve(jsonOk([CLAUDE, GPT]));
+  }
+  if (url.endsWith('/api/health')) {
+    return Promise.resolve(jsonOk({ ok: true }));
+  }
+  if (url.endsWith('/api/chat')) {
+    return Promise.resolve(sseChatResponse(chat));
+  }
+
+  return Promise.resolve(jsonOk({}));
+};
+
 const renderChatPage = (): ReturnType<typeof rtlRender> => {
   const queryClient = new QueryClient();
 
@@ -426,32 +449,32 @@ describe('ChatPage persistence', () => {
     vi.stubGlobal('localStorage', createMemoryStorage());
     vi.stubGlobal(
       'fetch',
-      vi.fn<(input: RequestInfo | URL) => Promise<Response>>((input) => {
-        const url = urlOf(input);
-        if (url.endsWith('/api/models')) {
-          return Promise.resolve(
-            Response.json([CLAUDE, GPT], {
-              headers: { 'content-type': 'application/json' },
-              status: 200,
-            }),
-          );
-        }
-        if (url.endsWith('/api/chat')) {
-          return Promise.resolve(sseChatResponse());
-        }
-
-        return Promise.resolve(
-          new Response('{}', {
-            headers: { 'content-type': 'application/json' },
-            status: 200,
-          }),
-        );
-      }),
+      vi.fn<(input: RequestInfo | URL) => Promise<Response>>((input) =>
+        respondTo(urlOf(input)),
+      ),
     );
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('shows the unavailable banner and disables the composer when the backend is down', async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = urlOf(input);
+      if (url.endsWith('/api/health')) {
+        return Promise.resolve(jsonOk({ ok: false }));
+      }
+
+      return respondTo(url);
+    });
+
+    renderChatPage();
+
+    await expect(
+      screen.findByTestId('service-banner'),
+    ).resolves.toBeInTheDocument();
+    expect(screen.getByTestId('composer-input')).toBeDisabled();
   });
 
   it('sends a message, renders the streamed answer, and persists to Dexie', async () => {
@@ -576,29 +599,12 @@ describe('ChatPage persistence', () => {
       sidebarOpen: true,
     });
 
-    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
-      const url = urlOf(input);
-      if (url.endsWith('/api/models')) {
-        return Promise.resolve(
-          Response.json([CLAUDE, GPT], {
-            headers: { 'content-type': 'application/json' },
-            status: 200,
-          }),
-        );
-      }
-      if (url.endsWith('/api/chat')) {
-        return Promise.resolve(
-          sseChatResponse({ answer: 'Нов одговор', responseId: 'resp-new' }),
-        );
-      }
-
-      return Promise.resolve(
-        new Response('{}', {
-          headers: { 'content-type': 'application/json' },
-          status: 200,
-        }),
-      );
-    });
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) =>
+      respondTo(urlOf(input), {
+        answer: 'Нов одговор',
+        responseId: 'resp-new',
+      }),
+    );
 
     const user = userEvent.setup();
     renderChatPage();
@@ -673,32 +679,12 @@ describe('ChatPage persistence', () => {
       sidebarOpen: true,
     });
 
-    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
-      const url = urlOf(input);
-      if (url.endsWith('/api/models')) {
-        return Promise.resolve(
-          Response.json([CLAUDE, GPT], {
-            headers: { 'content-type': 'application/json' },
-            status: 200,
-          }),
-        );
-      }
-      if (url.endsWith('/api/chat')) {
-        return Promise.resolve(
-          sseChatResponse({
-            answer: 'Регенериран прв',
-            responseId: 'resp-a1-new',
-          }),
-        );
-      }
-
-      return Promise.resolve(
-        new Response('{}', {
-          headers: { 'content-type': 'application/json' },
-          status: 200,
-        }),
-      );
-    });
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) =>
+      respondTo(urlOf(input), {
+        answer: 'Регенериран прв',
+        responseId: 'resp-a1-new',
+      }),
+    );
 
     const user = userEvent.setup();
     renderChatPage();

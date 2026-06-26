@@ -39,6 +39,8 @@ export const messages = {
   'notFound.description': 'Страницата што ја барате не постои.',
   'notFound.home': 'Назад кон почетната',
   'notFound.title': 'Страницата не е најдена',
+  'service.unavailable':
+    'Услугата е привремено недостапна. Чатот не е достапен во моментов.',
   'sidebar.clearSearch': 'Исчисти пребарување',
   'sidebar.deleteAll': 'Избриши ги сите',
   'sidebar.history': 'Разговори',
