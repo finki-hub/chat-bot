@@ -57,8 +57,11 @@ export const ConfirmDialog = ({
         <Button
           data-testid="confirm-action"
           onClick={() => {
-            fireAndForget(Promise.resolve(onConfirm()));
-            onOpenChange(false);
+            fireAndForget(
+              Promise.resolve(onConfirm()).then(() => {
+                onOpenChange(false);
+              }),
+            );
           }}
           type="button"
           variant={destructive ? 'destructive' : 'default'}

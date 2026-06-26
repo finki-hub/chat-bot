@@ -112,18 +112,23 @@ describe('useUiStore', () => {
   });
 
   it('persists the model and active conversation', () => {
+    const original = localStorage;
     const storage = createMemoryStorage();
     vi.stubGlobal('localStorage', storage);
 
-    act(() => {
-      useUiStore.getState().setModel(GPT);
-      useUiStore.getState().setActiveConversationId('c9');
-    });
+    try {
+      act(() => {
+        useUiStore.getState().setModel(GPT);
+        useUiStore.getState().setActiveConversationId('c9');
+      });
 
-    const raw = storage.getItem('finkiHub.ui');
+      const raw = storage.getItem('finkiHub.ui');
 
-    expect(raw).toContain(`"model":"${GPT}"`);
-    expect(raw).toContain('"activeConversationId":"c9"');
+      expect(raw).toContain(`"model":"${GPT}"`);
+      expect(raw).toContain('"activeConversationId":"c9"');
+    } finally {
+      vi.stubGlobal('localStorage', original);
+    }
   });
 });
 

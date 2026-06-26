@@ -201,6 +201,7 @@ export const useConversations = (model: string) => {
         if (!isCancelled()) {
           if (convo === undefined) {
             setActiveId(null);
+            setMessages([]);
           } else {
             const loaded = await loadMessages(activeId);
             if (!isCancelled()) {

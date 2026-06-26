@@ -28,12 +28,26 @@ const safeLocalStorage = (): Storage | undefined =>
   typeof localStorage === 'undefined' ? undefined : localStorage;
 
 const lazyLocalStorage: StateStorage = {
-  getItem: (name) => safeLocalStorage()?.getItem(name) ?? null,
+  getItem: (name) => {
+    try {
+      return safeLocalStorage()?.getItem(name) ?? null;
+    } catch {
+      return null;
+    }
+  },
   removeItem: (name) => {
-    safeLocalStorage()?.removeItem(name);
+    try {
+      safeLocalStorage()?.removeItem(name);
+    } catch {
+      // Persistence is best-effort; ignore storage failures.
+    }
   },
   setItem: (name, value) => {
-    safeLocalStorage()?.setItem(name, value);
+    try {
+      safeLocalStorage()?.setItem(name, value);
+    } catch {
+      // Persistence is best-effort; ignore storage failures (e.g. quota).
+    }
   },
 };
 
