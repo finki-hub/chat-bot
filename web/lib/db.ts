@@ -87,6 +87,13 @@ export const deleteConversation = async (id: string): Promise<void> => {
   });
 };
 
+export const clearAllConversations = async (): Promise<void> => {
+  await db.transaction('rw', db.conversations, db.messages, async () => {
+    await db.messages.clear();
+    await db.conversations.clear();
+  });
+};
+
 export const loadMessages = (conversationId: string): Promise<MessageRow[]> =>
   db.messages
     .where('conversationId')

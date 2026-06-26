@@ -178,7 +178,7 @@ describe('ConversationList', () => {
 
     expect(onDelete).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByTestId('confirm-delete'));
+    fireEvent.click(screen.getByTestId('confirm-action'));
 
     expect(onDelete).toHaveBeenCalledWith('c1');
   });
@@ -212,6 +212,7 @@ describe('Sidebar', () => {
       <Sidebar
         activeId="c1"
         conversations={rows}
+        onClearAll={noop()}
         onClose={noop()}
         onDelete={noop()}
         onNewChat={onNewChat}
@@ -233,6 +234,7 @@ describe('Sidebar', () => {
       <Sidebar
         activeId={null}
         conversations={rows}
+        onClearAll={noop()}
         onClose={noop()}
         onDelete={noop()}
         onNewChat={noop()}
@@ -246,6 +248,49 @@ describe('Sidebar', () => {
 
     expect(aside).toHaveAttribute('data-collapsed', 'true');
     expect(aside).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('clears all conversations after confirmation', () => {
+    const onClearAll = vi.fn<() => void>();
+    render(
+      <Sidebar
+        activeId="c1"
+        conversations={rows}
+        onClearAll={onClearAll}
+        onClose={noop()}
+        onDelete={noop()}
+        onNewChat={noop()}
+        onRename={noop()}
+        onSelect={noop()}
+        open
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('delete-all'));
+
+    expect(onClearAll).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('confirm-action'));
+
+    expect(onClearAll).toHaveBeenCalledOnce();
+  });
+
+  it('hides the delete-all button when there are no conversations', () => {
+    render(
+      <Sidebar
+        activeId={null}
+        conversations={[]}
+        onClearAll={noop()}
+        onClose={noop()}
+        onDelete={noop()}
+        onNewChat={noop()}
+        onRename={noop()}
+        onSelect={noop()}
+        open
+      />,
+    );
+
+    expect(screen.queryByTestId('delete-all')).not.toBeInTheDocument();
   });
 });
 

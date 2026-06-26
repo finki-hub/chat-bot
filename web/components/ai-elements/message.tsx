@@ -11,6 +11,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
@@ -28,7 +30,11 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Streamdown } from "streamdown";
+import {
+  type LinkSafetyConfig,
+  type LinkSafetyModalProps,
+  Streamdown,
+} from "streamdown";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -325,6 +331,38 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 
+const LinkSafetyModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  url,
+}: LinkSafetyModalProps) => (
+  <ConfirmDialog
+    confirmLabel={t("link.open")}
+    description={
+      <>
+        {t("link.confirmDescription")}
+        <span className="mt-2 block font-medium break-all text-foreground">
+          {url}
+        </span>
+      </>
+    }
+    onConfirm={onConfirm}
+    onOpenChange={(open) => {
+      if (!open) {
+        onClose();
+      }
+    }}
+    open={isOpen}
+    title={t("link.confirmTitle")}
+  />
+);
+
+const linkSafety: LinkSafetyConfig = {
+  enabled: true,
+  renderModal: (props: LinkSafetyModalProps) => <LinkSafetyModal {...props} />,
+};
+
 export const MessageResponse = memo(
   ({ className, ...props }: MessageResponseProps) => (
     <Streamdown
@@ -333,6 +371,7 @@ export const MessageResponse = memo(
         className
       )}
       plugins={streamdownPlugins}
+      linkSafety={linkSafety}
       {...props}
     />
   ),

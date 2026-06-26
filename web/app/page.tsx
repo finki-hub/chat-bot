@@ -26,6 +26,7 @@ const ChatScreen = () => {
     activeStatus,
     conversations,
     messages,
+    onClearAll,
     onDelete,
     onNewChat,
     onRename,
@@ -45,6 +46,7 @@ const ChatScreen = () => {
         <Sidebar
           activeId={activeId}
           conversations={conversations}
+          onClearAll={onClearAll}
           onClose={() => {
             setSidebarOpen(false);
           }}

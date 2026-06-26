@@ -15,6 +15,7 @@ import type { MyUIMessage } from '@/lib/api-types';
 import { AnswerActions } from '@/components/chat/answer-actions';
 import { fireAndForget } from '@/lib/async';
 import {
+  clearAllConversations,
   type ConversationRow,
   createConversation,
   deleteConversation,
@@ -56,13 +57,23 @@ const hasAssistantText = (message: MyUIMessage): boolean =>
       p.type === 'text' && p.text.length > 0,
   );
 
-const buildTiming = (
-  startedAt: number,
+const finalizeMessage = (
+  message: MyUIMessage,
+  startedAt: null | number,
   firstTokenAt: null | number,
-): { totalMs: number; ttftMs: null | number } => ({
-  totalMs: Date.now() - startedAt,
-  ttftMs: firstTokenAt === null ? null : firstTokenAt - startedAt,
-});
+): MyUIMessage =>
+  startedAt === null
+    ? message
+    : {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          timing: {
+            totalMs: Date.now() - startedAt,
+            ttftMs: firstTokenAt === null ? null : firstTokenAt - startedAt,
+          },
+        },
+      };
 
 const renderAnswerActions =
   (
@@ -159,17 +170,11 @@ export const useConversations = (model: string) => {
       },
       onFinish: ({ message }) => {
         setActiveStatus(undefined);
-        const startedAt = startedAtRef.current;
-        const finalized: MyUIMessage =
-          startedAt === null
-            ? message
-            : {
-                ...message,
-                metadata: {
-                  ...message.metadata,
-                  timing: buildTiming(startedAt, firstTokenAtRef.current),
-                },
-              };
+        const finalized = finalizeMessage(
+          message,
+          startedAtRef.current,
+          firstTokenAtRef.current,
+        );
         setMessages((prev) =>
           prev.map((m) => (m.id === finalized.id ? finalized : m)),
         );
@@ -276,6 +281,12 @@ export const useConversations = (model: string) => {
     [handleNewChat, refreshConversations],
   );
 
+  const handleClearAll = useCallback(async () => {
+    await clearAllConversations();
+    handleNewChat();
+    await refreshConversations();
+  }, [handleNewChat, refreshConversations]);
+
   const submitMessage = useCallback(
     (text: string) => {
       fireAndForget(handleSubmit(text));
@@ -301,6 +312,7 @@ export const useConversations = (model: string) => {
     activeStatus,
     conversations,
     messages,
+    onClearAll: handleClearAll,
     onDelete: handleDelete,
     onNewChat: handleNewChat,
     onRename: handleRename,

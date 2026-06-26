@@ -4,10 +4,10 @@ import { useState } from 'react';
 import type { ConversationRow } from '@/lib/db';
 
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -161,42 +161,19 @@ export const ConversationList = ({
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <ConfirmDialog
+        confirmLabel={t('conversation.delete')}
+        description={t('conversation.deleteDescription')}
+        destructive
+        onConfirm={confirmDelete}
         onOpenChange={(open) => {
           if (!open) {
             setPendingDelete(null);
           }
         }}
         open={pendingDelete !== null}
-      >
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t('conversation.deleteTitle')}</DialogTitle>
-            <DialogDescription>
-              {t('conversation.deleteDescription')}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              onClick={() => {
-                setPendingDelete(null);
-              }}
-              type="button"
-              variant="outline"
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              data-testid="confirm-delete"
-              onClick={confirmDelete}
-              type="button"
-              variant="destructive"
-            >
-              {t('conversation.delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title={t('conversation.deleteTitle')}
+      />
     </>
   );
 };

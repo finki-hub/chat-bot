@@ -16,6 +16,9 @@ export const messages = {
   'composer.send': 'Испрати',
   'composer.stop': 'Запри',
   'conversation.delete': 'Избриши',
+  'conversation.deleteAllDescription':
+    'Сите разговори и историја ќе бидат трајно избришани.',
+  'conversation.deleteAllTitle': 'Избриши ги сите разговори?',
   'conversation.deleteDescription':
     'Ова дејство е трајно и не може да се врати.',
   'conversation.deleteTitle': 'Избриши разговор?',
@@ -30,9 +33,13 @@ export const messages = {
   'header.theme': 'Промени тема',
   'header.title': 'ФИНКИ Хаб / Чат',
   'header.toggleSidebar': 'Прикажи/сокриј странична лента',
+  'link.confirmDescription': 'Ќе ја отворите следнава надворешна врска:',
+  'link.confirmTitle': 'Отвори надворешна врска?',
+  'link.open': 'Отвори',
   'notFound.description': 'Страницата што ја барате не постои.',
   'notFound.home': 'Назад кон почетната',
   'notFound.title': 'Страницата не е најдена',
+  'sidebar.deleteAll': 'Избриши ги сите',
   'sidebar.history': 'Разговори',
   'sidebar.label': 'Странична лента',
   'sidebar.new': 'Нов разговор',
