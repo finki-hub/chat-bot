@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
-# Model, temperature, top_p, max_tokens -> LLM
-ollama_chat_clients: dict[tuple[str, float, float, int], ChatOllama] = {}
+# Model, temperature, top_p, max_tokens, reasoning -> LLM
+ollama_chat_clients: dict[tuple[str, float, float, int, bool], ChatOllama] = {}
 ollama_embedders: dict[Model, OllamaEmbeddings] = {}
 
 
@@ -42,12 +42,18 @@ def get_llm(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    *,
+    reasoning: bool = False,
 ) -> ChatOllama:
     """
-    Return a singleton ChatOllama instance for the specified model and sampling parameters.
+    Return a singleton ChatOllama instance for the specified model and parameters.
     If the model and parameters are not already in the cache, create a new instance.
+
+    When `reasoning` is on, `reasoning=True` enables Ollama's `think` mode (reasoning-capable
+    models like deepseek-r1 then expose thoughts in `additional_kwargs["reasoning_content"]`);
+    when off, `None` leaves the model's default behavior.
     """
-    key = (model.value, temperature, top_p, max_tokens)
+    key = (model.value, temperature, top_p, max_tokens, reasoning)
 
     if key not in ollama_chat_clients:
         ollama_chat_clients[key] = ChatOllama(
@@ -56,6 +62,7 @@ def get_llm(
             temperature=temperature,
             top_p=top_p,
             num_predict=max_tokens,
+            reasoning=reasoning or None,
         )
 
     return ollama_chat_clients[key]
@@ -106,6 +113,7 @@ def stream_ollama_response(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    reasoning: bool = False,
 ) -> StreamingResponse:
     """
     Stream a response from the specified Ollama model using the provided user prompt and system prompt.
@@ -120,7 +128,7 @@ def stream_ollama_response(
         model.value,
     )
 
-    llm = get_llm(model, temperature, top_p, max_tokens)
+    llm = get_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
     full_prompt = stitch_conversation(system_prompt, history or [], user_prompt)
 
     def sync_token_gen() -> Generator[str]:
@@ -175,6 +183,7 @@ async def stream_ollama_agent_response(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    reasoning: bool = False,
 ) -> StreamingResponse:
     """
     Stream a response from an Ollama agent with MCP tools.
@@ -187,7 +196,7 @@ async def stream_ollama_agent_response(
     )
 
     try:
-        llm = get_llm(model, temperature, top_p, max_tokens)
+        llm = get_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
 
         tools = await get_mcp_tools()
 
@@ -218,4 +227,5 @@ async def stream_ollama_agent_response(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
+            reasoning=reasoning,
         )

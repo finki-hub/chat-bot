@@ -19,8 +19,11 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
-# Model, temperature, top_p, max_tokens -> LLM
-google_llm_clients: dict[tuple[str, float, float, int], ChatGoogleGenerativeAI] = {}
+# Model, temperature, top_p, max_tokens, reasoning -> LLM
+google_llm_clients: dict[
+    tuple[str, float, float, int, bool],
+    ChatGoogleGenerativeAI,
+] = {}
 # Model, is_document -> Embedder
 google_embedders: dict[tuple[str, bool], GoogleGenerativeAIEmbeddings] = {}
 
@@ -54,14 +57,26 @@ def get_google_llm(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    *,
+    reasoning: bool = False,
 ) -> ChatGoogleGenerativeAI:
     """
     Return a singleton ChatGoogleGenerativeAI instance for the specified model.
     If the model and parameters are not already in the cache, create a new instance.
+
+    When `reasoning` is on, `include_thoughts=True` returns the model's thoughts; Gemini 3
+    uses `thinking_level`, while Gemini 2.5 uses a `thinking_budget` token cap.
     """
-    key = (model.value, temperature, top_p, max_tokens)
+    key = (model.value, temperature, top_p, max_tokens, reasoning)
 
     if key not in google_llm_clients:
+        client_kwargs: dict[str, object] = {}
+        if reasoning:
+            client_kwargs["include_thoughts"] = True
+            if model == Model.GEMINI_3_FLASH_PREVIEW:
+                client_kwargs["thinking_level"] = "medium"
+            else:
+                client_kwargs["thinking_budget"] = 2048
         google_llm_clients[key] = ChatGoogleGenerativeAI(
             model=model.value,
             google_api_key=settings.GOOGLE_API_KEY,
@@ -69,6 +84,7 @@ def get_google_llm(
             temperature=temperature,
             top_p=top_p,
             max_output_tokens=max_tokens,
+            **client_kwargs,
         )
 
     return google_llm_clients[key]
@@ -126,6 +142,7 @@ def stream_google_response(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    reasoning: bool = False,
 ) -> StreamingResponse:
     """
     Stream a response from the specified Google model using the provided prompts.
@@ -138,7 +155,7 @@ def stream_google_response(
         model.value,
     )
 
-    llm = get_google_llm(model, temperature, top_p, max_tokens)
+    llm = get_google_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
     prompt_messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
     def sync_token_gen() -> Generator[str]:
@@ -209,6 +226,7 @@ async def stream_google_agent_response(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    reasoning: bool = False,
 ) -> StreamingResponse:
     """
     Stream a response from a Google agent with MCP tools.
@@ -221,7 +239,7 @@ async def stream_google_agent_response(
     )
 
     try:
-        llm = get_google_llm(model, temperature, top_p, max_tokens)
+        llm = get_google_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
 
         tools = await get_mcp_tools()
 
@@ -252,4 +270,5 @@ async def stream_google_agent_response(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
+            reasoning=reasoning,
         )
