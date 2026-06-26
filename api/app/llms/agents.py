@@ -25,6 +25,10 @@ def token_event(text: str) -> str:
     return _sse("token", {"text": text})
 
 
+def thinking_event(text: str) -> str:
+    return _sse("thinking", {"text": text})
+
+
 def status_event(tool: str | None = None) -> str:
     payload: dict[str, object] = {"state": "tool_call", "label": _STATUS_LABEL}
     if tool:
@@ -70,15 +74,54 @@ def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
     return StreamingResponse(async_token_gen(), media_type="text/event-stream")
 
 
-def _chunk_text(message: AIMessageChunk) -> str:
-    """The plain text of an AIMessageChunk; '' for tool-call/non-text content blocks."""
-    raw = message.content
-    if isinstance(raw, list):
+def content_to_text(content: object) -> str:
+    """Plain text of a message's content, whether a str or a list of content blocks
+    (Responses API / Anthropic). Non-text blocks (tool calls, reasoning) contribute ''."""
+    if isinstance(content, list):
         return "".join(
             part.get("text", "") if isinstance(part, dict) else str(part)
-            for part in raw
+            for part in content
         )
-    return str(raw)
+    return str(content)
+
+
+def _chunk_text(message: AIMessageChunk) -> str:
+    """The plain text of an AIMessageChunk; '' for tool-call/non-text content blocks."""
+    return content_to_text(message.content)
+
+
+def _chunk_reasoning(message: AIMessageChunk) -> str:
+    """The reasoning/thinking text in an AIMessageChunk; '' if none.
+
+    Two provider shapes are handled. Content-block providers put reasoning in the content
+    list: Anthropic/Google as ``{"type": "thinking", "thinking": ...}`` and OpenAI
+    (Responses API) as ``{"type": "reasoning", "summary": [{"text": ...}]}``. The
+    additional_kwargs provider (Ollama) puts it in ``additional_kwargs["reasoning_content"]``.
+    Anthropic also emits signature-only thinking blocks (no "thinking" key) — ``.get`` skips
+    them safely.
+    """
+    parts: list[str] = []
+
+    raw = message.content
+    if isinstance(raw, list):
+        for part in raw:
+            if not isinstance(part, dict):
+                continue
+            kind = part.get("type")
+            if kind == "thinking":
+                parts.append(str(part.get("thinking", "")))
+            elif kind == "reasoning":
+                parts.extend(
+                    str(summary.get("text", ""))
+                    for summary in part.get("summary", []) or []
+                    if isinstance(summary, dict)
+                )
+
+    extra = message.additional_kwargs.get("reasoning_content")
+    if isinstance(extra, str):
+        parts.append(extra)
+
+    return "".join(parts)
 
 
 async def create_agent_token_generator(
@@ -105,7 +148,14 @@ async def create_agent_token_generator(
                 continue
 
             chunk = event["data"].get("chunk")
-            text = _chunk_text(chunk) if isinstance(chunk, AIMessageChunk) else ""
+            if not isinstance(chunk, AIMessageChunk):
+                continue
+
+            reasoning = _chunk_reasoning(chunk)
+            if reasoning:
+                yield thinking_event(reasoning)
+
+            text = _chunk_text(chunk)
             if not text:
                 continue
 

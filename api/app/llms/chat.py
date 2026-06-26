@@ -47,4 +47,5 @@ async def handle_chat(
         temperature=payload.temperature,
         top_p=payload.top_p,
         max_tokens=payload.max_tokens,
+        reasoning=payload.reasoning,
     )

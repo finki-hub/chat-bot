@@ -17,8 +17,37 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
-# Model, temperature, top_p, max_tokens -> LLM
-anthropic_llm_clients: dict[tuple[str, float, float, int], ChatAnthropic] = {}
+# Model, temperature, top_p, max_tokens, reasoning -> LLM
+anthropic_llm_clients: dict[tuple[str, float, float, int, bool], ChatAnthropic] = {}
+
+# Opus 4.7/4.8 reject `budget_tokens` and only return reasoning text under summarized
+# adaptive thinking; they also reject sampling params, so they already get temperature=None.
+# This set happens to equal ANTHROPIC_NO_SAMPLING_MODELS today, but is named separately
+# because the two concepts (no-sampling vs adaptive-thinking) are not inherently linked.
+_ADAPTIVE_THINKING_MODELS: frozenset[Model] = ANTHROPIC_NO_SAMPLING_MODELS
+
+_MIN_THINKING_BUDGET = 1024  # Anthropic API floor (the lib does not validate it).
+_MAX_THINKING_BUDGET = 2048
+_ANSWER_HEADROOM = 2048  # tokens reserved for the answer on top of the thinking budget.
+
+
+def _thinking_config(
+    model: Model,
+    max_tokens: int,
+) -> tuple[dict[str, object], int]:
+    """The Anthropic ``thinking`` payload and the effective ``max_tokens`` for a
+    reasoning-enabled request.
+
+    Thinking tokens are billed inside ``max_tokens``, so ``budget_tokens`` must stay below
+    it with room for the answer; we size the budget and raise ``max_tokens`` so both fit.
+    Opus 4.7/4.8 use summarized adaptive thinking (no budget, no headroom math).
+    """
+    if model in _ADAPTIVE_THINKING_MODELS:
+        return {"type": "adaptive", "display": "summarized"}, max_tokens
+
+    budget = max(_MIN_THINKING_BUDGET, min(_MAX_THINKING_BUDGET, max_tokens // 2))
+    effective_max = max(max_tokens, budget + _ANSWER_HEADROOM)
+    return {"type": "enabled", "budget_tokens": budget}, effective_max
 
 
 def get_anthropic_llm(
@@ -26,27 +55,39 @@ def get_anthropic_llm(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    *,
+    reasoning: bool = False,
 ) -> ChatAnthropic:
     """
-    Return a singleton ChatAnthropic instance for the specified model and sampling parameters.
-    If the model and parameters are not already in the cache, create a new instance.
+    Return a singleton ChatAnthropic instance for the specified model and parameters.
 
     Anthropic's API is stricter about sampling parameters than the other providers:
     Claude Opus 4.7 / 4.8 reject `temperature`, `top_p`, and `top_k` outright (HTTP 400),
     and every Claude 4+ model rejects requests that set both `temperature` and `top_p`.
     To stay within those limits we never forward `top_p`, and forward `temperature` only
     for models that accept it (see `ANTHROPIC_NO_SAMPLING_MODELS`).
+
+    When `reasoning` is on, extended thinking additionally requires `temperature` to be
+    unset (the API uses its default of 1), so we send `None` for every reasoning request.
     """
-    key = (model.value, temperature, top_p, max_tokens)
+    key = (model.value, temperature, top_p, max_tokens, reasoning)
 
     if key not in anthropic_llm_clients:
-        temperature_arg = None if model in ANTHROPIC_NO_SAMPLING_MODELS else temperature
+        thinking, effective_max = (
+            _thinking_config(model, max_tokens) if reasoning else (None, max_tokens)
+        )
+        temperature_arg = (
+            None
+            if (reasoning or model in ANTHROPIC_NO_SAMPLING_MODELS)
+            else temperature
+        )
         anthropic_llm_clients[key] = ChatAnthropic(
             model=model.value,  # type: ignore[call-arg]
             api_key=SecretStr(settings.ANTHROPIC_API_KEY),
             base_url=settings.ANTHROPIC_BASE_URL or None,
             temperature=temperature_arg,
-            max_tokens=max_tokens,  # type: ignore[call-arg]
+            max_tokens=effective_max,  # type: ignore[call-arg]
+            thinking=thinking,  # type: ignore[call-arg]
         )
 
     return anthropic_llm_clients[key]
@@ -61,6 +102,7 @@ def stream_anthropic_response(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    reasoning: bool = False,
 ) -> StreamingResponse:
     """
     Stream a response from the specified Anthropic model using the provided prompts.
@@ -73,7 +115,7 @@ def stream_anthropic_response(
         model.value,
     )
 
-    llm = get_anthropic_llm(model, temperature, top_p, max_tokens)
+    llm = get_anthropic_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
     prompt_messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
     def sync_token_gen() -> Generator[str]:
@@ -144,6 +186,7 @@ async def stream_anthropic_agent_response(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    reasoning: bool = False,
 ) -> StreamingResponse:
     """
     Stream a response from an Anthropic agent with MCP tools.
@@ -156,7 +199,13 @@ async def stream_anthropic_agent_response(
     )
 
     try:
-        llm = get_anthropic_llm(model, temperature, top_p, max_tokens)
+        llm = get_anthropic_llm(
+            model,
+            temperature,
+            top_p,
+            max_tokens,
+            reasoning=reasoning,
+        )
 
         tools = await get_mcp_tools()
 
@@ -187,4 +236,5 @@ async def stream_anthropic_agent_response(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
+            reasoning=reasoning,
         )

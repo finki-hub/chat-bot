@@ -103,6 +103,16 @@ class ChatSchema(BaseModel):
             "This limits the length of the output."
         ),
     )
+    reasoning: bool = Field(
+        False,
+        examples=[True],
+        description=(
+            "Enable the model's extended-thinking / reasoning mode. When true and the "
+            "selected model supports it, the model reasons before answering and the "
+            "reasoning is streamed on a separate `thinking` SSE channel. Models without "
+            "a reasoning mode ignore this flag."
+        ),
+    )
 
     @field_validator("messages")
     @classmethod

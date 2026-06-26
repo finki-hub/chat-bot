@@ -22,6 +22,7 @@ async def stream_response_with_agent(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    reasoning: bool = False,
 ) -> StreamingResponse:
     """
     Stream a response from the specified model using the provided user prompt and system prompt with agent.
@@ -51,6 +52,7 @@ async def stream_response_with_agent(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
+                reasoning=reasoning,
             )
 
         case (
@@ -72,6 +74,7 @@ async def stream_response_with_agent(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
+                reasoning=reasoning,
             )
 
         case (
@@ -85,6 +88,7 @@ async def stream_response_with_agent(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
+                reasoning=reasoning,
             )
 
         case (
@@ -101,6 +105,7 @@ async def stream_response_with_agent(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
+                reasoning=reasoning,
             )
 
         case Model.QWEN2_1_5_B_INSTRUCT | Model.QWEN2_5_7B_INSTRUCT:
