@@ -50,6 +50,7 @@ const ChatScreen = () => {
             activeError={activeError}
             activeStatus={activeStatus}
             messages={messages}
+            onPickSuggestion={submitMessage}
             onRetry={retry}
             renderActions={renderActions}
             status={status}
