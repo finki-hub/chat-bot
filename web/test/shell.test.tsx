@@ -38,6 +38,7 @@ const CLAUDE = 'claude-sonnet-4-6';
 const GPT = 'gpt-5.4-mini';
 const RESPONSE_ID = 'resp-123';
 const FIRST_TITLE = 'Прв разговор';
+const SECOND_TITLE = 'Втор разговор';
 const REGENERATE_CONVERSATION_ID = 'c-regenerate';
 
 const rows: ConversationRow[] = [
@@ -52,12 +53,27 @@ const rows: ConversationRow[] = [
     createdAt: 3,
     id: 'c2',
     model: GPT,
-    title: 'Втор разговор',
+    title: SECOND_TITLE,
     updatedAt: 4,
   },
 ];
 
 const noop = () => vi.fn<(...args: string[]) => void>();
+
+const renderSidebar = (conversations: ConversationRow[] = rows) =>
+  render(
+    <Sidebar
+      activeId={null}
+      conversations={conversations}
+      onClearAll={noop()}
+      onClose={noop()}
+      onDelete={noop()}
+      onNewChat={noop()}
+      onRename={noop()}
+      onSelect={noop()}
+      open
+    />,
+  );
 
 const urlOf = (input: RequestInfo | URL): string => {
   if (typeof input === 'string') {
@@ -298,6 +314,51 @@ describe('Sidebar', () => {
     );
 
     expect(screen.queryByTestId('delete-all')).not.toBeInTheDocument();
+  });
+
+  it('filters the conversation list to substring matches as the user types', () => {
+    renderSidebar();
+
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'втор' },
+    });
+
+    expect(screen.getByText(SECOND_TITLE)).toBeInTheDocument();
+    expect(screen.queryByText(FIRST_TITLE)).not.toBeInTheDocument();
+  });
+
+  it('shows a no-matches message when nothing matches the query', () => {
+    renderSidebar();
+
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'зззз' },
+    });
+
+    expect(screen.getByTestId('no-results')).toBeInTheDocument();
+    expect(screen.queryByText(FIRST_TITLE)).not.toBeInTheDocument();
+  });
+
+  it('restores the full list when the search is cleared', () => {
+    renderSidebar();
+
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'втор' },
+    });
+
+    expect(screen.queryByText(FIRST_TITLE)).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Исчисти пребарување' }),
+    );
+
+    expect(screen.getByText(FIRST_TITLE)).toBeInTheDocument();
+    expect(screen.getByText(SECOND_TITLE)).toBeInTheDocument();
+  });
+
+  it('hides the search when there are no conversations', () => {
+    renderSidebar([]);
+
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
   });
 });
 

@@ -1,10 +1,16 @@
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Search, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 
 import type { ConversationRow } from '@/lib/db';
 
 import { ConversationList } from '@/components/shell/conversation-list';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -41,6 +47,7 @@ export const Sidebar = ({
   open,
 }: SidebarProps) => {
   const [confirmingClearAll, setConfirmingClearAll] = useState(false);
+  const [query, setQuery] = useState('');
 
   const handleSelect = (id: string) => {
     onSelect(id);
@@ -51,6 +58,11 @@ export const Sidebar = ({
     onNewChat();
     closeIfMobile(onClose);
   };
+
+  const term = query.trim().toLowerCase();
+  const filtered = term
+    ? conversations.filter((c) => c.title.toLowerCase().includes(term))
+    : conversations;
 
   return (
     <>
@@ -85,17 +97,57 @@ export const Sidebar = ({
             />
             {t('sidebar.new')}
           </button>
+          {conversations.length > 0 ? (
+            <InputGroup>
+              <InputGroupAddon>
+                <Search aria-hidden="true" />
+              </InputGroupAddon>
+              <InputGroupInput
+                aria-label={t('sidebar.search')}
+                className="[&::-webkit-search-cancel-button]:appearance-none"
+                data-testid="conversation-search"
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                }}
+                placeholder={t('sidebar.search')}
+                type="search"
+                value={query}
+              />
+              {query ? (
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    aria-label={t('sidebar.clearSearch')}
+                    onClick={() => {
+                      setQuery('');
+                    }}
+                    size="icon-xs"
+                  >
+                    <X aria-hidden="true" />
+                  </InputGroupButton>
+                </InputGroupAddon>
+              ) : null}
+            </InputGroup>
+          ) : null}
           <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <p className="px-2 pb-1.5 pt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
               {t('sidebar.history')}
             </p>
-            <ConversationList
-              activeId={activeId}
-              conversations={conversations}
-              onDelete={onDelete}
-              onRename={onRename}
-              onSelect={handleSelect}
-            />
+            {term && filtered.length === 0 ? (
+              <p
+                className="px-2 py-1.5 text-sm text-muted-foreground"
+                data-testid="no-results"
+              >
+                {t('sidebar.noResults')}
+              </p>
+            ) : (
+              <ConversationList
+                activeId={activeId}
+                conversations={filtered}
+                onDelete={onDelete}
+                onRename={onRename}
+                onSelect={handleSelect}
+              />
+            )}
           </nav>
           {conversations.length > 0 ? (
             <button
