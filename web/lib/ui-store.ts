@@ -21,10 +21,11 @@ export type UiState = {
   toggleSidebar: () => void;
 };
 
-// Read localStorage through a helper whose return type is widened to include
-// `undefined` so SSR (no localStorage) and tests that stub it after import both
-// behave correctly, and so the optional chaining below stays meaningful.
-const safeLocalStorage = (): Storage | undefined => localStorage;
+// Read localStorage through a `typeof` guard so SSR (no `localStorage` global)
+// and tests that stub it after import both behave correctly; the widened
+// `| undefined` return keeps the optional chaining below meaningful.
+const safeLocalStorage = (): Storage | undefined =>
+  typeof localStorage === 'undefined' ? undefined : localStorage;
 
 const lazyLocalStorage: StateStorage = {
   getItem: (name) => safeLocalStorage()?.getItem(name) ?? null,

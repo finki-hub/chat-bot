@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { fireAndForget } from '@/lib/async';
 import { t } from '@/lib/i18n';
 
 export type ConfirmDialogProps = {
@@ -18,7 +19,7 @@ export type ConfirmDialogProps = {
   confirmLabel: string;
   description: ReactNode;
   destructive?: boolean;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void> | void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   title: string;
@@ -56,7 +57,7 @@ export const ConfirmDialog = ({
         <Button
           data-testid="confirm-action"
           onClick={() => {
-            onConfirm();
+            fireAndForget(Promise.resolve(onConfirm()));
             onOpenChange(false);
           }}
           type="button"
