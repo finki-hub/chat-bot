@@ -64,7 +64,7 @@ export const ConversationList = ({
         {conversations.map((c) => (
           <li
             aria-current={c.id === activeId ? 'true' : undefined}
-            className={`group flex items-center justify-between gap-1 rounded-lg px-2.5 py-2 text-sm text-foreground/80 transition-colors duration-150 hover:bg-muted/70 ${
+            className={`group flex items-center justify-between gap-1 rounded-lg px-2.5 py-1.5 text-sm text-foreground/80 transition-colors duration-150 hover:bg-muted/70 ${
               c.id === activeId ? 'bg-muted font-medium text-foreground' : ''
             }`}
             data-testid={`conversation-${c.id}`}
