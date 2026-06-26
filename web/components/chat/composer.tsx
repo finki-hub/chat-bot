@@ -89,9 +89,9 @@ export const Composer = ({
   };
 
   return (
-    <div className="border-t border-border bg-background px-3 py-3 sm:px-4">
+    <div className="bg-background px-3 pb-3 pt-2 sm:px-4">
       <div className="mx-auto w-full max-w-3xl">
-        <div className="flex flex-col rounded-2xl border border-input bg-card shadow-sm transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+        <div className="flex flex-col rounded-3xl border border-input bg-card shadow-lg shadow-black/5 transition-[color,box-shadow] focus-within:border-ring/70 focus-within:ring-4 focus-within:ring-ring/15 dark:shadow-black/25">
           <textarea
             aria-label={t('composer.message')}
             className="field-sizing-content max-h-48 min-h-[52px] w-full resize-none bg-transparent px-4 pt-3 pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
@@ -144,7 +144,7 @@ export const Composer = ({
             </Select>
             <Button
               aria-label={isBusy ? t('composer.stop') : t('composer.send')}
-              className="size-9 shrink-0 rounded-full"
+              className="size-9 shrink-0 rounded-full transition-transform active:scale-95"
               data-testid="composer-submit"
               disabled={
                 (disabled ?? false) || (!isBusy && value.trim().length === 0)
@@ -157,6 +157,9 @@ export const Composer = ({
             </Button>
           </div>
         </div>
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          {t('composer.disclaimer')}
+        </p>
       </div>
     </div>
   );
