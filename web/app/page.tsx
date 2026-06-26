@@ -13,6 +13,7 @@ const ChatScreen = () => {
   const setModel = useUiStore((s) => s.setModel);
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
 
   const { data: modelList } = useModels();
   const {
@@ -39,6 +40,9 @@ const ChatScreen = () => {
         <Sidebar
           activeId={activeId}
           conversations={conversations}
+          onClose={() => {
+            setSidebarOpen(false);
+          }}
           onDelete={onDelete}
           onNewChat={onNewChat}
           onRename={onRename}

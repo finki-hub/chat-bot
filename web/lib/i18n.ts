@@ -20,6 +20,7 @@ export const messages = {
   'header.theme': 'Промени тема',
   'header.title': 'ФИНКИ Хаб / Чат',
   'header.toggleSidebar': 'Прикажи/сокриј странична лента',
+  'sidebar.history': 'Разговори',
   'sidebar.label': 'Странична лента',
   'sidebar.new': 'Нов разговор',
   'sidebar.toggle': 'Прикажи/сокриј странична лента',
