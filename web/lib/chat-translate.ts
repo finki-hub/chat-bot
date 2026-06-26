@@ -5,6 +5,7 @@ import {
   MAX_MESSAGES,
   type MyUIMessage,
 } from '@/lib/api-types';
+import { joinText } from '@/lib/message-parts';
 import { type ParsedEvent } from '@/lib/sse';
 
 export type ChatClientBody = {
@@ -40,23 +41,10 @@ export type UiStreamWriter = {
   write: (part: UiStreamPart) => void;
 };
 
-const joinText = (message: MyUIMessage): string => {
-  const text = message.parts
-    .filter(
-      (part): part is { text: string; type: 'text' } => part.type === 'text',
-    )
-    .map((part) => part.text)
-    .join('');
-
-  return text.length > MAX_CHARS_PER_TURN
-    ? text.slice(0, MAX_CHARS_PER_TURN)
-    : text;
-};
-
 export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
   const trimmed = body.messages.slice(-MAX_MESSAGES);
   const messages: ConversationTurn[] = trimmed.map((message) => ({
-    content: joinText(message),
+    content: joinText(message).slice(0, MAX_CHARS_PER_TURN),
     role: message.role === 'assistant' ? 'assistant' : 'user',
   }));
 

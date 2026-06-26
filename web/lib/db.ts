@@ -69,6 +69,10 @@ export const createConversation = async (input: {
 export const listConversations = (): Promise<ConversationRow[]> =>
   db.conversations.orderBy('updatedAt').reverse().toArray();
 
+export const getConversation = (
+  id: string,
+): Promise<ConversationRow | undefined> => db.conversations.get(id);
+
 export const renameConversation = async (
   id: string,
   title: string,
@@ -80,6 +84,13 @@ export const deleteConversation = async (id: string): Promise<void> => {
   await db.transaction('rw', db.conversations, db.messages, async () => {
     await db.messages.where('conversationId').equals(id).delete();
     await db.conversations.delete(id);
+  });
+};
+
+export const clearAllConversations = async (): Promise<void> => {
+  await db.transaction('rw', db.conversations, db.messages, async () => {
+    await db.messages.clear();
+    await db.conversations.clear();
   });
 };
 

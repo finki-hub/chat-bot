@@ -1,14 +1,17 @@
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 
 import type { ConversationRow } from '@/lib/db';
 
 import { ConversationList } from '@/components/shell/conversation-list';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export type SidebarProps = {
   activeId: null | string;
   conversations: ConversationRow[];
+  onClearAll: () => void;
   onClose: () => void;
   onDelete: (id: string) => void;
   onNewChat: () => void;
@@ -29,6 +32,7 @@ const closeIfMobile = (onClose: () => void) => {
 export const Sidebar = ({
   activeId,
   conversations,
+  onClearAll,
   onClose,
   onDelete,
   onNewChat,
@@ -36,6 +40,8 @@ export const Sidebar = ({
   onSelect,
   open,
 }: SidebarProps) => {
+  const [confirmingClearAll, setConfirmingClearAll] = useState(false);
+
   const handleSelect = (id: string) => {
     onSelect(id);
     closeIfMobile(onClose);
@@ -91,8 +97,33 @@ export const Sidebar = ({
               onSelect={handleSelect}
             />
           </nav>
+          {conversations.length > 0 ? (
+            <button
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-border/60 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+              data-testid="delete-all"
+              onClick={() => {
+                setConfirmingClearAll(true);
+              }}
+              type="button"
+            >
+              <Trash2
+                aria-hidden="true"
+                className="size-4"
+              />
+              {t('sidebar.deleteAll')}
+            </button>
+          ) : null}
         </div>
       </aside>
+      <ConfirmDialog
+        confirmLabel={t('conversation.delete')}
+        description={t('conversation.deleteAllDescription')}
+        destructive
+        onConfirm={onClearAll}
+        onOpenChange={setConfirmingClearAll}
+        open={confirmingClearAll}
+        title={t('conversation.deleteAllTitle')}
+      />
     </>
   );
 };

@@ -110,6 +110,26 @@ describe('useUiStore', () => {
 
     expect(useUiStore.getState()).toMatchObject({ sidebarOpen: true });
   });
+
+  it('persists the model and active conversation', () => {
+    const original = localStorage;
+    const storage = createMemoryStorage();
+    vi.stubGlobal('localStorage', storage);
+
+    try {
+      act(() => {
+        useUiStore.getState().setModel(GPT);
+        useUiStore.getState().setActiveConversationId('c9');
+      });
+
+      const raw = storage.getItem('finkiHub.ui');
+
+      expect(raw).toContain(`"model":"${GPT}"`);
+      expect(raw).toContain('"activeConversationId":"c9"');
+    } finally {
+      vi.stubGlobal('localStorage', original);
+    }
+  });
 });
 
 describe('ConversationList', () => {
@@ -147,7 +167,7 @@ describe('ConversationList', () => {
     expect(onSelect).toHaveBeenCalledWith('c1');
   });
 
-  it('deletes a conversation', () => {
+  it('deletes a conversation after confirmation', () => {
     const onDelete = vi.fn<(id: string) => void>();
     render(
       <ConversationList
@@ -161,12 +181,15 @@ describe('ConversationList', () => {
     const item = screen.getByTestId('conversation-c1');
     fireEvent.click(within(item).getByRole('button', { name: 'Избриши' }));
 
+    expect(onDelete).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('confirm-action'));
+
     expect(onDelete).toHaveBeenCalledWith('c1');
   });
 
-  it('renames a conversation via prompt', () => {
+  it('renames a conversation via the dialog', () => {
     const onRename = vi.fn<(id: string, title: string) => void>();
-    vi.spyOn(globalThis, 'prompt').mockReturnValue('Ново име');
     render(
       <ConversationList
         activeId={null}
@@ -179,6 +202,10 @@ describe('ConversationList', () => {
     const item = screen.getByTestId('conversation-c1');
     fireEvent.click(within(item).getByRole('button', { name: 'Преименувај' }));
 
+    const input = screen.getByLabelText('Ново име на разговорот');
+    fireEvent.change(input, { target: { value: 'Ново име' } });
+    fireEvent.click(screen.getByTestId('confirm-rename'));
+
     expect(onRename).toHaveBeenCalledWith('c1', 'Ново име');
   });
 });
@@ -190,6 +217,7 @@ describe('Sidebar', () => {
       <Sidebar
         activeId="c1"
         conversations={rows}
+        onClearAll={noop()}
         onClose={noop()}
         onDelete={noop()}
         onNewChat={onNewChat}
@@ -211,6 +239,7 @@ describe('Sidebar', () => {
       <Sidebar
         activeId={null}
         conversations={rows}
+        onClearAll={noop()}
         onClose={noop()}
         onDelete={noop()}
         onNewChat={noop()}
@@ -224,6 +253,49 @@ describe('Sidebar', () => {
 
     expect(aside).toHaveAttribute('data-collapsed', 'true');
     expect(aside).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('clears all conversations after confirmation', () => {
+    const onClearAll = vi.fn<() => void>();
+    render(
+      <Sidebar
+        activeId="c1"
+        conversations={rows}
+        onClearAll={onClearAll}
+        onClose={noop()}
+        onDelete={noop()}
+        onNewChat={noop()}
+        onRename={noop()}
+        onSelect={noop()}
+        open
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('delete-all'));
+
+    expect(onClearAll).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('confirm-action'));
+
+    expect(onClearAll).toHaveBeenCalledOnce();
+  });
+
+  it('hides the delete-all button when there are no conversations', () => {
+    render(
+      <Sidebar
+        activeId={null}
+        conversations={[]}
+        onClearAll={noop()}
+        onClose={noop()}
+        onDelete={noop()}
+        onNewChat={noop()}
+        onRename={noop()}
+        onSelect={noop()}
+        open
+      />,
+    );
+
+    expect(screen.queryByTestId('delete-all')).not.toBeInTheDocument();
   });
 });
 

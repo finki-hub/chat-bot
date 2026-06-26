@@ -1,9 +1,10 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useUiStore } from '@/lib/ui-store';
 
 export type ProvidersProps = {
   children: ReactNode;
@@ -11,6 +12,10 @@ export type ProvidersProps = {
 
 export const Providers = ({ children }: ProvidersProps) => {
   const [queryClient] = useState(() => new QueryClient());
+
+  useEffect(() => {
+    void useUiStore.persist.rehydrate();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

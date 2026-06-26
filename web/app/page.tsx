@@ -15,13 +15,18 @@ const ChatScreen = () => {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
 
-  const { data: modelList } = useModels();
+  const {
+    data: modelList,
+    isError: modelsError,
+    isLoading: modelsLoading,
+  } = useModels();
   const {
     activeError,
     activeId,
     activeStatus,
     conversations,
     messages,
+    onClearAll,
     onDelete,
     onNewChat,
     onRename,
@@ -41,6 +46,7 @@ const ChatScreen = () => {
         <Sidebar
           activeId={activeId}
           conversations={conversations}
+          onClearAll={onClearAll}
           onClose={() => {
             setSidebarOpen(false);
           }}
@@ -64,6 +70,8 @@ const ChatScreen = () => {
           <Composer
             model={model}
             models={modelList ?? []}
+            modelsError={modelsError}
+            modelsLoading={modelsLoading}
             onModelChange={setModel}
             onStop={onStop}
             onSubmit={submitMessage}

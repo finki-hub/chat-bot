@@ -15,15 +15,18 @@ import type { MyUIMessage } from '@/lib/api-types';
 import { AnswerActions } from '@/components/chat/answer-actions';
 import { fireAndForget } from '@/lib/async';
 import {
+  clearAllConversations,
   type ConversationRow,
   createConversation,
   deleteConversation,
+  getConversation,
   listConversations,
   loadMessages,
   type MessageRow,
   renameConversation,
   saveMessages,
 } from '@/lib/db';
+import { hasText, joinText } from '@/lib/message-parts';
 import { deriveTitle } from '@/lib/messages';
 import { buildChatTransport } from '@/lib/transport';
 import { useUiStore } from '@/lib/ui-store';
@@ -38,22 +41,33 @@ const fromRow = (row: MessageRow): MyUIMessage => ({
 const priorUserText = (
   messages: MyUIMessage[],
   message: MyUIMessage,
-): string | undefined =>
-  messages
+): string | undefined => {
+  const prior = messages
     .slice(0, messages.indexOf(message))
-    .findLast((m) => m.role === 'user')
-    ?.parts.filter(
-      (p): p is { text: string; type: 'text' } => p.type === 'text',
-    )
-    .map((p) => p.text)
-    .join('');
+    .findLast((m) => m.role === 'user');
+  return prior ? joinText(prior) : undefined;
+};
 
 const hasAssistantText = (message: MyUIMessage): boolean =>
-  message.role === 'assistant' &&
-  message.parts.some(
-    (p): p is { text: string; type: 'text' } =>
-      p.type === 'text' && p.text.length > 0,
-  );
+  message.role === 'assistant' && hasText(message);
+
+const finalizeMessage = (
+  message: MyUIMessage,
+  startedAt: null | number,
+  firstTokenAt: null | number,
+): MyUIMessage =>
+  startedAt === null
+    ? message
+    : {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          timing: {
+            totalMs: Date.now() - startedAt,
+            ttftMs: firstTokenAt === null ? null : firstTokenAt - startedAt,
+          },
+        },
+      };
 
 const renderAnswerActions =
   (
@@ -150,23 +164,11 @@ export const useConversations = (model: string) => {
       },
       onFinish: ({ message }) => {
         setActiveStatus(undefined);
-        const startedAt = startedAtRef.current;
-        const finalized: MyUIMessage =
-          startedAt === null
-            ? message
-            : {
-                ...message,
-                metadata: {
-                  ...message.metadata,
-                  timing: {
-                    totalMs: Date.now() - startedAt,
-                    ttftMs:
-                      firstTokenAtRef.current === null
-                        ? null
-                        : firstTokenAtRef.current - startedAt,
-                  },
-                },
-              };
+        const finalized = finalizeMessage(
+          message,
+          startedAtRef.current,
+          firstTokenAtRef.current,
+        );
         setMessages((prev) =>
           prev.map((m) => (m.id === finalized.id ? finalized : m)),
         );
@@ -192,11 +194,20 @@ export const useConversations = (model: string) => {
     setActiveError(undefined);
     setActiveStatus(undefined);
     let cancelled = false;
+    const isCancelled = (): boolean => cancelled;
     if (activeId) {
       const hydrate = async (): Promise<void> => {
-        const loaded = await loadMessages(activeId);
-        if (!cancelled) {
-          setMessages(loaded.map(fromRow));
+        const convo = await getConversation(activeId);
+        if (!isCancelled()) {
+          if (convo === undefined) {
+            setActiveId(null);
+            setMessages([]);
+          } else {
+            const loaded = await loadMessages(activeId);
+            if (!isCancelled()) {
+              setMessages(loaded.map(fromRow));
+            }
+          }
         }
       };
       fireAndForget(hydrate());
@@ -207,7 +218,7 @@ export const useConversations = (model: string) => {
     return () => {
       cancelled = true;
     };
-  }, [activeId, setMessages]);
+  }, [activeId, setActiveId, setMessages]);
 
   const handleNewChat = useCallback(() => {
     setActiveId(null);
@@ -265,6 +276,12 @@ export const useConversations = (model: string) => {
     [handleNewChat, refreshConversations],
   );
 
+  const handleClearAll = useCallback(async () => {
+    await clearAllConversations();
+    handleNewChat();
+    await refreshConversations();
+  }, [handleNewChat, refreshConversations]);
+
   const submitMessage = useCallback(
     (text: string) => {
       fireAndForget(handleSubmit(text));
@@ -290,6 +307,7 @@ export const useConversations = (model: string) => {
     activeStatus,
     conversations,
     messages,
+    onClearAll: handleClearAll,
     onDelete: handleDelete,
     onNewChat: handleNewChat,
     onRename: handleRename,

@@ -13,6 +13,8 @@ beforeAll(() => {
 });
 
 const SEARCHING = '🔍 Пребарувам…';
+const PREAMBLE = 'Дозволете да проверам во базата…';
+const ANSWER = 'Испитите се во јануари.';
 
 const assistantWithParts = (parts: MyUIMessage['parts']): MyUIMessage => ({
   id: 'a1',
@@ -102,6 +104,37 @@ describe('AssistantMessage', () => {
     );
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('suppresses a pre-tool preamble while streaming with an active status', () => {
+    const msg = assistantWithParts([{ text: PREAMBLE, type: 'text' }]);
+    render(
+      <AssistantMessage
+        message={msg}
+        pending
+        statusPart={{ label: SEARCHING }}
+      />,
+    );
+
+    expect(screen.queryByText(hasText(PREAMBLE))).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(SEARCHING);
+  });
+
+  it('shows the answer (not the preamble) once the answer part has started', () => {
+    const msg = assistantWithParts([
+      { text: PREAMBLE, type: 'text' },
+      { text: ANSWER, type: 'text' },
+    ]);
+    render(
+      <AssistantMessage
+        message={msg}
+        pending
+        statusPart={{ label: SEARCHING }}
+      />,
+    );
+
+    expect(screen.getByText(hasText(ANSWER))).toBeInTheDocument();
+    expect(screen.queryByText(hasText(PREAMBLE))).not.toBeInTheDocument();
   });
 
   it('renders a Retry button for a non-interrupted error', () => {

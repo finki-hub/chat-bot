@@ -16,6 +16,7 @@ import { ElapsedTimer } from '@/components/chat/elapsed-timer';
 import { AssistantMessage } from '@/components/chat/message';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { t } from '@/lib/i18n';
+import { joinText } from '@/lib/message-parts';
 
 export type ThreadProps = {
   activeError?: { code: string; message: string };
@@ -28,17 +29,11 @@ export type ThreadProps = {
   streamStartedAt?: null | number;
 };
 
-const userText = (message: MyUIMessage): string =>
-  message.parts
-    .filter((p): p is { text: string; type: 'text' } => p.type === 'text')
-    .map((p) => p.text)
-    .join('');
-
 const SUGGESTIONS = [
-  'Кои се роковите за пријавување на испити?',
-  'Како се пресметува просечната оценка?',
-  'Кои предмети се задолжителни во прва година?',
-  'Како да аплицирам за изборни предмети?',
+  'Колку кредити ми требаат за да се запишам во наредна година?',
+  'Колку изнесува школарината за една учебна година?',
+  'Колку пати можам да полагам еден испит?',
+  'Кои се условите за дипломирање?',
 ] as const;
 
 const STAGGER = ['stagger-1', 'stagger-2', 'stagger-3', 'stagger-4'];
@@ -107,7 +102,7 @@ export const Thread = ({
                     key={m.id}
                   >
                     <MessageContent>
-                      <MessageResponse>{userText(m)}</MessageResponse>
+                      <MessageResponse>{joinText(m)}</MessageResponse>
                     </MessageContent>
                   </Message>
                 );

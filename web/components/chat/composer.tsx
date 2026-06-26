@@ -1,5 +1,11 @@
 import { ArrowUp, Loader2, Sparkles, Square } from 'lucide-react';
-import { type KeyboardEvent, useState } from 'react';
+import {
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -18,6 +24,8 @@ export type ComposerProps = {
   disabled?: boolean;
   model: string;
   models: string[];
+  modelsError?: boolean;
+  modelsLoading?: boolean;
   onModelChange: (model: string) => void;
   onStop: () => void;
   onSubmit: (text: string) => void;
@@ -28,14 +36,47 @@ export const Composer = ({
   disabled,
   model,
   models,
+  modelsError,
+  modelsLoading,
   onModelChange,
   onStop,
   onSubmit,
   status,
 }: ComposerProps) => {
   const [value, setValue] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isBusy = status === 'streaming' || status === 'submitted';
   const groups = groupModelsByProvider(models);
+  const noModels = models.length === 0;
+  const modelSelectDisabled =
+    (disabled ?? false) || modelsLoading === true || noModels;
+  let modelPlaceholder = t('composer.model');
+  if (modelsLoading === true) {
+    modelPlaceholder = t('composer.modelsLoading');
+  } else if (modelsError === true) {
+    modelPlaceholder = t('composer.modelsError');
+  }
+
+  // Keep the input ready for typing on desktop: focus on mount and whenever a
+  // response finishes (status returns to `ready`). Skip on small screens (so the
+  // mobile keyboard does not pop up) and while a modal is open.
+  const focusInput = useCallback(() => {
+    if (document.querySelector('[role="dialog"]') !== null) {
+      return;
+    }
+    if (
+      typeof matchMedia === 'function' &&
+      matchMedia('(min-width: 768px)').matches
+    ) {
+      textareaRef.current?.focus();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status === 'ready') {
+      focusInput();
+    }
+  }, [status, focusInput]);
 
   const submit = () => {
     const trimmed = value.trim();
@@ -44,6 +85,7 @@ export const Composer = ({
     }
     onSubmit(trimmed);
     setValue('');
+    focusInput();
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -102,12 +144,13 @@ export const Composer = ({
             }}
             onKeyDown={onKeyDown}
             placeholder={t('composer.placeholder')}
+            ref={textareaRef}
             rows={1}
             value={value}
           />
           <div className="flex items-center justify-end gap-1.5 px-2 pb-2">
             <Select
-              disabled={disabled}
+              disabled={modelSelectDisabled}
               onValueChange={onModelChange}
               value={model}
             >
@@ -117,11 +160,18 @@ export const Composer = ({
                 data-testid="composer-model"
                 size="sm"
               >
-                <Sparkles
-                  aria-hidden="true"
-                  className="size-3.5"
-                />
-                <SelectValue placeholder={t('composer.model')} />
+                {modelsLoading === true ? (
+                  <Loader2
+                    aria-hidden="true"
+                    className="size-3.5 animate-spin"
+                  />
+                ) : (
+                  <Sparkles
+                    aria-hidden="true"
+                    className="size-3.5"
+                  />
+                )}
+                <SelectValue placeholder={modelPlaceholder} />
               </SelectTrigger>
               <SelectContent
                 align="end"
