@@ -18,6 +18,7 @@ import {
   type ConversationRow,
   createConversation,
   deleteConversation,
+  getConversation,
   listConversations,
   loadMessages,
   type MessageRow,
@@ -54,6 +55,14 @@ const hasAssistantText = (message: MyUIMessage): boolean =>
     (p): p is { text: string; type: 'text' } =>
       p.type === 'text' && p.text.length > 0,
   );
+
+const buildTiming = (
+  startedAt: number,
+  firstTokenAt: null | number,
+): { totalMs: number; ttftMs: null | number } => ({
+  totalMs: Date.now() - startedAt,
+  ttftMs: firstTokenAt === null ? null : firstTokenAt - startedAt,
+});
 
 const renderAnswerActions =
   (
@@ -158,13 +167,7 @@ export const useConversations = (model: string) => {
                 ...message,
                 metadata: {
                   ...message.metadata,
-                  timing: {
-                    totalMs: Date.now() - startedAt,
-                    ttftMs:
-                      firstTokenAtRef.current === null
-                        ? null
-                        : firstTokenAtRef.current - startedAt,
-                  },
+                  timing: buildTiming(startedAt, firstTokenAtRef.current),
                 },
               };
         setMessages((prev) =>
@@ -192,11 +195,19 @@ export const useConversations = (model: string) => {
     setActiveError(undefined);
     setActiveStatus(undefined);
     let cancelled = false;
+    const isCancelled = (): boolean => cancelled;
     if (activeId) {
       const hydrate = async (): Promise<void> => {
-        const loaded = await loadMessages(activeId);
-        if (!cancelled) {
-          setMessages(loaded.map(fromRow));
+        const convo = await getConversation(activeId);
+        if (!isCancelled()) {
+          if (convo === undefined) {
+            setActiveId(null);
+          } else {
+            const loaded = await loadMessages(activeId);
+            if (!isCancelled()) {
+              setMessages(loaded.map(fromRow));
+            }
+          }
         }
       };
       fireAndForget(hydrate());
@@ -207,7 +218,7 @@ export const useConversations = (model: string) => {
     return () => {
       cancelled = true;
     };
-  }, [activeId, setMessages]);
+  }, [activeId, setActiveId, setMessages]);
 
   const handleNewChat = useCallback(() => {
     setActiveId(null);

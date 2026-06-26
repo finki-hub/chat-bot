@@ -18,6 +18,8 @@ export type ComposerProps = {
   disabled?: boolean;
   model: string;
   models: string[];
+  modelsError?: boolean;
+  modelsLoading?: boolean;
   onModelChange: (model: string) => void;
   onStop: () => void;
   onSubmit: (text: string) => void;
@@ -28,6 +30,8 @@ export const Composer = ({
   disabled,
   model,
   models,
+  modelsError,
+  modelsLoading,
   onModelChange,
   onStop,
   onSubmit,
@@ -36,6 +40,15 @@ export const Composer = ({
   const [value, setValue] = useState('');
   const isBusy = status === 'streaming' || status === 'submitted';
   const groups = groupModelsByProvider(models);
+  const noModels = models.length === 0;
+  const modelSelectDisabled =
+    (disabled ?? false) || modelsLoading === true || noModels;
+  let modelPlaceholder = t('composer.model');
+  if (modelsLoading === true) {
+    modelPlaceholder = t('composer.modelsLoading');
+  } else if (modelsError === true) {
+    modelPlaceholder = t('composer.modelsError');
+  }
 
   const submit = () => {
     const trimmed = value.trim();
@@ -107,7 +120,7 @@ export const Composer = ({
           />
           <div className="flex items-center justify-end gap-1.5 px-2 pb-2">
             <Select
-              disabled={disabled}
+              disabled={modelSelectDisabled}
               onValueChange={onModelChange}
               value={model}
             >
@@ -117,11 +130,18 @@ export const Composer = ({
                 data-testid="composer-model"
                 size="sm"
               >
-                <Sparkles
-                  aria-hidden="true"
-                  className="size-3.5"
-                />
-                <SelectValue placeholder={t('composer.model')} />
+                {modelsLoading === true ? (
+                  <Loader2
+                    aria-hidden="true"
+                    className="size-3.5 animate-spin"
+                  />
+                ) : (
+                  <Sparkles
+                    aria-hidden="true"
+                    className="size-3.5"
+                  />
+                )}
+                <SelectValue placeholder={modelPlaceholder} />
               </SelectTrigger>
               <SelectContent
                 align="end"

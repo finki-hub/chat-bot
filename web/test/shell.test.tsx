@@ -110,6 +110,21 @@ describe('useUiStore', () => {
 
     expect(useUiStore.getState()).toMatchObject({ sidebarOpen: true });
   });
+
+  it('persists the model and active conversation', () => {
+    const storage = createMemoryStorage();
+    vi.stubGlobal('localStorage', storage);
+
+    act(() => {
+      useUiStore.getState().setModel(GPT);
+      useUiStore.getState().setActiveConversationId('c9');
+    });
+
+    const raw = storage.getItem('finkiHub.ui');
+
+    expect(raw).toContain(`"model":"${GPT}"`);
+    expect(raw).toContain('"activeConversationId":"c9"');
+  });
 });
 
 describe('ConversationList', () => {
@@ -147,7 +162,7 @@ describe('ConversationList', () => {
     expect(onSelect).toHaveBeenCalledWith('c1');
   });
 
-  it('deletes a conversation', () => {
+  it('deletes a conversation after confirmation', () => {
     const onDelete = vi.fn<(id: string) => void>();
     render(
       <ConversationList
@@ -161,12 +176,15 @@ describe('ConversationList', () => {
     const item = screen.getByTestId('conversation-c1');
     fireEvent.click(within(item).getByRole('button', { name: 'Избриши' }));
 
+    expect(onDelete).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('confirm-delete'));
+
     expect(onDelete).toHaveBeenCalledWith('c1');
   });
 
-  it('renames a conversation via prompt', () => {
+  it('renames a conversation via the dialog', () => {
     const onRename = vi.fn<(id: string, title: string) => void>();
-    vi.spyOn(globalThis, 'prompt').mockReturnValue('Ново име');
     render(
       <ConversationList
         activeId={null}
@@ -178,6 +196,10 @@ describe('ConversationList', () => {
     );
     const item = screen.getByTestId('conversation-c1');
     fireEvent.click(within(item).getByRole('button', { name: 'Преименувај' }));
+
+    const input = screen.getByLabelText('Ново име на разговорот');
+    fireEvent.change(input, { target: { value: 'Ново име' } });
+    fireEvent.click(screen.getByTestId('confirm-rename'));
 
     expect(onRename).toHaveBeenCalledWith('c1', 'Ново име');
   });

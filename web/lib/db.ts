@@ -69,6 +69,10 @@ export const createConversation = async (input: {
 export const listConversations = (): Promise<ConversationRow[]> =>
   db.conversations.orderBy('updatedAt').reverse().toArray();
 
+export const getConversation = (
+  id: string,
+): Promise<ConversationRow | undefined> => db.conversations.get(id);
+
 export const renameConversation = async (
   id: string,
   title: string,
