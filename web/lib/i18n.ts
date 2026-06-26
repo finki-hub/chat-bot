@@ -26,6 +26,7 @@ export const messages = {
   'sidebar.toggle': 'Прикажи/сокриј странична лента',
   'thread.emptyDescription': 'Прашај нешто за студиите на ФИНКИ.',
   'thread.emptyTitle': 'Започни разговор',
+  'thread.firstToken': 'прв токен',
   'thread.thinking': 'Размислувам…',
 } as const;
 

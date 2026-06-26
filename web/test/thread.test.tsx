@@ -141,6 +141,54 @@ describe('AssistantMessage', () => {
       screen.queryByRole('button', { name: 'Обиди се повторно' }),
     ).not.toBeInTheDocument();
   });
+
+  it('renders a timing footnote when finished with timing metadata', () => {
+    const msg: MyUIMessage = {
+      id: 'a1',
+      metadata: { timing: { totalMs: 2_345, ttftMs: 1_200 } },
+      parts: [{ text: 'Готово', type: 'text' }],
+      role: 'assistant',
+    };
+    render(<AssistantMessage message={msg} />);
+
+    const footnote = screen.getByTestId('message-timing');
+
+    expect(footnote).toHaveTextContent('2.3s');
+    expect(footnote).toHaveTextContent('прв токен');
+    expect(footnote).toHaveTextContent('1.2s');
+  });
+
+  it('omits the first-token part when ttft is unknown', () => {
+    const msg: MyUIMessage = {
+      id: 'a1',
+      metadata: { timing: { totalMs: 500, ttftMs: null } },
+      parts: [{ text: 'Готово', type: 'text' }],
+      role: 'assistant',
+    };
+    render(<AssistantMessage message={msg} />);
+
+    const footnote = screen.getByTestId('message-timing');
+
+    expect(footnote).toHaveTextContent('500ms');
+    expect(footnote).not.toHaveTextContent('прв токен');
+  });
+
+  it('hides the timing footnote while pending', () => {
+    const msg: MyUIMessage = {
+      id: 'a1',
+      metadata: { timing: { totalMs: 2_345, ttftMs: 1_200 } },
+      parts: [{ text: 'Делумен', type: 'text' }],
+      role: 'assistant',
+    };
+    render(
+      <AssistantMessage
+        message={msg}
+        pending
+      />,
+    );
+
+    expect(screen.queryByTestId('message-timing')).not.toBeInTheDocument();
+  });
 });
 
 describe('Thread', () => {
@@ -188,6 +236,18 @@ describe('Thread', () => {
     );
 
     expect(screen.getByTestId('typing-indicator')).toBeInTheDocument();
+  });
+
+  it('shows a live elapsed timer while awaiting the reply', () => {
+    render(
+      <Thread
+        messages={[userMessage('прашање')]}
+        status="submitted"
+        streamStartedAt={Date.now()}
+      />,
+    );
+
+    expect(screen.getByTestId('elapsed-timer')).toBeInTheDocument();
   });
 
   it('passes the active status only to the LAST assistant message while streaming', () => {

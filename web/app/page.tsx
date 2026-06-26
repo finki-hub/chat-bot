@@ -30,6 +30,7 @@ const ChatScreen = () => {
     renderActions,
     retry,
     status,
+    streamStartedAt,
     submitMessage,
   } = useConversations(model);
 
@@ -58,6 +59,7 @@ const ChatScreen = () => {
             onRetry={retry}
             renderActions={renderActions}
             status={status}
+            streamStartedAt={streamStartedAt}
           />
           <Composer
             model={model}
