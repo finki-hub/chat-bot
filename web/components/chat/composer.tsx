@@ -1,5 +1,11 @@
 import { ArrowUp, Loader2, Sparkles, Square } from 'lucide-react';
-import { type KeyboardEvent, useState } from 'react';
+import {
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -38,6 +44,7 @@ export const Composer = ({
   status,
 }: ComposerProps) => {
   const [value, setValue] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isBusy = status === 'streaming' || status === 'submitted';
   const groups = groupModelsByProvider(models);
   const noModels = models.length === 0;
@@ -50,6 +57,27 @@ export const Composer = ({
     modelPlaceholder = t('composer.modelsError');
   }
 
+  // Keep the input ready for typing on desktop: focus on mount and whenever a
+  // response finishes (status returns to `ready`). Skip on small screens (so the
+  // mobile keyboard does not pop up) and while a modal is open.
+  const focusInput = useCallback(() => {
+    if (document.querySelector('[role="dialog"]') !== null) {
+      return;
+    }
+    if (
+      typeof matchMedia === 'function' &&
+      matchMedia('(min-width: 768px)').matches
+    ) {
+      textareaRef.current?.focus();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status === 'ready') {
+      focusInput();
+    }
+  }, [status, focusInput]);
+
   const submit = () => {
     const trimmed = value.trim();
     if (!trimmed || isBusy || disabled) {
@@ -57,6 +85,7 @@ export const Composer = ({
     }
     onSubmit(trimmed);
     setValue('');
+    focusInput();
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -115,6 +144,7 @@ export const Composer = ({
             }}
             onKeyDown={onKeyDown}
             placeholder={t('composer.placeholder')}
+            ref={textareaRef}
             rows={1}
             value={value}
           />
