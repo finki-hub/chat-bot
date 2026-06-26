@@ -1,7 +1,7 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
@@ -22,6 +22,7 @@ import {
   saveMessages,
   setMessageFeedback,
 } from '@/lib/db';
+import { t } from '@/lib/i18n';
 import { deriveTitle } from '@/lib/messages';
 import { buildChatTransport } from '@/lib/transport';
 import { useUiStore } from '@/lib/ui-store';
@@ -61,6 +62,18 @@ export const useConversations = (model: string, disabled = false) => {
     [refreshConversations],
   );
 
+  // useChat captures the transport once (on the first render) and ignores any
+  // transport passed on later renders, so `model` must be read at send time via
+  // a ref rather than captured by value — otherwise the picked model never
+  // reaches the request. The transport is memoized so it stays the one instance
+  // useChat keeps.
+  const modelRef = useRef(model);
+  modelRef.current = model;
+  const transport = useMemo(
+    () => buildChatTransport(() => ({ model: modelRef.current })),
+    [],
+  );
+
   const { messages, regenerate, sendMessage, setMessages, status, stop } =
     useChat<MyUIMessage>({
       onData: (part) => {
@@ -73,6 +86,14 @@ export const useConversations = (model: string, disabled = false) => {
       onError: () => {
         regeneratingMessageIdRef.current = null;
         setRegeneratingMessageId(null);
+        // A thrown stream/transport error (no data-error part) would otherwise
+        // leave the user with a blank bubble; surface a generic fallback without
+        // clobbering a specific error already captured via onData. Aborts (stop)
+        // never reach onError, so this will not fire on user-initiated stop.
+        setActiveError(
+          (prev) =>
+            prev ?? { code: 'network', message: t('error.description') },
+        );
       },
       onFinish: ({ message }) => {
         setActiveStatus(undefined);
@@ -98,7 +119,7 @@ export const useConversations = (model: string, disabled = false) => {
           return next;
         });
       },
-      transport: buildChatTransport(() => ({ model })),
+      transport,
     });
 
   useStreamTiming({
@@ -119,11 +140,15 @@ export const useConversations = (model: string, disabled = false) => {
   });
 
   const handleNewChat = useCallback(() => {
+    // One Chat instance is shared across conversations, so an in-flight stream
+    // must be torn down before switching away or it would append into / persist
+    // against the wrong conversation.
+    void stop();
     setActiveId(null);
     setMessages([]);
     setActiveError(undefined);
     convoIdRef.current = null;
-  }, [setActiveId, setMessages]);
+  }, [setActiveId, setMessages, stop]);
 
   const handleSubmit = useCallback(
     async (text: string) => {
@@ -158,9 +183,10 @@ export const useConversations = (model: string, disabled = false) => {
 
   const handleSelect = useCallback(
     (id: string) => {
+      void stop();
       setActiveId(id);
     },
-    [setActiveId],
+    [setActiveId, stop],
   );
 
   const handleDelete = useCallback(

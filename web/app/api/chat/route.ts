@@ -51,6 +51,9 @@ export const POST = async (req: Request): Promise<Response> => {
       body: JSON.stringify(chatBody),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
+      // Forward the client abort so stopping the chat (or a disconnect) tears
+      // down the upstream LLM generation instead of letting it run to the end.
+      signal: req.signal,
     });
 
     const contentType = upstream.headers.get('content-type') ?? '';
@@ -79,8 +82,10 @@ export const POST = async (req: Request): Promise<Response> => {
           responseId,
         });
       },
-      onError: (error) =>
-        error instanceof Error ? error.message : 'stream error',
+      // Keep this generic: the returned string is sent to the browser, so do
+      // not leak raw upstream/runtime error messages. Known protocol-v2 errors
+      // are surfaced separately as transient data-error parts.
+      onError: () => 'stream error',
     });
 
     return createUIMessageStreamResponse({ stream });

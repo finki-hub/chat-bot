@@ -5,7 +5,7 @@ import {
   MAX_MESSAGES,
   type MyUIMessage,
 } from '@/lib/api-types';
-import { joinText } from '@/lib/message-parts';
+import { joinText, lastText } from '@/lib/message-parts';
 import { type ParsedEvent } from '@/lib/sse';
 
 export type ChatClientBody = {
@@ -59,10 +59,16 @@ const messagesForRequest = (body: ChatClientBody): MyUIMessage[] => {
 
 export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
   const trimmed = messagesForRequest(body).slice(-MAX_MESSAGES);
-  const messages: ConversationTurn[] = trimmed.map((message) => ({
-    content: joinText(message).slice(0, MAX_CHARS_PER_TURN),
-    role: message.role === 'assistant' ? 'assistant' : 'user',
-  }));
+  const messages: ConversationTurn[] = trimmed.map((message) => {
+    const role = message.role === 'assistant' ? 'assistant' : 'user';
+    // Assistants can carry multiple text parts (a `reset` discards a preamble by
+    // starting a fresh part); only the last part is the real answer and matches
+    // what the UI renders. User turns always have a single text part.
+    const content =
+      (role === 'assistant' ? lastText(message) : joinText(message)) ?? '';
+
+    return { content: content.slice(0, MAX_CHARS_PER_TURN), role };
+  });
 
   return {
     messages,

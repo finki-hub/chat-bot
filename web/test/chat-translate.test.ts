@@ -91,6 +91,20 @@ describe('toChatRequestBody', () => {
 
     expect(out.messages).toStrictEqual([{ content: 'Прашање?', role: 'user' }]);
   });
+
+  it('forwards only the last assistant text part (drops a discarded reset preamble)', () => {
+    const out = toChatRequestBody({
+      messages: [
+        msg('user', 'Прашање?'),
+        msg('assistant', 'преамбула', 'одговор'),
+      ],
+    });
+
+    expect(out.messages).toStrictEqual([
+      { content: 'Прашање?', role: 'user' },
+      { content: 'одговор', role: 'assistant' },
+    ]);
+  });
 });
 
 class FakeWriter {
