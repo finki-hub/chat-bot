@@ -21,15 +21,11 @@ export const useHealth = (): { unavailable: boolean } => {
     refetchInterval: (q) =>
       q.state.status === 'error' ? DOWN_INTERVAL_MS : HEALTHY_INTERVAL_MS,
     refetchOnWindowFocus: 'always',
-    // One retry absorbs a single transient blip; the down-state still resolves
-    // within ~one retry. Recovery is picked up by the faster down-interval and
-    // the always-on focus refetch.
+    // One retry absorbs a transient blip before flagging the backend down.
     retry: 1,
     staleTime: HEALTHY_INTERVAL_MS,
   });
 
-  // Optimistic: only flag unavailable once a check has actually failed (after
-  // the retry), so the chat is never blocked during the initial in-flight
-  // check and a single blip can't lock the composer.
+  // Optimistic: only flag unavailable after a check actually fails (post-retry).
   return { unavailable: query.isError };
 };
