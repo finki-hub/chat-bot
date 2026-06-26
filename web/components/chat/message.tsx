@@ -10,11 +10,12 @@ import {
   MessageResponse,
 } from '@/components/ai-elements/message';
 import { ElapsedTimer } from '@/components/chat/elapsed-timer';
+import { ReasoningDisclosure } from '@/components/chat/reasoning-disclosure';
 import { SearchStatus } from '@/components/chat/search-status';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { formatDuration } from '@/lib/duration';
 import { t } from '@/lib/i18n';
-import { textParts } from '@/lib/message-parts';
+import { reasoningParts, textParts } from '@/lib/message-parts';
 
 export type AssistantMessageProps = {
   actions?: ReactNode;
@@ -92,6 +93,9 @@ export const AssistantMessage = ({
   streamStartedAt,
 }: AssistantMessageProps) => {
   const parts = textParts(message);
+  const reasoningText = reasoningParts(message)
+    .map((part) => part.text)
+    .join('');
   // While streaming with a tool status active, a text part that is still the
   // FIRST part is the model's pre-tool preamble (the backend discards it via a
   // `reset` once the real answer begins). Suppress it so it does not render and
@@ -110,6 +114,7 @@ export const AssistantMessage = ({
   return (
     <Message from="assistant">
       <MessageContent>
+        {reasoningText ? <ReasoningDisclosure text={reasoningText} /> : null}
         {text ? (
           <div data-testid="answer-text">
             <MessageResponse>{text}</MessageResponse>

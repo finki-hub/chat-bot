@@ -13,6 +13,8 @@ import { useModels } from '@/lib/use-models';
 const ChatScreen = () => {
   const model = useUiStore((s) => s.model);
   const setModel = useUiStore((s) => s.setModel);
+  const reasoning = useUiStore((s) => s.reasoning);
+  const setReasoning = useUiStore((s) => s.setReasoning);
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
@@ -40,7 +42,7 @@ const ChatScreen = () => {
     status,
     streamStartedAt,
     submitMessage,
-  } = useConversations(model, unavailable);
+  } = useConversations(model, unavailable, reasoning);
 
   return (
     <div className="flex h-dvh w-full flex-col">
@@ -78,8 +80,10 @@ const ChatScreen = () => {
             modelsError={modelsError}
             modelsLoading={modelsLoading}
             onModelChange={setModel}
+            onReasoningChange={setReasoning}
             onStop={onStop}
             onSubmit={submitMessage}
+            reasoning={reasoning}
             status={status}
           />
         </main>

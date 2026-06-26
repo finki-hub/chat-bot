@@ -42,18 +42,21 @@ const setup = (overrides: Partial<ComponentProps<typeof Composer>> = {}) => {
   const onSubmit = vi.fn<(text: string) => void>();
   const onStop = vi.fn<() => void>();
   const onModelChange = vi.fn<(model: string) => void>();
+  const onReasoningChange = vi.fn<(reasoning: boolean) => void>();
   render(
     <Composer
       model={CLAUDE}
       models={[CLAUDE, GPT]}
       onModelChange={onModelChange}
+      onReasoningChange={onReasoningChange}
       onStop={onStop}
       onSubmit={onSubmit}
+      reasoning={false}
       status="ready"
       {...overrides}
     />,
   );
-  return { onModelChange, onStop, onSubmit };
+  return { onModelChange, onReasoningChange, onStop, onSubmit };
 };
 
 describe('Composer', () => {
@@ -127,5 +130,22 @@ describe('Composer', () => {
     await user.click(await screen.findByRole('option', { name: GPT }));
 
     expect(onModelChange).toHaveBeenCalledWith(GPT);
+  });
+
+  it('toggles reasoning for a reasoning-capable model', () => {
+    const { onReasoningChange } = setup({ model: CLAUDE, reasoning: false });
+    const pill = screen.getByTestId('composer-reasoning');
+
+    expect(pill).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(pill);
+
+    expect(onReasoningChange).toHaveBeenCalledWith(true);
+  });
+
+  it('disables the reasoning toggle for non-capable models', () => {
+    setup({ model: 'llama3.3:70b', reasoning: false });
+
+    expect(screen.getByTestId('composer-reasoning')).toBeDisabled();
   });
 });
