@@ -136,3 +136,23 @@
     font-family: 'JetBrains Mono', monospace;
   }
 }
+
+
+/* Brand text selection */
+::selection {
+  background-color: hsl(var(--primary) / 0.24);
+}
+
+/* Staggered entrance delays for animate-in utilities */
+.stagger-1 {
+  animation-delay: 80ms;
+}
+.stagger-2 {
+  animation-delay: 160ms;
+}
+.stagger-3 {
+  animation-delay: 240ms;
+}
+.stagger-4 {
+  animation-delay: 320ms;
+}
