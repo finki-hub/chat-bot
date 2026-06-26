@@ -15,6 +15,7 @@ beforeAll(() => {
 const SEARCHING = '🔍 Пребарувам…';
 const PREAMBLE = 'Дозволете да проверам во базата…';
 const ANSWER = 'Испитите се во јануари.';
+const TIMING_TESTID = 'message-timing';
 
 const assistantWithParts = (parts: MyUIMessage['parts']): MyUIMessage => ({
   id: 'a1',
@@ -184,7 +185,7 @@ describe('AssistantMessage', () => {
     };
     render(<AssistantMessage message={msg} />);
 
-    const footnote = screen.getByTestId('message-timing');
+    const footnote = screen.getByTestId(TIMING_TESTID);
 
     expect(footnote).toHaveTextContent('2.3s');
     expect(footnote).toHaveTextContent('прв токен');
@@ -200,7 +201,7 @@ describe('AssistantMessage', () => {
     };
     render(<AssistantMessage message={msg} />);
 
-    const footnote = screen.getByTestId('message-timing');
+    const footnote = screen.getByTestId(TIMING_TESTID);
 
     expect(footnote).toHaveTextContent('500ms');
     expect(footnote).not.toHaveTextContent('прв токен');
@@ -220,7 +221,40 @@ describe('AssistantMessage', () => {
       />,
     );
 
-    expect(screen.queryByTestId('message-timing')).not.toBeInTheDocument();
+    expect(screen.queryByTestId(TIMING_TESTID)).not.toBeInTheDocument();
+  });
+
+  it('renders the footnote as a hover trigger when diagnostics are present', () => {
+    const msg: MyUIMessage = {
+      id: 'a1',
+      metadata: {
+        diagnostics: {
+          serverTotalMs: 1_234,
+          tokens: { input: 10, output: 20, total: 30 },
+        },
+        timing: { totalMs: 2_345, ttftMs: 1_200 },
+      },
+      parts: [{ text: 'Готово', type: 'text' }],
+      role: 'assistant',
+    };
+    render(<AssistantMessage message={msg} />);
+
+    const footnote = screen.getByTestId(TIMING_TESTID);
+
+    expect(footnote.tagName).toBe('BUTTON');
+    expect(footnote).toHaveTextContent('2.3s');
+  });
+
+  it('keeps the footnote a plain element when diagnostics are absent', () => {
+    const msg: MyUIMessage = {
+      id: 'a1',
+      metadata: { timing: { totalMs: 500, ttftMs: null } },
+      parts: [{ text: 'Готово', type: 'text' }],
+      role: 'assistant',
+    };
+    render(<AssistantMessage message={msg} />);
+
+    expect(screen.getByTestId(TIMING_TESTID).tagName).toBe('DIV');
   });
 });
 

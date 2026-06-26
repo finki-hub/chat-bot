@@ -1,7 +1,8 @@
-import type { ChatErrorCode } from '@/lib/api-types';
+import type { ChatErrorCode, MessageDiagnostics } from '@/lib/api-types';
 
 export type ParsedEvent =
   | { code: ChatErrorCode; message: string; type: 'error' }
+  | { diagnostics: MessageDiagnostics; type: 'meta' }
   | { label: string; state: string; tool?: string; type: 'status' }
   | { text: string; type: 'token' }
   | { type: 'done' }
@@ -30,6 +31,59 @@ const asString = (value: unknown): string =>
 
 const unescapeNewlines = (text: string): string =>
   text.replaceAll(String.raw`\n`, '\n');
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const asNumberOrNull = (value: unknown): null | number =>
+  typeof value === 'number' ? value : null;
+
+const asNumber = (value: unknown): number =>
+  typeof value === 'number' ? value : 0;
+
+const toSpans = (value: unknown): Record<string, number> => {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  const spans: Record<string, number> = {};
+
+  for (const [name, ms] of Object.entries(value)) {
+    if (typeof ms === 'number') {
+      spans[name] = ms;
+    }
+  }
+
+  return spans;
+};
+
+// Map the snake_case `meta` wire payload to the camelCase MessageDiagnostics the UI
+// reads. A frame carries timing OR tokens (the API emits them from different layers),
+// so each section is mapped only when present and the rest is deep-merged downstream.
+const toDiagnostics = (obj: Record<string, unknown>): MessageDiagnostics => {
+  const diagnostics: MessageDiagnostics = {};
+  const timing = obj['timing'];
+
+  if (isRecord(timing)) {
+    diagnostics.serverTtftMs = asNumberOrNull(timing['ttft_ms']);
+    diagnostics.serverTotalMs = asNumberOrNull(timing['total_ms']);
+    diagnostics.candidateCount = asNumberOrNull(timing['candidate_count']);
+    diagnostics.topDistance = asNumberOrNull(timing['top_distance']);
+    diagnostics.spans = toSpans(timing['spans']);
+  }
+
+  const tokens = obj['tokens'];
+
+  if (isRecord(tokens)) {
+    diagnostics.tokens = {
+      input: asNumber(tokens['input']),
+      output: asNumber(tokens['output']),
+      total: asNumber(tokens['total']),
+    };
+  }
+
+  return diagnostics;
+};
 
 const toStringChunks = async function* (
   source: SseSource,
@@ -111,6 +165,8 @@ const buildEvent = (
         message: asString(obj['message']),
         type: 'error',
       };
+    case 'meta':
+      return { diagnostics: toDiagnostics(obj), type: 'meta' };
     case 'reset':
       return { type: 'reset' };
     case 'status':

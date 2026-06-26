@@ -58,12 +58,25 @@ export type FeedbackSchema = {
 
 export type FeedbackType = 'dislike' | 'like';
 
+// Server-measured request diagnostics surfaced under the timing footnote. Every field
+// is optional: a single `meta` frame carries only part of it (timing vs tokens), and
+// not all providers report token usage.
+export type MessageDiagnostics = {
+  candidateCount?: null | number;
+  serverTotalMs?: null | number;
+  serverTtftMs?: null | number;
+  spans?: Record<string, number>;
+  tokens?: { input: number; output: number; total: number };
+  topDistance?: null | number;
+};
+
 export type MyDataParts = {
   error: { code: string; message: string };
   status: { label: string; tool?: string };
 };
 
 export type MyMetadata = {
+  diagnostics?: MessageDiagnostics;
   feedback?: FeedbackType;
   inferenceModel?: string;
   responseId?: string;
@@ -83,4 +96,17 @@ export type ProtocolV2Event =
       event: 'error';
     }
   | { data: { label: string; state: string; tool?: string }; event: 'status' }
-  | { data: { text: string }; event: 'token' };
+  | { data: { text: string }; event: 'token' }
+  | {
+      data: {
+        timing?: {
+          candidate_count: null | number;
+          spans: Record<string, number>;
+          top_distance: null | number;
+          total_ms: null | number;
+          ttft_ms: null | number;
+        };
+        tokens?: { input: number; output: number; total: number };
+      };
+      event: 'meta';
+    };

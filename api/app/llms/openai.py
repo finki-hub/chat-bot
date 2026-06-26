@@ -61,6 +61,7 @@ def get_openai_llm(
             temperature=temperature,
             top_p=top_p,
             streaming=True,
+            stream_usage=True,
             max_tokens=max_tokens,  # type: ignore[call-arg]
         )
 

@@ -274,4 +274,31 @@ describe('translateToUiStream', () => {
       },
     ]);
   });
+
+  it('forwards a meta event as a message-metadata diagnostics part', async () => {
+    const writer = new FakeWriter();
+    const diagnostics = {
+      serverTotalMs: 980.2,
+      tokens: { input: 1, output: 2, total: 3 },
+    };
+
+    await translateToUiStream(
+      events(
+        { text: 'Здраво', type: 'token' },
+        { diagnostics, type: 'meta' },
+        DONE,
+      ),
+      writer,
+      {},
+      ids(),
+    );
+
+    expect(writer.parts).toStrictEqual([
+      startWith({}),
+      textStart(T1),
+      textDelta(T1, 'Здраво'),
+      { messageMetadata: { diagnostics }, type: 'message-metadata' },
+      textEnd(T1),
+    ]);
+  });
 });

@@ -3,6 +3,7 @@ import {
   type ConversationTurn,
   MAX_CHARS_PER_TURN,
   MAX_MESSAGES,
+  type MessageDiagnostics,
   type MyUIMessage,
 } from '@/lib/api-types';
 import { joinText } from '@/lib/message-parts';
@@ -37,7 +38,11 @@ export type UiStreamPart =
   | { delta: string; id: string; type: 'text-delta' }
   | { id: string; type: 'text-end' }
   | { id: string; type: 'text-start' }
-  | { messageMetadata: UiStreamMeta; type: 'start' };
+  | { messageMetadata: UiStreamMeta; type: 'start' }
+  | {
+      messageMetadata: { diagnostics: MessageDiagnostics };
+      type: 'message-metadata';
+    };
 
 export type UiStreamWriter = {
   write: (part: UiStreamPart) => void;
@@ -146,6 +151,13 @@ export const translateToUiStream = async (
           stopped = true;
         }
 
+        break;
+
+      case 'meta':
+        writer.write({
+          messageMetadata: { diagnostics: event.diagnostics },
+          type: 'message-metadata',
+        });
         break;
 
       case 'reset':
