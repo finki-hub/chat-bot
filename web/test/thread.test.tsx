@@ -271,6 +271,23 @@ describe('Thread', () => {
     expect(screen.getByTestId('typing-indicator')).toBeInTheDocument();
   });
 
+  it('keeps the typing indicator mounted when an empty assistant stream shell appears', () => {
+    const messages: MyUIMessage[] = [
+      userMessage('прашање'),
+      assistantWithParts([]),
+    ];
+
+    render(
+      <Thread
+        messages={messages}
+        status="streaming"
+      />,
+    );
+
+    expect(screen.getAllByTestId('typing-indicator')).toHaveLength(1);
+    expect(screen.queryByTestId('answer-text')).not.toBeInTheDocument();
+  });
+
   it('shows a live elapsed timer while awaiting the reply', () => {
     render(
       <Thread
@@ -312,5 +329,24 @@ describe('Thread', () => {
     );
 
     expect(screen.getByTestId('acts')).toHaveTextContent('a1');
+  });
+
+  it('keeps completed message actions visible while a later answer streams', () => {
+    const messages: MyUIMessage[] = [
+      assistantWithParts([{ text: 'готово', type: 'text' }]),
+      userMessage('уште едно'),
+      { ...assistantWithParts([]), id: 'a2' },
+    ];
+
+    render(
+      <Thread
+        messages={messages}
+        renderActions={(m) => <span data-testid="acts">{m.id}</span>}
+        status="streaming"
+      />,
+    );
+
+    expect(screen.getByTestId('acts')).toHaveTextContent('a1');
+    expect(screen.getAllByTestId('typing-indicator')).toHaveLength(1);
   });
 });

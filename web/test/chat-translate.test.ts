@@ -77,6 +77,20 @@ describe('toChatRequestBody', () => {
 
     expect(out).toStrictEqual({ messages: [{ content: 'hi', role: 'user' }] });
   });
+
+  it('removes the regenerated assistant answer from the forwarded context', () => {
+    const question = msg('user', 'Прашање?');
+    const firstAnswer = { ...msg('assistant', 'Стар одговор'), id: 'a1' };
+    const followUp = msg('user', 'Следно?');
+
+    const out = toChatRequestBody({
+      messageId: 'a1',
+      messages: [question, firstAnswer, followUp],
+      trigger: 'regenerate-message',
+    });
+
+    expect(out.messages).toStrictEqual([{ content: 'Прашање?', role: 'user' }]);
+  });
 });
 
 class FakeWriter {

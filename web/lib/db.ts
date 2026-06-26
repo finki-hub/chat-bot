@@ -119,3 +119,45 @@ export const saveMessages = async (
     await db.conversations.update(conversationId, { updatedAt: nextNow() });
   });
 };
+
+export const replaceConversationMessages = async (
+  conversationId: string,
+  messages: MyUIMessage[],
+): Promise<void> => {
+  await db.transaction('rw', db.conversations, db.messages, async () => {
+    const existingRows = await db.messages
+      .where('conversationId')
+      .equals(conversationId)
+      .toArray();
+    const existing = new Map(
+      existingRows.map((row) => [row.id, row.createdAt] as const),
+    );
+    let maxExisting = 0;
+    for (const row of existingRows) {
+      maxExisting = Math.max(maxExisting, row.createdAt);
+    }
+    const base = Math.max(nextNow(), maxExisting + 1);
+    const rows: MessageRow[] = messages.map((message, index) => ({
+      conversationId,
+      createdAt: existing.get(message.id) ?? base + index,
+      id: message.id,
+      metadata: message.metadata,
+      parts: message.parts,
+      role: message.role,
+    }));
+    const keptIds = new Set(rows.map((row) => row.id));
+    const staleIds: string[] = [];
+    for (const id of existing.keys()) {
+      if (!keptIds.has(id)) {
+        staleIds.push(id);
+      }
+    }
+
+    if (staleIds.length > 0) {
+      await db.messages.bulkDelete(staleIds);
+    }
+
+    await db.messages.bulkPut(rows);
+    await db.conversations.update(conversationId, { updatedAt: nextNow() });
+  });
+};

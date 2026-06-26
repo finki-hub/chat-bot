@@ -1,131 +1,37 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import {
-  type ReactNode,
-  type RefObject,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import type { MyUIMessage } from '@/lib/api-types';
 
-import { AnswerActions } from '@/components/chat/answer-actions';
 import { fireAndForget } from '@/lib/async';
+import { renderAnswerActions } from '@/lib/conversation-actions';
+import {
+  finalizeMessage,
+  previewRegeneration,
+  replaceFinishedMessage,
+} from '@/lib/conversation-message-state';
 import {
   clearAllConversations,
-  type ConversationRow,
   createConversation,
   deleteConversation,
-  getConversation,
-  listConversations,
-  loadMessages,
-  type MessageRow,
   renameConversation,
+  replaceConversationMessages,
   saveMessages,
 } from '@/lib/db';
-import { hasText, joinText } from '@/lib/message-parts';
 import { deriveTitle } from '@/lib/messages';
 import { buildChatTransport } from '@/lib/transport';
 import { useUiStore } from '@/lib/ui-store';
-
-const fromRow = (row: MessageRow): MyUIMessage => ({
-  id: row.id,
-  metadata: row.metadata,
-  parts: row.parts,
-  role: row.role,
-});
-
-const priorUserText = (
-  messages: MyUIMessage[],
-  message: MyUIMessage,
-): string | undefined => {
-  const prior = messages
-    .slice(0, messages.indexOf(message))
-    .findLast((m) => m.role === 'user');
-  return prior ? joinText(prior) : undefined;
-};
-
-const hasAssistantText = (message: MyUIMessage): boolean =>
-  message.role === 'assistant' && hasText(message);
-
-const finalizeMessage = (
-  message: MyUIMessage,
-  startedAt: null | number,
-  firstTokenAt: null | number,
-): MyUIMessage =>
-  startedAt === null
-    ? message
-    : {
-        ...message,
-        metadata: {
-          ...message.metadata,
-          timing: {
-            totalMs: Date.now() - startedAt,
-            ttftMs: firstTokenAt === null ? null : firstTokenAt - startedAt,
-          },
-        },
-      };
-
-const renderAnswerActions =
-  (
-    messages: MyUIMessage[],
-    status: 'error' | 'ready' | 'streaming' | 'submitted',
-    regenerate: (options: { messageId: string }) => void,
-  ) =>
-  (message: MyUIMessage): ReactNode =>
-    message.role === 'assistant' && status !== 'streaming' ? (
-      <AnswerActions
-        message={message}
-        onRegenerate={() => {
-          regenerate({ messageId: message.id });
-        }}
-        questionText={priorUserText(messages, message)}
-      />
-    ) : null;
-
-const useStreamTiming = ({
-  firstTokenAtRef,
-  messages,
-  setStreamStartedAt,
-  startedAtRef,
-  status,
-}: {
-  firstTokenAtRef: RefObject<null | number>;
-  messages: MyUIMessage[];
-  setStreamStartedAt: (value: null | number) => void;
-  startedAtRef: RefObject<null | number>;
-  status: 'error' | 'ready' | 'streaming' | 'submitted';
-}): void => {
-  useEffect(() => {
-    if (status === 'submitted') {
-      const now = Date.now();
-      startedAtRef.current = now;
-      firstTokenAtRef.current = null;
-      setStreamStartedAt(now);
-    } else if (status === 'ready' || status === 'error') {
-      setStreamStartedAt(null);
-    }
-  }, [status, firstTokenAtRef, setStreamStartedAt, startedAtRef]);
-
-  useEffect(() => {
-    if (firstTokenAtRef.current !== null || startedAtRef.current === null) {
-      return;
-    }
-    const last = messages.at(-1);
-    if (last !== undefined && hasAssistantText(last)) {
-      firstTokenAtRef.current = Date.now();
-    }
-  }, [messages, firstTokenAtRef, startedAtRef]);
-};
+import { useConversationHydration } from '@/lib/use-conversation-hydration';
+import { useConversationList } from '@/lib/use-conversation-list';
+import { useStreamTiming } from '@/lib/use-stream-timing';
 
 export const useConversations = (model: string) => {
   const activeId = useUiStore((s) => s.activeConversationId);
   const setActiveId = useUiStore((s) => s.setActiveConversationId);
 
-  const [conversations, setConversations] = useState<ConversationRow[]>([]);
+  const { conversations, refreshConversations } = useConversationList();
   const [activeStatus, setActiveStatus] = useState<
     undefined | { label: string; tool?: string }
   >();
@@ -135,19 +41,19 @@ export const useConversations = (model: string) => {
   const convoIdRef = useRef<null | string>(activeId);
   const startedAtRef = useRef<null | number>(null);
   const firstTokenAtRef = useRef<null | number>(null);
+  const regeneratingMessageIdRef = useRef<null | string>(null);
+  const [regeneratingMessageId, setRegeneratingMessageId] = useState<
+    null | string
+  >(null);
   const [streamStartedAt, setStreamStartedAt] = useState<null | number>(null);
 
-  const refreshConversations = useCallback(async () => {
-    setConversations(await listConversations());
-  }, []);
-
   const persistFinished = useCallback(
-    async (message: MyUIMessage): Promise<void> => {
+    async (allMessages: readonly MyUIMessage[]): Promise<void> => {
       const cid = convoIdRef.current;
       if (!cid) {
         return;
       }
-      await saveMessages(cid, [message]);
+      await replaceConversationMessages(cid, [...allMessages]);
       await refreshConversations();
     },
     [refreshConversations],
@@ -162,24 +68,36 @@ export const useConversations = (model: string) => {
           setActiveError(part.data);
         }
       },
+      onError: () => {
+        regeneratingMessageIdRef.current = null;
+        setRegeneratingMessageId(null);
+      },
       onFinish: ({ message }) => {
         setActiveStatus(undefined);
-        const finalized = finalizeMessage(
+        const replacementId = regeneratingMessageIdRef.current;
+        regeneratingMessageIdRef.current = null;
+        setRegeneratingMessageId(null);
+        const finalizedBase = finalizeMessage(
           message,
           startedAtRef.current,
           firstTokenAtRef.current,
         );
-        setMessages((prev) =>
-          prev.map((m) => (m.id === finalized.id ? finalized : m)),
-        );
-        fireAndForget(persistFinished(finalized));
+        const finalized =
+          replacementId === null
+            ? finalizedBase
+            : { ...finalizedBase, id: replacementId };
+        setMessages((prev) => {
+          const next = replaceFinishedMessage({
+            pruneAfterReplacement: replacementId !== null,
+            replacement: finalized,
+            streamMessageId: message.id,
+          })(prev);
+          fireAndForget(persistFinished(next));
+          return next;
+        });
       },
       transport: buildChatTransport(() => ({ model })),
     });
-
-  useEffect(() => {
-    fireAndForget(refreshConversations());
-  }, [refreshConversations]);
 
   useStreamTiming({
     firstTokenAtRef,
@@ -189,36 +107,14 @@ export const useConversations = (model: string) => {
     status,
   });
 
-  useEffect(() => {
-    convoIdRef.current = activeId;
-    setActiveError(undefined);
-    setActiveStatus(undefined);
-    let cancelled = false;
-    const isCancelled = (): boolean => cancelled;
-    if (activeId) {
-      const hydrate = async (): Promise<void> => {
-        const convo = await getConversation(activeId);
-        if (!isCancelled()) {
-          if (convo === undefined) {
-            setActiveId(null);
-            setMessages([]);
-          } else {
-            const loaded = await loadMessages(activeId);
-            if (!isCancelled()) {
-              setMessages(loaded.map(fromRow));
-            }
-          }
-        }
-      };
-      fireAndForget(hydrate());
-    } else {
-      setMessages([]);
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeId, setActiveId, setMessages]);
+  useConversationHydration({
+    activeId,
+    convoIdRef,
+    setActiveError,
+    setActiveId,
+    setActiveStatus,
+    setMessages,
+  });
 
   const handleNewChat = useCallback(() => {
     setActiveId(null);
@@ -293,6 +189,17 @@ export const useConversations = (model: string) => {
     fireAndForget(regenerate());
   }, [regenerate]);
 
+  const regenerateMessage = useCallback(
+    (options: { messageId: string }) => {
+      regeneratingMessageIdRef.current = options.messageId;
+      setRegeneratingMessageId(options.messageId);
+      void regenerate(options);
+      setActiveError(undefined);
+      setActiveStatus(undefined);
+    },
+    [regenerate],
+  );
+
   const handleRename = useCallback(
     async (id: string, title: string) => {
       await renameConversation(id, title);
@@ -301,19 +208,26 @@ export const useConversations = (model: string) => {
     [refreshConversations],
   );
 
+  const visibleMessages = previewRegeneration(messages, regeneratingMessageId);
+  const renderActions = renderAnswerActions(
+    visibleMessages,
+    regenerateMessage,
+    status,
+  );
+
   return {
     activeError,
     activeId,
     activeStatus,
     conversations,
-    messages,
+    messages: visibleMessages,
     onClearAll: handleClearAll,
     onDelete: handleDelete,
     onNewChat: handleNewChat,
     onRename: handleRename,
     onSelect: handleSelect,
     onStop: stop,
-    renderActions: renderAnswerActions(messages, status, regenerate),
+    renderActions,
     retry,
     status,
     streamStartedAt,
