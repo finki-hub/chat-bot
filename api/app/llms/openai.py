@@ -15,7 +15,11 @@ from app.llms.agents import (
     stream_sync_gen_as_sse,
 )
 from app.llms.mcp import get_mcp_tools
-from app.llms.models import OPENAI_MINIMAL_EFFORT_MODELS, Model
+from app.llms.models import (
+    OPENAI_MINIMAL_EFFORT_MODELS,
+    REASONING_CAPABLE_MODELS,
+    Model,
+)
 from app.llms.prompts import build_agent_messages
 from app.utils.settings import Settings
 
@@ -62,6 +66,10 @@ def get_openai_llm(
     wrapper strips automatically). When `reasoning` is off, models in
     `OPENAI_MINIMAL_EFFORT_MODELS` are pinned to `effort: "minimal"` so they don't burn the
     whole token budget on hidden reasoning and return an empty answer.
+
+    GPT-5 reasoning models reject `top_p` on the Responses API (HTTP 400 once a reasoning
+    request is made); the wrapper strips `temperature` for them but not `top_p`, so `top_p`
+    is forwarded only for the non-reasoning chat models. This mirrors the Anthropic client.
     """
     key = (model.value, temperature, top_p, max_tokens, reasoning)
 
@@ -71,12 +79,13 @@ def get_openai_llm(
             client_kwargs["reasoning"] = {"effort": "medium", "summary": "auto"}
         elif model in OPENAI_MINIMAL_EFFORT_MODELS:
             client_kwargs["reasoning"] = {"effort": "minimal"}
+        if model not in REASONING_CAPABLE_MODELS:
+            client_kwargs["top_p"] = top_p
         openai_llm_clients[key] = ChatOpenAI(
             model=model.value,
             api_key=SecretStr(settings.OPENAI_API_KEY),
             base_url=settings.OPENAI_BASE_URL or None,
             temperature=temperature,
-            top_p=top_p,
             streaming=True,
             stream_usage=True,
             max_tokens=max_tokens,  # type: ignore[call-arg]
