@@ -8,7 +8,6 @@ const diag = (overrides: MessageDiagnostics): MessageDiagnostics => overrides;
 
 describe('formatThroughput', () => {
   it('derives whole tokens/sec from output tokens over the generation window', () => {
-    // 60 output tokens generated between first byte (200ms) and done (1200ms) → 60 tok/s.
     expect(
       formatThroughput(
         diag({

@@ -72,14 +72,14 @@ const DiagnosticsCard = ({
   return (
     <div className="flex flex-col gap-2 text-xs">
       <p className="font-medium text-foreground">{t('diagnostics.title')}</p>
-      {inferenceModel === undefined ? null : (
+      {inferenceModel ? (
         <DiagnosticsGroup>
           <DiagnosticsRow
             label={t('diagnostics.model')}
             value={inferenceModel}
           />
         </DiagnosticsGroup>
-      )}
+      ) : null}
       <DiagnosticsGroup>
         {typeof diagnostics.thinkingMs === 'number' ? (
           <DiagnosticsRow
