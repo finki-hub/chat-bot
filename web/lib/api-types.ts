@@ -79,6 +79,8 @@ export type MyDataParts = {
 
 export type MyMetadata = {
   diagnostics?: MessageDiagnostics;
+  // Persisted so the notice survives a refresh; the live `error` part is transient.
+  error?: { code: string; message: string };
   feedback?: FeedbackType;
   inferenceModel?: string;
   responseId?: string;

@@ -129,10 +129,14 @@ export const Thread = ({
               return (
                 <AssistantMessage
                   actions={renderActions ? renderActions(m) : undefined}
-                  errorPart={isLastAssistant ? activeError : undefined}
+                  errorPart={
+                    isLastAssistant
+                      ? (activeError ?? m.metadata?.error)
+                      : m.metadata?.error
+                  }
                   key={m.id}
                   message={m}
-                  onRetry={onRetry}
+                  onRetry={isLastAssistant ? onRetry : undefined}
                   pending={isLastAssistant && streaming}
                   statusPart={
                     isLastAssistant && streaming ? activeStatus : undefined
