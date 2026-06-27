@@ -105,7 +105,8 @@ export type ProtocolV2Event =
         timing?: {
           candidate_count: null | number;
           spans: Record<string, number>;
-          thinking_ms: null | number;
+          // Optional: an older server (pre-rollout) won't emit it.
+          thinking_ms?: null | number;
           top_distance: null | number;
           total_ms: null | number;
           ttft_ms: null | number;

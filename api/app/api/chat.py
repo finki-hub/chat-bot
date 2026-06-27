@@ -58,11 +58,17 @@ def _history_for_retrieval(payload: ChatSchema) -> str | None:
 def _sse_event_name(chunk: bytes | str | memoryview) -> str:
     """The SSE event name of ``chunk``, or '' if it has none.
 
-    Each chunk is one ``_sse`` frame, so reading the ``event:`` prefix is enough.
+    Only the first line is inspected: the rest of the frame is the (possibly large)
+    data payload, and decoding bytes mid-character would risk a UnicodeDecodeError.
     """
-    text = bytes(chunk).decode() if not isinstance(chunk, str) else chunk
-    if text.startswith("event: "):
-        return text[len("event: ") :].split("\n", 1)[0].strip()
+    if isinstance(chunk, str):
+        first_line = chunk.split("\n", 1)[0]
+    else:
+        raw = bytes(chunk)
+        newline = raw.find(b"\n")
+        first_line = (raw if newline == -1 else raw[:newline]).decode(errors="ignore")
+    if first_line.startswith("event:"):
+        return first_line[len("event:") :].strip()
     return ""
 
 
