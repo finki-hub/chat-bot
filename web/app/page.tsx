@@ -17,9 +17,8 @@ const ChatScreen = () => {
   const reasoning = useUiStore((s) => s.reasoning);
   const setReasoning = useUiStore((s) => s.setReasoning);
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
-  // Honor the reasoning toggle only for capable models. The persisted flag is kept
-  // (so it re-applies when switching back to a capable model), but it is never sent to
-  // the backend nor shown as "on" for a model that would ignore/reject it.
+  // Honor the toggle only for capable models: the persisted flag is kept but never sent
+  // or shown as "on" for a model that would ignore it.
   const reasoningActive = reasoning && isReasoningCapableModel(model);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);

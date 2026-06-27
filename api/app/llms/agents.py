@@ -79,9 +79,7 @@ def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
 
 
 def content_to_text(content: object) -> str:
-    """Plain text of a message's content, whether a plain string or a list of content
-    blocks (Responses API / Anthropic). Text blocks — and bare-string parts — contribute
-    their text; non-text blocks (tool calls, reasoning, signatures) contribute ''."""
+    """Plain text of a message's content; non-text blocks (tool calls, reasoning) yield ''."""
     if not isinstance(content, list):
         return str(content)
 
@@ -98,14 +96,9 @@ _MAX_THINKING_BUDGET = 2048
 
 
 def thinking_budget(max_tokens: int) -> tuple[int, int]:
-    """A reasoning-token budget that fits *within* ``max_tokens``, and the (unchanged) output
-    cap.
-
-    Thinking tokens are billed inside ``max_tokens``, so the budget takes at most half the
-    cap (bounded by ``_MAX_THINKING_BUDGET``) and the answer keeps the rest. The cap itself is
-    returned unchanged, so enabling reasoning never silently raises the caller's ``max_tokens``.
-    Shared by the Anthropic and Google reasoning paths.
-    """
+    """A thinking-token budget — at most half of ``max_tokens`` — and that same cap returned
+    unchanged. Thinking is billed inside the cap, so a half-or-less budget leaves the rest
+    for the answer."""
     budget = min(_MAX_THINKING_BUDGET, max_tokens // 2)
     return budget, max_tokens
 
@@ -116,15 +109,9 @@ def _chunk_text(message: AIMessageChunk) -> str:
 
 
 def _chunk_reasoning(message: AIMessageChunk) -> str:
-    """The reasoning/thinking text in an AIMessageChunk; '' if none.
-
-    Two provider shapes are handled. Content-block providers put reasoning in the content
-    list: Anthropic/Google as ``{"type": "thinking", "thinking": ...}`` and OpenAI
-    (Responses API) as ``{"type": "reasoning", "summary": [{"text": ...}]}``. The
-    additional_kwargs provider (Ollama) puts it in ``additional_kwargs["reasoning_content"]``.
-    Anthropic also emits signature-only thinking blocks (no "thinking" key) — ``.get`` skips
-    them safely.
-    """
+    """The reasoning text in an AIMessageChunk; '' if none. Covers the provider shapes:
+    Anthropic/Google ``{type: thinking}`` blocks, OpenAI ``{type: reasoning, summary}``
+    blocks, and Ollama's ``additional_kwargs['reasoning_content']``."""
     parts: list[str] = []
 
     raw = message.content

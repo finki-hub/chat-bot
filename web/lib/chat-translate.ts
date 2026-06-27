@@ -95,9 +95,8 @@ export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
   };
 };
 
-// Text and reasoning parts share identical lazy-open/append/end lifecycle; only the
-// stream-part event names differ. Per-branch literal objects keep the discriminated
-// UiStreamPart union narrowable (a templated `${kind}-start` would widen to string).
+// One factory for the text and reasoning parts. Per-branch literal objects (not a
+// templated `${kind}-start`) keep the discriminated UiStreamPart union narrowable.
 const createStreamPart = (
   writer: UiStreamWriter,
   idGen: () => string,

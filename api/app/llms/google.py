@@ -80,7 +80,6 @@ def get_google_llm(
         if reasoning:
             client_kwargs["include_thoughts"] = True
             budget, max_output = thinking_budget(max_tokens)
-            # Gemini 3 sizes thinking by level; Gemini 2.5 takes an explicit token budget.
             if model == Model.GEMINI_3_FLASH_PREVIEW:
                 client_kwargs["thinking_level"] = "medium"
             else:
@@ -254,9 +253,7 @@ async def stream_google_agent_response(
             "Failed to stream Google agent response. Falling back to regular response",
         )
 
-        # The non-agent fallback streams plain text (stream_sync_gen_as_sse has no
-        # `thinking` channel), so it runs WITHOUT reasoning rather than requesting thoughts
-        # that would be silently dropped.
+        # The non-agent fallback has no `thinking` channel, so it runs without reasoning.
         return stream_google_response(
             user_prompt,
             model,

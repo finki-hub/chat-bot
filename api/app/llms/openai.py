@@ -195,9 +195,7 @@ async def stream_openai_agent_response(
             "Failed to stream OpenAI agent response. Falling back to regular response",
         )
 
-        # The non-agent fallback streams plain text (stream_sync_gen_as_sse has no
-        # `thinking` channel), so it runs WITHOUT reasoning rather than requesting a
-        # reasoning trace whose summary blocks would be silently dropped.
+        # The non-agent fallback has no `thinking` channel, so it runs without reasoning.
         return stream_openai_response(
             user_prompt,
             model,

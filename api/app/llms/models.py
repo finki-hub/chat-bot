@@ -100,11 +100,8 @@ CHAT_MODELS: frozenset[Model] = frozenset(
     },
 )
 
-# Models with an extended-thinking / reasoning mode. The `reasoning` request flag is
-# honored only for these; for any other model it is ignored (see ChatSchema.reasoning and
-# the guard in `stream_response_with_agent`), so a non-reasoning model never receives a
-# provider reasoning/thinking parameter it would reject. Mirrors the web-side
-# `isReasoningCapableModel` predicate.
+# Models with a reasoning/thinking mode; the `reasoning` flag is honored only for these
+# (gated in stream_response_with_agent). Mirrors the web isReasoningCapableModel predicate.
 REASONING_CAPABLE_MODELS: frozenset[Model] = frozenset(
     {
         Model.DEEPSEEK_R1_70B,

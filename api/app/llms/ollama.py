@@ -219,9 +219,7 @@ async def stream_ollama_agent_response(
             "Failed to stream Ollama agent response. Falling back to regular response",
         )
 
-        # The non-agent fallback streams plain text (stream_sync_gen_as_sse has no
-        # `thinking` channel), so it runs WITHOUT reasoning rather than enabling Ollama
-        # think mode whose reasoning_content would be silently dropped.
+        # The non-agent fallback has no `thinking` channel, so it runs without reasoning.
         return stream_ollama_response(
             user_prompt,
             model,

@@ -25,10 +25,8 @@ settings = Settings()
 # Model, temperature, top_p, max_tokens, reasoning -> LLM
 anthropic_llm_clients: dict[tuple[str, float, float, int, bool], ChatAnthropic] = {}
 
-# Opus 4.7/4.8 reject `budget_tokens` and only return reasoning text under summarized
-# adaptive thinking; they also reject sampling params, so they already get temperature=None.
-# This set happens to equal ANTHROPIC_NO_SAMPLING_MODELS today, but is named separately
-# because the two concepts (no-sampling vs adaptive-thinking) are not inherently linked.
+# Opus 4.7/4.8 reject `budget_tokens`; they use summarized adaptive thinking and already
+# send temperature=None via ANTHROPIC_NO_SAMPLING_MODELS.
 _ADAPTIVE_THINKING_MODELS: frozenset[Model] = ANTHROPIC_NO_SAMPLING_MODELS
 
 
@@ -36,10 +34,8 @@ def _thinking_config(
     model: Model,
     max_tokens: int,
 ) -> tuple[dict[str, object], int]:
-    """The Anthropic ``thinking`` payload and the effective ``max_tokens`` for a
-    reasoning-enabled request. Opus 4.7/4.8 use summarized adaptive thinking (no budget);
-    other models use an explicit budget bounded under ``max_tokens`` (see ``thinking_budget``).
-    """
+    """The Anthropic ``thinking`` payload and effective ``max_tokens``. Opus 4.7/4.8 use
+    summarized adaptive thinking (no budget); others use an explicit ``thinking_budget``."""
     if model in _ADAPTIVE_THINKING_MODELS:
         return {"type": "adaptive", "display": "summarized"}, max_tokens
 
@@ -209,9 +205,7 @@ async def stream_anthropic_agent_response(
             "Failed to stream Anthropic agent response. Falling back to regular response",
         )
 
-        # The non-agent fallback streams plain text (stream_sync_gen_as_sse has no
-        # `thinking` channel), so it runs WITHOUT reasoning rather than enabling extended
-        # thinking whose blocks would be silently dropped.
+        # The non-agent fallback has no `thinking` channel, so it runs without reasoning.
         return stream_anthropic_response(
             user_prompt,
             model,
