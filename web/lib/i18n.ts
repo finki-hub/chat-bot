@@ -26,6 +26,15 @@ export const messages = {
   'conversation.rename': 'Преименувај',
   'conversation.renamePrompt': 'Ново име на разговорот',
   'conversation.renameTitle': 'Преименувај разговор',
+  'diagnostics.candidates': 'кандидати',
+  'diagnostics.serverFirstByte': 'прв бајт (сервер)',
+  'diagnostics.serverTotal': 'вкупно (сервер)',
+  'diagnostics.stages': 'фази',
+  'diagnostics.title': 'Дијагностика',
+  'diagnostics.tokensInput': 'токени (влез)',
+  'diagnostics.tokensOutput': 'токени (излез)',
+  'diagnostics.tokensTotal': 'токени (вкупно)',
+  'diagnostics.topDistance': 'најблиска дистанца',
   'error.description': 'Се случи неочекувана грешка. Обидете се повторно.',
   'error.interrupted': 'Одговорот е прекинат.',
   'error.retry': 'Обиди се повторно',
@@ -60,3 +69,19 @@ export const messages = {
 export type TKey = keyof typeof messages;
 
 export const t = (key: TKey): string => messages[key];
+
+// Span keys are the API's internal `timed(...)` stage names; translate the known ones,
+// falling back to the raw key for any stage added server-side later.
+const spanLabels: Record<string, string> = {
+  'agent.mcp_tools': 'агент: алатки',
+  'agent.setup': 'агент: подготовка',
+  links: 'врски',
+  'retrieval.contextualize': 'контекстуализација',
+  'retrieval.embed': 'вградување',
+  'retrieval.expand': 'проширување',
+  'retrieval.rerank': 'рерангирање',
+  'retrieval.rewrite_hyde': 'преформулација (HyDE)',
+  'retrieval.vector_search': 'векторско пребарување',
+};
+
+export const formatSpanLabel = (key: string): string => spanLabels[key] ?? key;

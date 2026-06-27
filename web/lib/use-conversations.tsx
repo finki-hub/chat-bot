@@ -1,7 +1,7 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
@@ -22,6 +22,7 @@ import {
   saveMessages,
   setMessageFeedback,
 } from '@/lib/db';
+import { t } from '@/lib/i18n';
 import { deriveTitle } from '@/lib/messages';
 import { buildChatTransport } from '@/lib/transport';
 import { useUiStore } from '@/lib/ui-store';
@@ -65,6 +66,20 @@ export const useConversations = (
     [refreshConversations],
   );
 
+  // useChat keeps only the first transport, so read the latest values at send time.
+  const modelRef = useRef(model);
+  modelRef.current = model;
+  const reasoningRef = useRef(reasoning);
+  reasoningRef.current = reasoning;
+  const transport = useMemo(
+    () =>
+      buildChatTransport(() => ({
+        model: modelRef.current,
+        reasoning: reasoningRef.current,
+      })),
+    [],
+  );
+
   const { messages, regenerate, sendMessage, setMessages, status, stop } =
     useChat<MyUIMessage>({
       onData: (part) => {
@@ -77,12 +92,21 @@ export const useConversations = (
       onError: () => {
         regeneratingMessageIdRef.current = null;
         setRegeneratingMessageId(null);
+        setActiveError(
+          (prev) =>
+            prev ?? { code: 'network', message: t('error.description') },
+        );
       },
-      onFinish: ({ message }) => {
+      onFinish: ({ isAbort, isError, message }) => {
         setActiveStatus(undefined);
         const replacementId = regeneratingMessageIdRef.current;
         regeneratingMessageIdRef.current = null;
         setRegeneratingMessageId(null);
+        // ai v7 also calls onFinish on abort/error; never finalize or persist a
+        // partial answer (it would ghost into a switched-away conversation).
+        if (isAbort || isError) {
+          return;
+        }
         const finalizedBase = finalizeMessage(
           message,
           startedAtRef.current,
@@ -102,7 +126,7 @@ export const useConversations = (
           return next;
         });
       },
-      transport: buildChatTransport(() => ({ model, reasoning })),
+      transport,
     });
 
   useStreamTiming({
@@ -123,11 +147,13 @@ export const useConversations = (
   });
 
   const handleNewChat = useCallback(() => {
+    // The Chat instance is shared across conversations; stop before leaving.
+    void stop();
     setActiveId(null);
     setMessages([]);
     setActiveError(undefined);
     convoIdRef.current = null;
-  }, [setActiveId, setMessages]);
+  }, [setActiveId, setMessages, stop]);
 
   const handleSubmit = useCallback(
     async (text: string) => {
@@ -162,9 +188,13 @@ export const useConversations = (
 
   const handleSelect = useCallback(
     (id: string) => {
+      // Only tear down the stream when actually leaving the active conversation.
+      if (id !== activeId) {
+        void stop();
+      }
       setActiveId(id);
     },
-    [setActiveId],
+    [activeId, setActiveId, stop],
   );
 
   const handleDelete = useCallback(
@@ -195,6 +225,7 @@ export const useConversations = (
     if (disabled) {
       return;
     }
+    setActiveError(undefined);
     fireAndForget(regenerate());
   }, [disabled, regenerate]);
 

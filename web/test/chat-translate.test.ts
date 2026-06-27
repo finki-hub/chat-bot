@@ -103,6 +103,20 @@ describe('toChatRequestBody', () => {
     // The 'omits undefined sampling params' test above proves reasoning is
     // absent from the body when it is not set.
   });
+
+  it('forwards only the last assistant text part (drops a discarded reset preamble)', () => {
+    const out = toChatRequestBody({
+      messages: [
+        msg('user', 'Прашање?'),
+        msg('assistant', 'преамбула', 'одговор'),
+      ],
+    });
+
+    expect(out.messages).toStrictEqual([
+      { content: 'Прашање?', role: 'user' },
+      { content: 'одговор', role: 'assistant' },
+    ]);
+  });
 });
 
 class FakeWriter {
@@ -327,6 +341,33 @@ describe('translateToUiStream', () => {
         transient: true,
         type: 'data-error',
       },
+    ]);
+  });
+
+  it('forwards a meta event arriving after done as a message-metadata part', async () => {
+    const writer = new FakeWriter();
+    const diagnostics = {
+      serverTotalMs: 980.2,
+      tokens: { input: 1, output: 2, total: 3 },
+    };
+
+    // The backend timing meta trails done; the translator must still forward it.
+    await translateToUiStream(
+      events({ text: 'Здраво', type: 'token' }, DONE, {
+        diagnostics,
+        type: 'meta',
+      }),
+      writer,
+      {},
+      ids(),
+    );
+
+    expect(writer.parts).toStrictEqual([
+      startWith({}),
+      textStart(T1),
+      textDelta(T1, 'Здраво'),
+      textEnd(T1),
+      { messageMetadata: { diagnostics }, type: 'message-metadata' },
     ]);
   });
 });

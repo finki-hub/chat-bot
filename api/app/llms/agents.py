@@ -40,6 +40,10 @@ def error_event(code: str, message: str) -> str:
     return _sse("error", {"code": code, "message": message})
 
 
+def meta_event(payload: dict[str, object]) -> str:
+    return _sse("meta", payload)
+
+
 RESET_EVENT = _sse("reset", {})
 DONE_EVENT = _sse("done", {})
 
@@ -124,6 +128,21 @@ def _chunk_reasoning(message: AIMessageChunk) -> str:
     return "".join(parts)
 
 
+def _accumulate_usage(usage: dict[str, int], output: object) -> None:
+    """Fold one ``on_chat_model_end`` message's token counts into ``usage``.
+
+    Accumulates across the answer and any tool-loop turns; providers that omit
+    ``usage_metadata`` (e.g. the GPU-API path) add nothing.
+    """
+    metadata = getattr(output, "usage_metadata", None)
+    if not metadata:
+        return
+    usage["input"] += metadata.get("input_tokens") or 0
+    usage["output"] += metadata.get("output_tokens") or 0
+    # Derive total from the parts so the shown counts always reconcile.
+    usage["total"] = usage["input"] + usage["output"]
+
+
 async def create_agent_token_generator(
     agent: CompiledStateGraph,
     messages: list[BaseMessage],
@@ -133,6 +152,7 @@ async def create_agent_token_generator(
     pre-tool preamble is dropped."""
     streamed_text = False
     pending_reset = False
+    usage = {"input": 0, "output": 0, "total": 0}
     try:
         async for event in agent.astream_events(
             {"messages": messages},
@@ -142,6 +162,10 @@ async def create_agent_token_generator(
             if event["event"] == "on_tool_start":
                 yield status_event(event["name"])
                 pending_reset = True
+                continue
+
+            if event["event"] == "on_chat_model_end":
+                _accumulate_usage(usage, event["data"].get("output"))
                 continue
 
             if event["event"] != "on_chat_model_stream":
@@ -169,6 +193,8 @@ async def create_agent_token_generator(
         if not streamed_text:
             yield RESET_EVENT
             yield error_event("no_answer", _NO_ANSWER_MSG)
+        if any(usage.values()):
+            yield meta_event({"tokens": usage})
         yield DONE_EVENT
 
     except Exception:

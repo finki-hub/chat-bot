@@ -40,6 +40,16 @@ describe('lib/api-types', () => {
     expect(ev.data.text).toBe('збор');
   });
 
+  it('models a protocol-v2 meta event carrying token usage', () => {
+    const ev = {
+      data: { tokens: { input: 12, output: 34, total: 46 } },
+      event: 'meta',
+    } satisfies ProtocolV2Event;
+
+    expect(ev.event).toBe('meta');
+    expect(ev.data.tokens).toStrictEqual({ input: 12, output: 34, total: 46 });
+  });
+
   it('models the feedback wire + client payloads', () => {
     const wire = {
       client: 'web',

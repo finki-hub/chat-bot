@@ -51,6 +51,8 @@ export const POST = async (req: Request): Promise<Response> => {
       body: JSON.stringify(chatBody),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
+      // Propagate client aborts so stopping the chat tears down upstream generation.
+      signal: req.signal,
     });
 
     const contentType = upstream.headers.get('content-type') ?? '';
@@ -79,8 +81,8 @@ export const POST = async (req: Request): Promise<Response> => {
           responseId,
         });
       },
-      onError: (error) =>
-        error instanceof Error ? error.message : 'stream error',
+      // Generic: this string reaches the browser, so don't leak raw errors.
+      onError: () => 'stream error',
     });
 
     return createUIMessageStreamResponse({ stream });

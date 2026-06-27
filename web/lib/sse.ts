@@ -1,7 +1,8 @@
-import type { ChatErrorCode } from '@/lib/api-types';
+import type { ChatErrorCode, MessageDiagnostics } from '@/lib/api-types';
 
 export type ParsedEvent =
   | { code: ChatErrorCode; message: string; type: 'error' }
+  | { diagnostics: MessageDiagnostics; type: 'meta' }
   | { label: string; state: string; tool?: string; type: 'status' }
   | { text: string; type: 'thinking' }
   | { text: string; type: 'token' }
@@ -31,6 +32,59 @@ const asString = (value: unknown): string =>
 
 const unescapeNewlines = (text: string): string =>
   text.replaceAll(String.raw`\n`, '\n');
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const asNumberOrNull = (value: unknown): null | number =>
+  typeof value === 'number' ? value : null;
+
+const toSpans = (value: unknown): Record<string, number> => {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  const spans: Record<string, number> = {};
+
+  for (const [name, ms] of Object.entries(value)) {
+    if (typeof ms === 'number') {
+      spans[name] = ms;
+    }
+  }
+
+  return spans;
+};
+
+// A `meta` frame carries timing OR tokens (emitted from different API layers), so each
+// section is mapped only when present and the two halves are deep-merged downstream.
+const toDiagnostics = (obj: Record<string, unknown>): MessageDiagnostics => {
+  const diagnostics: MessageDiagnostics = {};
+  const timing = obj['timing'];
+
+  if (isRecord(timing)) {
+    diagnostics.serverTtftMs = asNumberOrNull(timing['ttft_ms']);
+    diagnostics.serverTotalMs = asNumberOrNull(timing['total_ms']);
+    diagnostics.candidateCount = asNumberOrNull(timing['candidate_count']);
+    diagnostics.topDistance = asNumberOrNull(timing['top_distance']);
+    diagnostics.spans = toSpans(timing['spans']);
+  }
+
+  const tokens = obj['tokens'];
+
+  if (isRecord(tokens)) {
+    const { input, output, total } = tokens;
+
+    if (
+      typeof input === 'number' &&
+      typeof output === 'number' &&
+      typeof total === 'number'
+    ) {
+      diagnostics.tokens = { input, output, total };
+    }
+  }
+
+  return diagnostics;
+};
 
 const toStringChunks = async function* (
   source: SseSource,
@@ -112,6 +166,8 @@ const buildEvent = (
         message: asString(obj['message']),
         type: 'error',
       };
+    case 'meta':
+      return { diagnostics: toDiagnostics(obj), type: 'meta' };
     case 'reset':
       return { type: 'reset' };
     case 'status':
