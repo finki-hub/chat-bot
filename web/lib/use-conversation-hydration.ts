@@ -2,7 +2,7 @@
 
 import { type RefObject, useEffect } from 'react';
 
-import type { MyUIMessage } from '@/lib/api-types';
+import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
 
 import { fireAndForget } from '@/lib/async';
 import { getConversation, loadMessages, type MessageRow } from '@/lib/db';
@@ -10,9 +10,7 @@ import { getConversation, loadMessages, type MessageRow } from '@/lib/db';
 type UseConversationHydrationOptions = {
   readonly activeId: null | string;
   readonly convoIdRef: RefObject<null | string>;
-  readonly setActiveError: (
-    value: undefined | { code: string; message: string },
-  ) => void;
+  readonly setActiveError: (value: ErrorNotice | undefined) => void;
   readonly setActiveId: (id: null | string) => void;
   readonly setActiveStatus: (
     value: undefined | { label: string; tool?: string },

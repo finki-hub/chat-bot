@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { AnswerActions } from '@/components/chat/answer-actions';
-import { joinText } from '@/lib/message-parts';
+import { hasText, joinText } from '@/lib/message-parts';
 
 export type ChatStatus = 'error' | 'ready' | 'streaming' | 'submitted';
 
@@ -31,7 +31,8 @@ export type AnswerActionsContext = {
 export const renderAnswerActions =
   ({ disabled, messages, onVote, regenerate, status }: AnswerActionsContext) =>
   (message: MyUIMessage): ReactNode => {
-    if (message.role !== 'assistant') {
+    // No answer text means an errored/empty turn — skip the bar so it can't be voted on.
+    if (message.role !== 'assistant' || !hasText(message)) {
       return null;
     }
 

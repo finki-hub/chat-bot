@@ -341,6 +341,51 @@ describe('Thread', () => {
     expect(screen.queryByText(hasText('преамбула'))).not.toBeInTheDocument();
   });
 
+  it('renders a persisted error notice after refresh (from message metadata)', () => {
+    // After a refresh there is no live activeError; the errored turn is hydrated
+    // with metadata.error and must still show the notice, not an empty bubble.
+    const messages: MyUIMessage[] = [
+      userMessage('прашање'),
+      {
+        id: 'a1',
+        metadata: {
+          error: { code: 'agent_error', message: 'Се случи грешка.' },
+        },
+        parts: [],
+        role: 'assistant',
+      },
+    ];
+    render(
+      <Thread
+        messages={messages}
+        status="ready"
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Се случи грешка.');
+  });
+
+  it('prefers the live error over a stale persisted one on the last message', () => {
+    const messages: MyUIMessage[] = [
+      userMessage('прашање'),
+      {
+        id: 'a1',
+        metadata: { error: { code: 'agent_error', message: 'Стара грешка.' } },
+        parts: [],
+        role: 'assistant',
+      },
+    ];
+    render(
+      <Thread
+        activeError={{ code: 'agent_error', message: 'Грешка во живо.' }}
+        messages={messages}
+        status="ready"
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Грешка во живо.');
+  });
+
   it('shows a typing indicator while awaiting the assistant reply', () => {
     render(
       <Thread

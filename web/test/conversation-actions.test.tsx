@@ -58,4 +58,25 @@ describe('renderAnswerActions', () => {
 
     expect(screen.getByRole('button', { name: REGENERATE })).toBeEnabled();
   });
+
+  it('drops the action bar for a text-less (errored) turn', () => {
+    const message: MyUIMessage = {
+      id: 'a1',
+      metadata: {
+        error: { code: 'agent_error', message: 'грешка' },
+        responseId: 'r1',
+      },
+      parts: [],
+      role: 'assistant',
+    };
+    const node = renderAnswerActions({
+      disabled: false,
+      messages: [message],
+      onVote: vi.fn<(messageId: string, vote: FeedbackType) => void>(),
+      regenerate: vi.fn<(options: { messageId: string }) => void>(),
+      status: 'ready',
+    })(message);
+
+    expect(node).toBeNull();
+  });
 });

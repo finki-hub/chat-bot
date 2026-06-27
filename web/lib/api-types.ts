@@ -27,6 +27,11 @@ export const MAX_CHARS_PER_TURN = 8_000;
 
 export type ChatErrorCode = 'agent_error' | 'interrupted' | 'no_answer';
 
+// A user-facing error: the live transient `error` part, the persisted metadata, and
+// the in-memory active error all share this shape (`code` is looser than ChatErrorCode
+// because it also carries transport codes like 'network'/'pre_stream').
+export type ErrorNotice = { code: string; message: string };
+
 export type FeedbackAck = {
   feedback_type: FeedbackType;
   id: string;
@@ -73,12 +78,14 @@ export type MessageDiagnostics = {
 };
 
 export type MyDataParts = {
-  error: { code: string; message: string };
+  error: ErrorNotice;
   status: { label: string; tool?: string };
 };
 
 export type MyMetadata = {
   diagnostics?: MessageDiagnostics;
+  // Persisted so the notice survives a refresh; the live `error` part is transient.
+  error?: ErrorNotice;
   feedback?: FeedbackType;
   inferenceModel?: string;
   responseId?: string;

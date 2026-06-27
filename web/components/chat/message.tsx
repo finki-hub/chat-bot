@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { Clock3 } from 'lucide-react';
 
-import type { MyUIMessage } from '@/lib/api-types';
+import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
 
 import {
   Message,
@@ -25,7 +25,7 @@ import { reasoningParts, textParts } from '@/lib/message-parts';
 
 export type AssistantMessageProps = {
   actions?: ReactNode;
-  errorPart?: { code: string; message: string };
+  errorPart?: ErrorNotice;
   message: MyUIMessage;
   onRetry?: () => void;
   pending?: boolean;
@@ -232,7 +232,7 @@ const MessageError = ({
   errorPart,
   onRetry,
 }: {
-  errorPart: { code: string; message: string };
+  errorPart: ErrorNotice;
   onRetry?: () => void;
 }) => (
   <div

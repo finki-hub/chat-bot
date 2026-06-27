@@ -3,7 +3,7 @@
 import { useChat } from '@ai-sdk/react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
+import type { ErrorNotice, FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { fireAndForget } from '@/lib/async';
 import { renderAnswerActions } from '@/lib/conversation-actions';
@@ -42,12 +42,11 @@ export const useConversations = (
   const [activeStatus, setActiveStatus] = useState<
     undefined | { label: string; tool?: string }
   >();
-  const [activeError, setActiveError] = useState<
-    undefined | { code: string; message: string }
-  >();
+  const [activeError, setActiveError] = useState<ErrorNotice | undefined>();
   const convoIdRef = useRef<null | string>(activeId);
   const startedAtRef = useRef<null | number>(null);
   const firstTokenAtRef = useRef<null | number>(null);
+  const activeErrorRef = useRef<ErrorNotice | undefined>(undefined);
   const regeneratingMessageIdRef = useRef<null | string>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<
     null | string
@@ -87,6 +86,8 @@ export const useConversations = (
           setActiveStatus(part.data);
         } else {
           setActiveError(part.data);
+          // Stamp it onto the message in onFinish so the notice persists past refresh.
+          activeErrorRef.current = part.data;
         }
       },
       onError: () => {
@@ -102,6 +103,9 @@ export const useConversations = (
         const replacementId = regeneratingMessageIdRef.current;
         regeneratingMessageIdRef.current = null;
         setRegeneratingMessageId(null);
+        // Consume on every finish so a prior turn's error can't leak onto the next.
+        const error = activeErrorRef.current;
+        activeErrorRef.current = undefined;
         // ai v7 also calls onFinish on abort/error; never finalize or persist a
         // partial answer (it would ghost into a switched-away conversation).
         if (isAbort || isError) {
@@ -112,10 +116,17 @@ export const useConversations = (
           startedAtRef.current,
           firstTokenAtRef.current,
         );
+        const withError =
+          error === undefined
+            ? finalizedBase
+            : {
+                ...finalizedBase,
+                metadata: { ...finalizedBase.metadata, error },
+              };
         const finalized =
           replacementId === null
-            ? finalizedBase
-            : { ...finalizedBase, id: replacementId };
+            ? withError
+            : { ...withError, id: replacementId };
         setMessages((prev) => {
           const next = replaceFinishedMessage({
             pruneAfterReplacement: replacementId !== null,
