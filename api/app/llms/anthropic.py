@@ -28,17 +28,27 @@ anthropic_llm_clients: dict[tuple[str, float, float, int, bool], ChatAnthropic] 
 # Opus 4.7/4.8 reject `budget_tokens`; they use summarized adaptive thinking instead.
 _ADAPTIVE_THINKING_MODELS: frozenset[Model] = ANTHROPIC_NO_SAMPLING_MODELS
 
+# Anthropic rejects an enabled-thinking `budget_tokens` below 1024 and requires
+# `max_tokens` to exceed it. `thinking_budget` can fall below 1024 for small `max_tokens`
+# (e.g. max_tokens=2000 -> 1000), which 400s sonnet-4-6 / haiku-4-5, so clamp to the floor.
+_MIN_ANTHROPIC_THINKING_BUDGET = 1024
+
 
 def _thinking_config(
     model: Model,
     max_tokens: int,
 ) -> tuple[dict[str, object], int]:
     """The Anthropic ``thinking`` payload and effective ``max_tokens`` (adaptive for Opus
-    4.7/4.8, else an explicit budget)."""
+    4.7/4.8, else an explicit budget clamped to Anthropic's 1024-token floor)."""
     if model in _ADAPTIVE_THINKING_MODELS:
         return {"type": "adaptive", "display": "summarized"}, max_tokens
 
     budget, effective_max = thinking_budget(max_tokens)
+    budget = max(budget, _MIN_ANTHROPIC_THINKING_BUDGET)
+    # max_tokens must exceed budget_tokens; always keep at least a budget's worth of room
+    # for the answer so a small max_tokens isn't swallowed whole by the thinking budget
+    # (without this, max_tokens just above 1024 leaves a near-empty answer).
+    effective_max = max(effective_max, budget + _MIN_ANTHROPIC_THINKING_BUDGET)
     return {"type": "enabled", "budget_tokens": budget}, effective_max
 
 

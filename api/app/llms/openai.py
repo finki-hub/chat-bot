@@ -15,7 +15,11 @@ from app.llms.agents import (
     stream_sync_gen_as_sse,
 )
 from app.llms.mcp import get_mcp_tools
-from app.llms.models import Model
+from app.llms.models import (
+    OPENAI_MINIMAL_EFFORT_MODELS,
+    REASONING_CAPABLE_MODELS,
+    Model,
+)
 from app.llms.prompts import build_agent_messages
 from app.utils.settings import Settings
 
@@ -23,8 +27,8 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
-# Model, temperature, top_p, max_tokens, reasoning -> LLM
-openai_llm_clients: dict[tuple[str, float, float, int, bool], ChatOpenAI] = {}
+# Model, temperature, top_p (None when not forwarded), max_tokens, reasoning -> LLM
+openai_llm_clients: dict[tuple[str, float, float | None, int, bool], ChatOpenAI] = {}
 openai_embedders: dict[str, OpenAIEmbeddings] = {}
 
 
@@ -59,20 +63,38 @@ def get_openai_llm(
     All OpenAI requests use the Responses API (`use_responses_api=True`); reasoning content
     is only surfaced there. When `reasoning` is on, a `reasoning` config requests a
     summarized reasoning trace (GPT-5 reasoning models ignore `temperature`, which the
-    wrapper strips automatically).
+    wrapper strips automatically). When `reasoning` is off, models in
+    `OPENAI_MINIMAL_EFFORT_MODELS` are pinned to `effort: "minimal"` so they don't burn the
+    whole token budget on hidden reasoning and return an empty answer.
+
+    GPT-5 reasoning models reject `top_p` on the Responses API (HTTP 400 once a reasoning
+    request is made); the wrapper strips `temperature` for them but not `top_p`, so `top_p`
+    is forwarded only for the non-reasoning chat models. This mirrors the Anthropic client.
     """
-    key = (model.value, temperature, top_p, max_tokens, reasoning)
+    # top_p is dropped for reasoning-capable (GPT-5) models, so it must not split the cache
+    # for them — fold it out of the key when it isn't forwarded.
+    forwards_top_p = model not in REASONING_CAPABLE_MODELS
+    key = (
+        model.value,
+        temperature,
+        top_p if forwards_top_p else None,
+        max_tokens,
+        reasoning,
+    )
 
     if key not in openai_llm_clients:
         client_kwargs: dict[str, object] = {"use_responses_api": True}
         if reasoning:
             client_kwargs["reasoning"] = {"effort": "medium", "summary": "auto"}
+        elif model in OPENAI_MINIMAL_EFFORT_MODELS:
+            client_kwargs["reasoning"] = {"effort": "minimal"}
+        if forwards_top_p:
+            client_kwargs["top_p"] = top_p
         openai_llm_clients[key] = ChatOpenAI(
             model=model.value,
             api_key=SecretStr(settings.OPENAI_API_KEY),
             base_url=settings.OPENAI_BASE_URL or None,
             temperature=temperature,
-            top_p=top_p,
             streaming=True,
             stream_usage=True,
             max_tokens=max_tokens,  # type: ignore[call-arg]
