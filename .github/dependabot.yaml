@@ -9,3 +9,8 @@ updates:
     directory: '/gpu-api'
     schedule:
       interval: 'daily'
+
+  - package-ecosystem: 'npm'
+    directory: '/web'
+    schedule:
+      interval: 'daily'
