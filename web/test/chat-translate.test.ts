@@ -275,19 +275,19 @@ describe('translateToUiStream', () => {
     ]);
   });
 
-  it('forwards a meta event as a message-metadata diagnostics part', async () => {
+  it('forwards a meta event arriving after done as a message-metadata part', async () => {
     const writer = new FakeWriter();
     const diagnostics = {
       serverTotalMs: 980.2,
       tokens: { input: 1, output: 2, total: 3 },
     };
 
+    // The backend timing meta trails done; the translator must still forward it.
     await translateToUiStream(
-      events(
-        { text: 'Здраво', type: 'token' },
-        { diagnostics, type: 'meta' },
-        DONE,
-      ),
+      events({ text: 'Здраво', type: 'token' }, DONE, {
+        diagnostics,
+        type: 'meta',
+      }),
       writer,
       {},
       ids(),
@@ -297,8 +297,8 @@ describe('translateToUiStream', () => {
       startWith({}),
       textStart(T1),
       textDelta(T1, 'Здраво'),
-      { messageMetadata: { diagnostics }, type: 'message-metadata' },
       textEnd(T1),
+      { messageMetadata: { diagnostics }, type: 'message-metadata' },
     ]);
   });
 });

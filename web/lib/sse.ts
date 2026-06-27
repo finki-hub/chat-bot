@@ -33,13 +33,10 @@ const unescapeNewlines = (text: string): string =>
   text.replaceAll(String.raw`\n`, '\n');
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const asNumberOrNull = (value: unknown): null | number =>
   typeof value === 'number' ? value : null;
-
-const asNumber = (value: unknown): number =>
-  typeof value === 'number' ? value : 0;
 
 const toSpans = (value: unknown): Record<string, number> => {
   if (!isRecord(value)) {
@@ -75,11 +72,15 @@ const toDiagnostics = (obj: Record<string, unknown>): MessageDiagnostics => {
   const tokens = obj['tokens'];
 
   if (isRecord(tokens)) {
-    diagnostics.tokens = {
-      input: asNumber(tokens['input']),
-      output: asNumber(tokens['output']),
-      total: asNumber(tokens['total']),
-    };
+    const { input, output, total } = tokens;
+
+    if (
+      typeof input === 'number' &&
+      typeof output === 'number' &&
+      typeof total === 'number'
+    ) {
+      diagnostics.tokens = { input, output, total };
+    }
   }
 
   return diagnostics;

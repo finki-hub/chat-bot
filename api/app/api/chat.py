@@ -77,6 +77,7 @@ async def _instrument_stream(
             yield chunk
     finally:
         timings.mark_total()
+        record = timings.as_record()
         logger.info(
             "chat.timing %s",
             json.dumps(
@@ -86,11 +87,11 @@ async def _instrument_stream(
                     "embeddings_model": payload.embeddings_model.value,
                     "query_transform_model": payload.query_transform_model.value,
                     "retrieval_hit": retrieval_hit,
-                    **timings.as_record(),
+                    **record,
                 },
             ),
         )
-    yield meta_event({"timing": timings.as_record()})
+    yield meta_event({"timing": record})
 
 
 db_dep = Depends(get_db)
