@@ -69,6 +69,12 @@ const DiagnosticsCard = ({
     <div className="flex flex-col gap-2 text-xs">
       <p className="font-medium text-foreground">{t('diagnostics.title')}</p>
       <DiagnosticsGroup>
+        {typeof diagnostics.thinkingMs === 'number' ? (
+          <DiagnosticsRow
+            label={t('diagnostics.thinking')}
+            value={formatMs(diagnostics.thinkingMs)}
+          />
+        ) : null}
         <DiagnosticsRow
           label={t('diagnostics.serverTotal')}
           value={formatMs(diagnostics.serverTotalMs)}
@@ -249,8 +255,15 @@ export const AssistantMessage = ({
   const inPreamble =
     Boolean(pending) && Boolean(statusPart) && parts.length <= 1;
   const text = inPreamble ? null : (parts.at(-1)?.text ?? null);
+  const reasoningStreaming =
+    Boolean(pending) && reasoningText.length > 0 && text === null;
   const showChip = Boolean(statusPart) && !text;
-  const showDots = Boolean(pending) && !text && !statusPart && !errorPart;
+  const showDots =
+    Boolean(pending) &&
+    !text &&
+    !statusPart &&
+    !errorPart &&
+    reasoningText.length === 0;
   const timing = message.metadata?.timing;
   const diagnostics = message.metadata?.diagnostics;
   const liveTimer =
@@ -261,7 +274,12 @@ export const AssistantMessage = ({
   return (
     <Message from="assistant">
       <MessageContent>
-        {reasoningText ? <ReasoningDisclosure text={reasoningText} /> : null}
+        {reasoningText ? (
+          <ReasoningDisclosure
+            streaming={reasoningStreaming}
+            text={reasoningText}
+          />
+        ) : null}
         {text ? (
           <div data-testid="answer-text">
             <MessageResponse>{text}</MessageResponse>

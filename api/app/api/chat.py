@@ -55,6 +55,23 @@ def _history_for_retrieval(payload: ChatSchema) -> str | None:
     )
 
 
+def _sse_event_name(chunk: bytes | str | memoryview) -> str:
+    """The SSE event name of ``chunk``, or '' if it has none.
+
+    Only the first line is inspected: the rest of the frame is the (possibly large)
+    data payload, and decoding bytes mid-character would risk a UnicodeDecodeError.
+    """
+    if isinstance(chunk, str):
+        first_line = chunk.split("\n", 1)[0]
+    else:
+        raw = bytes(chunk)
+        newline = raw.find(b"\n")
+        first_line = (raw if newline == -1 else raw[:newline]).decode(errors="ignore")
+    if first_line.startswith("event:"):
+        return first_line[len("event:") :].strip()
+    return ""
+
+
 async def _instrument_stream(
     body: AsyncIterable[bytes | str | memoryview],
     *,
@@ -63,16 +80,27 @@ async def _instrument_stream(
     timings: RequestTimings,
     retrieval_hit: bool,
 ) -> AsyncGenerator[bytes | str | memoryview]:
-    """Pass the SSE body through untouched, stamping TTFT and total, then log one
-    chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
+    """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
+    log one chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
+
+    Thinking time spans the first ``thinking`` frame to the first ``token`` frame, so it
+    lands in the same ``meta`` diagnostics as TTFT and total.
 
     The ``meta`` frame trails the body's ``done`` (``total_ms`` is known only once the
     body drains); consumers that stop at ``done`` ignore it and the protocol-v2 parsers
     drop unknown events, so it stays backward compatible.
     """
     try:
+        marking = True
         async for chunk in body:
             timings.mark_ttft()
+            if marking:
+                event_name = _sse_event_name(chunk)
+                if event_name == "thinking":
+                    timings.mark_thinking()
+                elif event_name == "token":
+                    timings.mark_answer()
+                    marking = False
             yield chunk
     finally:
         timings.mark_total()

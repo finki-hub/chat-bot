@@ -66,6 +66,8 @@ export type MessageDiagnostics = {
   serverTotalMs?: null | number;
   serverTtftMs?: null | number;
   spans?: Record<string, number>;
+  // Wall-clock before the answer: first thinking frame → first token.
+  thinkingMs?: null | number;
   tokens?: { input: number; output: number; total: number };
   topDistance?: null | number;
 };
@@ -103,6 +105,7 @@ export type ProtocolV2Event =
         timing?: {
           candidate_count: null | number;
           spans: Record<string, number>;
+          thinking_ms: null | number;
           top_distance: null | number;
           total_ms: null | number;
           ttft_ms: null | number;

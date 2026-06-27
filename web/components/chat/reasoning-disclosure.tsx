@@ -4,13 +4,22 @@ import { useId, useState } from 'react';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { t } from '@/lib/i18n';
 
-export const ReasoningDisclosure = ({ text }: { text: string }) => {
-  const [open, setOpen] = useState(false);
+export const ReasoningDisclosure = ({
+  streaming = false,
+  text,
+}: {
+  streaming?: boolean;
+  text: string;
+}) => {
+  // null = follow the stream (open while thinking); a click pins it open or closed.
+  const [manualOpen, setManualOpen] = useState<boolean | null>(null);
   const panelId = useId();
 
   if (text.length === 0) {
     return null;
   }
+
+  const open = manualOpen ?? streaming;
 
   return (
     <div
@@ -22,7 +31,7 @@ export const ReasoningDisclosure = ({ text }: { text: string }) => {
         aria-expanded={open}
         className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
         onClick={() => {
-          setOpen((v) => !v);
+          setManualOpen(!open);
         }}
         type="button"
       >
@@ -30,11 +39,14 @@ export const ReasoningDisclosure = ({ text }: { text: string }) => {
           aria-hidden="true"
           className={`size-3 transition-transform ${open ? 'rotate-90' : ''}`}
         />
-        {t('thread.reasoning')}
+        <span className={streaming ? 'animate-pulse' : undefined}>
+          {streaming ? t('thread.thinking') : t('thread.reasoning')}
+        </span>
       </button>
       {open ? (
         <div
           className="mt-1 border-l-2 border-border pl-3 text-sm text-muted-foreground"
+          data-testid="reasoning-panel"
           id={panelId}
         >
           <MessageResponse>{text}</MessageResponse>
