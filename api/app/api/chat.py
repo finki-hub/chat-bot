@@ -56,10 +56,9 @@ def _history_for_retrieval(payload: ChatSchema) -> str | None:
 
 
 def _sse_event_name(chunk: bytes | str | memoryview) -> str:
-    """The SSE event name of a single frame, or '' if it carries none.
+    """The SSE event name of ``chunk``, or '' if it has none.
 
-    The agent generator yields exactly one frame per chunk, so a cheap prefix read
-    suffices — no need to parse the whole frame.
+    Each chunk is one ``_sse`` frame, so reading the ``event:`` prefix is enough.
     """
     text = bytes(chunk).decode() if not isinstance(chunk, str) else chunk
     if text.startswith("event: "):
@@ -78,8 +77,8 @@ async def _instrument_stream(
     """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
     log one chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
 
-    Thinking time is the span from the first ``thinking`` frame to the first ``token``
-    frame, measured here so it rides the same ``meta``/diagnostics path as the rest.
+    Thinking time spans the first ``thinking`` frame to the first ``token`` frame, so it
+    lands in the same ``meta`` diagnostics as TTFT and total.
 
     The ``meta`` frame trails the body's ``done`` (``total_ms`` is known only once the
     body drains); consumers that stop at ``done`` ignore it and the protocol-v2 parsers

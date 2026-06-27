@@ -11,8 +11,7 @@ export const ReasoningDisclosure = ({
   streaming?: boolean;
   text: string;
 }) => {
-  // Until the user clicks, the panel follows the stream: open while thinking, collapse
-  // once the answer begins. A manual toggle then takes over.
+  // null = follow the stream (open while thinking); a click pins it open or closed.
   const [manualOpen, setManualOpen] = useState<boolean | null>(null);
   const panelId = useId();
 

@@ -25,8 +25,7 @@ const closeServer = (server: ReturnType<typeof createServer>): Promise<void> =>
     });
   });
 
-// A client that navigates away mid-stream ends the response, so a late timer must
-// not write to a finished socket (that throws ERR_STREAM_WRITE_AFTER_END).
+// Skip a late timer once the client navigated away: writing to an ended socket throws.
 const writeEvent = (res: ServerResponse, event: TimedEvent): void => {
   if (res.writableEnded || res.destroyed) {
     return;
@@ -70,8 +69,7 @@ const handleStream =
     });
   };
 
-// A streaming server that flushes each chunk on its own schedule, so reasoning deltas
-// genuinely arrive over time (the shared head/tail helper batches them).
+// Flushes each chunk on its own timer so reasoning deltas arrive over time, not batched.
 const startTimedStream = (
   events: TimedEvent[],
 ): Promise<{ close: () => Promise<void>; url: string }> =>
@@ -106,7 +104,6 @@ test.describe('reasoning streaming (mocked BFF)', () => {
         atMs: 0,
         chunk: { delta: REASON_HEAD, id: 'r', type: 'reasoning-delta' },
       },
-      // reasoning keeps streaming for ~1.2s before any answer text exists
       {
         atMs: 700,
         chunk: { delta: REASON_TAIL, id: 'r', type: 'reasoning-delta' },
@@ -145,22 +142,19 @@ test.describe('reasoning streaming (mocked BFF)', () => {
       await page.getByTestId('composer-input').fill('Каде е ФИНКИ?');
       await page.getByTestId('composer-input').press('Enter');
 
-      // Mid-stream: the panel is auto-expanded and the partial reasoning is visible
-      // BEFORE the answer text exists.
+      // Reasoning is visible mid-stream, before any answer text exists.
       await expect(page.getByTestId('reasoning-panel')).toContainText(
         'чекор еден',
       );
       await expect(page.getByTestId('answer-text')).toHaveCount(0);
 
-      // After the stream completes: the answer renders and the panel auto-collapses
-      // (the toggle stays, so the reasoning is still reachable).
+      // Once the answer arrives the panel auto-collapses, but the toggle remains.
       await expect(page.getByTestId('answer-text')).toContainText(
         'ФИНКИ е во Скопје',
       );
       await expect(page.getByTestId('reasoning')).toBeVisible();
       await expect(page.getByTestId('reasoning-panel')).toHaveCount(0);
 
-      // Re-expanding shows the full reasoning trace.
       await page.getByTestId('reasoning').getByRole('button').click();
       await expect(page.getByTestId('reasoning-panel')).toContainText(
         'чекор еден… и чекор два.',

@@ -66,7 +66,7 @@ export type MessageDiagnostics = {
   serverTotalMs?: null | number;
   serverTtftMs?: null | number;
   spans?: Record<string, number>;
-  // Wall-clock the model spent thinking before the answer (first thinking → first token).
+  // Wall-clock before the answer: first thinking frame → first token.
   thinkingMs?: null | number;
   tokens?: { input: number; output: number; total: number };
   topDistance?: null | number;
