@@ -92,6 +92,18 @@ describe('toChatRequestBody', () => {
     expect(out.messages).toStrictEqual([{ content: 'Прашање?', role: 'user' }]);
   });
 
+  it('forwards the reasoning flag when set (and omits it when unset)', () => {
+    expect(
+      toChatRequestBody({ messages: [msg('user', 'hi')], reasoning: true }),
+    ).toStrictEqual({
+      messages: [{ content: 'hi', role: 'user' }],
+      reasoning: true,
+    });
+
+    // The 'omits undefined sampling params' test above proves reasoning is
+    // absent from the body when it is not set.
+  });
+
   it('forwards only the last assistant text part (drops a discarded reset preamble)', () => {
     const out = toChatRequestBody({
       messages: [
@@ -151,7 +163,50 @@ const textDelta = (id: string, delta: string): UiStreamPart => ({
 
 const textEnd = (id: string): UiStreamPart => ({ id, type: 'text-end' });
 
+const reasoningStart = (id: string): UiStreamPart => ({
+  id,
+  type: 'reasoning-start',
+});
+
+const reasoningDelta = (id: string, delta: string): UiStreamPart => ({
+  delta,
+  id,
+  type: 'reasoning-delta',
+});
+
+const reasoningEnd = (id: string): UiStreamPart => ({
+  id,
+  type: 'reasoning-end',
+});
+
 describe('translateToUiStream', () => {
+  it('streams reasoning into a part that ends when the answer begins', async () => {
+    const writer = new FakeWriter();
+
+    await translateToUiStream(
+      events(
+        { text: 'раз', type: 'thinking' },
+        { text: 'мислам', type: 'thinking' },
+        { text: 'одговор', type: 'token' },
+        DONE,
+      ),
+      writer,
+      { inferenceModel: MODEL, responseId: 'r3' },
+      ids(),
+    );
+
+    expect(writer.parts).toStrictEqual([
+      startWith({ inferenceModel: MODEL, responseId: 'r3' }),
+      reasoningStart(T1),
+      reasoningDelta(T1, 'раз'),
+      reasoningDelta(T1, 'мислам'),
+      reasoningEnd(T1),
+      textStart(T2),
+      textDelta(T2, 'одговор'),
+      textEnd(T2),
+    ]);
+  });
+
   it('emits start metadata, lazy text part, and finalizes on done', async () => {
     const writer = new FakeWriter();
 

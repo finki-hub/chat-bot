@@ -9,7 +9,12 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from pydantic import SecretStr
 
-from app.llms.agents import create_agent_token_generator, stream_sync_gen_as_sse
+from app.llms.agents import (
+    content_to_text,
+    create_agent_token_generator,
+    stream_sync_gen_as_sse,
+    thinking_budget,
+)
 from app.llms.mcp import get_mcp_tools
 from app.llms.models import Model
 from app.llms.prompts import build_agent_messages
@@ -19,8 +24,11 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
-# Model, temperature, top_p, max_tokens -> LLM
-google_llm_clients: dict[tuple[str, float, float, int], ChatGoogleGenerativeAI] = {}
+# Model, temperature, top_p, max_tokens, reasoning -> LLM
+google_llm_clients: dict[
+    tuple[str, float, float, int, bool],
+    ChatGoogleGenerativeAI,
+] = {}
 # Model, is_document -> Embedder
 google_embedders: dict[tuple[str, bool], GoogleGenerativeAIEmbeddings] = {}
 
@@ -54,21 +62,36 @@ def get_google_llm(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    *,
+    reasoning: bool = False,
 ) -> ChatGoogleGenerativeAI:
     """
     Return a singleton ChatGoogleGenerativeAI instance for the specified model.
     If the model and parameters are not already in the cache, create a new instance.
+
+    When `reasoning` is on, `include_thoughts=True` returns the model's thoughts; Gemini 3
+    uses `thinking_level`, while Gemini 2.5 uses a `thinking_budget` token cap.
     """
-    key = (model.value, temperature, top_p, max_tokens)
+    key = (model.value, temperature, top_p, max_tokens, reasoning)
 
     if key not in google_llm_clients:
+        client_kwargs: dict[str, object] = {}
+        max_output = max_tokens
+        if reasoning:
+            client_kwargs["include_thoughts"] = True
+            budget, max_output = thinking_budget(max_tokens)
+            if model == Model.GEMINI_3_FLASH_PREVIEW:
+                client_kwargs["thinking_level"] = "medium"
+            else:
+                client_kwargs["thinking_budget"] = budget
         google_llm_clients[key] = ChatGoogleGenerativeAI(
             model=model.value,
             google_api_key=settings.GOOGLE_API_KEY,
             base_url=settings.GOOGLE_BASE_URL or None,
             temperature=temperature,
             top_p=top_p,
-            max_output_tokens=max_tokens,
+            max_output_tokens=max_output,
+            **client_kwargs,
         )
 
     return google_llm_clients[key]
@@ -126,6 +149,7 @@ def stream_google_response(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    reasoning: bool = False,
 ) -> StreamingResponse:
     """
     Stream a response from the specified Google model using the provided prompts.
@@ -138,20 +162,12 @@ def stream_google_response(
         model.value,
     )
 
-    llm = get_google_llm(model, temperature, top_p, max_tokens)
+    llm = get_google_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
     prompt_messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
     def sync_token_gen() -> Generator[str]:
         for chunk in llm.stream(prompt_messages):
-            content = chunk.content
-            if isinstance(content, list):
-                text = "".join(
-                    part.get("text", "") if isinstance(part, dict) else str(part)
-                    for part in content
-                )
-            else:
-                text = str(content)
-            yield text
+            yield content_to_text(chunk.content)
 
     return stream_sync_gen_as_sse(sync_token_gen())
 
@@ -185,15 +201,7 @@ async def transform_query_with_google(
         ]
 
         response = await llm.ainvoke(messages)
-        content = response.content
-        if isinstance(content, list):
-            text = "".join(
-                part.get("text", "") if isinstance(part, dict) else str(part)
-                for part in content
-            )
-        else:
-            text = str(content)
-        return text.strip()
+        return content_to_text(response.content).strip()
     except Exception:
         logger.exception("Query transformation failed: %s. Using original query.")
 
@@ -209,6 +217,7 @@ async def stream_google_agent_response(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    reasoning: bool = False,
 ) -> StreamingResponse:
     """
     Stream a response from a Google agent with MCP tools.
@@ -221,7 +230,7 @@ async def stream_google_agent_response(
     )
 
     try:
-        llm = get_google_llm(model, temperature, top_p, max_tokens)
+        llm = get_google_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
 
         tools = await get_mcp_tools()
 

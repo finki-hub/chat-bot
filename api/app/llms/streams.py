@@ -6,7 +6,7 @@ from langchain_core.messages import BaseMessage
 from app.llms.anthropic import stream_anthropic_agent_response
 from app.llms.google import stream_google_agent_response
 from app.llms.gpu_api import stream_gpu_api_response
-from app.llms.models import Model
+from app.llms.models import REASONING_CAPABLE_MODELS, Model
 from app.llms.ollama import stream_ollama_agent_response
 from app.llms.openai import stream_openai_agent_response
 
@@ -22,6 +22,7 @@ async def stream_response_with_agent(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    reasoning: bool = False,
 ) -> StreamingResponse:
     """
     Stream a response from the specified model using the provided user prompt and system prompt with agent.
@@ -33,6 +34,8 @@ async def stream_response_with_agent(
         model.value,
         len(history),
     )
+
+    reasoning = reasoning and model in REASONING_CAPABLE_MODELS
 
     match model:
         case (
@@ -51,6 +54,7 @@ async def stream_response_with_agent(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
+                reasoning=reasoning,
             )
 
         case (
@@ -72,6 +76,7 @@ async def stream_response_with_agent(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
+                reasoning=reasoning,
             )
 
         case (
@@ -85,6 +90,7 @@ async def stream_response_with_agent(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
+                reasoning=reasoning,
             )
 
         case (
@@ -101,6 +107,7 @@ async def stream_response_with_agent(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
+                reasoning=reasoning,
             )
 
         case Model.QWEN2_1_5_B_INSTRUCT | Model.QWEN2_5_7B_INSTRUCT:

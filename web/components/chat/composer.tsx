@@ -1,4 +1,4 @@
-import { ArrowUp, Loader2, Sparkles, Square } from 'lucide-react';
+import { ArrowUp, Brain, Loader2, Sparkles, Square } from 'lucide-react';
 import {
   type KeyboardEvent,
   useCallback,
@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { t } from '@/lib/i18n';
+import { isReasoningCapableModel } from '@/lib/reasoning';
 import { groupModelsByProvider } from '@/lib/use-models';
 
 export type ComposerProps = {
@@ -27,8 +28,10 @@ export type ComposerProps = {
   modelsError?: boolean;
   modelsLoading?: boolean;
   onModelChange: (model: string) => void;
+  onReasoningChange: (reasoning: boolean) => void;
   onStop: () => void;
   onSubmit: (text: string) => void;
+  reasoning: boolean;
   status: 'error' | 'ready' | 'streaming' | 'submitted';
 };
 
@@ -39,8 +42,10 @@ export const Composer = ({
   modelsError,
   modelsLoading,
   onModelChange,
+  onReasoningChange,
   onStop,
   onSubmit,
+  reasoning,
   status,
 }: ComposerProps) => {
   const [value, setValue] = useState('');
@@ -149,6 +154,25 @@ export const Composer = ({
             value={value}
           />
           <div className="flex items-center justify-end gap-1.5 px-2 pb-2">
+            <Button
+              aria-label={t('composer.reasoning')}
+              aria-pressed={reasoning}
+              className="h-8 w-fit gap-1.5 rounded-full px-3 text-xs font-medium"
+              data-testid="composer-reasoning"
+              disabled={(disabled ?? false) || !isReasoningCapableModel(model)}
+              onClick={() => {
+                onReasoningChange(!reasoning);
+              }}
+              size="sm"
+              type="button"
+              variant={reasoning ? 'default' : 'ghost'}
+            >
+              <Brain
+                aria-hidden="true"
+                className="size-3.5"
+              />
+              {t('composer.reasoning')}
+            </Button>
             <Select
               disabled={modelSelectDisabled}
               onValueChange={onModelChange}

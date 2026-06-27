@@ -97,6 +97,20 @@ describe('parseProtocolV2', () => {
     expect(events).toStrictEqual([DONE]);
   });
 
+  it('parses a thinking event into a thinking part', async () => {
+    const events = await collect(
+      'event: thinking\ndata: {"text":"размислувам"}\n\n',
+      'event: token\ndata: {"text":"одговор"}\n\n',
+      DONE_FRAME,
+    );
+
+    expect(events).toStrictEqual([
+      { text: 'размислувам', type: 'thinking' },
+      token('одговор'),
+      DONE,
+    ]);
+  });
+
   it('maps meta frames to camelCase diagnostics, including a timing frame after done', async () => {
     // Mirrors the real wire order: tokens meta before done, timing meta after done.
     const events = await collect(

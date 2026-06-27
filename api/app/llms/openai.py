@@ -9,7 +9,11 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic import SecretStr
 
-from app.llms.agents import create_agent_token_generator, stream_sync_gen_as_sse
+from app.llms.agents import (
+    content_to_text,
+    create_agent_token_generator,
+    stream_sync_gen_as_sse,
+)
 from app.llms.mcp import get_mcp_tools
 from app.llms.models import Model
 from app.llms.prompts import build_agent_messages
@@ -19,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
-# Model, temperature, top_p, max_tokens -> LLM
-openai_llm_clients: dict[tuple[str, float, float, int], ChatOpenAI] = {}
+# Model, temperature, top_p, max_tokens, reasoning -> LLM
+openai_llm_clients: dict[tuple[str, float, float, int, bool], ChatOpenAI] = {}
 openai_embedders: dict[str, OpenAIEmbeddings] = {}
 
 
@@ -46,14 +50,23 @@ def get_openai_llm(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    *,
+    reasoning: bool = False,
 ) -> ChatOpenAI:
     """
-    Return a singleton ChatOpenAI instance for the specified model and sampling parameters.
-    If the model and parameters are not already in the cache, create a new instance.
+    Return a singleton ChatOpenAI instance for the specified model and parameters.
+
+    All OpenAI requests use the Responses API (`use_responses_api=True`); reasoning content
+    is only surfaced there. When `reasoning` is on, a `reasoning` config requests a
+    summarized reasoning trace (GPT-5 reasoning models ignore `temperature`, which the
+    wrapper strips automatically).
     """
-    key = (model.value, temperature, top_p, max_tokens)
+    key = (model.value, temperature, top_p, max_tokens, reasoning)
 
     if key not in openai_llm_clients:
+        client_kwargs: dict[str, object] = {"use_responses_api": True}
+        if reasoning:
+            client_kwargs["reasoning"] = {"effort": "medium", "summary": "auto"}
         openai_llm_clients[key] = ChatOpenAI(
             model=model.value,
             api_key=SecretStr(settings.OPENAI_API_KEY),
@@ -63,6 +76,7 @@ def get_openai_llm(
             streaming=True,
             stream_usage=True,
             max_tokens=max_tokens,  # type: ignore[call-arg]
+            **client_kwargs,
         )
 
     return openai_llm_clients[key]
@@ -113,6 +127,7 @@ def stream_openai_response(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    reasoning: bool = False,
 ) -> StreamingResponse:
     """
     Stream a response from the specified OpenAI model using the provided user prompt and system prompt.
@@ -124,13 +139,13 @@ def stream_openai_response(
         model.value,
     )
 
-    llm = get_openai_llm(model, temperature, top_p, max_tokens)
+    llm = get_openai_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
 
     messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
     def sync_token_gen() -> Generator[str]:
         for chunk in llm.stream(messages):
-            yield str(chunk.content)
+            yield content_to_text(chunk.content)
 
     return stream_sync_gen_as_sse(sync_token_gen())
 
@@ -144,6 +159,7 @@ async def stream_openai_agent_response(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    reasoning: bool = False,
 ) -> StreamingResponse:
     """
     Stream a response from an OpenAI agent with MCP tools.
@@ -156,7 +172,7 @@ async def stream_openai_agent_response(
     )
 
     try:
-        llm = get_openai_llm(model, temperature, top_p, max_tokens)
+        llm = get_openai_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
 
         tools = await get_mcp_tools()
 
@@ -219,7 +235,7 @@ async def transform_query_with_openai(
         ]
 
         response = await llm.ainvoke(messages)
-        return str(response.content).strip()
+        return content_to_text(response.content).strip()
     except Exception:
         logger.exception("Query transformation failed; using the original query.")
 

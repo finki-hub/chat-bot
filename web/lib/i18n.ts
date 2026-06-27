@@ -13,6 +13,7 @@ export const messages = {
   'composer.modelsError': 'Моделите се недостапни',
   'composer.modelsLoading': 'Се вчитуваат модели…',
   'composer.placeholder': 'Напиши порака…',
+  'composer.reasoning': 'Размислување',
   'composer.send': 'Испрати',
   'composer.stop': 'Запри',
   'conversation.delete': 'Избриши',
@@ -61,6 +62,7 @@ export const messages = {
   'thread.emptyDescription': 'Прашај нешто за студиите на ФИНКИ.',
   'thread.emptyTitle': 'Започни разговор',
   'thread.firstToken': 'прв токен',
+  'thread.reasoning': 'Размислување',
   'thread.thinking': 'Размислувам…',
 } as const;
 

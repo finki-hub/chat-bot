@@ -4,6 +4,7 @@ export type ParsedEvent =
   | { code: ChatErrorCode; message: string; type: 'error' }
   | { diagnostics: MessageDiagnostics; type: 'meta' }
   | { label: string; state: string; tool?: string; type: 'status' }
+  | { text: string; type: 'thinking' }
   | { text: string; type: 'token' }
   | { type: 'done' }
   | { type: 'reset' };
@@ -176,6 +177,8 @@ const buildEvent = (
         type: 'status',
         ...(typeof obj['tool'] === 'string' && { tool: obj['tool'] }),
       };
+    case 'thinking':
+      return { text: asString(obj['text']), type: 'thinking' };
     case 'token':
       return { text: asString(obj['text']), type: 'token' };
     default:

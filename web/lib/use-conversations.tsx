@@ -30,7 +30,11 @@ import { useConversationHydration } from '@/lib/use-conversation-hydration';
 import { useConversationList } from '@/lib/use-conversation-list';
 import { useStreamTiming } from '@/lib/use-stream-timing';
 
-export const useConversations = (model: string, disabled = false) => {
+export const useConversations = (
+  model: string,
+  disabled = false,
+  reasoning = false,
+) => {
   const activeId = useUiStore((s) => s.activeConversationId);
   const setActiveId = useUiStore((s) => s.setActiveConversationId);
 
@@ -62,11 +66,17 @@ export const useConversations = (model: string, disabled = false) => {
     [refreshConversations],
   );
 
-  // useChat keeps only the first transport, so read the model at send time.
+  // useChat keeps only the first transport, so read the latest values at send time.
   const modelRef = useRef(model);
   modelRef.current = model;
+  const reasoningRef = useRef(reasoning);
+  reasoningRef.current = reasoning;
   const transport = useMemo(
-    () => buildChatTransport(() => ({ model: modelRef.current })),
+    () =>
+      buildChatTransport(() => ({
+        model: modelRef.current,
+        reasoning: reasoningRef.current,
+      })),
     [],
   );
 

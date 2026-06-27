@@ -5,6 +5,7 @@ import { ServiceBanner } from '@/components/chat/service-banner';
 import { Thread } from '@/components/chat/thread';
 import { Header } from '@/components/shell/header';
 import { Sidebar } from '@/components/shell/sidebar';
+import { isReasoningCapableModel } from '@/lib/reasoning';
 import { useUiStore } from '@/lib/ui-store';
 import { useConversations } from '@/lib/use-conversations';
 import { useHealth } from '@/lib/use-health';
@@ -13,7 +14,10 @@ import { useModels } from '@/lib/use-models';
 const ChatScreen = () => {
   const model = useUiStore((s) => s.model);
   const setModel = useUiStore((s) => s.setModel);
+  const reasoning = useUiStore((s) => s.reasoning);
+  const setReasoning = useUiStore((s) => s.setReasoning);
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const reasoningActive = reasoning && isReasoningCapableModel(model);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
 
@@ -40,7 +44,7 @@ const ChatScreen = () => {
     status,
     streamStartedAt,
     submitMessage,
-  } = useConversations(model, unavailable);
+  } = useConversations(model, unavailable, reasoningActive);
 
   return (
     <div className="flex h-dvh w-full flex-col">
@@ -78,8 +82,10 @@ const ChatScreen = () => {
             modelsError={modelsError}
             modelsLoading={modelsLoading}
             onModelChange={setModel}
+            onReasoningChange={setReasoning}
             onStop={onStop}
             onSubmit={submitMessage}
+            reasoning={reasoningActive}
             status={status}
           />
         </main>

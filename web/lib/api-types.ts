@@ -6,6 +6,7 @@ export type ChatRequestBody = {
   max_tokens?: number;
   messages: ConversationTurn[];
   query_transform_model?: ModelId;
+  reasoning?: boolean;
   system_prompt?: null | string;
   temperature?: number;
   top_p?: number;
@@ -95,6 +96,7 @@ export type ProtocolV2Event =
       event: 'error';
     }
   | { data: { label: string; state: string; tool?: string }; event: 'status' }
+  | { data: { text: string }; event: 'thinking' }
   | { data: { text: string }; event: 'token' }
   | {
       data: {

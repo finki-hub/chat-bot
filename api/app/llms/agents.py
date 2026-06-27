@@ -25,6 +25,10 @@ def token_event(text: str) -> str:
     return _sse("token", {"text": text})
 
 
+def thinking_event(text: str) -> str:
+    return _sse("thinking", {"text": text})
+
+
 def status_event(tool: str | None = None) -> str:
     payload: dict[str, object] = {"state": "tool_call", "label": _STATUS_LABEL}
     if tool:
@@ -74,15 +78,60 @@ def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
     return StreamingResponse(async_token_gen(), media_type="text/event-stream")
 
 
+def content_to_text(content: object) -> str:
+    """Plain text of a message's content; non-text blocks (tool calls, reasoning) yield ''."""
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+
+    parts: list[str] = []
+    for part in content:
+        if isinstance(part, dict):
+            parts.append(str(part.get("text", "")))
+        elif isinstance(part, str):
+            parts.append(part)
+    return "".join(parts)
+
+
+_MAX_THINKING_BUDGET = 2048
+
+
+def thinking_budget(max_tokens: int) -> tuple[int, int]:
+    """A thinking budget (at most half of ``max_tokens``) and that cap returned unchanged."""
+    budget = min(_MAX_THINKING_BUDGET, max_tokens // 2)
+    return budget, max_tokens
+
+
 def _chunk_text(message: AIMessageChunk) -> str:
     """The plain text of an AIMessageChunk; '' for tool-call/non-text content blocks."""
+    return content_to_text(message.content)
+
+
+def _chunk_reasoning(message: AIMessageChunk) -> str:
+    """Reasoning text in an AIMessageChunk; '' if none."""
+    parts: list[str] = []
+
     raw = message.content
     if isinstance(raw, list):
-        return "".join(
-            part.get("text", "") if isinstance(part, dict) else str(part)
-            for part in raw
-        )
-    return str(raw)
+        for part in raw:
+            if not isinstance(part, dict):
+                continue
+            kind = part.get("type")
+            if kind == "thinking":
+                parts.append(str(part.get("thinking", "")))
+            elif kind == "reasoning":
+                parts.extend(
+                    str(summary.get("text", ""))
+                    for summary in part.get("summary", []) or []
+                    if isinstance(summary, dict)
+                )
+
+    extra = message.additional_kwargs.get("reasoning_content")
+    if isinstance(extra, str):
+        parts.append(extra)
+
+    return "".join(parts)
 
 
 def _accumulate_usage(usage: dict[str, int], output: object) -> None:
@@ -129,7 +178,14 @@ async def create_agent_token_generator(
                 continue
 
             chunk = event["data"].get("chunk")
-            text = _chunk_text(chunk) if isinstance(chunk, AIMessageChunk) else ""
+            if not isinstance(chunk, AIMessageChunk):
+                continue
+
+            reasoning = _chunk_reasoning(chunk)
+            if reasoning:
+                yield thinking_event(reasoning)
+
+            text = _chunk_text(chunk)
             if not text:
                 continue
 
