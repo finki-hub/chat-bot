@@ -63,13 +63,12 @@ async def _instrument_stream(
     timings: RequestTimings,
     retrieval_hit: bool,
 ) -> AsyncGenerator[bytes | str | memoryview]:
-    """Pass the SSE body through untouched while stamping TTFT (first chunk) and total
-    (stream end), emit one chat.timing log line with the latency breakdown, then a
-    trailing ``meta`` SSE frame carrying that breakdown for the client to surface.
+    """Pass the SSE body through untouched, stamping TTFT and total, then log one
+    chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
 
-    The ``meta`` frame is sent after the inner body's ``done`` (``total_ms`` is only
-    known once the body drains); SSE consumers that stop at ``done`` ignore it, and the
-    protocol-v2 parsers drop unknown events, so it is backward compatible.
+    The ``meta`` frame trails the body's ``done`` (``total_ms`` is known only once the
+    body drains); consumers that stop at ``done`` ignore it and the protocol-v2 parsers
+    drop unknown events, so it stays backward compatible.
     """
     try:
         async for chunk in body:

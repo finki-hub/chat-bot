@@ -54,9 +54,8 @@ const toSpans = (value: unknown): Record<string, number> => {
   return spans;
 };
 
-// Map the snake_case `meta` wire payload to the camelCase MessageDiagnostics the UI
-// reads. A frame carries timing OR tokens (the API emits them from different layers),
-// so each section is mapped only when present and the rest is deep-merged downstream.
+// A `meta` frame carries timing OR tokens (emitted from different API layers), so each
+// section is mapped only when present and the two halves are deep-merged downstream.
 const toDiagnostics = (obj: Record<string, unknown>): MessageDiagnostics => {
   const diagnostics: MessageDiagnostics = {};
   const timing = obj['timing'];

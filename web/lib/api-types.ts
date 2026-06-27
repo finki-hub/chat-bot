@@ -58,9 +58,8 @@ export type FeedbackSchema = {
 
 export type FeedbackType = 'dislike' | 'like';
 
-// Server-measured request diagnostics surfaced under the timing footnote. Every field
-// is optional: a single `meta` frame carries only part of it (timing vs tokens), and
-// not all providers report token usage.
+// Every field is optional: a `meta` frame carries only part of it (timing vs tokens),
+// and not all providers report token usage.
 export type MessageDiagnostics = {
   candidateCount?: null | number;
   serverTotalMs?: null | number;

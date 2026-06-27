@@ -170,8 +170,7 @@ const MessageTiming = ({
     timing.ttftMs === null
       ? ''
       : `, ${t('thread.firstToken')} ${formatDuration(timing.ttftMs)}`;
-  // Give the trigger an accessible name that states its purpose AND the timing summary,
-  // since the HoverCard detail itself is pointer/focus-only.
+  // The HoverCard detail is pointer/focus-only, so name the trigger with purpose + summary.
   const triggerLabel = `${t('diagnostics.title')}: ${formatDuration(timing.totalMs)}${ttftSuffix}`;
 
   return (

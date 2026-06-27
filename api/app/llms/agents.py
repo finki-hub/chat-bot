@@ -86,19 +86,17 @@ def _chunk_text(message: AIMessageChunk) -> str:
 
 
 def _accumulate_usage(usage: dict[str, int], output: object) -> None:
-    """Add an ``on_chat_model_end`` message's token counts into ``usage`` in place.
+    """Fold one ``on_chat_model_end`` message's token counts into ``usage``.
 
-    Summed across the agent's chat-model calls — the answer plus any tool-loop turns.
-    Providers that don't surface ``usage_metadata`` while streaming (the GPU-API path)
-    contribute nothing, so the token ``meta`` frame is simply omitted for them.
+    Accumulates across the answer and any tool-loop turns; providers that omit
+    ``usage_metadata`` (e.g. the GPU-API path) add nothing.
     """
     metadata = getattr(output, "usage_metadata", None)
     if not metadata:
         return
     usage["input"] += metadata.get("input_tokens") or 0
     usage["output"] += metadata.get("output_tokens") or 0
-    # Derive total from the parts so the displayed counts always reconcile, even if a
-    # provider reports a null/partial total_tokens.
+    # Derive total from the parts so the shown counts always reconcile.
     usage["total"] = usage["input"] + usage["output"]
 
 

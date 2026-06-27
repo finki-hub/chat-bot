@@ -68,9 +68,8 @@ export type TKey = keyof typeof messages;
 
 export const t = (key: TKey): string => messages[key];
 
-// Per-stage span keys come from the API's internal `timed(...)` instrumentation; map the
-// known ones to Macedonian labels for the diagnostics card, falling back to the raw key
-// for any stage added server-side later.
+// Span keys are the API's internal `timed(...)` stage names; translate the known ones,
+// falling back to the raw key for any stage added server-side later.
 const spanLabels: Record<string, string> = {
   'agent.mcp_tools': 'агент: алатки',
   'agent.setup': 'агент: подготовка',
