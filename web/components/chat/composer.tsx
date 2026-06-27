@@ -83,6 +83,33 @@ export const Composer = ({
     }
   }, [status, focusInput]);
 
+  // Start typing anywhere on the page to focus the composer, so the first
+  // keystroke lands in the input even when it was never focused. Skip shortcuts
+  // and non-character keys, and stay out of the way of other editable fields.
+  useEffect(() => {
+    const onTypeAhead = (e: globalThis.KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) {
+        return;
+      }
+      const active = document.activeElement;
+      const isEditable =
+        active instanceof HTMLElement &&
+        (active.isContentEditable ||
+          active.tagName === 'INPUT' ||
+          active.tagName === 'TEXTAREA' ||
+          active.tagName === 'SELECT');
+      if (isEditable || document.querySelector('[role="dialog"]') !== null) {
+        return;
+      }
+      textareaRef.current?.focus();
+    };
+
+    document.addEventListener('keydown', onTypeAhead);
+    return () => {
+      document.removeEventListener('keydown', onTypeAhead);
+    };
+  }, []);
+
   const submit = () => {
     const trimmed = value.trim();
     if (!trimmed || isBusy || disabled) {
@@ -138,7 +165,7 @@ export const Composer = ({
   return (
     <div className="bg-background px-3 pb-3 pt-2 sm:px-4">
       <div className="mx-auto w-full max-w-3xl">
-        <div className="flex flex-col rounded-3xl border border-input bg-card shadow-lg shadow-black/5 transition-[color,box-shadow] focus-within:border-ring/70 focus-within:ring-4 focus-within:ring-ring/15 dark:shadow-black/25">
+        <div className="flex flex-col rounded-3xl border border-input bg-card shadow-lg shadow-black/5 transition-[color,box-shadow] focus-within:border-foreground/25 focus-within:ring-2 focus-within:ring-foreground/[0.06] dark:shadow-black/25">
           <textarea
             aria-label={t('composer.message')}
             className="field-sizing-content max-h-48 min-h-[52px] w-full resize-none bg-transparent px-4 pt-3 pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"

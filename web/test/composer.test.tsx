@@ -123,6 +123,27 @@ describe('Composer', () => {
     expect(screen.getByRole('option', { name: GPT })).toBeInTheDocument();
   });
 
+  it('focuses the input when typing starts elsewhere on the page', () => {
+    setup();
+    const textarea = screen.getByTestId('composer-input');
+
+    expect(textarea).not.toHaveFocus();
+
+    fireEvent.keyDown(document.body, { key: 'к' });
+
+    expect(textarea).toHaveFocus();
+  });
+
+  it('ignores shortcuts and non-character keys for type-to-focus', () => {
+    setup();
+    const textarea = screen.getByTestId('composer-input');
+
+    fireEvent.keyDown(document.body, { ctrlKey: true, key: 'a' });
+    fireEvent.keyDown(document.body, { key: 'ArrowDown' });
+
+    expect(textarea).not.toHaveFocus();
+  });
+
   it('reports model changes', async () => {
     const { onModelChange } = setup();
     const user = userEvent.setup();
