@@ -309,7 +309,9 @@ export const AssistantMessage = ({
             <MessageResponse>{text}</MessageResponse>
           </div>
         ) : null}
-        {pending || text === null ? null : (
+        {/* No `pending` guard: MessageTiming renders nothing until `timing` is set
+            on finish, so a still-streaming answer shows no footnote anyway. */}
+        {text === null ? null : (
           <MessageTiming
             diagnostics={diagnostics}
             inferenceModel={inferenceModel}
