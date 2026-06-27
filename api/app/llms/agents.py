@@ -89,6 +89,23 @@ def content_to_text(content: object) -> str:
     return str(content)
 
 
+_MIN_THINKING_BUDGET = 1024  # provider floor; the libs do not validate it.
+_MAX_THINKING_BUDGET = 2048
+_ANSWER_HEADROOM = 2048  # tokens reserved for the answer on top of the thinking budget.
+
+
+def thinking_budget(max_tokens: int) -> tuple[int, int]:
+    """A reasoning-token budget bounded under ``max_tokens`` with answer headroom, and the
+    effective ``max_tokens`` that fits both the thinking and the answer.
+
+    Thinking tokens are billed inside the output cap, so the budget must stay below it.
+    Shared by the Anthropic and Google reasoning paths.
+    """
+    budget = max(_MIN_THINKING_BUDGET, min(_MAX_THINKING_BUDGET, max_tokens // 2))
+    effective_max = max(max_tokens, budget + _ANSWER_HEADROOM)
+    return budget, effective_max
+
+
 def _chunk_text(message: AIMessageChunk) -> str:
     """The plain text of an AIMessageChunk; '' for tool-call/non-text content blocks."""
     return content_to_text(message.content)

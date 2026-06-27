@@ -9,7 +9,12 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from pydantic import SecretStr
 
-from app.llms.agents import create_agent_token_generator, stream_sync_gen_as_sse
+from app.llms.agents import (
+    content_to_text,
+    create_agent_token_generator,
+    stream_sync_gen_as_sse,
+    thinking_budget,
+)
 from app.llms.mcp import get_mcp_tools
 from app.llms.models import Model
 from app.llms.prompts import build_agent_messages
@@ -18,12 +23,6 @@ from app.utils.settings import Settings
 logger = logging.getLogger(__name__)
 
 settings = Settings()
-
-# Thinking tokens are billed inside max_output_tokens, so the thinking budget must stay
-# under the output cap with room for the answer (mirrors the Anthropic _thinking_config).
-_MIN_THINKING_BUDGET = 1024
-_MAX_THINKING_BUDGET = 2048
-_ANSWER_HEADROOM = 2048
 
 # Model, temperature, top_p, max_tokens, reasoning -> LLM
 google_llm_clients: dict[
@@ -80,16 +79,12 @@ def get_google_llm(
         max_output = max_tokens
         if reasoning:
             client_kwargs["include_thoughts"] = True
+            budget, max_output = thinking_budget(max_tokens)
+            # Gemini 3 sizes thinking by level; Gemini 2.5 takes an explicit token budget.
             if model == Model.GEMINI_3_FLASH_PREVIEW:
                 client_kwargs["thinking_level"] = "medium"
-                max_output = max(max_tokens, _MAX_THINKING_BUDGET + _ANSWER_HEADROOM)
             else:
-                budget = max(
-                    _MIN_THINKING_BUDGET,
-                    min(_MAX_THINKING_BUDGET, max_tokens // 2),
-                )
                 client_kwargs["thinking_budget"] = budget
-                max_output = max(max_tokens, budget + _ANSWER_HEADROOM)
         google_llm_clients[key] = ChatGoogleGenerativeAI(
             model=model.value,
             google_api_key=settings.GOOGLE_API_KEY,
@@ -173,15 +168,7 @@ def stream_google_response(
 
     def sync_token_gen() -> Generator[str]:
         for chunk in llm.stream(prompt_messages):
-            content = chunk.content
-            if isinstance(content, list):
-                text = "".join(
-                    part.get("text", "") if isinstance(part, dict) else str(part)
-                    for part in content
-                )
-            else:
-                text = str(content)
-            yield text
+            yield content_to_text(chunk.content)
 
     return stream_sync_gen_as_sse(sync_token_gen())
 
@@ -215,15 +202,7 @@ async def transform_query_with_google(
         ]
 
         response = await llm.ainvoke(messages)
-        content = response.content
-        if isinstance(content, list):
-            text = "".join(
-                part.get("text", "") if isinstance(part, dict) else str(part)
-                for part in content
-            )
-        else:
-            text = str(content)
-        return text.strip()
+        return content_to_text(response.content).strip()
     except Exception:
         logger.exception("Query transformation failed: %s. Using original query.")
 

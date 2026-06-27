@@ -95,7 +95,14 @@ export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
   };
 };
 
-const createTextPart = (writer: UiStreamWriter, idGen: () => string) => {
+// Text and reasoning parts share identical lazy-open/append/end lifecycle; only the
+// stream-part event names differ. Per-branch literal objects keep the discriminated
+// UiStreamPart union narrowable (a templated `${kind}-start` would widen to string).
+const createStreamPart = (
+  writer: UiStreamWriter,
+  idGen: () => string,
+  kind: 'reasoning' | 'text',
+) => {
   let id: null | string = null;
 
   return {
@@ -104,42 +111,29 @@ const createTextPart = (writer: UiStreamWriter, idGen: () => string) => {
 
       if (id === null) {
         id = ensuredId;
-        writer.write({ id: ensuredId, type: 'text-start' });
+        writer.write(
+          kind === 'text'
+            ? { id: ensuredId, type: 'text-start' }
+            : { id: ensuredId, type: 'reasoning-start' },
+        );
       }
 
-      writer.write({ delta, id: ensuredId, type: 'text-delta' });
+      writer.write(
+        kind === 'text'
+          ? { delta, id: ensuredId, type: 'text-delta' }
+          : { delta, id: ensuredId, type: 'reasoning-delta' },
+      );
     },
     end(): void {
       if (id === null) {
         return;
       }
 
-      writer.write({ id, type: 'text-end' });
-      id = null;
-    },
-  };
-};
-
-const createReasoningPart = (writer: UiStreamWriter, idGen: () => string) => {
-  let id: null | string = null;
-
-  return {
-    appendDelta(delta: string): void {
-      const ensuredId = id ?? idGen();
-
-      if (id === null) {
-        id = ensuredId;
-        writer.write({ id: ensuredId, type: 'reasoning-start' });
-      }
-
-      writer.write({ delta, id: ensuredId, type: 'reasoning-delta' });
-    },
-    end(): void {
-      if (id === null) {
-        return;
-      }
-
-      writer.write({ id, type: 'reasoning-end' });
+      writer.write(
+        kind === 'text'
+          ? { id, type: 'text-end' }
+          : { id, type: 'reasoning-end' },
+      );
       id = null;
     },
   };
@@ -164,8 +158,8 @@ export const translateToUiStream = async (
   /* eslint-enable @typescript-eslint/max-params -- re-enable once past the declaration */
   writer.write({ messageMetadata: meta, type: 'start' });
 
-  const textPart = createTextPart(writer, idGen);
-  const reasoningPart = createReasoningPart(writer, idGen);
+  const textPart = createStreamPart(writer, idGen, 'text');
+  const reasoningPart = createStreamPart(writer, idGen, 'reasoning');
   let stopped = false;
 
   const handleEvent = (event: ParsedEvent): void => {

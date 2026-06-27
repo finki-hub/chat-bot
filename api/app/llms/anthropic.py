@@ -7,7 +7,12 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from pydantic import SecretStr
 
-from app.llms.agents import create_agent_token_generator, stream_sync_gen_as_sse
+from app.llms.agents import (
+    content_to_text,
+    create_agent_token_generator,
+    stream_sync_gen_as_sse,
+    thinking_budget,
+)
 from app.llms.mcp import get_mcp_tools
 from app.llms.models import ANTHROPIC_NO_SAMPLING_MODELS, Model
 from app.llms.prompts import build_agent_messages
@@ -26,27 +31,19 @@ anthropic_llm_clients: dict[tuple[str, float, float, int, bool], ChatAnthropic] 
 # because the two concepts (no-sampling vs adaptive-thinking) are not inherently linked.
 _ADAPTIVE_THINKING_MODELS: frozenset[Model] = ANTHROPIC_NO_SAMPLING_MODELS
 
-_MIN_THINKING_BUDGET = 1024  # Anthropic API floor (the lib does not validate it).
-_MAX_THINKING_BUDGET = 2048
-_ANSWER_HEADROOM = 2048  # tokens reserved for the answer on top of the thinking budget.
-
 
 def _thinking_config(
     model: Model,
     max_tokens: int,
 ) -> tuple[dict[str, object], int]:
     """The Anthropic ``thinking`` payload and the effective ``max_tokens`` for a
-    reasoning-enabled request.
-
-    Thinking tokens are billed inside ``max_tokens``, so ``budget_tokens`` must stay below
-    it with room for the answer; we size the budget and raise ``max_tokens`` so both fit.
-    Opus 4.7/4.8 use summarized adaptive thinking (no budget, no headroom math).
+    reasoning-enabled request. Opus 4.7/4.8 use summarized adaptive thinking (no budget);
+    other models use an explicit budget bounded under ``max_tokens`` (see ``thinking_budget``).
     """
     if model in _ADAPTIVE_THINKING_MODELS:
         return {"type": "adaptive", "display": "summarized"}, max_tokens
 
-    budget = max(_MIN_THINKING_BUDGET, min(_MAX_THINKING_BUDGET, max_tokens // 2))
-    effective_max = max(max_tokens, budget + _ANSWER_HEADROOM)
+    budget, effective_max = thinking_budget(max_tokens)
     return {"type": "enabled", "budget_tokens": budget}, effective_max
 
 
@@ -120,15 +117,7 @@ def stream_anthropic_response(
 
     def sync_token_gen() -> Generator[str]:
         for chunk in llm.stream(prompt_messages):
-            content = chunk.content
-            if isinstance(content, list):
-                text = "".join(
-                    part.get("text", "") if isinstance(part, dict) else str(part)
-                    for part in content
-                )
-            else:
-                text = str(content)
-            yield text
+            yield content_to_text(chunk.content)
 
     return stream_sync_gen_as_sse(sync_token_gen())
 
@@ -162,15 +151,7 @@ async def transform_query_with_anthropic(
         ]
 
         response = await llm.ainvoke(messages)
-        content = response.content
-        if isinstance(content, list):
-            text = "".join(
-                part.get("text", "") if isinstance(part, dict) else str(part)
-                for part in content
-            )
-        else:
-            text = str(content)
-        return text.strip()
+        return content_to_text(response.content).strip()
     except Exception:
         logger.exception("Query transformation failed: %s. Using original query.")
 
