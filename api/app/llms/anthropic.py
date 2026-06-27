@@ -45,8 +45,10 @@ def _thinking_config(
 
     budget, effective_max = thinking_budget(max_tokens)
     budget = max(budget, _MIN_ANTHROPIC_THINKING_BUDGET)
-    if effective_max <= budget:
-        effective_max = budget + _MIN_ANTHROPIC_THINKING_BUDGET
+    # max_tokens must exceed budget_tokens; always keep at least a budget's worth of room
+    # for the answer so a small max_tokens isn't swallowed whole by the thinking budget
+    # (without this, max_tokens just above 1024 leaves a near-empty answer).
+    effective_max = max(effective_max, budget + _MIN_ANTHROPIC_THINKING_BUDGET)
     return {"type": "enabled", "budget_tokens": budget}, effective_max
 
 
