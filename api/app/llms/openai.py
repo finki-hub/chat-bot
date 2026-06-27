@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
-# Model, temperature, top_p, max_tokens, reasoning -> LLM
-openai_llm_clients: dict[tuple[str, float, float, int, bool], ChatOpenAI] = {}
+# Model, temperature, top_p (None when not forwarded), max_tokens, reasoning -> LLM
+openai_llm_clients: dict[tuple[str, float, float | None, int, bool], ChatOpenAI] = {}
 openai_embedders: dict[str, OpenAIEmbeddings] = {}
 
 
@@ -71,7 +71,16 @@ def get_openai_llm(
     request is made); the wrapper strips `temperature` for them but not `top_p`, so `top_p`
     is forwarded only for the non-reasoning chat models. This mirrors the Anthropic client.
     """
-    key = (model.value, temperature, top_p, max_tokens, reasoning)
+    # top_p is dropped for reasoning-capable (GPT-5) models, so it must not split the cache
+    # for them — fold it out of the key when it isn't forwarded.
+    forwards_top_p = model not in REASONING_CAPABLE_MODELS
+    key = (
+        model.value,
+        temperature,
+        top_p if forwards_top_p else None,
+        max_tokens,
+        reasoning,
+    )
 
     if key not in openai_llm_clients:
         client_kwargs: dict[str, object] = {"use_responses_api": True}
@@ -79,7 +88,7 @@ def get_openai_llm(
             client_kwargs["reasoning"] = {"effort": "medium", "summary": "auto"}
         elif model in OPENAI_MINIMAL_EFFORT_MODELS:
             client_kwargs["reasoning"] = {"effort": "minimal"}
-        if model not in REASONING_CAPABLE_MODELS:
+        if forwards_top_p:
             client_kwargs["top_p"] = top_p
         openai_llm_clients[key] = ChatOpenAI(
             model=model.value,
