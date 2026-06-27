@@ -5,6 +5,7 @@ import { ServiceBanner } from '@/components/chat/service-banner';
 import { Thread } from '@/components/chat/thread';
 import { Header } from '@/components/shell/header';
 import { Sidebar } from '@/components/shell/sidebar';
+import { isReasoningCapableModel } from '@/lib/reasoning';
 import { useUiStore } from '@/lib/ui-store';
 import { useConversations } from '@/lib/use-conversations';
 import { useHealth } from '@/lib/use-health';
@@ -16,6 +17,10 @@ const ChatScreen = () => {
   const reasoning = useUiStore((s) => s.reasoning);
   const setReasoning = useUiStore((s) => s.setReasoning);
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  // Honor the reasoning toggle only for capable models. The persisted flag is kept
+  // (so it re-applies when switching back to a capable model), but it is never sent to
+  // the backend nor shown as "on" for a model that would ignore/reject it.
+  const reasoningActive = reasoning && isReasoningCapableModel(model);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
 
@@ -42,7 +47,7 @@ const ChatScreen = () => {
     status,
     streamStartedAt,
     submitMessage,
-  } = useConversations(model, unavailable, reasoning);
+  } = useConversations(model, unavailable, reasoningActive);
 
   return (
     <div className="flex h-dvh w-full flex-col">
@@ -83,7 +88,7 @@ const ChatScreen = () => {
             onReasoningChange={setReasoning}
             onStop={onStop}
             onSubmit={submitMessage}
-            reasoning={reasoning}
+            reasoning={reasoningActive}
             status={status}
           />
         </main>

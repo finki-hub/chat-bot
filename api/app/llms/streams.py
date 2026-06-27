@@ -6,7 +6,7 @@ from langchain_core.messages import BaseMessage
 from app.llms.anthropic import stream_anthropic_agent_response
 from app.llms.google import stream_google_agent_response
 from app.llms.gpu_api import stream_gpu_api_response
-from app.llms.models import Model
+from app.llms.models import REASONING_CAPABLE_MODELS, Model
 from app.llms.ollama import stream_ollama_agent_response
 from app.llms.openai import stream_openai_agent_response
 
@@ -34,6 +34,11 @@ async def stream_response_with_agent(
         model.value,
         len(history),
     )
+
+    # A non-reasoning model ignores the flag (per the ChatSchema contract): never forward
+    # a provider reasoning/thinking parameter it would reject. This is the single chokepoint
+    # for the chat path, so every provider branch below sees an already-validated flag.
+    reasoning = reasoning and model in REASONING_CAPABLE_MODELS
 
     match model:
         case (

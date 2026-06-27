@@ -100,6 +100,29 @@ CHAT_MODELS: frozenset[Model] = frozenset(
     },
 )
 
+# Models with an extended-thinking / reasoning mode. The `reasoning` request flag is
+# honored only for these; for any other model it is ignored (see ChatSchema.reasoning and
+# the guard in `stream_response_with_agent`), so a non-reasoning model never receives a
+# provider reasoning/thinking parameter it would reject. Mirrors the web-side
+# `isReasoningCapableModel` predicate.
+REASONING_CAPABLE_MODELS: frozenset[Model] = frozenset(
+    {
+        Model.DEEPSEEK_R1_70B,
+        Model.GPT_5_4,
+        Model.GPT_5_4_MINI,
+        Model.GPT_5_2,
+        Model.GPT_5_MINI,
+        Model.GPT_5_NANO,
+        Model.GEMINI_2_5_FLASH,
+        Model.GEMINI_2_5_PRO,
+        Model.GEMINI_3_FLASH_PREVIEW,
+        Model.CLAUDE_OPUS_4_8,
+        Model.CLAUDE_OPUS_4_7,
+        Model.CLAUDE_SONNET_4_6,
+        Model.CLAUDE_HAIKU_4_5,
+    },
+)
+
 # Anthropic models that reject sampling parameters (temperature / top_p / top_k).
 # Claude Opus 4.7 and 4.8 return HTTP 400 if any of these are sent, so no sampling
 # parameters are forwarded for them. Every Claude 4+ model additionally rejects
