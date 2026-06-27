@@ -1,6 +1,7 @@
 import {
   type ChatRequestBody,
   type ConversationTurn,
+  type ErrorNotice,
   MAX_CHARS_PER_TURN,
   MAX_MESSAGES,
   type MessageDiagnostics,
@@ -27,7 +28,7 @@ export type UiStreamMeta = { inferenceModel?: string; responseId?: string };
 
 export type UiStreamPart =
   | {
-      data: { code: string; message: string };
+      data: ErrorNotice;
       transient: true;
       type: 'data-error';
     }

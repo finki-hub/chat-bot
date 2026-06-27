@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import type { MyUIMessage } from '@/lib/api-types';
+import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
 
 import {
   Conversation,
@@ -19,7 +19,7 @@ import { t } from '@/lib/i18n';
 import { hasReasoning, hasText, joinText } from '@/lib/message-parts';
 
 export type ThreadProps = {
-  activeError?: { code: string; message: string };
+  activeError?: ErrorNotice;
   activeStatus?: { label: string; tool?: string };
   messages: MyUIMessage[];
   onPickSuggestion?: (text: string) => void;

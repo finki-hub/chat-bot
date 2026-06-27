@@ -3,7 +3,7 @@
 import { useChat } from '@ai-sdk/react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
+import type { ErrorNotice, FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { fireAndForget } from '@/lib/async';
 import { renderAnswerActions } from '@/lib/conversation-actions';
@@ -42,15 +42,11 @@ export const useConversations = (
   const [activeStatus, setActiveStatus] = useState<
     undefined | { label: string; tool?: string }
   >();
-  const [activeError, setActiveError] = useState<
-    undefined | { code: string; message: string }
-  >();
+  const [activeError, setActiveError] = useState<ErrorNotice | undefined>();
   const convoIdRef = useRef<null | string>(activeId);
   const startedAtRef = useRef<null | number>(null);
   const firstTokenAtRef = useRef<null | number>(null);
-  const activeErrorRef = useRef<undefined | { code: string; message: string }>(
-    undefined,
-  );
+  const activeErrorRef = useRef<ErrorNotice | undefined>(undefined);
   const regeneratingMessageIdRef = useRef<null | string>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<
     null | string

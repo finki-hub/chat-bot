@@ -31,8 +31,7 @@ export type AnswerActionsContext = {
 export const renderAnswerActions =
   ({ disabled, messages, onVote, regenerate, status }: AnswerActionsContext) =>
   (message: MyUIMessage): ReactNode => {
-    // A text-less turn (errored or still empty) has no answer to copy, vote on,
-    // or regenerate meaningfully — skip the action bar so an error can't be voted on.
+    // No answer text means an errored/empty turn — skip the bar so it can't be voted on.
     if (message.role !== 'assistant' || !hasText(message)) {
       return null;
     }
