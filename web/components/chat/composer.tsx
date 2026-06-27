@@ -88,7 +88,13 @@ export const Composer = ({
   // and non-character keys, and stay out of the way of other editable fields.
   useEffect(() => {
     const onTypeAhead = (e: globalThis.KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) {
+      if (
+        e.defaultPrevented ||
+        e.ctrlKey ||
+        e.metaKey ||
+        e.altKey ||
+        e.key.length !== 1
+      ) {
         return;
       }
       const active = document.activeElement;

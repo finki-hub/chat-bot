@@ -124,7 +124,7 @@ describe('Composer', () => {
   });
 
   it('focuses the input when typing starts elsewhere on the page', () => {
-    setup();
+    setup({ status: 'error' });
     const textarea = screen.getByTestId('composer-input');
 
     expect(textarea).not.toHaveFocus();
@@ -135,7 +135,7 @@ describe('Composer', () => {
   });
 
   it('ignores shortcuts and non-character keys for type-to-focus', () => {
-    setup();
+    setup({ status: 'error' });
     const textarea = screen.getByTestId('composer-input');
 
     fireEvent.keyDown(document.body, { ctrlKey: true, key: 'a' });
