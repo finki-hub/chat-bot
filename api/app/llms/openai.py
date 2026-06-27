@@ -15,7 +15,7 @@ from app.llms.agents import (
     stream_sync_gen_as_sse,
 )
 from app.llms.mcp import get_mcp_tools
-from app.llms.models import Model
+from app.llms.models import OPENAI_MINIMAL_EFFORT_MODELS, Model
 from app.llms.prompts import build_agent_messages
 from app.utils.settings import Settings
 
@@ -59,7 +59,9 @@ def get_openai_llm(
     All OpenAI requests use the Responses API (`use_responses_api=True`); reasoning content
     is only surfaced there. When `reasoning` is on, a `reasoning` config requests a
     summarized reasoning trace (GPT-5 reasoning models ignore `temperature`, which the
-    wrapper strips automatically).
+    wrapper strips automatically). When `reasoning` is off, models in
+    `OPENAI_MINIMAL_EFFORT_MODELS` are pinned to `effort: "minimal"` so they don't burn the
+    whole token budget on hidden reasoning and return an empty answer.
     """
     key = (model.value, temperature, top_p, max_tokens, reasoning)
 
@@ -67,6 +69,8 @@ def get_openai_llm(
         client_kwargs: dict[str, object] = {"use_responses_api": True}
         if reasoning:
             client_kwargs["reasoning"] = {"effort": "medium", "summary": "auto"}
+        elif model in OPENAI_MINIMAL_EFFORT_MODELS:
+            client_kwargs["reasoning"] = {"effort": "minimal"}
         openai_llm_clients[key] = ChatOpenAI(
             model=model.value,
             api_key=SecretStr(settings.OPENAI_API_KEY),

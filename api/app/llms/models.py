@@ -118,6 +118,18 @@ REASONING_CAPABLE_MODELS: frozenset[Model] = frozenset(
     },
 )
 
+# OpenAI reasoning models that default to "medium" effort and, in a non-reasoning chat,
+# can spend the whole max_output_tokens budget on hidden reasoning and return an empty
+# answer (observed for gpt-5-mini / gpt-5-nano). They accept reasoning effort "minimal",
+# which keeps them answering. The newer GPT-5.2 / 5.4 models reject "minimal" and do not
+# over-reason at the default, so they are deliberately excluded.
+OPENAI_MINIMAL_EFFORT_MODELS: frozenset[Model] = frozenset(
+    {
+        Model.GPT_5_MINI,
+        Model.GPT_5_NANO,
+    },
+)
+
 # Anthropic models that reject sampling parameters (temperature / top_p / top_k).
 # Claude Opus 4.7 and 4.8 return HTTP 400 if any of these are sent, so no sampling
 # parameters are forwarded for them. Every Claude 4+ model additionally rejects
