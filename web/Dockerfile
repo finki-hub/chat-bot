@@ -12,6 +12,12 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Public PostHog ingest key, inlined at build (NEXT_PUBLIC_* are baked by next build).
+# Safe to expose — it is a write-only browser key. CI passes it via --build-arg.
+ARG NEXT_PUBLIC_POSTHOG_KEY=""
+ARG NEXT_PUBLIC_POSTHOG_HOST="https://eu.i.posthog.com"
+ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
+ENV NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST
 RUN API_BASE_URL="http://localhost:8880" CHAT_API_KEY="build-time-placeholder" npm run build
 
 FROM base AS runner

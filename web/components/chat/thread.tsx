@@ -99,7 +99,7 @@ export const Thread = ({
         {messages.length === 0 ? (
           <Welcome onPick={onPickSuggestion} />
         ) : (
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+          <div className="ph-no-capture mx-auto flex w-full max-w-3xl flex-col gap-6">
             {messages.map((m) => {
               if (
                 m.role === 'assistant' &&
