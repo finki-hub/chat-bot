@@ -80,8 +80,10 @@ def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
 
 def content_to_text(content: object) -> str:
     """Plain text of a message's content; non-text blocks (tool calls, reasoning) yield ''."""
+    if isinstance(content, str):
+        return content
     if not isinstance(content, list):
-        return str(content)
+        return ""
 
     parts: list[str] = []
     for part in content:
@@ -96,9 +98,7 @@ _MAX_THINKING_BUDGET = 2048
 
 
 def thinking_budget(max_tokens: int) -> tuple[int, int]:
-    """A thinking-token budget — at most half of ``max_tokens`` — and that same cap returned
-    unchanged. Thinking is billed inside the cap, so a half-or-less budget leaves the rest
-    for the answer."""
+    """A thinking budget (at most half of ``max_tokens``) and that cap returned unchanged."""
     budget = min(_MAX_THINKING_BUDGET, max_tokens // 2)
     return budget, max_tokens
 
@@ -109,9 +109,7 @@ def _chunk_text(message: AIMessageChunk) -> str:
 
 
 def _chunk_reasoning(message: AIMessageChunk) -> str:
-    """The reasoning text in an AIMessageChunk; '' if none. Covers the provider shapes:
-    Anthropic/Google ``{type: thinking}`` blocks, OpenAI ``{type: reasoning, summary}``
-    blocks, and Ollama's ``additional_kwargs['reasoning_content']``."""
+    """Reasoning text in an AIMessageChunk; '' if none."""
     parts: list[str] = []
 
     raw = message.content

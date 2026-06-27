@@ -215,7 +215,6 @@ export const translateToUiStream = async (
 
       case 'token':
         if (!stopped) {
-          // Reasoning always precedes the answer; close it when answer text begins.
           reasoningPart.end();
           textPart.appendDelta(event.text);
         }

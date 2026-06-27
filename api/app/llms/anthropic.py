@@ -25,8 +25,7 @@ settings = Settings()
 # Model, temperature, top_p, max_tokens, reasoning -> LLM
 anthropic_llm_clients: dict[tuple[str, float, float, int, bool], ChatAnthropic] = {}
 
-# Opus 4.7/4.8 reject `budget_tokens`; they use summarized adaptive thinking and already
-# send temperature=None via ANTHROPIC_NO_SAMPLING_MODELS.
+# Opus 4.7/4.8 reject `budget_tokens`; they use summarized adaptive thinking instead.
 _ADAPTIVE_THINKING_MODELS: frozenset[Model] = ANTHROPIC_NO_SAMPLING_MODELS
 
 
@@ -34,8 +33,8 @@ def _thinking_config(
     model: Model,
     max_tokens: int,
 ) -> tuple[dict[str, object], int]:
-    """The Anthropic ``thinking`` payload and effective ``max_tokens``. Opus 4.7/4.8 use
-    summarized adaptive thinking (no budget); others use an explicit ``thinking_budget``."""
+    """The Anthropic ``thinking`` payload and effective ``max_tokens`` (adaptive for Opus
+    4.7/4.8, else an explicit budget)."""
     if model in _ADAPTIVE_THINKING_MODELS:
         return {"type": "adaptive", "display": "summarized"}, max_tokens
 
@@ -205,7 +204,6 @@ async def stream_anthropic_agent_response(
             "Failed to stream Anthropic agent response. Falling back to regular response",
         )
 
-        # The non-agent fallback has no `thinking` channel, so it runs without reasoning.
         return stream_anthropic_response(
             user_prompt,
             model,

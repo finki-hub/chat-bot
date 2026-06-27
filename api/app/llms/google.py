@@ -253,7 +253,6 @@ async def stream_google_agent_response(
             "Failed to stream Google agent response. Falling back to regular response",
         )
 
-        # The non-agent fallback has no `thinking` channel, so it runs without reasoning.
         return stream_google_response(
             user_prompt,
             model,

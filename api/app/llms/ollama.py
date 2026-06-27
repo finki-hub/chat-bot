@@ -219,7 +219,6 @@ async def stream_ollama_agent_response(
             "Failed to stream Ollama agent response. Falling back to regular response",
         )
 
-        # The non-agent fallback has no `thinking` channel, so it runs without reasoning.
         return stream_ollama_response(
             user_prompt,
             model,

@@ -35,8 +35,6 @@ async def stream_response_with_agent(
         len(history),
     )
 
-    # Gate the flag here, the single chat chokepoint: a non-reasoning model ignores it, so
-    # no provider branch below gets a reasoning param it would reject.
     reasoning = reasoning and model in REASONING_CAPABLE_MODELS
 
     match model:

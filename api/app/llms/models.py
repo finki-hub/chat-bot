@@ -100,8 +100,6 @@ CHAT_MODELS: frozenset[Model] = frozenset(
     },
 )
 
-# Models with a reasoning/thinking mode; the `reasoning` flag is honored only for these
-# (gated in stream_response_with_agent). Mirrors the web isReasoningCapableModel predicate.
 REASONING_CAPABLE_MODELS: frozenset[Model] = frozenset(
     {
         Model.DEEPSEEK_R1_70B,

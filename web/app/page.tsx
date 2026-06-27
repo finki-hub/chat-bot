@@ -17,8 +17,6 @@ const ChatScreen = () => {
   const reasoning = useUiStore((s) => s.reasoning);
   const setReasoning = useUiStore((s) => s.setReasoning);
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
-  // Honor the toggle only for capable models: the persisted flag is kept but never sent
-  // or shown as "on" for a model that would ignore it.
   const reasoningActive = reasoning && isReasoningCapableModel(model);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);

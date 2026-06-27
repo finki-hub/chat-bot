@@ -195,7 +195,6 @@ async def stream_openai_agent_response(
             "Failed to stream OpenAI agent response. Falling back to regular response",
         )
 
-        # The non-agent fallback has no `thinking` channel, so it runs without reasoning.
         return stream_openai_response(
             user_prompt,
             model,

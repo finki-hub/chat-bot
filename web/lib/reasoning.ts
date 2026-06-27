@@ -1,5 +1,3 @@
-// Models that expose a reasoning mode; the composer gates the toggle on this. Mirrors
-// the API REASONING_CAPABLE_MODELS set.
 const REASONING_PREFIXES = ['claude-', 'gemini-', 'gpt-5', 'deepseek-r1'];
 
 export const isReasoningCapableModel = (model: string): boolean =>
