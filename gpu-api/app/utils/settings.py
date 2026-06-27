@@ -18,6 +18,9 @@ class Settings(BaseSettings):
 
     RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
 
+    POSTHOG_KEY: str = ""
+    POSTHOG_HOST: str = "https://eu.i.posthog.com"
+
     ALLOWED_ORIGINS: list[str] = ["*"]
     EXPOSE_HEADERS: list[str] = ["*"]
 

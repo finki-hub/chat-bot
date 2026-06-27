@@ -6,7 +6,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import StreamingResponse
 
 from app.data.connection import Database
@@ -16,6 +16,7 @@ from app.llms.chat import handle_chat
 from app.llms.context import get_links_context, get_retrieved_context
 from app.llms.models import CHAT_MODELS
 from app.schemas.chat import ChatSchema
+from app.utils.posthog_client import capture
 from app.utils.settings import Settings
 from app.utils.timing import (
     RequestTimings,
@@ -72,6 +73,60 @@ def _sse_event_name(chunk: bytes | str | memoryview) -> str:
     return ""
 
 
+def _sniff_tokens(chunk: bytes | str | memoryview) -> dict[str, int] | None:
+    """Token counts from a trailing ``meta`` frame's ``{"tokens": ...}`` data line, or None.
+
+    Only the token-count meta frame ``agents.py`` emits is parsed; ``token``/``thinking``
+    frames carry the answer text and are never inspected, so no answer text is read.
+    """
+    if _sse_event_name(chunk) != "meta":
+        return None
+    text = chunk if isinstance(chunk, str) else bytes(chunk).decode(errors="ignore")
+    for line in text.split("\n"):
+        if not line.startswith("data:"):
+            continue
+        try:
+            data = json.loads(line[len("data:") :].strip())
+        except json.JSONDecodeError:
+            return None
+        tokens = data.get("tokens") if isinstance(data, dict) else None
+        if isinstance(tokens, dict):
+            return {
+                "input": int(tokens.get("input", 0) or 0),
+                "output": int(tokens.get("output", 0) or 0),
+            }
+    return None
+
+
+def _capture_chat_response(
+    *,
+    distinct_id: str,
+    payload: ChatSchema,
+    response_id: UUID,
+    timings: RequestTimings,
+    retrieval_hit: bool,
+    usage: dict[str, int] | None,
+    outcome: str,
+) -> None:
+    """Emit the PostHog AI-observability event for a finished stream (metadata only)."""
+    props: dict[str, object] = {
+        "$ai_model": payload.inference_model.value,
+        "$ai_latency": (
+            timings.total_ms / 1000.0 if timings.total_ms is not None else None
+        ),
+        "response_id": str(response_id),
+        "retrieval_hit": retrieval_hit,
+        "ttft_ms": timings.ttft_ms,
+        "candidate_count": timings.candidate_count,
+        "top_distance": timings.top_distance,
+        "outcome": outcome,
+    }
+    if usage is not None:
+        props["$ai_input_tokens"] = usage["input"]
+        props["$ai_output_tokens"] = usage["output"]
+    capture(distinct_id, "$ai_generation", props)
+
+
 async def _instrument_stream(
     body: AsyncIterable[bytes | str | memoryview],
     *,
@@ -79,6 +134,7 @@ async def _instrument_stream(
     response_id: UUID,
     timings: RequestTimings,
     retrieval_hit: bool,
+    distinct_id: str,
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
     log one chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
@@ -90,6 +146,8 @@ async def _instrument_stream(
     body drains); consumers that stop at ``done`` ignore it and the protocol-v2 parsers
     drop unknown events, so it stays backward compatible.
     """
+    outcome = "completed"
+    usage: dict[str, int] | None = None
     try:
         marking = True
         async for chunk in body:
@@ -101,7 +159,17 @@ async def _instrument_stream(
                 elif event_name == "token":
                     timings.mark_answer()
                     marking = False
+            sniffed = _sniff_tokens(chunk)
+            if sniffed is not None:
+                usage = sniffed
             yield chunk
+    except GeneratorExit:
+        # The client hung up mid-stream; record the partial run before unwinding.
+        outcome = "client_disconnect"
+        raise
+    except asyncio.CancelledError:
+        outcome = "client_disconnect"
+        raise
     finally:
         timings.mark_total()
         record = timings.as_record()
@@ -117,6 +185,15 @@ async def _instrument_stream(
                     **record,
                 },
             ),
+        )
+        _capture_chat_response(
+            distinct_id=distinct_id,
+            payload=payload,
+            response_id=response_id,
+            timings=timings,
+            retrieval_hit=retrieval_hit,
+            usage=usage,
+            outcome=outcome,
         )
     yield meta_event({"timing": record})
 
@@ -157,6 +234,7 @@ router = APIRouter(
 )
 async def chat(
     payload: ChatSchema,
+    request: Request,
     db: Database = db_dep,
 ) -> StreamingResponse:
     logger.info(
@@ -168,6 +246,27 @@ async def chat(
 
     timings, token = start_request_timings()
     try:
+        # Minted before retrieval so it can tag chat_request + retrieval_miss and still
+        # back the X-Response-Id header below.
+        response_id = uuid4()
+        # Prefer the caller's anonymous id (browser) so events stitch into one person;
+        # fall back to the response id for un-identified callers (e.g. Discord).
+        distinct_id = request.headers.get("X-Distinct-Id") or str(response_id)
+        capture(
+            distinct_id,
+            "chat_request",
+            {
+                "inference_model": payload.inference_model.value,
+                "embeddings_model": payload.embeddings_model.value,
+                "query_transform_model": payload.query_transform_model.value,
+                "reasoning": payload.reasoning,
+                "temperature": payload.temperature,
+                "max_tokens": payload.max_tokens,
+                "query_len": len(payload.query),
+                "history_turns": len(payload.history),
+            },
+        )
+
         retrieved, links_context = await asyncio.gather(
             get_retrieved_context(
                 db=db,
@@ -180,6 +279,18 @@ async def chat(
         )
 
         if not retrieved:
+            capture(
+                distinct_id,
+                "retrieval_miss",
+                {
+                    "response_id": str(response_id),
+                    "embeddings_model": payload.embeddings_model.value,
+                    "query_transform_model": payload.query_transform_model.value,
+                    "candidate_count": timings.candidate_count,
+                    "top_distance": timings.top_distance,
+                    "query_len": len(payload.query),
+                },
+            )
             # On a miss, leave the bare "nothing found" context alone so the prompt's
             # tool-search directive isn't diluted by the links catalog.
             context = (
@@ -193,7 +304,6 @@ async def chat(
         today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
         context = f"Денешен датум: {today}.\n\n{context}"
 
-        response_id = uuid4()
         with timed("agent.setup"):
             response = await handle_chat(payload, context)
 
@@ -203,6 +313,7 @@ async def chat(
             response_id=response_id,
             timings=timings,
             retrieval_hit=bool(retrieved),
+            distinct_id=distinct_id,
         )
 
         # Set the header on the StreamingResponse returned by handle_chat: Starlette

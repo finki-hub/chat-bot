@@ -1,0 +1,66 @@
+import logging
+
+from posthog import Posthog
+
+from app.utils.settings import Settings
+
+logger = logging.getLogger(__name__)
+
+_SERVICE = "chat-bot-api"
+
+
+class _State:
+    client: Posthog | None = None
+
+
+_state = _State()
+
+
+def init_posthog(settings: Settings) -> None:
+    """Construct the per-worker PostHog client.
+
+    Call AFTER gunicorn forks (the ``post_fork`` hook): posthog-python's background
+    flush thread does not survive ``os.fork()``, so a client built pre-fork silently
+    drops every event in the workers. A no-op when ``POSTHOG_KEY`` is unset (dev/CI/tests).
+    """
+    if not settings.POSTHOG_KEY:
+        return
+
+    _state.client = Posthog(
+        host=settings.POSTHOG_HOST,
+        project_api_key=settings.POSTHOG_KEY,
+    )
+
+
+def capture(
+    distinct_id: str,
+    event: str,
+    properties: dict[str, object] | None = None,
+) -> None:
+    """Send one analytics event; a no-op when disabled, and never raising into the caller.
+
+    Residency: callers must pass metadata only (model ids, lengths, token counts,
+    timings) — never raw prompt or answer text.
+    """
+    client = _state.client
+    if client is None:
+        return
+
+    try:
+        client.capture(
+            distinct_id=distinct_id,
+            event=event,
+            properties={"service": _SERVICE, **(properties or {})},
+        )
+    except Exception:
+        logger.exception("PostHog capture failed (event=%s)", event)
+
+
+def shutdown_posthog() -> None:
+    """Flush and stop the client (the gunicorn ``worker_exit`` hook)."""
+    client = _state.client
+    if client is None:
+        return
+
+    client.flush()
+    client.shutdown()
