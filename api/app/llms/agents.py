@@ -79,31 +79,35 @@ def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
 
 
 def content_to_text(content: object) -> str:
-    """Plain text of a message's content, whether a str or a list of content blocks
-    (Responses API / Anthropic). Non-text blocks (tool calls, reasoning) contribute ''."""
-    if isinstance(content, list):
-        return "".join(
-            part.get("text", "") if isinstance(part, dict) else str(part)
-            for part in content
-        )
-    return str(content)
+    """Plain text of a message's content, whether a plain string or a list of content
+    blocks (Responses API / Anthropic). Text blocks — and bare-string parts — contribute
+    their text; non-text blocks (tool calls, reasoning, signatures) contribute ''."""
+    if not isinstance(content, list):
+        return str(content)
+
+    parts: list[str] = []
+    for part in content:
+        if isinstance(part, dict):
+            parts.append(str(part.get("text", "")))
+        elif isinstance(part, str):
+            parts.append(part)
+    return "".join(parts)
 
 
-_MIN_THINKING_BUDGET = 1024  # provider floor; the libs do not validate it.
 _MAX_THINKING_BUDGET = 2048
-_ANSWER_HEADROOM = 2048  # tokens reserved for the answer on top of the thinking budget.
 
 
 def thinking_budget(max_tokens: int) -> tuple[int, int]:
-    """A reasoning-token budget bounded under ``max_tokens`` with answer headroom, and the
-    effective ``max_tokens`` that fits both the thinking and the answer.
+    """A reasoning-token budget that fits *within* ``max_tokens``, and the (unchanged) output
+    cap.
 
-    Thinking tokens are billed inside the output cap, so the budget must stay below it.
+    Thinking tokens are billed inside ``max_tokens``, so the budget takes at most half the
+    cap (bounded by ``_MAX_THINKING_BUDGET``) and the answer keeps the rest. The cap itself is
+    returned unchanged, so enabling reasoning never silently raises the caller's ``max_tokens``.
     Shared by the Anthropic and Google reasoning paths.
     """
-    budget = max(_MIN_THINKING_BUDGET, min(_MAX_THINKING_BUDGET, max_tokens // 2))
-    effective_max = max(max_tokens, budget + _ANSWER_HEADROOM)
-    return budget, effective_max
+    budget = min(_MAX_THINKING_BUDGET, max_tokens // 2)
+    return budget, max_tokens
 
 
 def _chunk_text(message: AIMessageChunk) -> str:
