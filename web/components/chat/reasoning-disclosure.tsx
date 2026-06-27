@@ -1,11 +1,12 @@
 import { ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import { MessageResponse } from '@/components/ai-elements/message';
 import { t } from '@/lib/i18n';
 
 export const ReasoningDisclosure = ({ text }: { text: string }) => {
   const [open, setOpen] = useState(false);
+  const panelId = useId();
 
   if (text.length === 0) {
     return null;
@@ -17,6 +18,7 @@ export const ReasoningDisclosure = ({ text }: { text: string }) => {
       data-testid="reasoning"
     >
       <button
+        aria-controls={panelId}
         aria-expanded={open}
         className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
         onClick={() => {
@@ -31,7 +33,10 @@ export const ReasoningDisclosure = ({ text }: { text: string }) => {
         {t('thread.reasoning')}
       </button>
       {open ? (
-        <div className="mt-1 border-l-2 border-border pl-3 text-sm text-muted-foreground">
+        <div
+          className="mt-1 border-l-2 border-border pl-3 text-sm text-muted-foreground"
+          id={panelId}
+        >
           <MessageResponse>{text}</MessageResponse>
         </div>
       ) : null}
