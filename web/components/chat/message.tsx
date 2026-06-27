@@ -309,7 +309,7 @@ export const AssistantMessage = ({
             <MessageResponse>{text}</MessageResponse>
           </div>
         ) : null}
-        {pending || text === null ? null : (
+        {text === null ? null : (
           <MessageTiming
             diagnostics={diagnostics}
             inferenceModel={inferenceModel}

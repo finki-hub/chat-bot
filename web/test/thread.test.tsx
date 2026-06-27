@@ -208,23 +208,6 @@ describe('AssistantMessage', () => {
     expect(footnote).not.toHaveTextContent('прв токен');
   });
 
-  it('hides the timing footnote while pending', () => {
-    const msg: MyUIMessage = {
-      id: 'a1',
-      metadata: { timing: { totalMs: 2_345, ttftMs: 1_200 } },
-      parts: [{ text: 'Делумен', type: 'text' }],
-      role: 'assistant',
-    };
-    render(
-      <AssistantMessage
-        message={msg}
-        pending
-      />,
-    );
-
-    expect(screen.queryByTestId(TIMING_TESTID)).not.toBeInTheDocument();
-  });
-
   it('renders the footnote as a hover trigger when diagnostics are present', () => {
     const msg: MyUIMessage = {
       id: 'a1',
@@ -283,6 +266,42 @@ describe('AssistantMessage', () => {
     render(<AssistantMessage message={msg} />);
 
     expect(screen.getByTestId(TIMING_TESTID).tagName).toBe('DIV');
+  });
+
+  it('keeps the timing footnote on a finished answer while a newer message streams', () => {
+    // In the submit→first-token window the previous answer is briefly the last
+    // assistant and receives pending; its timing is final and must stay visible.
+    const msg: MyUIMessage = {
+      id: 'a1',
+      metadata: { timing: { totalMs: 2_345, ttftMs: 1_200 } },
+      parts: [{ text: 'Готово', type: 'text' }],
+      role: 'assistant',
+    };
+    render(
+      <AssistantMessage
+        message={msg}
+        pending
+      />,
+    );
+
+    expect(screen.getByTestId(TIMING_TESTID)).toBeInTheDocument();
+  });
+
+  it('shows no timing footnote on a message that is still generating', () => {
+    const msg: MyUIMessage = {
+      id: 'a1',
+      metadata: {},
+      parts: [{ text: 'Пишувам…', type: 'text' }],
+      role: 'assistant',
+    };
+    render(
+      <AssistantMessage
+        message={msg}
+        pending
+      />,
+    );
+
+    expect(screen.queryByTestId(TIMING_TESTID)).toBeNull();
   });
 });
 
