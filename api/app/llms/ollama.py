@@ -49,9 +49,9 @@ def get_llm(
     Return a singleton ChatOllama instance for the specified model and parameters.
     If the model and parameters are not already in the cache, create a new instance.
 
-    When `reasoning` is on, `reasoning=True` enables Ollama's `think` mode (reasoning-capable
-    models like deepseek-r1 then expose thoughts in `additional_kwargs["reasoning_content"]`);
-    when off, `None` leaves the model's default behavior.
+    `reasoning` maps to Ollama's `think` mode: True makes reasoning-capable models (e.g.
+    deepseek-r1) expose thoughts in `additional_kwargs["reasoning_content"]`; False disables
+    it so a model that would otherwise emit raw inline `<think>` tags stays clean.
     """
     key = (model.value, temperature, top_p, max_tokens, reasoning)
 
@@ -62,7 +62,7 @@ def get_llm(
             temperature=temperature,
             top_p=top_p,
             num_predict=max_tokens,
-            reasoning=reasoning or None,
+            reasoning=reasoning,
         )
 
     return ollama_chat_clients[key]
@@ -219,6 +219,9 @@ async def stream_ollama_agent_response(
             "Failed to stream Ollama agent response. Falling back to regular response",
         )
 
+        # The non-agent fallback streams plain text (stream_sync_gen_as_sse has no
+        # `thinking` channel), so it runs WITHOUT reasoning rather than enabling Ollama
+        # think mode whose reasoning_content would be silently dropped.
         return stream_ollama_response(
             user_prompt,
             model,
@@ -227,5 +230,4 @@ async def stream_ollama_agent_response(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
-            reasoning=reasoning,
         )

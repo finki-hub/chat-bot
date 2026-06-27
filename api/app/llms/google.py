@@ -19,6 +19,12 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
+# Thinking tokens are billed inside max_output_tokens, so the thinking budget must stay
+# under the output cap with room for the answer (mirrors the Anthropic _thinking_config).
+_MIN_THINKING_BUDGET = 1024
+_MAX_THINKING_BUDGET = 2048
+_ANSWER_HEADROOM = 2048
+
 # Model, temperature, top_p, max_tokens, reasoning -> LLM
 google_llm_clients: dict[
     tuple[str, float, float, int, bool],
@@ -71,19 +77,26 @@ def get_google_llm(
 
     if key not in google_llm_clients:
         client_kwargs: dict[str, object] = {}
+        max_output = max_tokens
         if reasoning:
             client_kwargs["include_thoughts"] = True
             if model == Model.GEMINI_3_FLASH_PREVIEW:
                 client_kwargs["thinking_level"] = "medium"
+                max_output = max(max_tokens, _MAX_THINKING_BUDGET + _ANSWER_HEADROOM)
             else:
-                client_kwargs["thinking_budget"] = 2048
+                budget = max(
+                    _MIN_THINKING_BUDGET,
+                    min(_MAX_THINKING_BUDGET, max_tokens // 2),
+                )
+                client_kwargs["thinking_budget"] = budget
+                max_output = max(max_tokens, budget + _ANSWER_HEADROOM)
         google_llm_clients[key] = ChatGoogleGenerativeAI(
             model=model.value,
             google_api_key=settings.GOOGLE_API_KEY,
             base_url=settings.GOOGLE_BASE_URL or None,
             temperature=temperature,
             top_p=top_p,
-            max_output_tokens=max_tokens,
+            max_output_tokens=max_output,
             **client_kwargs,
         )
 
@@ -262,6 +275,9 @@ async def stream_google_agent_response(
             "Failed to stream Google agent response. Falling back to regular response",
         )
 
+        # The non-agent fallback streams plain text (stream_sync_gen_as_sse has no
+        # `thinking` channel), so it runs WITHOUT reasoning rather than requesting thoughts
+        # that would be silently dropped.
         return stream_google_response(
             user_prompt,
             model,
@@ -270,5 +286,4 @@ async def stream_google_agent_response(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
-            reasoning=reasoning,
         )
