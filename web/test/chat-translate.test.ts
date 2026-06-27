@@ -288,4 +288,31 @@ describe('translateToUiStream', () => {
       },
     ]);
   });
+
+  it('forwards a meta event arriving after done as a message-metadata part', async () => {
+    const writer = new FakeWriter();
+    const diagnostics = {
+      serverTotalMs: 980.2,
+      tokens: { input: 1, output: 2, total: 3 },
+    };
+
+    // The backend timing meta trails done; the translator must still forward it.
+    await translateToUiStream(
+      events({ text: 'Здраво', type: 'token' }, DONE, {
+        diagnostics,
+        type: 'meta',
+      }),
+      writer,
+      {},
+      ids(),
+    );
+
+    expect(writer.parts).toStrictEqual([
+      startWith({}),
+      textStart(T1),
+      textDelta(T1, 'Здраво'),
+      textEnd(T1),
+      { messageMetadata: { diagnostics }, type: 'message-metadata' },
+    ]);
+  });
 });

@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from app.data.connection import Database
 from app.data.db import get_db
+from app.llms.agents import meta_event
 from app.llms.chat import handle_chat
 from app.llms.context import get_links_context, get_retrieved_context
 from app.llms.models import CHAT_MODELS
@@ -62,8 +63,12 @@ async def _instrument_stream(
     timings: RequestTimings,
     retrieval_hit: bool,
 ) -> AsyncGenerator[bytes | str | memoryview]:
-    """Pass the SSE body through untouched while stamping TTFT (first chunk) and total
-    (stream end), then emit one chat.timing log line with the latency breakdown.
+    """Pass the SSE body through untouched, stamping TTFT and total, then log one
+    chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
+
+    The ``meta`` frame trails the body's ``done`` (``total_ms`` is known only once the
+    body drains); consumers that stop at ``done`` ignore it and the protocol-v2 parsers
+    drop unknown events, so it stays backward compatible.
     """
     try:
         async for chunk in body:
@@ -71,6 +76,7 @@ async def _instrument_stream(
             yield chunk
     finally:
         timings.mark_total()
+        record = timings.as_record()
         logger.info(
             "chat.timing %s",
             json.dumps(
@@ -80,10 +86,11 @@ async def _instrument_stream(
                     "embeddings_model": payload.embeddings_model.value,
                     "query_transform_model": payload.query_transform_model.value,
                     "retrieval_hit": retrieval_hit,
-                    **timings.as_record(),
+                    **record,
                 },
             ),
         )
+    yield meta_event({"timing": record})
 
 
 db_dep = Depends(get_db)

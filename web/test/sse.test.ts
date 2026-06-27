@@ -96,4 +96,31 @@ describe('parseProtocolV2', () => {
 
     expect(events).toStrictEqual([DONE]);
   });
+
+  it('maps meta frames to camelCase diagnostics, including a timing frame after done', async () => {
+    // Mirrors the real wire order: tokens meta before done, timing meta after done.
+    const events = await collect(
+      'event: meta\ndata: {"tokens":{"input":12,"output":34,"total":46}}\n\n',
+      DONE_FRAME,
+      'event: meta\ndata: {"timing":{"ttft_ms":120.5,"total_ms":980.2,"candidate_count":8,"top_distance":0.1234,"spans":{"retrieval.embed":42.1}}}\n\n',
+    );
+
+    expect(events).toStrictEqual([
+      {
+        diagnostics: { tokens: { input: 12, output: 34, total: 46 } },
+        type: 'meta',
+      },
+      DONE,
+      {
+        diagnostics: {
+          candidateCount: 8,
+          serverTotalMs: 980.2,
+          serverTtftMs: 120.5,
+          spans: { 'retrieval.embed': 42.1 },
+          topDistance: 0.1234,
+        },
+        type: 'meta',
+      },
+    ]);
+  });
 });
