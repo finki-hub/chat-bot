@@ -19,16 +19,17 @@ describe('formatThroughput', () => {
     ).toBe('60');
   });
 
-  it('rounds to the nearest whole token/sec', () => {
+  it('rounds the fractional rate to the nearest whole token/sec', () => {
+    // 10 tokens over a 1.3s window → 7.69 tok/s, which must round up to 8.
     expect(
       formatThroughput(
         diag({
-          serverTotalMs: 1_000,
+          serverTotalMs: 1_300,
           serverTtftMs: 0,
-          tokens: { input: 1, output: 25, total: 26 },
+          tokens: { input: 1, output: 10, total: 11 },
         }),
       ),
-    ).toBe('25');
+    ).toBe('8');
   });
 
   it('returns null when tokens are missing', () => {
