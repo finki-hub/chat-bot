@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { createServer } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from 'node:http';
 import { type AddressInfo } from 'node:net';
 
 import { type UiChunk } from './helpers/sse';
@@ -10,6 +14,8 @@ const REASON_HEAD = 'Размислувам чекор еден…';
 const REASON_TAIL = ' и чекор два.';
 const ANSWER = 'Конечниот одговор е дека ФИНКИ е во Скопје.';
 
+type TimedEvent = { atMs: number; chunk?: UiChunk; done?: boolean };
+
 const frame = (chunk: UiChunk): string => `data: ${JSON.stringify(chunk)}\n\n`;
 
 const closeServer = (server: ReturnType<typeof createServer>): Promise<void> =>
@@ -19,40 +25,58 @@ const closeServer = (server: ReturnType<typeof createServer>): Promise<void> =>
     });
   });
 
+// A client that navigates away mid-stream ends the response, so a late timer must
+// not write to a finished socket (that throws ERR_STREAM_WRITE_AFTER_END).
+const writeEvent = (res: ServerResponse, event: TimedEvent): void => {
+  if (res.writableEnded || res.destroyed) {
+    return;
+  }
+  if (event.done) {
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } else if (event.chunk) {
+    res.write(frame(event.chunk));
+  }
+};
+
+const handleStream =
+  (events: TimedEvent[]) =>
+  (req: IncomingMessage, res: ServerResponse): void => {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'access-control-allow-headers': '*',
+        'access-control-allow-methods': '*',
+        'access-control-allow-origin': '*',
+      });
+      res.end();
+      return;
+    }
+    res.writeHead(200, {
+      'access-control-allow-origin': '*',
+      'cache-control': 'no-cache, no-transform',
+      'content-type': 'text/event-stream',
+      'x-vercel-ai-ui-message-stream': 'v1',
+    });
+    res.flushHeaders();
+    const timers = events.map((event) =>
+      setTimeout(() => {
+        writeEvent(res, event);
+      }, event.atMs),
+    );
+    res.on('close', () => {
+      for (const timer of timers) {
+        clearTimeout(timer);
+      }
+    });
+  };
+
 // A streaming server that flushes each chunk on its own schedule, so reasoning deltas
 // genuinely arrive over time (the shared head/tail helper batches them).
 const startTimedStream = (
-  events: Array<{ atMs: number; chunk?: UiChunk; done?: boolean }>,
+  events: TimedEvent[],
 ): Promise<{ close: () => Promise<void>; url: string }> =>
   new Promise((resolve) => {
-    const server = createServer((req, res) => {
-      if (req.method === 'OPTIONS') {
-        res.writeHead(204, {
-          'access-control-allow-headers': '*',
-          'access-control-allow-methods': '*',
-          'access-control-allow-origin': '*',
-        });
-        res.end();
-        return;
-      }
-      res.writeHead(200, {
-        'access-control-allow-origin': '*',
-        'cache-control': 'no-cache, no-transform',
-        'content-type': 'text/event-stream',
-        'x-vercel-ai-ui-message-stream': 'v1',
-      });
-      res.flushHeaders();
-      for (const event of events) {
-        setTimeout(() => {
-          if (event.done) {
-            res.write('data: [DONE]\n\n');
-            res.end();
-          } else if (event.chunk) {
-            res.write(frame(event.chunk));
-          }
-        }, event.atMs);
-      }
-    });
+    const server = createServer(handleStream(events));
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address() as AddressInfo;
       resolve({
@@ -95,52 +119,54 @@ test.describe('reasoning streaming (mocked BFF)', () => {
       { atMs: 1_500, done: true },
     ]);
 
-    await page.route('**/api/health', async (route) => {
-      await route.fulfill({
-        body: '{}',
-        contentType: 'application/json',
-        status: 200,
+    try {
+      await page.route('**/api/health', async (route) => {
+        await route.fulfill({
+          body: '{}',
+          contentType: 'application/json',
+          status: 200,
+        });
       });
-    });
-    await page.route('**/api/models', async (route) => {
-      await route.fulfill({
-        body: JSON.stringify([INFERENCE_MODEL, 'gpt-5.4-mini']),
-        contentType: 'application/json',
-        status: 200,
+      await page.route('**/api/models', async (route) => {
+        await route.fulfill({
+          body: JSON.stringify([INFERENCE_MODEL, 'gpt-5.4-mini']),
+          contentType: 'application/json',
+          status: 200,
+        });
       });
-    });
-    await page.route('**/api/chat', async (route) => {
-      await route.fulfill({
-        headers: { location: chatServer.url },
-        status: 307,
+      await page.route('**/api/chat', async (route) => {
+        await route.fulfill({
+          headers: { location: chatServer.url },
+          status: 307,
+        });
       });
-    });
 
-    await page.goto('/');
-    await page.getByTestId('composer-input').fill('Каде е ФИНКИ?');
-    await page.getByTestId('composer-input').press('Enter');
+      await page.goto('/');
+      await page.getByTestId('composer-input').fill('Каде е ФИНКИ?');
+      await page.getByTestId('composer-input').press('Enter');
 
-    // Mid-stream: the panel is auto-expanded and the partial reasoning is visible
-    // BEFORE the answer text exists.
-    await expect(page.getByTestId('reasoning-panel')).toContainText(
-      'чекор еден',
-    );
-    await expect(page.getByTestId('answer-text')).toHaveCount(0);
+      // Mid-stream: the panel is auto-expanded and the partial reasoning is visible
+      // BEFORE the answer text exists.
+      await expect(page.getByTestId('reasoning-panel')).toContainText(
+        'чекор еден',
+      );
+      await expect(page.getByTestId('answer-text')).toHaveCount(0);
 
-    // After the stream completes: the answer renders and the panel auto-collapses
-    // (the toggle stays, so the reasoning is still reachable).
-    await expect(page.getByTestId('answer-text')).toContainText(
-      'ФИНКИ е во Скопје',
-    );
-    await expect(page.getByTestId('reasoning')).toBeVisible();
-    await expect(page.getByTestId('reasoning-panel')).toHaveCount(0);
+      // After the stream completes: the answer renders and the panel auto-collapses
+      // (the toggle stays, so the reasoning is still reachable).
+      await expect(page.getByTestId('answer-text')).toContainText(
+        'ФИНКИ е во Скопје',
+      );
+      await expect(page.getByTestId('reasoning')).toBeVisible();
+      await expect(page.getByTestId('reasoning-panel')).toHaveCount(0);
 
-    // Re-expanding shows the full reasoning trace.
-    await page.getByTestId('reasoning').getByRole('button').click();
-    await expect(page.getByTestId('reasoning-panel')).toContainText(
-      'чекор еден… и чекор два.',
-    );
-
-    await chatServer.close();
+      // Re-expanding shows the full reasoning trace.
+      await page.getByTestId('reasoning').getByRole('button').click();
+      await expect(page.getByTestId('reasoning-panel')).toContainText(
+        'чекор еден… и чекор два.',
+      );
+    } finally {
+      await chatServer.close();
+    }
   });
 });

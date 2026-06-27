@@ -86,13 +86,16 @@ async def _instrument_stream(
     drop unknown events, so it stays backward compatible.
     """
     try:
+        marking = True
         async for chunk in body:
             timings.mark_ttft()
-            event_name = _sse_event_name(chunk)
-            if event_name == "thinking":
-                timings.mark_thinking()
-            elif event_name == "token":
-                timings.mark_answer()
+            if marking:
+                event_name = _sse_event_name(chunk)
+                if event_name == "thinking":
+                    timings.mark_thinking()
+                elif event_name == "token":
+                    timings.mark_answer()
+                    marking = False
             yield chunk
     finally:
         timings.mark_total()
