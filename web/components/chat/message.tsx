@@ -18,6 +18,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from '@/components/ui/hover-card';
+import { formatThroughput } from '@/lib/diagnostics';
 import { formatDuration } from '@/lib/duration';
 import { formatSpanLabel, t } from '@/lib/i18n';
 import { reasoningParts, textParts } from '@/lib/message-parts';
@@ -56,11 +57,14 @@ const DiagnosticsGroup = ({ children }: { children: ReactNode }) => (
 
 const DiagnosticsCard = ({
   diagnostics,
+  inferenceModel,
 }: {
   diagnostics: NonNullable<Diagnostics>;
+  inferenceModel?: string;
 }) => {
   const spans = Object.entries(diagnostics.spans ?? {});
   const { tokens } = diagnostics;
+  const throughput = formatThroughput(diagnostics);
   const hasRetrievalShape =
     typeof diagnostics.candidateCount === 'number' ||
     typeof diagnostics.topDistance === 'number';
@@ -68,6 +72,14 @@ const DiagnosticsCard = ({
   return (
     <div className="flex flex-col gap-2 text-xs">
       <p className="font-medium text-foreground">{t('diagnostics.title')}</p>
+      {inferenceModel ? (
+        <DiagnosticsGroup>
+          <DiagnosticsRow
+            label={t('diagnostics.model')}
+            value={inferenceModel}
+          />
+        </DiagnosticsGroup>
+      ) : null}
       <DiagnosticsGroup>
         {typeof diagnostics.thinkingMs === 'number' ? (
           <DiagnosticsRow
@@ -130,6 +142,12 @@ const DiagnosticsCard = ({
             label={t('diagnostics.tokensOutput')}
             value={String(tokens.output)}
           />
+          {throughput === null ? null : (
+            <DiagnosticsRow
+              label={t('diagnostics.throughput')}
+              value={throughput}
+            />
+          )}
         </DiagnosticsGroup>
       )}
     </div>
@@ -153,9 +171,11 @@ const TimingSummary = ({ timing }: { timing: NonNullable<Timing> }) => (
 
 const MessageTiming = ({
   diagnostics,
+  inferenceModel,
   timing,
 }: {
   diagnostics: Diagnostics;
+  inferenceModel?: string;
   timing: Timing;
 }) => {
   if (timing === undefined) {
@@ -199,7 +219,10 @@ const MessageTiming = ({
         align="start"
         className="w-auto min-w-56 max-w-xs"
       >
-        <DiagnosticsCard diagnostics={diagnostics} />
+        <DiagnosticsCard
+          diagnostics={diagnostics}
+          inferenceModel={inferenceModel}
+        />
       </HoverCardContent>
     </HoverCard>
   );
@@ -266,6 +289,7 @@ export const AssistantMessage = ({
     reasoningText.length === 0;
   const timing = message.metadata?.timing;
   const diagnostics = message.metadata?.diagnostics;
+  const inferenceModel = message.metadata?.inferenceModel;
   const liveTimer =
     typeof streamStartedAt === 'number' ? (
       <ElapsedTimer startedAt={streamStartedAt} />
@@ -288,6 +312,7 @@ export const AssistantMessage = ({
         {pending || text === null ? null : (
           <MessageTiming
             diagnostics={diagnostics}
+            inferenceModel={inferenceModel}
             timing={timing}
           />
         )}

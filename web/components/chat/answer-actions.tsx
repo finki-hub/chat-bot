@@ -14,6 +14,7 @@ export type AnswerActionsProps = {
   onVote?: (vote: FeedbackType) => void;
   pending?: boolean;
   questionText?: string;
+  regenerateDisabled?: boolean;
 };
 
 const BTN =
@@ -25,6 +26,7 @@ export const AnswerActions = ({
   onVote,
   pending = false,
   questionText,
+  regenerateDisabled = false,
 }: AnswerActionsProps) => {
   const responseId = message.metadata?.responseId;
   const [copied, setCopied] = useState(false);
@@ -104,6 +106,7 @@ export const AnswerActions = ({
         <button
           aria-label={t('actions.regenerate')}
           className={BTN}
+          disabled={regenerateDisabled}
           onClick={onRegenerate}
           type="button"
         >

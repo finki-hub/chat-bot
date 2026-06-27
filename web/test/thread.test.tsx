@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { MyUIMessage } from '@/lib/api-types';
@@ -243,6 +244,33 @@ describe('AssistantMessage', () => {
 
     expect(footnote.tagName).toBe('BUTTON');
     expect(footnote).toHaveTextContent('2.3s');
+  });
+
+  it('reveals the model and throughput rows in the diagnostics popover', async () => {
+    const user = userEvent.setup();
+    const msg: MyUIMessage = {
+      id: 'a1',
+      metadata: {
+        // 30 output tokens over a 1.5s window → 20 tok/s.
+        diagnostics: {
+          serverTotalMs: 1_700,
+          serverTtftMs: 200,
+          tokens: { input: 10, output: 30, total: 40 },
+        },
+        inferenceModel: 'claude-sonnet-4-6',
+        timing: { totalMs: 2_000, ttftMs: 200 },
+      },
+      parts: [{ text: 'Готово', type: 'text' }],
+      role: 'assistant',
+    };
+    render(<AssistantMessage message={msg} />);
+
+    await user.hover(screen.getByTestId(TIMING_TESTID));
+
+    await expect(screen.findByText('модел')).resolves.toBeInTheDocument();
+    expect(screen.getByText('claude-sonnet-4-6')).toBeInTheDocument();
+    expect(screen.getByText('брзина (ток./сек)')).toBeInTheDocument();
+    expect(screen.getByText('20')).toBeInTheDocument();
   });
 
   it('keeps the footnote a plain element when diagnostics are absent', () => {
