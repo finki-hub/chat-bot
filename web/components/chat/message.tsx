@@ -18,7 +18,7 @@ import {
   HoverCardTrigger,
 } from '@/components/ui/hover-card';
 import { formatDuration } from '@/lib/duration';
-import { t } from '@/lib/i18n';
+import { formatSpanLabel, t } from '@/lib/i18n';
 import { textParts } from '@/lib/message-parts';
 
 export type AssistantMessageProps = {
@@ -42,8 +42,8 @@ const formatMs = (ms: null | number | undefined): string =>
 
 const DiagnosticsRow = ({ label, value }: { label: string; value: string }) => (
   <div className="flex items-center justify-between gap-6">
-    <span className="text-muted-foreground">{label}</span>
-    <span className="tabular-nums">{value}</span>
+    <span className="min-w-0 truncate text-muted-foreground">{label}</span>
+    <span className="shrink-0 tabular-nums">{value}</span>
   </div>
 );
 
@@ -60,6 +60,9 @@ const DiagnosticsCard = ({
 }) => {
   const spans = Object.entries(diagnostics.spans ?? {});
   const { tokens } = diagnostics;
+  const hasRetrievalShape =
+    typeof diagnostics.candidateCount === 'number' ||
+    typeof diagnostics.topDistance === 'number';
 
   return (
     <div className="flex flex-col gap-2 text-xs">
@@ -80,30 +83,32 @@ const DiagnosticsCard = ({
           {spans.map(([name, ms]) => (
             <DiagnosticsRow
               key={name}
-              label={name}
+              label={formatSpanLabel(name)}
               value={formatMs(ms)}
             />
           ))}
         </DiagnosticsGroup>
       )}
-      <DiagnosticsGroup>
-        <DiagnosticsRow
-          label={t('diagnostics.candidates')}
-          value={
-            typeof diagnostics.candidateCount === 'number'
-              ? String(diagnostics.candidateCount)
-              : '—'
-          }
-        />
-        <DiagnosticsRow
-          label={t('diagnostics.topDistance')}
-          value={
-            typeof diagnostics.topDistance === 'number'
-              ? diagnostics.topDistance.toFixed(4)
-              : '—'
-          }
-        />
-      </DiagnosticsGroup>
+      {hasRetrievalShape ? (
+        <DiagnosticsGroup>
+          <DiagnosticsRow
+            label={t('diagnostics.candidates')}
+            value={
+              typeof diagnostics.candidateCount === 'number'
+                ? String(diagnostics.candidateCount)
+                : '—'
+            }
+          />
+          <DiagnosticsRow
+            label={t('diagnostics.topDistance')}
+            value={
+              typeof diagnostics.topDistance === 'number'
+                ? diagnostics.topDistance.toFixed(4)
+                : '—'
+            }
+          />
+        </DiagnosticsGroup>
+      ) : null}
       {tokens === undefined ? null : (
         <DiagnosticsGroup>
           <DiagnosticsRow
@@ -161,6 +166,14 @@ const MessageTiming = ({
     );
   }
 
+  const ttftSuffix =
+    timing.ttftMs === null
+      ? ''
+      : `, ${t('thread.firstToken')} ${formatDuration(timing.ttftMs)}`;
+  // Give the trigger an accessible name that states its purpose AND the timing summary,
+  // since the HoverCard detail itself is pointer/focus-only.
+  const triggerLabel = `${t('diagnostics.title')}: ${formatDuration(timing.totalMs)}${ttftSuffix}`;
+
   return (
     <HoverCard
       closeDelay={80}
@@ -168,6 +181,7 @@ const MessageTiming = ({
     >
       <HoverCardTrigger asChild>
         <button
+          aria-label={triggerLabel}
           className={`${FOOTNOTE_CLASS} cursor-help hover:text-muted-foreground`}
           data-testid="message-timing"
           type="button"

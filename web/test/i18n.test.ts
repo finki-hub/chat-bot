@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { messages, t } from '@/lib/i18n';
+import { formatSpanLabel, messages, t } from '@/lib/i18n';
 
 describe('i18n', () => {
   it('returns the Macedonian string for a known key', () => {
@@ -23,5 +23,13 @@ describe('i18n', () => {
     for (const key of keys) {
       expect(messages[key as keyof typeof messages].length).toBeGreaterThan(0);
     }
+  });
+
+  it('translates known span keys and falls back to the raw key otherwise', () => {
+    expect(formatSpanLabel('retrieval.embed')).toBe('вградување');
+    expect(formatSpanLabel('agent.setup')).toBe('агент: подготовка');
+    expect(formatSpanLabel('retrieval.future_stage')).toBe(
+      'retrieval.future_stage',
+    );
   });
 });
