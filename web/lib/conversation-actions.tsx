@@ -41,8 +41,10 @@ export const renderAnswerActions =
       <AnswerActions
         key={`${message.id}:${message.metadata?.responseId ?? ''}`}
         message={message}
+        // Keep the button mounted while streaming (disabled below) and only drop it
+        // when the backend is unavailable, so regeneration isn't even offered then.
         onRegenerate={
-          streaming || disabled
+          disabled
             ? undefined
             : () => {
                 regenerate({ messageId: message.id });
@@ -53,6 +55,7 @@ export const renderAnswerActions =
         }}
         pending={streaming && messages.at(-1)?.id === message.id}
         questionText={priorUserText(messages, message)}
+        regenerateDisabled={streaming}
       />
     );
   };
