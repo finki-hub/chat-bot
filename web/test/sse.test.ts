@@ -116,7 +116,7 @@ describe('parseProtocolV2', () => {
     const events = await collect(
       'event: meta\ndata: {"tokens":{"input":12,"output":34,"total":46}}\n\n',
       DONE_FRAME,
-      'event: meta\ndata: {"timing":{"ttft_ms":120.5,"total_ms":980.2,"candidate_count":8,"top_distance":0.1234,"spans":{"retrieval.embed":42.1}}}\n\n',
+      'event: meta\ndata: {"timing":{"ttft_ms":120.5,"total_ms":980.2,"thinking_ms":340,"candidate_count":8,"top_distance":0.1234,"spans":{"retrieval.embed":42.1}}}\n\n',
     );
 
     expect(events).toStrictEqual([
@@ -131,6 +131,7 @@ describe('parseProtocolV2', () => {
           serverTotalMs: 980.2,
           serverTtftMs: 120.5,
           spans: { 'retrieval.embed': 42.1 },
+          thinkingMs: 340,
           topDistance: 0.1234,
         },
         type: 'meta',

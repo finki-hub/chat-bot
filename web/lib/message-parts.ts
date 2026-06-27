@@ -30,3 +30,6 @@ export const lastText = (message: MyUIMessage): null | string =>
 
 export const hasText = (message: MyUIMessage): boolean =>
   textParts(message).some((part) => part.text.length > 0);
+
+export const hasReasoning = (message: MyUIMessage): boolean =>
+  reasoningParts(message).some((part) => part.text.length > 0);

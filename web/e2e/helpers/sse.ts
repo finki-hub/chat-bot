@@ -12,7 +12,10 @@ export type UiChunk =
       transient: true;
       type: 'data-status';
     }
+  | { delta: string; id: string; type: 'reasoning-delta' }
   | { delta: string; id: string; type: 'text-delta' }
+  | { id: string; type: 'reasoning-end' }
+  | { id: string; type: 'reasoning-start' }
   | { id: string; type: 'text-end' }
   | { id: string; type: 'text-start' }
   | {

@@ -55,6 +55,18 @@ def _history_for_retrieval(payload: ChatSchema) -> str | None:
     )
 
 
+def _sse_event_name(chunk: bytes | str | memoryview) -> str:
+    """The SSE event name of a single frame, or '' if it carries none.
+
+    The agent generator yields exactly one frame per chunk, so a cheap prefix read
+    suffices — no need to parse the whole frame.
+    """
+    text = bytes(chunk).decode() if not isinstance(chunk, str) else chunk
+    if text.startswith("event: "):
+        return text[len("event: ") :].split("\n", 1)[0].strip()
+    return ""
+
+
 async def _instrument_stream(
     body: AsyncIterable[bytes | str | memoryview],
     *,
@@ -63,8 +75,11 @@ async def _instrument_stream(
     timings: RequestTimings,
     retrieval_hit: bool,
 ) -> AsyncGenerator[bytes | str | memoryview]:
-    """Pass the SSE body through untouched, stamping TTFT and total, then log one
-    chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
+    """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
+    log one chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
+
+    Thinking time is the span from the first ``thinking`` frame to the first ``token``
+    frame, measured here so it rides the same ``meta``/diagnostics path as the rest.
 
     The ``meta`` frame trails the body's ``done`` (``total_ms`` is known only once the
     body drains); consumers that stop at ``done`` ignore it and the protocol-v2 parsers
@@ -73,6 +88,11 @@ async def _instrument_stream(
     try:
         async for chunk in body:
             timings.mark_ttft()
+            event_name = _sse_event_name(chunk)
+            if event_name == "thinking":
+                timings.mark_thinking()
+            elif event_name == "token":
+                timings.mark_answer()
             yield chunk
     finally:
         timings.mark_total()

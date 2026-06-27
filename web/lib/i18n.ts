@@ -30,6 +30,7 @@ export const messages = {
   'diagnostics.serverFirstByte': 'прв бајт (сервер)',
   'diagnostics.serverTotal': 'вкупно (сервер)',
   'diagnostics.stages': 'фази',
+  'diagnostics.thinking': 'Размислување',
   'diagnostics.title': 'Дијагностика',
   'diagnostics.tokensInput': 'токени (влез)',
   'diagnostics.tokensOutput': 'токени (излез)',

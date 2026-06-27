@@ -64,6 +64,7 @@ const toDiagnostics = (obj: Record<string, unknown>): MessageDiagnostics => {
   if (isRecord(timing)) {
     diagnostics.serverTtftMs = asNumberOrNull(timing['ttft_ms']);
     diagnostics.serverTotalMs = asNumberOrNull(timing['total_ms']);
+    diagnostics.thinkingMs = asNumberOrNull(timing['thinking_ms']);
     diagnostics.candidateCount = asNumberOrNull(timing['candidate_count']);
     diagnostics.topDistance = asNumberOrNull(timing['top_distance']);
     diagnostics.spans = toSpans(timing['spans']);

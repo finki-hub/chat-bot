@@ -17,9 +17,11 @@ class RequestTimings:
 
     def __init__(self) -> None:
         self._t0 = time.perf_counter()
+        self._thinking_t0: float | None = None
         self.spans: dict[str, float] = {}
         self.ttft_ms: float | None = None
         self.total_ms: float | None = None
+        self.thinking_ms: float | None = None
         self.candidate_count: int | None = None
         self.top_distance: float | None = None
 
@@ -30,6 +32,14 @@ class RequestTimings:
         if self.ttft_ms is None:
             self.ttft_ms = (time.perf_counter() - self._t0) * 1000.0
 
+    def mark_thinking(self) -> None:
+        if self._thinking_t0 is None:
+            self._thinking_t0 = time.perf_counter()
+
+    def mark_answer(self) -> None:
+        if self.thinking_ms is None and self._thinking_t0 is not None:
+            self.thinking_ms = (time.perf_counter() - self._thinking_t0) * 1000.0
+
     def mark_total(self) -> None:
         self.total_ms = (time.perf_counter() - self._t0) * 1000.0
 
@@ -37,6 +47,7 @@ class RequestTimings:
         return {
             "ttft_ms": _round(self.ttft_ms),
             "total_ms": _round(self.total_ms),
+            "thinking_ms": _round(self.thinking_ms),
             "candidate_count": self.candidate_count,
             "top_distance": _round(self.top_distance, 4),
             "spans": {name: round(ms, 1) for name, ms in self.spans.items()},
