@@ -55,6 +55,31 @@ def capture(
         logger.exception("PostHog capture failed (event=%s)", event)
 
 
+def capture_exception(
+    exc: BaseException,
+    distinct_id: str = "server",
+    properties: dict[str, object] | None = None,
+) -> None:
+    """Report an unhandled exception to PostHog Error Tracking; a no-op when disabled,
+    and never raising into the caller.
+
+    Residency: callers must pass metadata only (request path, method, status) — never
+    the embedded or reranked text.
+    """
+    client = _state.client
+    if client is None:
+        return
+
+    try:
+        client.capture_exception(
+            exc,
+            distinct_id=distinct_id,
+            properties={"service": _SERVICE, **(properties or {})},
+        )
+    except Exception:
+        logger.exception("PostHog capture_exception failed")
+
+
 def shutdown_analytics() -> None:
     """Flush and stop the client (called after the lifespan ``yield``)."""
     client = _state.client

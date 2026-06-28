@@ -21,6 +21,7 @@ from app.data.connection import Database
 from app.utils.exceptions import RetrievalError
 from app.utils.http_client import close_http_client, init_http_client
 from app.utils.logger import setup_logging
+from app.utils.posthog_client import capture_exception
 from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -148,6 +149,10 @@ def make_app(settings: Settings) -> FastAPI:
         exc: Exception,
     ) -> JSONResponse:
         logger.exception("Unhandled exception")
+        capture_exception(
+            exc,
+            properties={"path": request.url.path, "method": request.method},
+        )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "An unexpected internal server error occurred."},

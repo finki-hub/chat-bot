@@ -16,7 +16,12 @@ from app.api.rerank import router as rerank_router
 from app.api.streams import router as streams_router
 from app.llms.bge_m3 import init_bge_m3_embedder
 from app.llms.reranker import init_reranker
-from app.utils.analytics import capture, init_analytics, shutdown_analytics
+from app.utils.analytics import (
+    capture,
+    capture_exception,
+    init_analytics,
+    shutdown_analytics,
+)
 from app.utils.exceptions import ModelNotReadyError
 from app.utils.logger import setup_logging
 from app.utils.settings import Settings
@@ -124,6 +129,10 @@ def make_app(settings: Settings) -> FastAPI:
         exc: Exception,
     ) -> JSONResponse:
         logger.exception("Unhandled exception")
+        capture_exception(
+            exc,
+            properties={"path": request.url.path, "method": request.method},
+        )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "An unexpected internal server error occurred."},
