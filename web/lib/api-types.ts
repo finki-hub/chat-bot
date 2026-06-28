@@ -79,7 +79,8 @@ export type MessageDiagnostics = {
 
 export type MyDataParts = {
   error: ErrorNotice;
-  status: { label: string; tool?: string };
+  reset: Record<string, never>;
+  status: StatusPart;
 };
 
 export type MyMetadata = {
@@ -104,7 +105,10 @@ export type ProtocolV2Event =
       };
       event: 'error';
     }
-  | { data: { label: string; state: string; tool?: string }; event: 'status' }
+  | {
+      data: { label: string; stage?: string; state: string; tool?: string };
+      event: 'status';
+    }
   | { data: { text: string }; event: 'thinking' }
   | { data: { text: string }; event: 'token' }
   | {
@@ -121,3 +125,5 @@ export type ProtocolV2Event =
       };
       event: 'meta';
     };
+
+export type StatusPart = { label: string; stage?: string; tool?: string };

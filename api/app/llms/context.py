@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -218,6 +219,7 @@ async def get_retrieved_context(
     history_text: str | None = None,
     initial_k: int = 30,
     top_k: int = 10,
+    on_stage: Callable[[str], None] | None = None,
 ) -> str:
     """Multi-query (original + rewritten + HyDE) retrieval over FAQ and chunks, reranked by a cross-encoder with vector-order fallback."""
 
@@ -226,6 +228,12 @@ async def get_retrieved_context(
         query,
         embedding_model,
     )
+
+    def _stage(stage: str) -> None:
+        if on_stage is not None:
+            on_stage(stage)
+
+    _stage("contextualize")
 
     with timed("retrieval.contextualize"):
         search_query = await _contextualize_query(
@@ -265,6 +273,8 @@ async def get_retrieved_context(
     logger.info("HyDE passage: '%s'", hyde_passage)
 
     per_query_k = initial_k // 3 + 1
+
+    _stage("retrieve")
 
     try:
         with timed("retrieval.embed"):
@@ -312,6 +322,8 @@ async def get_retrieved_context(
         raise RetrievalError("Failed during multi-query vector search") from e
 
     rerank_texts = [c.rerank_text for c in candidates]
+
+    _stage("rerank")
 
     try:
         logger.info("Sending %d candidates to re-ranker...", len(rerank_texts))
@@ -398,6 +410,8 @@ async def get_retrieved_context(
         final = _select_with_faq_reservation(candidates, top_k)
 
     record_retrieval_ids([c.key for c in final[:_RETRIEVAL_IDS_CAP]])
+
+    _stage("context")
 
     with timed("retrieval.expand"):
         return await _expand_and_render(db, final)

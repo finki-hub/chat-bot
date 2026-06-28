@@ -33,7 +33,12 @@ export type UiStreamPart =
       type: 'data-error';
     }
   | {
-      data: { label: string; tool?: string };
+      data: Record<string, never>;
+      transient: true;
+      type: 'data-reset';
+    }
+  | {
+      data: { label: string; stage?: string; tool?: string };
       transient: true;
       type: 'data-status';
     }
@@ -194,12 +199,14 @@ export const translateToUiStream = async (
       case 'reset':
         // `reset` only delimits the dropped pre-tool text preamble — never reasoning.
         textPart.end();
+        writer.write({ data: {}, transient: true, type: 'data-reset' });
         break;
 
       case 'status':
         writer.write({
           data: {
             label: event.label,
+            ...(event.stage !== undefined && { stage: event.stage }),
             ...(event.tool !== undefined && { tool: event.tool }),
           },
           transient: true,

@@ -1,8 +1,7 @@
-import type { ReactNode } from 'react';
-
 import { Clock3 } from 'lucide-react';
+import { type ReactNode } from 'react';
 
-import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
+import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
 
 import {
   Message,
@@ -12,6 +11,7 @@ import {
 import { ElapsedTimer } from '@/components/chat/elapsed-timer';
 import { ReasoningDisclosure } from '@/components/chat/reasoning-disclosure';
 import { SearchStatus } from '@/components/chat/search-status';
+import { SearchStepper } from '@/components/chat/search-stepper';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import {
   HoverCard,
@@ -22,6 +22,7 @@ import { formatThroughput } from '@/lib/diagnostics';
 import { formatDuration } from '@/lib/duration';
 import { formatSpanLabel, t } from '@/lib/i18n';
 import { reasoningParts, textParts } from '@/lib/message-parts';
+import { useSearchStage } from '@/lib/use-search-stage';
 
 export type AssistantMessageProps = {
   actions?: ReactNode;
@@ -29,7 +30,7 @@ export type AssistantMessageProps = {
   message: MyUIMessage;
   onRetry?: () => void;
   pending?: boolean;
-  statusPart?: { label: string; tool?: string };
+  statusPart?: StatusPart;
   streamStartedAt?: null | number;
 };
 
@@ -258,6 +259,67 @@ const MessageError = ({
   </div>
 );
 
+const AssistantMessageStatus = ({
+  errorPart,
+  liveTimer,
+  pending,
+  reasoningText,
+  statusPart,
+  text,
+}: {
+  errorPart?: ErrorNotice;
+  liveTimer: ReactNode;
+  pending?: boolean;
+  reasoningText: string;
+  statusPart?: StatusPart;
+  text: null | string;
+}) => {
+  const maxStage = useSearchStage({
+    pending,
+    stage: statusPart?.stage,
+    text,
+  });
+
+  const showStepper =
+    maxStage !== undefined && text === null && (pending ?? Boolean(statusPart));
+  const showChip = Boolean(statusPart) && !text && !statusPart?.stage;
+  const showDots =
+    Boolean(pending) &&
+    !text &&
+    !statusPart &&
+    !errorPart &&
+    reasoningText.length === 0 &&
+    maxStage === undefined;
+
+  return (
+    <>
+      {showStepper ? (
+        <div className="flex items-start gap-2">
+          <SearchStepper activeStage={maxStage} />
+          {liveTimer}
+        </div>
+      ) : null}
+      {showChip && statusPart ? (
+        <div
+          className="flex items-center gap-2"
+          data-testid="search-status-wrapper"
+        >
+          <SearchStatus
+            label={statusPart.label}
+            tool={statusPart.tool}
+          />
+          {liveTimer}
+        </div>
+      ) : null}
+      {showDots ? (
+        <div className="flex items-center gap-2">
+          <TypingIndicator />
+          {liveTimer}
+        </div>
+      ) : null}
+    </>
+  );
+};
 export const AssistantMessage = ({
   actions,
   errorPart,
@@ -280,20 +342,14 @@ export const AssistantMessage = ({
   const text = inPreamble ? null : (parts.at(-1)?.text ?? null);
   const reasoningStreaming =
     Boolean(pending) && reasoningText.length > 0 && text === null;
-  const showChip = Boolean(statusPart) && !text;
-  const showDots =
-    Boolean(pending) &&
-    !text &&
-    !statusPart &&
-    !errorPart &&
-    reasoningText.length === 0;
-  const timing = message.metadata?.timing;
-  const diagnostics = message.metadata?.diagnostics;
-  const inferenceModel = message.metadata?.inferenceModel;
+
   const liveTimer =
     typeof streamStartedAt === 'number' ? (
       <ElapsedTimer startedAt={streamStartedAt} />
     ) : null;
+  const timing = message.metadata?.timing;
+  const diagnostics = message.metadata?.diagnostics;
+  const inferenceModel = message.metadata?.inferenceModel;
 
   return (
     <Message from="assistant">
@@ -318,21 +374,14 @@ export const AssistantMessage = ({
             timing={timing}
           />
         )}
-        {showChip && statusPart ? (
-          <div className="flex items-center gap-2">
-            <SearchStatus
-              label={statusPart.label}
-              tool={statusPart.tool}
-            />
-            {liveTimer}
-          </div>
-        ) : null}
-        {showDots ? (
-          <div className="flex items-center gap-2">
-            <TypingIndicator />
-            {liveTimer}
-          </div>
-        ) : null}
+        <AssistantMessageStatus
+          errorPart={errorPart}
+          liveTimer={liveTimer}
+          pending={pending}
+          reasoningText={reasoningText}
+          statusPart={statusPart}
+          text={text}
+        />
         {errorPart ? (
           <MessageError
             errorPart={errorPart}

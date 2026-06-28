@@ -16,6 +16,7 @@ beforeAll(() => {
 const SEARCHING = '🔍 Пребарувам…';
 const PREAMBLE = 'Дозволете да проверам во базата…';
 const ANSWER = 'Испитите се во јануари.';
+const ANSWER_TEXT_TESTID = 'answer-text';
 const TIMING_TESTID = 'message-timing';
 
 const assistantWithParts = (parts: MyUIMessage['parts']): MyUIMessage => ({
@@ -66,6 +67,18 @@ describe('SearchStatus', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Размислувам…');
   });
+
+  it('falls back to a tool-specific label when label is omitted', () => {
+    render(<SearchStatus tool="faq_search" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Барам во прашања…');
+  });
+
+  it('falls back to the generic label for an unknown tool', () => {
+    render(<SearchStatus tool="unknown_tool" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Пребарувам…');
+  });
 });
 
 describe('AssistantMessage', () => {
@@ -76,7 +89,7 @@ describe('AssistantMessage', () => {
     ]);
     render(<AssistantMessage message={msg} />);
 
-    expect(screen.getByTestId('answer-text')).toHaveTextContent(
+    expect(screen.getByTestId(ANSWER_TEXT_TESTID)).toHaveTextContent(
       'Конечниот одговор е тука.',
     );
     expect(
@@ -139,6 +152,64 @@ describe('AssistantMessage', () => {
     expect(screen.queryByText(hasText(PREAMBLE))).not.toBeInTheDocument();
   });
 
+  it('streams a reset answer when the status has cleared and only the answer part remains', () => {
+    const msg = assistantWithParts([{ text: ANSWER, type: 'text' }]);
+    render(
+      <AssistantMessage
+        message={msg}
+        pending
+      />,
+    );
+
+    expect(screen.getByTestId(ANSWER_TEXT_TESTID)).toHaveTextContent(ANSWER);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('renders a stepper when the status has a stage', () => {
+    const msg = assistantWithParts([]);
+    render(
+      <AssistantMessage
+        message={msg}
+        pending
+        statusPart={{
+          label: SEARCHING,
+          stage: 'retrieve',
+          tool: 'search_documents',
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('search-stepper')).toBeInTheDocument();
+    expect(screen.getByText('Пребарувам база на знаење…')).toBeInTheDocument();
+  });
+
+  it('advances the stepper to the generate stage after the status resets', () => {
+    const msg = assistantWithParts([]);
+    const { rerender } = render(
+      <AssistantMessage
+        message={msg}
+        pending
+        statusPart={{
+          label: SEARCHING,
+          stage: 'context',
+          tool: 'search_documents',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Составувам контекст…')).toBeInTheDocument();
+
+    rerender(
+      <AssistantMessage
+        message={msg}
+        pending
+        statusPart={undefined}
+      />,
+    );
+
+    expect(screen.getByText('Генерирам одговор…')).toBeInTheDocument();
+  });
+
   it('renders a Retry button for a non-interrupted error', () => {
     const onRetry = vi.fn<() => void>();
     const msg = assistantWithParts([]);
@@ -166,7 +237,7 @@ describe('AssistantMessage', () => {
       />,
     );
 
-    expect(screen.getByTestId('answer-text')).toHaveTextContent(
+    expect(screen.getByTestId(ANSWER_TEXT_TESTID)).toHaveTextContent(
       'Делумен одговор',
     );
     expect(screen.getByRole('alert')).toHaveTextContent(
@@ -335,7 +406,7 @@ describe('Thread', () => {
     expect(
       screen.getByText(hasText('Кога е роковниот испит?')),
     ).toBeInTheDocument();
-    expect(screen.getByTestId('answer-text')).toHaveTextContent(
+    expect(screen.getByTestId(ANSWER_TEXT_TESTID)).toHaveTextContent(
       'Роковниот испит е во јануари.',
     );
     expect(screen.queryByText(hasText('преамбула'))).not.toBeInTheDocument();
@@ -411,7 +482,7 @@ describe('Thread', () => {
     );
 
     expect(screen.getAllByTestId('typing-indicator')).toHaveLength(1);
-    expect(screen.queryByTestId('answer-text')).not.toBeInTheDocument();
+    expect(screen.queryByTestId(ANSWER_TEXT_TESTID)).not.toBeInTheDocument();
   });
 
   it('shows a live elapsed timer while awaiting the reply', () => {

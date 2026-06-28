@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator, AsyncIterable
@@ -11,7 +12,7 @@ from fastapi.responses import StreamingResponse
 
 from app.data.connection import Database
 from app.data.db import get_db
-from app.llms.agents import StreamObservation, meta_event
+from app.llms.agents import StreamObservation, error_event, meta_event, status_event
 from app.llms.chat import handle_chat
 from app.llms.context import get_links_context, get_retrieved_context
 from app.llms.models import CHAT_MODELS
@@ -36,6 +37,9 @@ settings = Settings()
 _TZ = ZoneInfo(settings.TZ)
 _HISTORY_TURNS_FOR_RETRIEVAL = 6
 _HISTORY_TURN_MAX_CHARS = 600
+_PRE_STREAM_ERROR_MSG = (
+    "Се случи грешка при подготовка на одговорот. Обидете се повторно."
+)
 
 
 def _clip(text: str) -> str:
@@ -295,36 +299,13 @@ router = APIRouter(
 )
 
 
-@router.post(
-    "/",
-    summary="Stream a chat response",
-    description=(
-        "Compute an embedding for the incoming question, retrieve top-N "
-        "similar questions for context, construct a prompt, and stream back "
-        "the LLM's answer as a text stream."
-    ),
-    response_class=StreamingResponse,
-    status_code=status.HTTP_200_OK,
-    responses={
-        status.HTTP_200_OK: {
-            "description": "Chunked stream of SSE events",
-            "content": {
-                "text/event-stream": {
-                    "schema": {
-                        "type": "string",
-                        "example": "data: Hello\n\ndata: World\n\n",
-                    },
-                },
-            },
-        },
-    },
-    operation_id="chatWithModel",
-)
-async def chat(
+async def _chat_response_stream(
     payload: ChatSchema,
     request: Request,
-    db: Database = db_dep,
-) -> StreamingResponse:
+    db: Database,
+    response_id: UUID,
+) -> AsyncGenerator[bytes | str | memoryview]:
+    """Build context (streaming retrieval status), then yield the agent answer stream."""
     logger.info(
         "Received chat request with payload: %s",
         payload.model_dump(mode="json", exclude_defaults=True),
@@ -334,8 +315,6 @@ async def chat(
 
     timings, token = start_request_timings()
     try:
-        response_id = uuid4()
-        record_response_id(str(response_id))
         distinct_id = safe_distinct_id(
             request.headers.get("X-Distinct-Id"),
             str(response_id),
@@ -368,57 +347,81 @@ async def chat(
             },
         )
 
-        retrieved, links_context = await asyncio.gather(
-            get_retrieved_context(
-                db=db,
-                query=payload.query,
-                embedding_model=payload.embeddings_model,
-                query_transform_model=payload.query_transform_model,
-                history_text=history_text,
-            ),
-            get_links_context(db),
-        )
+        # Run retrieval and links loading concurrently, streaming retrieval
+        # stage events to the client as they happen.
+        stage_queue: asyncio.Queue[str | None] = asyncio.Queue()
 
-        if not retrieved:
-            capture(
-                distinct_id,
-                "retrieval_miss",
-                {
-                    "response_id": str(response_id),
-                    "embeddings_model": payload.embeddings_model.value,
-                    "query_transform_model": payload.query_transform_model.value,
-                    "candidate_count": timings.candidate_count,
-                    "top_distance": timings.top_distance,
-                    "query_len": len(payload.query),
-                },
-            )
-            # On a miss, leave the bare "nothing found" context alone so the prompt's
-            # tool-search directive isn't diluted by the links catalog.
-            context = (
-                "Не можев да пронајдам релевантни информации во базата на податоци."
-            )
-        else:
-            context = retrieved
-            observation.context_chars = len(retrieved)
-            if links_context:
-                context = f"{retrieved}\n\n{links_context}"
-            if timings.retrieval_ids:
+        def on_stage(stage: str) -> None:
+            stage_queue.put_nowait(status_event(stage=stage))
+
+        async def run_retrieval() -> str:
+            try:
+                return await get_retrieved_context(
+                    db=db,
+                    query=payload.query,
+                    embedding_model=payload.embeddings_model,
+                    query_transform_model=payload.query_transform_model,
+                    history_text=history_text,
+                    on_stage=on_stage,
+                )
+            finally:
+                stage_queue.put_nowait(None)
+
+        retrieval_task = asyncio.create_task(run_retrieval())
+        links_task = asyncio.create_task(get_links_context(db))
+
+        try:
+            while (event := await stage_queue.get()) is not None:
+                yield event
+
+            retrieved = await retrieval_task
+            links_context = await links_task
+
+            if not retrieved:
                 capture(
                     distinct_id,
-                    "retrieval_used",
+                    "retrieval_miss",
                     {
                         "response_id": str(response_id),
                         "embeddings_model": payload.embeddings_model.value,
-                        "retrieval_ids": timings.retrieval_ids,
-                        "retrieval_count": len(timings.retrieval_ids),
+                        "query_transform_model": payload.query_transform_model.value,
+                        "candidate_count": timings.candidate_count,
+                        "top_distance": timings.top_distance,
+                        "query_len": len(payload.query),
                     },
                 )
+                context = (
+                    "Не можев да пронајдам релевантни информации во базата на податоци."
+                )
+            else:
+                context = retrieved
+                observation.context_chars = len(retrieved)
+                if links_context:
+                    context = f"{retrieved}\n\n{links_context}"
+                if timings.retrieval_ids:
+                    capture(
+                        distinct_id,
+                        "retrieval_used",
+                        {
+                            "response_id": str(response_id),
+                            "embeddings_model": payload.embeddings_model.value,
+                            "retrieval_ids": timings.retrieval_ids,
+                            "retrieval_count": len(timings.retrieval_ids),
+                        },
+                    )
 
-        today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
-        context = f"Денешен датум: {today}.\n\n{context}"
+            today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
+            context = f"Денешен датум: {today}.\n\n{context}"
 
-        with timed("agent.setup"):
-            response = await handle_chat(payload, context, observation)
+            with timed("agent.setup"):
+                response = await handle_chat(payload, context, observation)
+        except Exception:
+            logger.exception("Chat context build failed before streaming")
+            links_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await links_task
+            yield error_event("agent_error", _PRE_STREAM_ERROR_MSG)
+            return
 
         response.body_iterator = _instrument_stream(
             response.body_iterator,
@@ -430,14 +433,48 @@ async def chat(
             observation=observation,
         )
 
-        # Set the header on the StreamingResponse returned by handle_chat: Starlette
-        # serializes headers only when the body starts streaming, so this lands first.
-        response.headers["X-Response-Id"] = str(response_id)
-        return response
+        async for chunk in response.body_iterator:
+            yield chunk
     finally:
-        # The stream wrapper holds `timings` by closure, so the context var can be reset
-        # now (before streaming) without affecting the TTFT/total it records later.
         reset_request_timings(token)
+
+
+@router.post(
+    "/",
+    summary="Stream a chat response",
+    description=(
+        "Compute an embedding for the incoming question, retrieve top-N "
+        "similar questions for context, construct a prompt, and stream back "
+        "the LLM's answer as a text stream."
+    ),
+    response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Chunked stream of SSE events",
+            "content": {
+                "text/event-stream": {
+                    "schema": {
+                        "type": "string",
+                        "example": "data: Hello\n\ndata: World\n\n",
+                    },
+                },
+            },
+        },
+    },
+    operation_id="chatWithModel",
+)
+async def chat(
+    payload: ChatSchema,
+    request: Request,
+    db: Database = db_dep,
+) -> StreamingResponse:
+    response_id = uuid4()
+    record_response_id(str(response_id))
+    stream = _chat_response_stream(payload, request, db, response_id)
+    response = StreamingResponse(stream, media_type="text/event-stream")
+    response.headers["X-Response-Id"] = str(response_id)
+    return response
 
 
 @router.get(
