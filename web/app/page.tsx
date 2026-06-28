@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+
 import { Composer } from '@/components/chat/composer';
 import { ServiceBanner } from '@/components/chat/service-banner';
 import { Thread } from '@/components/chat/thread';
@@ -10,6 +12,19 @@ import { useUiStore } from '@/lib/ui-store';
 import { useConversations } from '@/lib/use-conversations';
 import { useHealth } from '@/lib/use-health';
 import { useModels } from '@/lib/use-models';
+
+const DESKTOP_SIDEBAR_QUERY = '(min-width: 768px)';
+
+const subscribeToMediaQuery = (
+  media: MediaQueryList,
+  onChange: (event: MediaQueryListEvent) => void,
+) => {
+  media.addEventListener('change', onChange);
+
+  return () => {
+    media.removeEventListener('change', onChange);
+  };
+};
 
 const ChatScreen = () => {
   const model = useUiStore((s) => s.model);
@@ -22,6 +37,24 @@ const ChatScreen = () => {
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
 
   const { unavailable } = useHealth();
+
+  useEffect(() => {
+    const cleanup = () => {};
+
+    if (typeof matchMedia !== 'function') {
+      return cleanup;
+    }
+
+    const media = matchMedia(DESKTOP_SIDEBAR_QUERY);
+    const syncSidebarWithViewport = (event: MediaQueryListEvent) => {
+      setSidebarOpen(event.matches);
+    };
+
+    setSidebarOpen(media.matches);
+
+    return subscribeToMediaQuery(media, syncSidebarWithViewport);
+  }, [setSidebarOpen]);
+
   const {
     data: modelList,
     isError: modelsError,

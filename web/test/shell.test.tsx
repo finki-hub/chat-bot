@@ -91,7 +91,7 @@ describe('useUiStore', () => {
     useUiStore.setState({
       activeConversationId: null,
       model: CLAUDE,
-      sidebarOpen: true,
+      sidebarOpen: false,
     });
   });
 
@@ -101,7 +101,7 @@ describe('useUiStore', () => {
     expect(s).toMatchObject({
       activeConversationId: null,
       model: CLAUDE,
-      sidebarOpen: true,
+      sidebarOpen: false,
     });
   });
 
@@ -120,13 +120,13 @@ describe('useUiStore', () => {
       useUiStore.getState().toggleSidebar();
     });
 
-    expect(useUiStore.getState()).toMatchObject({ sidebarOpen: false });
+    expect(useUiStore.getState()).toMatchObject({ sidebarOpen: true });
 
     act(() => {
-      useUiStore.getState().setSidebarOpen(true);
+      useUiStore.getState().setSidebarOpen(false);
     });
 
-    expect(useUiStore.getState()).toMatchObject({ sidebarOpen: true });
+    expect(useUiStore.getState()).toMatchObject({ sidebarOpen: false });
   });
 
   it('persists the model and active conversation', () => {

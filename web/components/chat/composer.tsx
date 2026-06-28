@@ -1,4 +1,3 @@
-import { ArrowUp, Brain, Loader2, Sparkles, Square } from 'lucide-react';
 import {
   type KeyboardEvent,
   useCallback,
@@ -7,18 +6,11 @@ import {
   useState,
 } from 'react';
 
-import { Button } from '@/components/ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  ComposerActions,
+  type ComposerStatus,
+} from '@/components/chat/composer-actions';
 import { t } from '@/lib/i18n';
-import { isReasoningCapableModel } from '@/lib/reasoning';
 import { groupModelsByProvider } from '@/lib/use-models';
 
 export type ComposerProps = {
@@ -32,7 +24,7 @@ export type ComposerProps = {
   onStop: () => void;
   onSubmit: (text: string) => void;
   reasoning: boolean;
-  status: 'error' | 'ready' | 'streaming' | 'submitted';
+  status: ComposerStatus;
 };
 
 export const Composer = ({
@@ -143,31 +135,6 @@ export const Composer = ({
     }
   };
 
-  const renderSubmitIcon = () => {
-    if (status === 'submitted') {
-      return (
-        <Loader2
-          aria-hidden="true"
-          className="size-4 animate-spin"
-        />
-      );
-    }
-    if (isBusy) {
-      return (
-        <Square
-          aria-hidden="true"
-          className="size-4 fill-current"
-        />
-      );
-    }
-    return (
-      <ArrowUp
-        aria-hidden="true"
-        className="size-4"
-      />
-    );
-  };
-
   return (
     <div className="bg-background px-3 pb-3 pt-2 sm:px-4">
       <div className="mx-auto w-full max-w-3xl">
@@ -186,85 +153,23 @@ export const Composer = ({
             rows={1}
             value={value}
           />
-          <div className="flex items-center justify-end gap-1.5 px-2 pb-2">
-            <Button
-              aria-label={t('composer.reasoning')}
-              aria-pressed={reasoning}
-              className="h-8 w-fit gap-1.5 rounded-full px-3 text-xs font-medium"
-              data-testid="composer-reasoning"
-              disabled={(disabled ?? false) || !isReasoningCapableModel(model)}
-              onClick={() => {
-                onReasoningChange(!reasoning);
-              }}
-              size="sm"
-              type="button"
-              variant={reasoning ? 'default' : 'ghost'}
-            >
-              <Brain
-                aria-hidden="true"
-                className="size-3.5"
-              />
-              {t('composer.reasoning')}
-            </Button>
-            <Select
-              disabled={modelSelectDisabled}
-              onValueChange={onModelChange}
-              value={model}
-            >
-              <SelectTrigger
-                aria-label={t('composer.model')}
-                className="h-8 w-fit max-w-[55%] gap-1.5 rounded-full border-0 bg-transparent px-3 text-xs font-medium text-muted-foreground shadow-none hover:bg-muted hover:text-foreground sm:max-w-[240px]"
-                data-testid="composer-model"
-                size="sm"
-              >
-                {modelsLoading === true ? (
-                  <Loader2
-                    aria-hidden="true"
-                    className="size-3.5 animate-spin"
-                  />
-                ) : (
-                  <Sparkles
-                    aria-hidden="true"
-                    className="size-3.5"
-                  />
-                )}
-                <SelectValue placeholder={modelPlaceholder} />
-              </SelectTrigger>
-              <SelectContent
-                align="end"
-                position="popper"
-              >
-                {groups.map((g) => (
-                  <SelectGroup key={g.provider}>
-                    <SelectLabel>{g.provider}</SelectLabel>
-                    {g.models.map((id) => (
-                      <SelectItem
-                        key={id}
-                        value={id}
-                      >
-                        {id}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              aria-label={isBusy ? t('composer.stop') : t('composer.send')}
-              className="size-9 shrink-0 rounded-full transition-transform active:scale-95"
-              data-testid="composer-submit"
-              disabled={
-                isBusy
-                  ? false
-                  : (disabled ?? false) || value.trim().length === 0
-              }
-              onClick={onButtonClick}
-              size="icon"
-              type="button"
-            >
-              {renderSubmitIcon()}
-            </Button>
-          </div>
+          <ComposerActions
+            disabled={disabled}
+            groups={groups}
+            isBusy={isBusy}
+            model={model}
+            modelPlaceholder={modelPlaceholder}
+            modelSelectDisabled={modelSelectDisabled}
+            modelsLoading={modelsLoading}
+            onButtonClick={onButtonClick}
+            onModelChange={onModelChange}
+            onReasoningChange={onReasoningChange}
+            reasoning={reasoning}
+            status={status}
+            submitDisabled={
+              isBusy ? false : (disabled ?? false) || value.trim().length === 0
+            }
+          />
         </div>
         <p className="mt-2 text-center text-xs text-muted-foreground">
           {t('composer.disclaimer')}
