@@ -49,7 +49,14 @@ export const POST = async (req: Request): Promise<Response> => {
 
     const upstream = await fetch(`${API_BASE_URL}/chat/`, {
       body: JSON.stringify(chatBody),
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        // Forward the browser's anonymous id so server-side analytics share its distinct_id.
+        ...(typeof clientBody.userId === 'string' &&
+          clientBody.userId.length > 0 && {
+            'X-Distinct-Id': clientBody.userId,
+          }),
+      },
       method: 'POST',
       // Propagate client aborts so stopping the chat tears down upstream generation.
       signal: req.signal,
