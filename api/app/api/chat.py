@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator, AsyncIterable
@@ -11,7 +12,7 @@ from fastapi.responses import StreamingResponse
 
 from app.data.connection import Database
 from app.data.db import get_db
-from app.llms.agents import StreamObservation, meta_event, status_event
+from app.llms.agents import StreamObservation, error_event, meta_event, status_event
 from app.llms.chat import handle_chat
 from app.llms.context import get_links_context, get_retrieved_context
 from app.llms.models import CHAT_MODELS
@@ -36,6 +37,9 @@ settings = Settings()
 _TZ = ZoneInfo(settings.TZ)
 _HISTORY_TURNS_FOR_RETRIEVAL = 6
 _HISTORY_TURN_MAX_CHARS = 600
+_PRE_STREAM_ERROR_MSG = (
+    "Се случи грешка при подготовка на одговорот. Обидете се повторно."
+)
 
 
 def _clip(text: str) -> str:
@@ -366,50 +370,58 @@ async def _chat_response_stream(
         retrieval_task = asyncio.create_task(run_retrieval())
         links_task = asyncio.create_task(get_links_context(db))
 
-        while (event := await stage_queue.get()) is not None:
-            yield event
+        try:
+            while (event := await stage_queue.get()) is not None:
+                yield event
 
-        retrieved = await retrieval_task
-        links_context = await links_task
+            retrieved = await retrieval_task
+            links_context = await links_task
 
-        if not retrieved:
-            capture(
-                distinct_id,
-                "retrieval_miss",
-                {
-                    "response_id": str(response_id),
-                    "embeddings_model": payload.embeddings_model.value,
-                    "query_transform_model": payload.query_transform_model.value,
-                    "candidate_count": timings.candidate_count,
-                    "top_distance": timings.top_distance,
-                    "query_len": len(payload.query),
-                },
-            )
-            context = (
-                "Не можев да пронајдам релевантни информации во базата на податоци."
-            )
-        else:
-            context = retrieved
-            observation.context_chars = len(retrieved)
-            if links_context:
-                context = f"{retrieved}\n\n{links_context}"
-            if timings.retrieval_ids:
+            if not retrieved:
                 capture(
                     distinct_id,
-                    "retrieval_used",
+                    "retrieval_miss",
                     {
                         "response_id": str(response_id),
                         "embeddings_model": payload.embeddings_model.value,
-                        "retrieval_ids": timings.retrieval_ids,
-                        "retrieval_count": len(timings.retrieval_ids),
+                        "query_transform_model": payload.query_transform_model.value,
+                        "candidate_count": timings.candidate_count,
+                        "top_distance": timings.top_distance,
+                        "query_len": len(payload.query),
                     },
                 )
+                context = (
+                    "Не можев да пронајдам релевантни информации во базата на податоци."
+                )
+            else:
+                context = retrieved
+                observation.context_chars = len(retrieved)
+                if links_context:
+                    context = f"{retrieved}\n\n{links_context}"
+                if timings.retrieval_ids:
+                    capture(
+                        distinct_id,
+                        "retrieval_used",
+                        {
+                            "response_id": str(response_id),
+                            "embeddings_model": payload.embeddings_model.value,
+                            "retrieval_ids": timings.retrieval_ids,
+                            "retrieval_count": len(timings.retrieval_ids),
+                        },
+                    )
 
-        today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
-        context = f"Денешен датум: {today}.\n\n{context}"
+            today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
+            context = f"Денешен датум: {today}.\n\n{context}"
 
-        with timed("agent.setup"):
-            response = await handle_chat(payload, context, observation)
+            with timed("agent.setup"):
+                response = await handle_chat(payload, context, observation)
+        except Exception:
+            logger.exception("Chat context build failed before streaming")
+            links_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await links_task
+            yield error_event("agent_error", _PRE_STREAM_ERROR_MSG)
+            return
 
         response.body_iterator = _instrument_stream(
             response.body_iterator,
