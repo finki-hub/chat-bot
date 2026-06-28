@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 
 import { Composer } from '@/components/chat/composer';
 import { ServiceBanner } from '@/components/chat/service-banner';
@@ -38,7 +38,7 @@ const ChatScreen = () => {
 
   const { unavailable } = useHealth();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const cleanup = () => {};
 
     if (typeof matchMedia !== 'function') {
