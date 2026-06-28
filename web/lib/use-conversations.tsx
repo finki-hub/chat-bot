@@ -271,9 +271,6 @@ export const useConversations = (
     [setMessages],
   );
 
-  // Wrap the SDK stop so we can fire the quality-signal event before aborting.
-  // Uses `model` (current selection) because inferenceModel metadata is only
-  // stamped on finish — it is never present during an in-flight stream.
   const handleStop = useCallback(() => {
     /* eslint-disable camelcase -- PostHog event properties are snake_case. */
     posthog.capture('chat_stopped', {
