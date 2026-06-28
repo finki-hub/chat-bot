@@ -28,4 +28,5 @@ if (key !== undefined && key.length > 0) {
     },
   });
   /* eslint-enable camelcase -- end of PostHog snake_case options. */
+  posthog.register({ service: 'chat-bot-web' });
 }
