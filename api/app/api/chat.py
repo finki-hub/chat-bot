@@ -21,6 +21,7 @@ from app.utils.posthog_client import capture, safe_distinct_id
 from app.utils.settings import Settings
 from app.utils.timing import (
     RequestTimings,
+    record_response_id,
     reset_request_timings,
     start_request_timings,
     timed,
@@ -140,6 +141,7 @@ def _capture_chat_response(
         generation_ms = max(timings.total_ms - timings.ttft_ms, 0.0)
 
     props: dict[str, object] = {
+        "$ai_trace_id": str(response_id),
         "$ai_model": model.value,
         "$ai_provider": observation.provider or None,
         "provider": observation.provider or None,
@@ -332,6 +334,7 @@ async def chat(
     timings, token = start_request_timings()
     try:
         response_id = uuid4()
+        record_response_id(str(response_id))
         distinct_id = safe_distinct_id(
             request.headers.get("X-Distinct-Id"),
             str(response_id),
