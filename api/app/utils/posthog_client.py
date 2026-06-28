@@ -61,21 +61,32 @@ def capture_exception(
     distinct_id: str = "server",
     properties: dict[str, object] | None = None,
 ) -> None:
-    """Report an unhandled exception to PostHog Error Tracking; a no-op when disabled,
-    and never raising into the caller.
+    """Report an unhandled exception to PostHog Error Tracking as a metadata-only
+    ``$exception`` event; a no-op when disabled, and never raising into the caller.
 
-    Residency: callers must pass metadata only (request path, method, status) — never
-    raw prompt or answer text.
+    Residency: the exception object is NEVER handed to the SDK. posthog-python's
+    ``capture_exception`` serializes the full stacktrace WITH frame-local variables and
+    the raw ``str(exc)`` message, both of which can embed sovereign text (the user query,
+    the answer, retrieved chunks). Only the exception type, service and caller metadata
+    (request path, method, status) leave; the message/value is redacted.
     """
     client = _state.client
     if client is None:
         return
 
+    error_type = type(exc).__name__
     try:
-        client.capture_exception(
-            exc,
+        client.capture(
+            event="$exception",
             distinct_id=distinct_id,
-            properties={"service": _SERVICE, **(properties or {})},
+            properties={
+                "service": _SERVICE,
+                "error_type": error_type,
+                "$exception_list": [
+                    {"type": error_type, "value": "(redacted for residency)"},
+                ],
+                **(properties or {}),
+            },
         )
     except Exception:
         logger.exception("PostHog capture_exception failed")
