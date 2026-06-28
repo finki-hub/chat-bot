@@ -16,6 +16,7 @@ from app.llms.agents import StreamObservation, meta_event
 from app.llms.chat import handle_chat
 from app.llms.context import get_links_context, get_retrieved_context
 from app.llms.models import CHAT_MODELS
+from app.llms.pricing import cost_usd, is_self_hosted
 from app.schemas.chat import ChatSchema
 from app.utils.posthog_client import capture
 from app.utils.settings import Settings
@@ -25,7 +26,7 @@ from app.utils.timing import (
     start_request_timings,
     timed,
 )
-from app.utils.topic import classify_topic
+from app.utils.topic import classify_language, classify_topic
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,19 @@ def _sniff_tokens(chunk: bytes | str | memoryview) -> dict[str, int] | None:
     return None
 
 
+def _ms(value: float | None) -> float | None:
+    return round(value, 1) if value is not None else None
+
+
+_WEB_SEARCH_HINTS = ("web_search", "web-search", "websearch", "search_web", "tavily")
+
+
+def _used_web_search(tool_names: set[str]) -> bool:
+    return any(
+        hint in name.lower() for name in tool_names for hint in _WEB_SEARCH_HINTS
+    )
+
+
 def _capture_chat_response(
     *,
     distinct_id: str,
@@ -131,22 +145,75 @@ def _capture_chat_response(
     retrieval_hit: bool,
     usage: dict[str, int] | None,
     outcome: str,
+    observation: StreamObservation,
 ) -> None:
+    model = payload.inference_model
+    generation_ms: float | None = None
+    if timings.total_ms is not None and timings.ttft_ms is not None:
+        generation_ms = max(timings.total_ms - timings.ttft_ms, 0.0)
+
     props: dict[str, object] = {
-        "$ai_model": payload.inference_model.value,
+        "$ai_model": model.value,
+        "$ai_provider": observation.provider or None,
+        "provider": observation.provider or None,
+        "is_self_hosted": is_self_hosted(model),
         "$ai_latency": (
             timings.total_ms / 1000.0 if timings.total_ms is not None else None
         ),
         "response_id": str(response_id),
         "retrieval_hit": retrieval_hit,
-        "ttft_ms": timings.ttft_ms,
+        "outcome": outcome,
+        "language": classify_language(payload.query),
+        "ttft_ms": _ms(timings.ttft_ms),
+        "thinking_ms": _ms(timings.thinking_ms),
+        "llm_generation_ms": _ms(generation_ms),
+        "embedding_ms": _ms(timings.spans.get("retrieval.embed")),
+        "retrieval_ms": _ms(timings.spans.get("retrieval.vector_search")),
+        "rerank_ms": _ms(timings.spans.get("retrieval.rerank")),
+        "query_transform_ms": _ms(timings.spans.get("retrieval.rewrite_hyde")),
         "candidate_count": timings.candidate_count,
         "top_distance": timings.top_distance,
-        "outcome": outcome,
+        "context_char_len": observation.context_chars,
+        "context_chunk_count": len(timings.retrieval_ids),
+        "answer_char_len": observation.answer_chars,
+        "tool_call_count": observation.tool_call_count,
+        "used_web_search": _used_web_search(observation.tool_names),
     }
+
+    if observation.finish_reason:
+        props["finish_reason"] = observation.finish_reason
+        props["truncated"] = observation.finish_reason == "length"
+
+    if timings.reranker_score_max is not None:
+        props["reranker_score_max"] = round(timings.reranker_score_max, 4)
+        props["reranker_score_min"] = round(timings.reranker_score_min or 0.0, 4)
+        props["chunks_above_threshold"] = timings.reranker_above_threshold
+
     if usage is not None:
-        props["$ai_input_tokens"] = usage["input"]
-        props["$ai_output_tokens"] = usage["output"]
+        input_tokens = usage["input"]
+        output_tokens = usage["output"]
+        props["$ai_input_tokens"] = input_tokens
+        props["$ai_output_tokens"] = output_tokens
+        if usage.get("cache_read"):
+            props["$ai_cache_read_input_tokens"] = usage["cache_read"]
+        if usage.get("reasoning"):
+            props["$ai_reasoning_tokens"] = usage["reasoning"]
+        if generation_ms and output_tokens:
+            props["output_tokens_per_sec"] = round(
+                output_tokens / (generation_ms / 1000.0),
+                1,
+            )
+        costs = cost_usd(model, input_tokens, output_tokens)
+        if costs is not None:
+            props["$ai_input_cost_usd"] = round(costs[0], 6)
+            props["$ai_output_cost_usd"] = round(costs[1], 6)
+            props["$ai_total_cost_usd"] = round(costs[2], 6)
+            props["cost_known"] = True
+        else:
+            props["cost_known"] = False
+    else:
+        props["cost_known"] = False
+
     capture(distinct_id, "$ai_generation", props)
 
 
@@ -224,6 +291,7 @@ async def _instrument_stream(
             retrieval_hit=retrieval_hit,
             usage=observation.usage if any(observation.usage.values()) else usage,
             outcome=outcome,
+            observation=observation,
         )
     yield meta_event({"timing": record})
 
@@ -339,6 +407,7 @@ async def chat(
             )
         else:
             context = retrieved
+            observation.context_chars = len(retrieved)
             if links_context:
                 context = f"{retrieved}\n\n{links_context}"
             if timings.retrieval_ids:
