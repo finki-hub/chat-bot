@@ -24,6 +24,13 @@ def safe_response_id(raw: str | None) -> str | None:
     return candidate if _RESPONSE_ID_RE.fullmatch(candidate) else None
 
 
+def safe_distinct_id(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    candidate = raw.strip()
+    return candidate if _RESPONSE_ID_RE.fullmatch(candidate) else None
+
+
 class _State:
     client: Posthog | None = None
 
@@ -104,17 +111,52 @@ def capture_chat_inference(
     ms: float,
     props: dict[str, object],
 ) -> None:
-    """Record one embed/rerank stage (metadata only); distinct_id is the bounded caller id."""
-    response_id = safe_response_id(request.headers.get("X-Response-Id"))
-    capture(
-        response_id or "gpu-api",
-        "chat_inference",
-        {
-            "stage": stage,
-            "ms": ms,
-            "device": "cuda" if torch.cuda.is_available() else "cpu",
-            "response_id": response_id,
+    """Record an embed/rerank stage as an LLM-analytics span on the chat's trace.
+
+    With a chat trace id (``X-Response-Id``) the stage is emitted as a native
+    ``$ai_embedding`` / ``$ai_span`` sharing that ``$ai_trace_id`` so it nests under the
+    chat's trace in PostHog; only size/latency metadata is sent, never content
+    (residency). Calls without a trace id (e.g. document fills) fall back to a plain
+    metadata event.
+    """
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    trace_id = safe_response_id(request.headers.get("X-Response-Id"))
+
+    if trace_id is None:
+        capture(
+            "gpu-api",
+            "chat_inference",
+            {"stage": stage, "ms": ms, "device": device, **props},
+        )
+        return
+
+    distinct_id = safe_distinct_id(request.headers.get("X-Distinct-Id")) or trace_id
+    latency_s = round(ms / 1000.0, 4)
+
+    if stage == "embed":
+        properties: dict[str, object] = {
+            "$ai_trace_id": trace_id,
+            "$ai_provider": "gpu-api",
+            "$ai_latency": latency_s,
+            "device": device,
             **props,
+        }
+        model = props.get("model")
+        if model is not None:
+            properties["$ai_model"] = model
+        capture(distinct_id, "$ai_embedding", properties)
+        return
+
+    capture(
+        distinct_id,
+        "$ai_span",
+        {
+            "$ai_trace_id": trace_id,
+            "$ai_span_name": stage,
+            "$ai_latency": latency_s,
+            "$ai_input_state": dict(props),
+            "$ai_output_state": {"reranked_documents": props.get("docs")},
+            "device": device,
         },
     )
 
