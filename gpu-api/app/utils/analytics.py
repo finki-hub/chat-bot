@@ -1,4 +1,5 @@
 import logging
+import re
 
 from posthog import Posthog
 
@@ -7,6 +8,19 @@ from app.utils.settings import Settings
 logger = logging.getLogger(__name__)
 
 _SERVICE = "chat-bot-gpu-api"
+
+# X-Response-Id is an untrusted client header used as the PostHog person id. Bound it to a
+# short, opaque token (the api forwards a UUID) so a caller can't inject PII/free text or
+# explode person cardinality.
+_RESPONSE_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def safe_response_id(raw: str | None) -> str | None:
+    """The caller's ``X-Response-Id`` if it's a short opaque token, else ``None``."""
+    if raw is None:
+        return None
+    candidate = raw.strip()
+    return candidate if _RESPONSE_ID_RE.fullmatch(candidate) else None
 
 
 class _State:

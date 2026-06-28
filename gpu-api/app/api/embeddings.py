@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request, status
 
 from app.llms.embeddings import generate_embeddings
 from app.schemas.embeddings import EmbedRequestSchema, EmbedResponseSchema
-from app.utils.analytics import capture
+from app.utils.analytics import capture, safe_response_id
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ async def embed(payload: EmbedRequestSchema, request: Request) -> EmbedResponseS
             },
         ),
     )
-    response_id = request.headers.get("X-Response-Id")
+    response_id = safe_response_id(request.headers.get("X-Response-Id"))
     capture(
         response_id or "gpu-api",
         "chat_inference",
