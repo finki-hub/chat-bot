@@ -2,6 +2,7 @@ import logging
 
 from fastapi.responses import StreamingResponse
 
+from app.llms.agents import StreamObservation
 from app.llms.prompts import (
     DEFAULT_AGENT_SYSTEM_PROMPT,
     build_user_agent_prompt,
@@ -19,6 +20,7 @@ settings = Settings()
 async def handle_chat(
     payload: ChatSchema,
     context: str,
+    observation: StreamObservation | None = None,
 ) -> StreamingResponse:
     """
     Handle chat using an agent with MCP tool support.
@@ -48,4 +50,5 @@ async def handle_chat(
         top_p=payload.top_p,
         max_tokens=payload.max_tokens,
         reasoning=payload.reasoning,
+        observation=observation,
     )

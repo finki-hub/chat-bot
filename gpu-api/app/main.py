@@ -16,6 +16,13 @@ from app.api.rerank import router as rerank_router
 from app.api.streams import router as streams_router
 from app.llms.bge_m3 import init_bge_m3_embedder
 from app.llms.reranker import init_reranker
+from app.utils.analytics import (
+    capture,
+    capture_request_exception,
+    init_analytics,
+    register_request_middleware,
+    shutdown_analytics,
+)
 from app.utils.exceptions import ModelNotReadyError
 from app.utils.logger import setup_logging
 from app.utils.settings import Settings
@@ -29,7 +36,8 @@ setup_logging(level=settings.LOG_LEVEL)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    if torch.cuda.is_available():
+    cuda_available = torch.cuda.is_available()
+    if cuda_available:
         logger.info(
             "gpu.cuda available=True device=%s count=%d",
             torch.cuda.get_device_name(0),
@@ -38,6 +46,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     else:
         logger.warning("gpu.cuda available=False - models will run on CPU")
 
+    init_analytics(settings)
+    if not cuda_available:
+        capture("gpu-api", "cuda_fallback", {"device": "cpu"})
+
     tasks = [to_thread(init_reranker, settings.RERANKER_MODEL)]
     if settings.PRELOAD_BGEM3:
         tasks.append(to_thread(init_bge_m3_embedder))
@@ -45,6 +57,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await gather(*tasks)
 
     yield
+
+    shutdown_analytics()
 
 
 def make_app(settings: Settings) -> FastAPI:
@@ -73,6 +87,9 @@ def make_app(settings: Settings) -> FastAPI:
         allow_headers=["*"],
         expose_headers=settings.EXPOSE_HEADERS,
     )
+
+    # Added last so it sits outermost and times the whole request.
+    register_request_middleware(app)
 
     app.include_router(embeddings_router)
     app.include_router(streams_router)
@@ -116,6 +133,7 @@ def make_app(settings: Settings) -> FastAPI:
         exc: Exception,
     ) -> JSONResponse:
         logger.exception("Unhandled exception")
+        capture_request_exception(request, exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "An unexpected internal server error occurred."},

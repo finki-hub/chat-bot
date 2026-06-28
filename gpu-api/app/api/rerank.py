@@ -3,10 +3,11 @@ import json
 import logging
 from time import perf_counter
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Request, status
 
 from app.llms.reranker import rerank_documents
 from app.schemas.rerank import RankedDocument, RerankRequestSchema, RerankResponseSchema
+from app.utils.analytics import capture_chat_inference
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,10 @@ router = APIRouter(
         },
     },
 )
-async def handle_rerank(payload: RerankRequestSchema) -> RerankResponseSchema:
+async def handle_rerank(
+    payload: RerankRequestSchema,
+    request: Request,
+) -> RerankResponseSchema:
     logger.info(
         "Received rerank request with query: %s and %d documents",
         payload.query,
@@ -52,14 +56,25 @@ async def handle_rerank(payload: RerankRequestSchema) -> RerankResponseSchema:
         payload.query,
         payload.documents,
     )
+    ms = round((perf_counter() - start) * 1000, 1)
     logger.info(
         "gpu.rerank %s",
         json.dumps(
             {
                 "docs": len(payload.documents),
-                "ms": round((perf_counter() - start) * 1000, 1),
+                "ms": ms,
             },
         ),
+    )
+    capture_chat_inference(
+        request,
+        stage="rerank",
+        ms=ms,
+        props={
+            "docs": len(payload.documents),
+            "query_chars": len(payload.query),
+            "doc_chars": sum(len(doc) for doc in payload.documents),
+        },
     )
 
     return RerankResponseSchema(

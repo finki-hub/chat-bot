@@ -20,7 +20,14 @@ from app.schemas.questions import QuestionSchema
 from app.utils.exceptions import RetrievalError
 from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
-from app.utils.timing import record_retrieval_shape, timed
+from app.utils.timing import (
+    current_distinct_id,
+    current_response_id,
+    record_reranker_scores,
+    record_retrieval_ids,
+    record_retrieval_shape,
+    timed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +40,7 @@ _RERANKER_TIMEOUT = httpx.Timeout(timeout=30.0)
 _RERANKER_MAX_RETRIES: int = 1
 # Chunks pulled in on each side of a retrieved chunk, to give the model a contiguous passage.
 _NEIGHBOR_WINDOW: int = 1
+_RETRIEVAL_IDS_CAP: int = 10
 
 
 @dataclass(frozen=True)
@@ -50,9 +58,17 @@ async def _post_rerank(payload: dict) -> httpx.Response:
     client = get_http_client()
     for attempt in range(_RERANKER_MAX_RETRIES + 1):
         try:
+            headers: dict[str, str] = {}
+            rid = current_response_id()
+            if rid:
+                headers["X-Response-Id"] = rid
+            did = current_distinct_id()
+            if did:
+                headers["X-Distinct-Id"] = did
             response = await client.post(
                 f"{settings.GPU_API_URL}/rerank/",
                 json=payload,
+                headers=headers or None,
                 timeout=_RERANKER_TIMEOUT,
             )
             response.raise_for_status()
@@ -337,6 +353,11 @@ async def get_retrieved_context(
                 continue
             ranked_candidates.append(candidates[idx])
 
+        record_reranker_scores(
+            [item["score"] for item in ranked if 0 <= item["index"] < len(candidates)],
+            above_threshold=len(ranked_candidates),
+        )
+
         if dropped:
             logger.info(
                 "Reranker dropped %d/%d candidates below RERANKER_MIN_SCORE=%.2f",
@@ -375,6 +396,8 @@ async def get_retrieved_context(
             "Reranking call failed. Using vector search order as a fallback",
         )
         final = _select_with_faq_reservation(candidates, top_k)
+
+    record_retrieval_ids([c.key for c in final[:_RETRIEVAL_IDS_CAP]])
 
     with timed("retrieval.expand"):
         return await _expand_and_render(db, final)

@@ -8,7 +8,12 @@ from langchain.agents import create_agent
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
-from app.llms.agents import create_agent_token_generator, stream_sync_gen_as_sse
+from app.llms.agents import (
+    StreamObservation,
+    capture_model_fallback,
+    create_agent_token_generator,
+    stream_sync_gen_as_sse,
+)
 from app.llms.mcp import get_mcp_tools
 from app.llms.models import Model
 from app.llms.prompts import build_agent_messages, stitch_conversation
@@ -184,6 +189,7 @@ async def stream_ollama_agent_response(
     top_p: float,
     max_tokens: int,
     reasoning: bool = False,
+    observation: StreamObservation | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from an Ollama agent with MCP tools.
@@ -210,13 +216,19 @@ async def stream_ollama_agent_response(
         messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
         return StreamingResponse(
-            create_agent_token_generator(agent, messages),
+            create_agent_token_generator(agent, messages, observation),
             media_type="text/event-stream",
         )
 
     except Exception:
         logger.exception(
             "Failed to stream Ollama agent response. Falling back to regular response",
+        )
+        capture_model_fallback(
+            observation,
+            from_model=model.value,
+            to_model=model.value,
+            reason="agent_setup_failed",
         )
 
         return stream_ollama_response(

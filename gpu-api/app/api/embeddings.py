@@ -2,10 +2,11 @@ import json
 import logging
 from time import perf_counter
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Request, status
 
 from app.llms.embeddings import generate_embeddings
 from app.schemas.embeddings import EmbedRequestSchema, EmbedResponseSchema
+from app.utils.analytics import capture_chat_inference
 
 logger = logging.getLogger(__name__)
 
@@ -28,18 +29,34 @@ router = APIRouter(
         },
     },
 )
-async def embed(payload: EmbedRequestSchema) -> EmbedResponseSchema:
+async def embed(payload: EmbedRequestSchema, request: Request) -> EmbedResponseSchema:
     start = perf_counter()
     embeddings = await generate_embeddings(payload.input, payload.embeddings_model)
     count = 1 if isinstance(payload.input, str) else len(payload.input)
+    input_chars = (
+        len(payload.input)
+        if isinstance(payload.input, str)
+        else sum(len(item) for item in payload.input)
+    )
+    ms = round((perf_counter() - start) * 1000, 1)
     logger.info(
         "gpu.embed %s",
         json.dumps(
             {
                 "model": payload.embeddings_model.value,
                 "count": count,
-                "ms": round((perf_counter() - start) * 1000, 1),
+                "ms": ms,
             },
         ),
+    )
+    capture_chat_inference(
+        request,
+        stage="embed",
+        ms=ms,
+        props={
+            "model": payload.embeddings_model.value,
+            "count": count,
+            "input_chars": input_chars,
+        },
     )
     return EmbedResponseSchema(embeddings=embeddings)

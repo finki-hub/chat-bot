@@ -7,6 +7,7 @@ from app.data.db import get_db
 from app.data.feedback import upsert_feedback
 from app.schemas.feedback import FeedbackAckSchema, FeedbackSchema
 from app.utils.auth import verify_api_key
+from app.utils.posthog_client import capture
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,19 @@ async def submit_feedback(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to record feedback",
         )
+
+    capture(
+        str(payload.user_id),
+        "chat_feedback",
+        {
+            "response_id": str(payload.response_id),
+            "client": payload.client,
+            "feedback_type": payload.feedback_type,
+            "inference_model": payload.inference_model,
+            "embeddings_model": payload.embeddings_model,
+            "query_transform_model": payload.query_transform_model,
+        },
+    )
 
     logger.info(
         "Recorded %s feedback from %s for response %s",

@@ -6,11 +6,17 @@ import httpx
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import BaseMessage
 
-from app.llms.agents import DONE_EVENT, error_event
+from app.llms.agents import (
+    DONE_EVENT,
+    StreamObservation,
+    capture_model_error,
+    error_event,
+)
 from app.llms.models import GPU_API_MODELS, Model
 from app.llms.prompts import history_transcript
 from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
+from app.utils.timing import current_distinct_id, current_response_id
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +25,17 @@ settings = Settings()
 _STREAMING_TIMEOUT = httpx.Timeout(timeout=300.0)
 _EMBEDDINGS_TIMEOUT = httpx.Timeout(timeout=60.0)
 _GPU_ERROR_MESSAGE = "Се случи грешка при обработката на барањето. Обидете се повторно."
+
+
+def _forwarded_headers() -> dict[str, str]:
+    headers: dict[str, str] = {}
+    rid = current_response_id()
+    if rid:
+        headers["X-Response-Id"] = rid
+    did = current_distinct_id()
+    if did:
+        headers["X-Distinct-Id"] = did
+    return headers
 
 
 async def generate_gpu_api_embeddings(
@@ -45,7 +62,7 @@ async def generate_gpu_api_embeddings(
     response = await client.post(
         gpu_api_url,
         json=payload,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", **_forwarded_headers()},
         timeout=_EMBEDDINGS_TIMEOUT,
     )
 
@@ -69,6 +86,7 @@ def stream_gpu_api_response(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    observation: StreamObservation | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from the GPU API service.
@@ -105,7 +123,7 @@ def stream_gpu_api_response(
                 "POST",
                 gpu_api_url,
                 json=payload,
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", **_forwarded_headers()},
                 timeout=_STREAMING_TIMEOUT,
             ) as response:
                 if response.status_code != 200:
@@ -114,6 +132,11 @@ def stream_gpu_api_response(
                         "GPU API returned error status %d: %s",
                         response.status_code,
                         error_text.decode(),
+                    )
+                    capture_model_error(
+                        observation,
+                        error_type="http_status",
+                        status_code=response.status_code,
                     )
                     yield error_event("agent_error", _GPU_ERROR_MESSAGE)
                     yield DONE_EVENT
@@ -127,16 +150,18 @@ def stream_gpu_api_response(
 
             yield DONE_EVENT
 
-        except httpx.RequestError:
+        except httpx.RequestError as exc:
             logger.exception("Connection error to GPU API")
+            capture_model_error(observation, error_type=type(exc).__name__)
             yield error_event("agent_error", _GPU_ERROR_MESSAGE)
             yield DONE_EVENT
         except asyncio.CancelledError:
             logger.exception("Streaming cancelled from GPU API")
 
             raise
-        except Exception:
+        except Exception as exc:
             logger.exception("Unexpected error while streaming from GPU API")
+            capture_model_error(observation, error_type=type(exc).__name__)
             yield error_event("agent_error", _GPU_ERROR_MESSAGE)
             yield DONE_EVENT
 

@@ -21,6 +21,10 @@ from app.data.connection import Database
 from app.utils.exceptions import RetrievalError
 from app.utils.http_client import close_http_client, init_http_client
 from app.utils.logger import setup_logging
+from app.utils.posthog_client import (
+    capture_request_exception,
+    register_request_middleware,
+)
 from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -110,6 +114,9 @@ def make_app(settings: Settings) -> FastAPI:
         expose_headers=settings.EXPOSE_HEADERS,
     )
 
+    # Added last so it sits outermost and times the whole request.
+    register_request_middleware(app)
+
     app.include_router(health_router)
     app.include_router(questions_router)
     app.include_router(documents_router)
@@ -148,6 +155,7 @@ def make_app(settings: Settings) -> FastAPI:
         exc: Exception,
     ) -> JSONResponse:
         logger.exception("Unhandled exception")
+        capture_request_exception(request, exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "An unexpected internal server error occurred."},

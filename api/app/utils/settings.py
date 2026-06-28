@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     GOOGLE_BASE_URL: str = ""
     ANTHROPIC_BASE_URL: str = ""
 
+    POSTHOG_KEY: str = ""
+    POSTHOG_HOST: str = "https://eu.i.posthog.com"
+
     CHAT_HISTORY_MAX_TURNS: int = 10
 
     ALLOWED_ORIGINS: list[str] = ["*"]

@@ -24,6 +24,12 @@ class RequestTimings:
         self.thinking_ms: float | None = None
         self.candidate_count: int | None = None
         self.top_distance: float | None = None
+        self.retrieval_ids: list[str] = []
+        self.reranker_score_max: float | None = None
+        self.reranker_score_min: float | None = None
+        self.reranker_above_threshold: int | None = None
+        self.response_id: str | None = None
+        self.distinct_id: str | None = None
 
     def record(self, name: str, elapsed_ms: float) -> None:
         self.spans[name] = self.spans.get(name, 0.0) + elapsed_ms
@@ -76,6 +82,43 @@ def record_retrieval_shape(candidate_count: int, top_distance: float | None) -> 
     if timings is not None:
         timings.candidate_count = candidate_count
         timings.top_distance = top_distance
+
+
+def record_retrieval_ids(ids: list[str]) -> None:
+    timings = _current.get()
+    if timings is not None:
+        timings.retrieval_ids = ids
+
+
+def record_reranker_scores(scores: list[float], above_threshold: int) -> None:
+    timings = _current.get()
+    if timings is None or not scores:
+        return
+    timings.reranker_score_max = max(scores)
+    timings.reranker_score_min = min(scores)
+    timings.reranker_above_threshold = above_threshold
+
+
+def record_response_id(response_id: str) -> None:
+    timings = _current.get()
+    if timings is not None:
+        timings.response_id = response_id
+
+
+def current_response_id() -> str | None:
+    timings = _current.get()
+    return timings.response_id if timings is not None else None
+
+
+def record_distinct_id(distinct_id: str) -> None:
+    timings = _current.get()
+    if timings is not None:
+        timings.distinct_id = distinct_id
+
+
+def current_distinct_id() -> str | None:
+    timings = _current.get()
+    return timings.distinct_id if timings is not None else None
 
 
 @contextmanager
