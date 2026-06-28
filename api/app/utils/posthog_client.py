@@ -1,4 +1,5 @@
 import logging
+import re
 
 from posthog import Posthog
 
@@ -7,6 +8,22 @@ from app.utils.settings import Settings
 logger = logging.getLogger(__name__)
 
 _SERVICE = "chat-bot-api"
+
+_DISTINCT_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def safe_distinct_id(raw: str | None, fallback: str) -> str:
+    """The caller-supplied analytics id if it is a short opaque token, else ``fallback``.
+
+    The header is untrusted: bounding length and charset stops a caller injecting PII,
+    smuggling free text, or exploding person cardinality.
+    """
+    if raw is None:
+        return fallback
+    candidate = raw.strip()
+    if _DISTINCT_ID_RE.fullmatch(candidate):
+        return candidate
+    return fallback
 
 
 class _State:

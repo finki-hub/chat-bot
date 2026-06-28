@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import re
 from collections.abc import AsyncGenerator, AsyncIterable
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -18,7 +17,7 @@ from app.llms.context import get_links_context, get_retrieved_context
 from app.llms.models import CHAT_MODELS
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.schemas.chat import ChatSchema
-from app.utils.posthog_client import capture
+from app.utils.posthog_client import capture, safe_distinct_id
 from app.utils.settings import Settings
 from app.utils.timing import (
     RequestTimings,
@@ -57,18 +56,6 @@ def _history_for_retrieval(payload: ChatSchema) -> str | None:
         f"{'Корисник' if t.role == 'user' else 'Асистент'}: {_clip(t.content)}"
         for t in turns
     )
-
-
-_DISTINCT_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
-
-
-def _safe_distinct_id(raw: str | None, fallback: str) -> str:
-    if raw is None:
-        return fallback
-    candidate = raw.strip()
-    if _DISTINCT_ID_RE.fullmatch(candidate):
-        return candidate
-    return fallback
 
 
 def _sse_event_name(chunk: bytes | str | memoryview) -> str:
@@ -345,7 +332,7 @@ async def chat(
     timings, token = start_request_timings()
     try:
         response_id = uuid4()
-        distinct_id = _safe_distinct_id(
+        distinct_id = safe_distinct_id(
             request.headers.get("X-Distinct-Id"),
             str(response_id),
         )
