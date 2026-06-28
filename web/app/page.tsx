@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 
 import { Composer } from '@/components/chat/composer';
 import { ServiceBanner } from '@/components/chat/service-banner';
@@ -14,6 +14,10 @@ import { useHealth } from '@/lib/use-health';
 import { useModels } from '@/lib/use-models';
 
 const DESKTOP_SIDEBAR_QUERY = '(min-width: 768px)';
+const useIsomorphicLayoutEffect =
+  typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+const noop = () => {};
 
 const subscribeToMediaQuery = (
   media: MediaQueryList,
@@ -38,11 +42,9 @@ const ChatScreen = () => {
 
   const { unavailable } = useHealth();
 
-  useLayoutEffect(() => {
-    const cleanup = () => {};
-
+  useIsomorphicLayoutEffect(() => {
     if (typeof matchMedia !== 'function') {
-      return cleanup;
+      return noop;
     }
 
     const media = matchMedia(DESKTOP_SIDEBAR_QUERY);
