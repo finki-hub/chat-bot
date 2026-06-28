@@ -1,5 +1,4 @@
 import logging
-import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -7,9 +6,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from starlette.datastructures import Headers
 from starlette.middleware.cors import CORSMiddleware
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.chat import router as chat_router
 from app.api.diplomas import router as diplomas_router
@@ -24,7 +21,10 @@ from app.data.connection import Database
 from app.utils.exceptions import RetrievalError
 from app.utils.http_client import close_http_client, init_http_client
 from app.utils.logger import setup_logging
-from app.utils.posthog_client import capture, capture_exception, safe_distinct_id
+from app.utils.posthog_client import (
+    capture_request_exception,
+    register_request_middleware,
+)
 from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -68,71 +68,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     await db.disconnect()
     await close_http_client()
-
-
-# Extreme-noise paths kept out of request_completed to control event volume.
-_SKIP_PATHS: frozenset[str] = frozenset(
-    {"/docs", "/redoc", "/openapi.json", "/favicon.ico"},
-)
-_SKIP_PREFIXES: tuple[str, ...] = ("/health",)
-
-
-def _request_outcome(status_code: int) -> str:
-    if status_code >= 500:
-        return "server_error"
-    if status_code >= 400:
-        return "client_error"
-    return "ok"
-
-
-class RequestTrackingMiddleware:
-    """Emit one ``request_completed`` PostHog event per HTTP request (metadata only).
-
-    A pure ASGI middleware, not BaseHTTPMiddleware, so it never buffers the SSE chat body:
-    it only reads the status off ``http.response.start`` and times the whole request. The
-    matched route TEMPLATE is reported (never the raw path), so ids never leak and route /
-    person cardinality stays bounded.
-    """
-
-    def __init__(self, app: ASGIApp) -> None:
-        self.app = app
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-        path = scope.get("path", "")
-        if path in _SKIP_PATHS or path.startswith(_SKIP_PREFIXES):
-            await self.app(scope, receive, send)
-            return
-
-        start = time.perf_counter()
-        status_code = 500
-
-        async def send_wrapper(message: Message) -> None:
-            nonlocal status_code
-            if message["type"] == "http.response.start":
-                status_code = message["status"]
-            await send(message)
-
-        try:
-            await self.app(scope, receive, send_wrapper)
-        finally:
-            # FastAPI puts the matched APIRoute (template path) on the scope; absent on a
-            # 404, where the raw path is the only thing available.
-            route = scope.get("route")
-            template = getattr(route, "path", None) or path
-            capture(
-                safe_distinct_id(Headers(scope=scope).get("x-distinct-id"), "api"),
-                "request_completed",
-                {
-                    "route": template,
-                    "method": scope.get("method", ""),
-                    "status_code": status_code,
-                    "duration_ms": round((time.perf_counter() - start) * 1000, 1),
-                    "outcome": _request_outcome(status_code),
-                },
-            )
 
 
 def make_app(settings: Settings) -> FastAPI:
@@ -179,10 +114,8 @@ def make_app(settings: Settings) -> FastAPI:
         expose_headers=settings.EXPOSE_HEADERS,
     )
 
-    # Added last so it sits outermost and times the whole request. A handled error (e.g.
-    # 422/503) arrives as a normal response we read the status off; an unhandled 500
-    # propagates here as an exception, so status_code stays 500 and we still emit in finally.
-    app.add_middleware(RequestTrackingMiddleware)
+    # Added last so it sits outermost and times the whole request.
+    register_request_middleware(app)
 
     app.include_router(health_router)
     app.include_router(questions_router)
@@ -222,10 +155,7 @@ def make_app(settings: Settings) -> FastAPI:
         exc: Exception,
     ) -> JSONResponse:
         logger.exception("Unhandled exception")
-        capture_exception(
-            exc,
-            properties={"path": request.url.path, "method": request.method},
-        )
+        capture_request_exception(request, exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "An unexpected internal server error occurred."},

@@ -3,12 +3,11 @@ import json
 import logging
 from time import perf_counter
 
-import torch
 from fastapi import APIRouter, Request, status
 
 from app.llms.reranker import rerank_documents
 from app.schemas.rerank import RankedDocument, RerankRequestSchema, RerankResponseSchema
-from app.utils.analytics import capture, safe_response_id
+from app.utils.analytics import capture_chat_inference
 
 logger = logging.getLogger(__name__)
 
@@ -67,18 +66,14 @@ async def handle_rerank(
             },
         ),
     )
-    response_id = safe_response_id(request.headers.get("X-Response-Id"))
-    capture(
-        response_id or "gpu-api",
-        "chat_inference",
-        {
-            "stage": "rerank",
+    capture_chat_inference(
+        request,
+        stage="rerank",
+        ms=ms,
+        props={
             "docs": len(payload.documents),
             "query_chars": len(payload.query),
             "doc_chars": sum(len(doc) for doc in payload.documents),
-            "ms": ms,
-            "device": "cuda" if torch.cuda.is_available() else "cpu",
-            "response_id": response_id,
         },
     )
 

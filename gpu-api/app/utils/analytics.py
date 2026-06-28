@@ -1,7 +1,12 @@
 import logging
 import re
+import time
 
+import torch
+from fastapi import FastAPI, Request
 from posthog import Posthog
+from starlette.datastructures import Headers
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.utils.settings import Settings
 
@@ -90,3 +95,102 @@ def shutdown_analytics() -> None:
 
     client.flush()
     client.shutdown()
+
+
+def capture_chat_inference(
+    request: Request,
+    *,
+    stage: str,
+    ms: float,
+    props: dict[str, object],
+) -> None:
+    """Record one embed/rerank stage (metadata only); distinct_id is the bounded caller id."""
+    response_id = safe_response_id(request.headers.get("X-Response-Id"))
+    capture(
+        response_id or "gpu-api",
+        "chat_inference",
+        {
+            "stage": stage,
+            "ms": ms,
+            "device": "cuda" if torch.cuda.is_available() else "cpu",
+            "response_id": response_id,
+            **props,
+        },
+    )
+
+
+def capture_request_exception(request: Request, exc: Exception) -> None:
+    """Report an unhandled request exception (path/method metadata only, redacted body)."""
+    capture_exception(
+        exc,
+        properties={"path": request.url.path, "method": request.method},
+    )
+
+
+# Extreme-noise paths kept out of request_completed to control event volume.
+_SKIP_PATHS: frozenset[str] = frozenset(
+    {"/docs", "/redoc", "/openapi.json", "/favicon.ico"},
+)
+_SKIP_PREFIXES: tuple[str, ...] = ("/health",)
+
+
+def _request_outcome(status_code: int) -> str:
+    if status_code >= 500:
+        return "server_error"
+    if status_code >= 400:
+        return "client_error"
+    return "ok"
+
+
+class _RequestTrackingMiddleware:
+    """Emit one ``request_completed`` PostHog event per HTTP request (metadata only).
+
+    A pure ASGI middleware, not BaseHTTPMiddleware, so it never buffers a streaming body:
+    it only reads the status off ``http.response.start`` and times the whole request. The
+    matched route TEMPLATE is reported (never the raw path), so ids never leak and route /
+    person cardinality stays bounded.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        if path in _SKIP_PATHS or path.startswith(_SKIP_PREFIXES):
+            await self.app(scope, receive, send)
+            return
+
+        start = time.perf_counter()
+        status_code = 500
+
+        async def send_wrapper(message: Message) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        finally:
+            route = scope.get("route")
+            template = getattr(route, "path", None) or path
+            capture(
+                safe_response_id(Headers(scope=scope).get("x-response-id"))
+                or "gpu-api",
+                "request_completed",
+                {
+                    "route": template,
+                    "method": scope.get("method", ""),
+                    "status_code": status_code,
+                    "duration_ms": round((time.perf_counter() - start) * 1000, 1),
+                    "outcome": _request_outcome(status_code),
+                },
+            )
+
+
+def register_request_middleware(app: FastAPI) -> None:
+    """Attach the request_completed middleware (added outermost to time the whole request)."""
+    app.add_middleware(_RequestTrackingMiddleware)

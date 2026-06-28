@@ -2,12 +2,11 @@ import json
 import logging
 from time import perf_counter
 
-import torch
 from fastapi import APIRouter, Request, status
 
 from app.llms.embeddings import generate_embeddings
 from app.schemas.embeddings import EmbedRequestSchema, EmbedResponseSchema
-from app.utils.analytics import capture, safe_response_id
+from app.utils.analytics import capture_chat_inference
 
 logger = logging.getLogger(__name__)
 
@@ -50,18 +49,14 @@ async def embed(payload: EmbedRequestSchema, request: Request) -> EmbedResponseS
             },
         ),
     )
-    response_id = safe_response_id(request.headers.get("X-Response-Id"))
-    capture(
-        response_id or "gpu-api",
-        "chat_inference",
-        {
-            "stage": "embed",
+    capture_chat_inference(
+        request,
+        stage="embed",
+        ms=ms,
+        props={
             "model": payload.embeddings_model.value,
             "count": count,
             "input_chars": input_chars,
-            "ms": ms,
-            "device": "cuda" if torch.cuda.is_available() else "cpu",
-            "response_id": response_id,
         },
     )
     return EmbedResponseSchema(embeddings=embeddings)
