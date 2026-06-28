@@ -20,7 +20,7 @@ from app.schemas.questions import QuestionSchema
 from app.utils.exceptions import RetrievalError
 from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
-from app.utils.timing import record_retrieval_shape, timed
+from app.utils.timing import record_retrieval_ids, record_retrieval_shape, timed
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,8 @@ _RERANKER_TIMEOUT = httpx.Timeout(timeout=30.0)
 _RERANKER_MAX_RETRIES: int = 1
 # Chunks pulled in on each side of a retrieved chunk, to give the model a contiguous passage.
 _NEIGHBOR_WINDOW: int = 1
+# Cap on the corpus ids reported per request (ids only) — the top of the ranked set.
+_RETRIEVAL_IDS_CAP: int = 10
 
 
 @dataclass(frozen=True)
@@ -375,6 +377,8 @@ async def get_retrieved_context(
             "Reranking call failed. Using vector search order as a fallback",
         )
         final = _select_with_faq_reservation(candidates, top_k)
+
+    record_retrieval_ids([c.key for c in final[:_RETRIEVAL_IDS_CAP]])
 
     with timed("retrieval.expand"):
         return await _expand_and_render(db, final)

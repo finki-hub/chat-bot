@@ -24,6 +24,7 @@ class RequestTimings:
         self.thinking_ms: float | None = None
         self.candidate_count: int | None = None
         self.top_distance: float | None = None
+        self.retrieval_ids: list[str] = []
 
     def record(self, name: str, elapsed_ms: float) -> None:
         self.spans[name] = self.spans.get(name, 0.0) + elapsed_ms
@@ -76,6 +77,13 @@ def record_retrieval_shape(candidate_count: int, top_distance: float | None) -> 
     if timings is not None:
         timings.candidate_count = candidate_count
         timings.top_distance = top_distance
+
+
+def record_retrieval_ids(ids: list[str]) -> None:
+    """Record the corpus ids of the items kept for the prompt (ids only — never text)."""
+    timings = _current.get()
+    if timings is not None:
+        timings.retrieval_ids = ids
 
 
 @contextmanager
