@@ -21,6 +21,7 @@ from app.utils.posthog_client import capture, safe_distinct_id
 from app.utils.settings import Settings
 from app.utils.timing import (
     RequestTimings,
+    record_distinct_id,
     record_response_id,
     reset_request_timings,
     start_request_timings,
@@ -339,6 +340,7 @@ async def chat(
             request.headers.get("X-Distinct-Id"),
             str(response_id),
         )
+        record_distinct_id(distinct_id)
         observation = StreamObservation(
             distinct_id=distinct_id,
             response_id=str(response_id),

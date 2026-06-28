@@ -21,6 +21,7 @@ from app.utils.exceptions import RetrievalError
 from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
 from app.utils.timing import (
+    current_distinct_id,
     current_response_id,
     record_reranker_scores,
     record_retrieval_ids,
@@ -57,11 +58,17 @@ async def _post_rerank(payload: dict) -> httpx.Response:
     client = get_http_client()
     for attempt in range(_RERANKER_MAX_RETRIES + 1):
         try:
+            headers: dict[str, str] = {}
             rid = current_response_id()
+            if rid:
+                headers["X-Response-Id"] = rid
+            did = current_distinct_id()
+            if did:
+                headers["X-Distinct-Id"] = did
             response = await client.post(
                 f"{settings.GPU_API_URL}/rerank/",
                 json=payload,
-                headers={"X-Response-Id": rid} if rid else None,
+                headers=headers or None,
                 timeout=_RERANKER_TIMEOUT,
             )
             response.raise_for_status()
