@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from app.data.connection import Database
 from app.data.db import get_db
-from app.llms.agents import meta_event
+from app.llms.agents import StreamObservation, meta_event
 from app.llms.chat import handle_chat
 from app.llms.context import get_links_context, get_retrieved_context
 from app.llms.models import CHAT_MODELS
@@ -24,6 +24,7 @@ from app.utils.timing import (
     start_request_timings,
     timed,
 )
+from app.utils.topic import classify_topic
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,17 @@ def _sse_event_name(chunk: bytes | str | memoryview) -> str:
     if first_line.startswith("event:"):
         return first_line[len("event:") :].strip()
     return ""
+
+
+def _is_answer_chunk(event_name: str, chunk: bytes | str | memoryview) -> bool:
+    """Whether ``chunk`` carries answer text: a protocol ``token`` frame, or the bare
+    ``data:`` frame the GPU-API path streams (which has no ``event:`` line). Control frames
+    (thinking/status/reset/error/done/meta all name their event) never count, so a run that
+    only ever reasons or errors out is correctly seen as having produced no answer.
+    """
+    if event_name == "token":
+        return True
+    return event_name == "" and bool(chunk)
 
 
 def _sniff_tokens(chunk: bytes | str | memoryview) -> dict[str, int] | None:
@@ -135,6 +147,7 @@ async def _instrument_stream(
     timings: RequestTimings,
     retrieval_hit: bool,
     distinct_id: str,
+    observation: StreamObservation,
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
     log one chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
@@ -145,20 +158,29 @@ async def _instrument_stream(
     The ``meta`` frame trails the body's ``done`` (``total_ms`` is known only once the
     body drains); consumers that stop at ``done`` ignore it and the protocol-v2 parsers
     drop unknown events, so it stays backward compatible.
+
+    The outcome is ``completed`` on a normal run, ``client_disconnect`` if the client hung
+    up, or ``empty_answer`` when the stream drained without ever producing an answer frame
+    (the gpt-5-mini/nano failure class). Token usage prefers the real provider counts the
+    agent generator folds into ``observation.usage`` and falls back to the meta-frame sniff.
     """
     outcome = "completed"
     usage: dict[str, int] | None = None
+    marking = True
+    answered = False
     try:
-        marking = True
         async for chunk in body:
             timings.mark_ttft()
-            if marking:
+            if marking or not answered:
                 event_name = _sse_event_name(chunk)
-                if event_name == "thinking":
-                    timings.mark_thinking()
-                elif event_name == "token":
-                    timings.mark_answer()
-                    marking = False
+                if marking:
+                    if event_name == "thinking":
+                        timings.mark_thinking()
+                    elif event_name == "token":
+                        timings.mark_answer()
+                        marking = False
+                if not answered and _is_answer_chunk(event_name, chunk):
+                    answered = True
             sniffed = _sniff_tokens(chunk)
             if sniffed is not None:
                 usage = sniffed
@@ -173,6 +195,8 @@ async def _instrument_stream(
     finally:
         timings.mark_total()
         record = timings.as_record()
+        if outcome == "completed" and not answered:
+            outcome = "empty_answer"
         logger.info(
             "chat.timing %s",
             json.dumps(
@@ -182,6 +206,7 @@ async def _instrument_stream(
                     "embeddings_model": payload.embeddings_model.value,
                     "query_transform_model": payload.query_transform_model.value,
                     "retrieval_hit": retrieval_hit,
+                    "outcome": outcome,
                     **record,
                 },
             ),
@@ -192,7 +217,7 @@ async def _instrument_stream(
             response_id=response_id,
             timings=timings,
             retrieval_hit=retrieval_hit,
-            usage=usage,
+            usage=observation.usage if any(observation.usage.values()) else usage,
             outcome=outcome,
         )
     yield meta_event({"timing": record})
@@ -252,6 +277,12 @@ async def chat(
         # Prefer the caller's anonymous id (browser) so events stitch into one person;
         # fall back to the response id for un-identified callers (e.g. Discord).
         distinct_id = request.headers.get("X-Distinct-Id") or str(response_id)
+        # Threaded into the generator so token usage, tool calls, provider errors and
+        # fallbacks are reported against this request (metadata only).
+        observation = StreamObservation(
+            distinct_id=distinct_id,
+            response_id=str(response_id),
+        )
         capture(
             distinct_id,
             "chat_request",
@@ -264,6 +295,16 @@ async def chat(
                 "max_tokens": payload.max_tokens,
                 "query_len": len(payload.query),
                 "history_turns": len(payload.history),
+            },
+        )
+        # Server-side, residency-safe classification: only the topic label leaves, never
+        # the raw query text.
+        capture(
+            distinct_id,
+            "query_classified",
+            {
+                "response_id": str(response_id),
+                "topic": classify_topic(payload.query),
             },
         )
 
@@ -300,12 +341,24 @@ async def chat(
             context = retrieved
             if links_context:
                 context = f"{retrieved}\n\n{links_context}"
+            # Which corpus entries actually backed the answer (ids only, never text).
+            if timings.retrieval_ids:
+                capture(
+                    distinct_id,
+                    "retrieval_used",
+                    {
+                        "response_id": str(response_id),
+                        "embeddings_model": payload.embeddings_model.value,
+                        "retrieval_ids": timings.retrieval_ids,
+                        "retrieval_count": len(timings.retrieval_ids),
+                    },
+                )
 
         today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
         context = f"Денешен датум: {today}.\n\n{context}"
 
         with timed("agent.setup"):
-            response = await handle_chat(payload, context)
+            response = await handle_chat(payload, context, observation)
 
         response.body_iterator = _instrument_stream(
             response.body_iterator,
@@ -314,6 +367,7 @@ async def chat(
             timings=timings,
             retrieval_hit=bool(retrieved),
             distinct_id=distinct_id,
+            observation=observation,
         )
 
         # Set the header on the StreamingResponse returned by handle_chat: Starlette
