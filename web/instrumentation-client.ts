@@ -20,7 +20,8 @@ if (key !== undefined && key.length > 0) {
     bootstrap:
       distinctId === undefined ? undefined : { distinctID: distinctId },
     capture_exceptions: true,
-    person_profiles: 'always',
+    capture_pageview: 'history_change',
+    person_profiles: 'identified_only',
     session_recording: {
       maskAllInputs: true,
       maskTextSelector: '.ph-no-capture',
