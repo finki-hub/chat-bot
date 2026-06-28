@@ -6,7 +6,12 @@ import httpx
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import BaseMessage
 
-from app.llms.agents import DONE_EVENT, error_event
+from app.llms.agents import (
+    DONE_EVENT,
+    StreamObservation,
+    capture_model_error,
+    error_event,
+)
 from app.llms.models import GPU_API_MODELS, Model
 from app.llms.prompts import history_transcript
 from app.utils.http_client import get_http_client
@@ -69,6 +74,7 @@ def stream_gpu_api_response(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    observation: StreamObservation | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from the GPU API service.
@@ -115,6 +121,11 @@ def stream_gpu_api_response(
                         response.status_code,
                         error_text.decode(),
                     )
+                    capture_model_error(
+                        observation,
+                        error_type="http_status",
+                        status_code=response.status_code,
+                    )
                     yield error_event("agent_error", _GPU_ERROR_MESSAGE)
                     yield DONE_EVENT
                     return
@@ -127,16 +138,18 @@ def stream_gpu_api_response(
 
             yield DONE_EVENT
 
-        except httpx.RequestError:
+        except httpx.RequestError as exc:
             logger.exception("Connection error to GPU API")
+            capture_model_error(observation, error_type=type(exc).__name__)
             yield error_event("agent_error", _GPU_ERROR_MESSAGE)
             yield DONE_EVENT
         except asyncio.CancelledError:
             logger.exception("Streaming cancelled from GPU API")
 
             raise
-        except Exception:
+        except Exception as exc:
             logger.exception("Unexpected error while streaming from GPU API")
+            capture_model_error(observation, error_type=type(exc).__name__)
             yield error_event("agent_error", _GPU_ERROR_MESSAGE)
             yield DONE_EVENT
 

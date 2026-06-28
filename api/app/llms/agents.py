@@ -1,11 +1,15 @@
 import asyncio
 import json
 import logging
+import time
 from collections.abc import AsyncGenerator, Generator
+from dataclasses import dataclass, field
 
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk, BaseMessage
 from langgraph.graph.state import CompiledStateGraph
+
+from app.utils.posthog_client import capture
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +50,124 @@ def meta_event(payload: dict[str, object]) -> str:
 
 RESET_EVENT = _sse("reset", {})
 DONE_EVENT = _sse("done", {})
+
+
+@dataclass
+class StreamObservation:
+    """Per-request, mutable analytics holder threaded into the agent generator.
+
+    Carries the request ids so per-invocation events (``tool_called``, ``model_error``,
+    ``model_fallback``) group with the rest of the request, and exposes the live token
+    ``usage`` dict by reference so the SSE wrapper reads real provider counts directly
+    instead of sniffing a trailing meta frame. Residency: every field is metadata only.
+    """
+
+    distinct_id: str
+    response_id: str
+    model: str = ""
+    provider: str = ""
+    usage: dict[str, int] = field(
+        default_factory=lambda: {"input": 0, "output": 0, "total": 0},
+    )
+
+
+def _error_status_code(exc: BaseException) -> int | None:
+    """An HTTP status code carried by a provider exception (e.g. 429), if any."""
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        return status
+    response = getattr(exc, "response", None)
+    code = getattr(response, "status_code", None)
+    return code if isinstance(code, int) else None
+
+
+def _content_len(value: object) -> int:
+    """Character length of a value's text form (a length only — never the text)."""
+    if value is None:
+        return 0
+    if isinstance(value, str):
+        return len(value)
+    content = getattr(value, "content", None)
+    if isinstance(content, str):
+        return len(content)
+    return len(str(value))
+
+
+def _tool_succeeded(output: object) -> bool:
+    """Whether a tool's output indicates success; an error ToolMessage flips it to False."""
+    return getattr(output, "status", None) != "error"
+
+
+def capture_tool_called(
+    observation: StreamObservation | None,
+    *,
+    tool: str,
+    latency_ms: float,
+    success: bool,
+    arg_len: int,
+    result_len: int,
+) -> None:
+    """Record one tool invocation (lengths/timings only — never the tool args/result)."""
+    if observation is None:
+        return
+    capture(
+        observation.distinct_id,
+        "tool_called",
+        {
+            "response_id": observation.response_id,
+            "model": observation.model,
+            "provider": observation.provider,
+            "tool": tool,
+            "latency_ms": round(latency_ms, 1),
+            "success": success,
+            "arg_len": arg_len,
+            "result_len": result_len,
+        },
+    )
+
+
+def capture_model_error(
+    observation: StreamObservation | None,
+    *,
+    error_type: str,
+    status_code: int | None = None,
+) -> None:
+    """Record a failed provider call (metadata only)."""
+    if observation is None:
+        return
+    capture(
+        observation.distinct_id,
+        "model_error",
+        {
+            "response_id": observation.response_id,
+            "model": observation.model,
+            "provider": observation.provider,
+            "error_type": error_type,
+            "status_code": status_code,
+        },
+    )
+
+
+def capture_model_fallback(
+    observation: StreamObservation | None,
+    *,
+    from_model: str,
+    to_model: str,
+    reason: str,
+) -> None:
+    """Record a switch to a different model/path (metadata only)."""
+    if observation is None:
+        return
+    capture(
+        observation.distinct_id,
+        "model_fallback",
+        {
+            "response_id": observation.response_id,
+            "from_model": from_model,
+            "to_model": to_model,
+            "reason": reason,
+        },
+    )
 
 
 def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
@@ -152,29 +274,65 @@ def _accumulate_usage(usage: dict[str, int], output: object) -> None:
 async def create_agent_token_generator(
     agent: CompiledStateGraph,
     messages: list[BaseMessage],
+    observation: StreamObservation | None = None,
 ) -> AsyncGenerator[str]:
     """Stream an agent run as SSE, mapping `astream_events` onto the protocol: each
     `on_tool_start` becomes a `status`, and a `reset` precedes the answer so any
-    pre-tool preamble is dropped."""
+    pre-tool preamble is dropped.
+
+    When an `observation` is supplied, real token usage is folded into its shared `usage`
+    dict (read by the SSE wrapper), each tool call is recorded as a `tool_called` event,
+    and a failed provider call is recorded as a `model_error` event — metadata only.
+    """
     streamed_text = False
     pending_reset = False
-    usage = {"input": 0, "output": 0, "total": 0}
+    # Share the observation's usage dict by reference when present, so the SSE wrapper sees
+    # the real provider counts as they accumulate; fall back to a local dict otherwise.
+    usage = (
+        observation.usage
+        if observation is not None
+        else {"input": 0, "output": 0, "total": 0}
+    )
+    # run_id -> (tool name, start time, arg length), to pair on_tool_start with its end.
+    tool_runs: dict[str, tuple[str, float, int]] = {}
     try:
         async for event in agent.astream_events(
             {"messages": messages},
             {"configurable": {"thread_id": "default"}},
             version="v2",
         ):
-            if event["event"] == "on_tool_start":
+            kind = event["event"]
+            if kind == "on_tool_start":
+                tool_runs[event["run_id"]] = (
+                    event["name"],
+                    time.perf_counter(),
+                    _content_len(event["data"].get("input")),
+                )
                 yield status_event(event["name"])
                 pending_reset = True
                 continue
 
-            if event["event"] == "on_chat_model_end":
+            if kind in ("on_tool_end", "on_tool_error"):
+                started = tool_runs.pop(event["run_id"], None)
+                if started is not None:
+                    name, start, arg_len = started
+                    is_error = kind == "on_tool_error"
+                    output = None if is_error else event["data"].get("output")
+                    capture_tool_called(
+                        observation,
+                        tool=name,
+                        latency_ms=(time.perf_counter() - start) * 1000.0,
+                        success=not is_error and _tool_succeeded(output),
+                        arg_len=arg_len,
+                        result_len=_content_len(output),
+                    )
+                continue
+
+            if kind == "on_chat_model_end":
                 _accumulate_usage(usage, event["data"].get("output"))
                 continue
 
-            if event["event"] != "on_chat_model_stream":
+            if kind != "on_chat_model_stream":
                 continue
 
             chunk = event["data"].get("chunk")
@@ -203,8 +361,13 @@ async def create_agent_token_generator(
             yield meta_event({"tokens": usage})
         yield DONE_EVENT
 
-    except Exception:
+    except Exception as exc:
         logger.exception("Agent error occurred during streaming")
+        capture_model_error(
+            observation,
+            error_type=type(exc).__name__,
+            status_code=_error_status_code(exc),
+        )
         # Tokens already streamed: a fresh "try again" would contradict the partial answer.
         if streamed_text:
             yield error_event("interrupted", _INTERRUPTED_MSG)
