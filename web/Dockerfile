@@ -12,10 +12,9 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Public PostHog ingest key, inlined at build (NEXT_PUBLIC_* are baked by next build).
-# Safe to expose — it is a write-only browser key. Defaults to the public project key so
-# images always ship analytics; override via --build-arg NEXT_PUBLIC_POSTHOG_KEY=... if needed.
-ARG NEXT_PUBLIC_POSTHOG_KEY=phc_xXEqLMnYeDPuXA6HHwuasQMdSufDGryS8vZZuHmu9Qwd
+# Public PostHog ingest key, baked at build (NEXT_PUBLIC_* are inlined by next build).
+# Empty by default = analytics off; CI supplies it via --build-arg NEXT_PUBLIC_POSTHOG_KEY=... to enable.
+ARG NEXT_PUBLIC_POSTHOG_KEY=
 ARG NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
 ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
 ENV NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST
