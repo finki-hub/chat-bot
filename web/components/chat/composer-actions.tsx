@@ -1,5 +1,7 @@
 import { ArrowUp, Brain, Loader2, Sparkles, Square } from 'lucide-react';
 
+import type { ModelGroup } from '@/lib/use-models';
+
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -12,9 +14,6 @@ import {
 } from '@/components/ui/select';
 import { t } from '@/lib/i18n';
 import { isReasoningCapableModel } from '@/lib/reasoning';
-import type { ModelGroup } from '@/lib/use-models';
-
-export type ComposerStatus = 'error' | 'ready' | 'streaming' | 'submitted';
 
 export type ComposerActionsProps = {
   disabled?: boolean;
@@ -31,6 +30,8 @@ export type ComposerActionsProps = {
   status: ComposerStatus;
   submitDisabled: boolean;
 };
+
+export type ComposerStatus = 'error' | 'ready' | 'streaming' | 'submitted';
 
 export const ComposerActions = ({
   disabled,
