@@ -16,4 +16,6 @@ jobs:
       context: ./web
       package-name: chat-bot-web
       cache-backend: registry
+      build-args: |
+        NEXT_PUBLIC_POSTHOG_KEY=${{ vars.NEXT_PUBLIC_POSTHOG_KEY }}
     secrets: inherit
