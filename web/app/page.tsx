@@ -15,31 +15,14 @@ import { useModels } from '@/lib/use-models';
 
 const DESKTOP_SIDEBAR_QUERY = '(min-width: 768px)';
 
-type LegacyMediaQueryList = MediaQueryList & {
-  addListener: (listener: (event: MediaQueryListEvent) => void) => void;
-  removeListener: (listener: (event: MediaQueryListEvent) => void) => void;
-};
-
 const subscribeToMediaQuery = (
   media: MediaQueryList,
   onChange: (event: MediaQueryListEvent) => void,
 ) => {
-  if (typeof media.addEventListener === 'function') {
-    media.addEventListener('change', onChange);
-
-    return () => {
-      media.removeEventListener('change', onChange);
-    };
-  }
-
-  const legacyMedia = media as LegacyMediaQueryList;
-
-  // eslint-disable-next-line @typescript-eslint/no-deprecated -- Safari fallback.
-  legacyMedia.addListener(onChange);
+  media.addEventListener('change', onChange);
 
   return () => {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- Safari fallback.
-    legacyMedia.removeListener(onChange);
+    media.removeEventListener('change', onChange);
   };
 };
 
