@@ -19,7 +19,7 @@ if (key !== undefined && key.length > 0) {
   try {
     distinctId = getAnonUserId();
   } catch {
-    // storage unavailable — PostHog will fall back to its own id
+    // falls back to PostHog generating its own id
   }
 
   /* eslint-disable camelcase -- PostHog SDK option names are snake_case. */
