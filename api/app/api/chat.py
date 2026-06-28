@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator, AsyncIterable
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -55,6 +56,22 @@ def _history_for_retrieval(payload: ChatSchema) -> str | None:
         f"{'Корисник' if t.role == 'user' else 'Асистент'}: {_clip(t.content)}"
         for t in turns
     )
+
+
+# X-Distinct-Id is an untrusted client header used verbatim as the PostHog person id.
+# Bound it to a short, opaque token (UUIDs, Discord snowflakes and PostHog anon ids all
+# fit) so a caller can't inject PII, smuggle free text, or explode person cardinality.
+_DISTINCT_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def _safe_distinct_id(raw: str | None, fallback: str) -> str:
+    """The caller-supplied analytics id if it's a short opaque token, else ``fallback``."""
+    if raw is None:
+        return fallback
+    candidate = raw.strip()
+    if _DISTINCT_ID_RE.fullmatch(candidate):
+        return candidate
+    return fallback
 
 
 def _sse_event_name(chunk: bytes | str | memoryview) -> str:
@@ -275,8 +292,11 @@ async def chat(
         # back the X-Response-Id header below.
         response_id = uuid4()
         # Prefer the caller's anonymous id (browser) so events stitch into one person;
-        # fall back to the response id for un-identified callers (e.g. Discord).
-        distinct_id = request.headers.get("X-Distinct-Id") or str(response_id)
+        # fall back to the response id for un-identified or malformed callers (e.g. Discord).
+        distinct_id = _safe_distinct_id(
+            request.headers.get("X-Distinct-Id"),
+            str(response_id),
+        )
         # Threaded into the generator so token usage, tool calls, provider errors and
         # fallbacks are reported against this request (metadata only).
         observation = StreamObservation(
