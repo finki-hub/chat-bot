@@ -24,6 +24,7 @@ export type SidebarProps = {
   onRename: (id: string, title: string) => void;
   onSelect: (id: string) => void;
   open: boolean;
+  synced?: boolean;
 };
 
 const closeIfMobile = (onClose: () => void) => {
@@ -45,6 +46,7 @@ export const Sidebar = ({
   onRename,
   onSelect,
   open,
+  synced = true,
 }: SidebarProps) => {
   const [confirmingClearAll, setConfirmingClearAll] = useState(false);
   const [query, setQuery] = useState('');
@@ -63,10 +65,16 @@ export const Sidebar = ({
   const filtered = term
     ? conversations.filter((c) => c.title.toLowerCase().includes(term))
     : conversations;
+  let responsiveStateClass = '-translate-x-full md:w-64 md:translate-x-0';
+  if (synced) {
+    responsiveStateClass = open
+      ? 'translate-x-0 md:w-64'
+      : '-translate-x-full md:w-0 md:translate-x-0';
+  }
 
   return (
     <>
-      {open ? (
+      {synced && open ? (
         <button
           aria-label={t('header.toggleSidebar')}
           className="fixed inset-y-0 left-64 right-0 z-40 bg-black/40 md:hidden"
@@ -75,16 +83,15 @@ export const Sidebar = ({
         />
       ) : null}
       <aside
-        aria-hidden={!open}
+        aria-hidden={synced ? !open : undefined}
         aria-label={t('sidebar.label')}
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 shrink-0 overflow-hidden border-r border-border/60 bg-background transition-transform duration-300 ease-in-out md:static md:z-auto md:bg-muted/30 md:transition-[width]',
-          open
-            ? 'translate-x-0 md:w-64'
-            : '-translate-x-full md:w-0 md:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-64 shrink-0 overflow-hidden border-r border-border/60 bg-background transition-transform duration-300 ease-in-out md:static md:z-auto md:bg-muted/30',
+          synced ? 'md:transition-[width]' : 'md:transition-none',
+          responsiveStateClass,
         )}
-        data-collapsed={!open}
-        inert={!open}
+        data-collapsed={synced ? !open : undefined}
+        inert={synced && !open}
       >
         <div className="flex h-full w-64 flex-col gap-3 p-3">
           <button
