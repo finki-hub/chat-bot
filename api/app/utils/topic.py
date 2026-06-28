@@ -165,3 +165,14 @@ def classify_topic(query: str) -> str:
         if any(keyword in text for keyword in keywords):
             return topic
     return OTHER_TOPIC
+
+
+def classify_language(query: str) -> str:
+    """Coarse script-based language label of ``query``: "mk", "en" or "other" (label only)."""
+    cyrillic = sum("Ѐ" <= ch <= "ӿ" for ch in query)
+    latin = sum(("a" <= ch <= "z") or ("A" <= ch <= "Z") for ch in query)
+    if cyrillic == 0 and latin == 0:
+        return "other"
+    if cyrillic >= latin:
+        return "mk"
+    return "en"

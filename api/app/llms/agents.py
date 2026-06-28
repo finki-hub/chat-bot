@@ -59,8 +59,19 @@ class StreamObservation:
     model: str = ""
     provider: str = ""
     usage: dict[str, int] = field(
-        default_factory=lambda: {"input": 0, "output": 0, "total": 0},
+        default_factory=lambda: {
+            "input": 0,
+            "output": 0,
+            "total": 0,
+            "cache_read": 0,
+            "reasoning": 0,
+        },
     )
+    answer_chars: int = 0
+    tool_call_count: int = 0
+    tool_names: set[str] = field(default_factory=set)
+    finish_reason: str = ""
+    context_chars: int = 0
 
 
 def _error_status_code(exc: BaseException) -> int | None:
@@ -255,6 +266,34 @@ def _accumulate_usage(usage: dict[str, int], output: object) -> None:
     usage["output"] += metadata.get("output_tokens") or 0
     # Derive total from the parts so the shown counts always reconcile.
     usage["total"] = usage["input"] + usage["output"]
+    input_details = metadata.get("input_token_details") or {}
+    output_details = metadata.get("output_token_details") or {}
+    usage["cache_read"] = usage.get("cache_read", 0) + (
+        input_details.get("cache_read") or 0
+    )
+    usage["reasoning"] = usage.get("reasoning", 0) + (
+        output_details.get("reasoning") or 0
+    )
+
+
+def _finish_reason(output: object) -> str:
+    """A normalised finish/stop reason from a chat-model end message, or "" if absent."""
+    metadata = getattr(output, "response_metadata", None)
+    if not isinstance(metadata, dict):
+        return ""
+    raw = metadata.get("finish_reason") or metadata.get("stop_reason") or ""
+    mapping = {
+        "length": "length",
+        "max_tokens": "length",
+        "model_length": "length",
+        "content_filter": "content_filter",
+        "stop": "stop",
+        "end_turn": "stop",
+        "stop_sequence": "stop",
+        "tool_calls": "tool_calls",
+        "tool_use": "tool_calls",
+    }
+    return mapping.get(str(raw), str(raw))
 
 
 async def create_agent_token_generator(
@@ -304,10 +343,18 @@ async def create_agent_token_generator(
                         arg_len=arg_len,
                         result_len=_content_len(output),
                     )
+                    if observation is not None:
+                        observation.tool_call_count += 1
+                        observation.tool_names.add(name)
                 continue
 
             if kind == "on_chat_model_end":
-                _accumulate_usage(usage, event["data"].get("output"))
+                output = event["data"].get("output")
+                _accumulate_usage(usage, output)
+                if observation is not None:
+                    reason = _finish_reason(output)
+                    if reason:
+                        observation.finish_reason = reason
                 continue
 
             if kind != "on_chat_model_stream":
@@ -327,9 +374,15 @@ async def create_agent_token_generator(
 
             if pending_reset:
                 pending_reset = False
+                # The client clears any pre-tool preamble on reset; mirror that so the
+                # length reflects the final answer only.
+                if observation is not None:
+                    observation.answer_chars = 0
                 yield RESET_EVENT
 
             streamed_text = True
+            if observation is not None:
+                observation.answer_chars += len(text)
             yield token_event(text)
 
         if not streamed_text:

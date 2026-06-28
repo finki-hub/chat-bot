@@ -20,7 +20,12 @@ from app.schemas.questions import QuestionSchema
 from app.utils.exceptions import RetrievalError
 from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
-from app.utils.timing import record_retrieval_ids, record_retrieval_shape, timed
+from app.utils.timing import (
+    record_reranker_scores,
+    record_retrieval_ids,
+    record_retrieval_shape,
+    timed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -337,6 +342,11 @@ async def get_retrieved_context(
                 )
                 continue
             ranked_candidates.append(candidates[idx])
+
+        record_reranker_scores(
+            [item["score"] for item in ranked if 0 <= item["index"] < len(candidates)],
+            above_threshold=len(ranked_candidates),
+        )
 
         if dropped:
             logger.info(
