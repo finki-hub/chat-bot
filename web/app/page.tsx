@@ -15,6 +15,35 @@ import { useModels } from '@/lib/use-models';
 
 const DESKTOP_SIDEBAR_QUERY = '(min-width: 768px)';
 
+const subscribeToMediaQuery = (
+  media: MediaQueryList,
+  onChange: (event: MediaQueryListEvent) => void,
+) => {
+  if (typeof media.addEventListener === 'function') {
+    media.addEventListener('change', onChange);
+
+    return () => {
+      media.removeEventListener('change', onChange);
+    };
+  }
+
+  const addLegacyListener: unknown = Reflect.get(media, 'addListener');
+  const removeLegacyListener: unknown = Reflect.get(media, 'removeListener');
+
+  if (
+    typeof addLegacyListener !== 'function' ||
+    typeof removeLegacyListener !== 'function'
+  ) {
+    return () => {};
+  }
+
+  addLegacyListener.call(media, onChange);
+
+  return () => {
+    removeLegacyListener.call(media, onChange);
+  };
+};
+
 const ChatScreen = () => {
   const model = useUiStore((s) => s.model);
   const setModel = useUiStore((s) => s.setModel);
@@ -28,23 +57,20 @@ const ChatScreen = () => {
   const { unavailable } = useHealth();
 
   useEffect(() => {
+    const cleanup = () => {};
+
     if (typeof matchMedia !== 'function') {
-      return;
+      return cleanup;
     }
 
     const media = matchMedia(DESKTOP_SIDEBAR_QUERY);
-    const syncSidebarWithViewport = (
-      event: MediaQueryList | MediaQueryListEvent,
-    ) => {
+    const syncSidebarWithViewport = (event: MediaQueryListEvent) => {
       setSidebarOpen(event.matches);
     };
 
-    syncSidebarWithViewport(media);
-    media.addEventListener('change', syncSidebarWithViewport);
+    setSidebarOpen(media.matches);
 
-    return () => {
-      media.removeEventListener('change', syncSidebarWithViewport);
-    };
+    return subscribeToMediaQuery(media, syncSidebarWithViewport);
   }, [setSidebarOpen]);
 
   const {

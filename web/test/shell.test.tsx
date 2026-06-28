@@ -41,6 +41,14 @@ const FIRST_TITLE = 'Прв разговор';
 const SECOND_TITLE = 'Втор разговор';
 const REGENERATE_CONVERSATION_ID = 'c-regenerate';
 
+type LegacyOnlyMediaQueryList = Omit<
+  MediaQueryList,
+  'addEventListener' | 'removeEventListener'
+> & {
+  readonly addEventListener?: undefined;
+  readonly removeEventListener?: undefined;
+};
+
 const rows: ConversationRow[] = [
   {
     createdAt: 1,
@@ -478,6 +486,42 @@ describe('ChatPage persistence', () => {
     ).resolves.toBeInTheDocument();
     expect(screen.getByTestId('composer-input')).toBeDisabled();
     expect(screen.getByTestId('composer-submit')).toBeDisabled();
+  });
+
+  it('opens the sidebar on desktop with legacy media query listeners', async () => {
+    const addListener =
+      vi.fn<(listener: (event: MediaQueryListEvent) => void) => void>();
+    const removeListener =
+      vi.fn<(listener: (event: MediaQueryListEvent) => void) => void>();
+
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn<(query: string) => LegacyOnlyMediaQueryList>((query) => ({
+        addEventListener: undefined,
+        addListener,
+        dispatchEvent: () => false,
+        matches: true,
+        media: query,
+        onchange: null,
+        removeEventListener: undefined,
+        removeListener,
+      })),
+    );
+
+    const view = renderChatPage();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Странична лента')).toHaveAttribute(
+        'aria-hidden',
+        'false',
+      );
+    });
+
+    expect(addListener).toHaveBeenCalledOnce();
+
+    view.unmount();
+
+    expect(removeListener).toHaveBeenCalledOnce();
   });
 
   it('sends a message, renders the streamed answer, and persists to Dexie', async () => {
