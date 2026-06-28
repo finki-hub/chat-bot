@@ -12,6 +12,12 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Public PostHog ingest key, baked at build (NEXT_PUBLIC_* are inlined by next build).
+# Empty by default = analytics off; CI supplies it via --build-arg NEXT_PUBLIC_POSTHOG_KEY=... to enable.
+ARG NEXT_PUBLIC_POSTHOG_KEY=
+ARG NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
+ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
+ENV NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST
 RUN API_BASE_URL="http://localhost:8880" CHAT_API_KEY="build-time-placeholder" npm run build
 
 FROM base AS runner

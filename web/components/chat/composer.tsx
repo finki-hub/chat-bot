@@ -141,7 +141,7 @@ export const Composer = ({
         <div className="flex flex-col rounded-3xl border border-input bg-card shadow-lg shadow-black/5 transition-[color,box-shadow] focus-within:border-foreground/25 focus-within:ring-2 focus-within:ring-foreground/[0.06] dark:shadow-black/25">
           <textarea
             aria-label={t('composer.message')}
-            className="field-sizing-content max-h-48 min-h-[52px] w-full resize-none bg-transparent px-4 pt-3 pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
+            className="ph-no-capture field-sizing-content max-h-48 min-h-[52px] w-full resize-none bg-transparent px-4 pt-3 pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
             data-testid="composer-input"
             disabled={disabled}
             onChange={(e) => {

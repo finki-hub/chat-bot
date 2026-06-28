@@ -1,4 +1,5 @@
 import { Check, Copy, RotateCcw, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { posthog } from 'posthog-js';
 import { useState } from 'react';
 
 import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
@@ -42,6 +43,12 @@ export const AnswerActions = ({
 
   const copy = async (): Promise<void> => {
     await navigator.clipboard.writeText(text);
+    /* eslint-disable camelcase -- PostHog event properties are snake_case. */
+    posthog.capture('answer_copied', {
+      inference_model: message.metadata?.inferenceModel,
+      response_id: responseId,
+    });
+    /* eslint-enable camelcase -- end of PostHog snake_case properties. */
     setCopied(true);
     setTimeout(() => {
       setCopied(false);

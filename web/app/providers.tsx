@@ -1,6 +1,8 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { posthog } from 'posthog-js';
+import { PostHogProvider } from 'posthog-js/react';
 import { type ReactNode, useEffect, useState } from 'react';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -18,9 +20,11 @@ export const Providers = ({ children }: ProvidersProps) => {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>{children}</TooltipProvider>
-    </QueryClientProvider>
+    <PostHogProvider client={posthog}>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>{children}</TooltipProvider>
+      </QueryClientProvider>
+    </PostHogProvider>
   );
 };
 

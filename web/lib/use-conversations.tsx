@@ -1,6 +1,7 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
+import { posthog } from 'posthog-js';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { ErrorNotice, FeedbackType, MyUIMessage } from '@/lib/api-types';
@@ -270,6 +271,15 @@ export const useConversations = (
     [setMessages],
   );
 
+  const handleStop = useCallback(() => {
+    /* eslint-disable camelcase -- PostHog event properties are snake_case. */
+    posthog.capture('chat_stopped', {
+      inference_model: model,
+    });
+    /* eslint-enable camelcase -- end of PostHog snake_case properties. */
+    void stop();
+  }, [model, stop]);
+
   const visibleMessages = previewRegeneration(messages, regeneratingMessageId);
   const renderActions = renderAnswerActions({
     disabled,
@@ -290,7 +300,7 @@ export const useConversations = (
     onNewChat: handleNewChat,
     onRename: handleRename,
     onSelect: handleSelect,
-    onStop: stop,
+    onStop: handleStop,
     renderActions,
     retry,
     status,
