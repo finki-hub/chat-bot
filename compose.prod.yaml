@@ -29,7 +29,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       POSTHOG_HOST: ${POSTHOG_HOST:-https://eu.i.posthog.com}
-      POSTHOG_KEY: ${POSTHOG_KEY:-phc_xXEqLMnYeDPuXA6HHwuasQMdSufDGryS8vZZuHmu9Qwd}
+      POSTHOG_KEY: ${POSTHOG_KEY:-}
       RERANKER_MIN_SCORE: ${RERANKER_MIN_SCORE:-0.1}
       TZ: ${TZ}
       WORKERS: ${WORKERS}
@@ -68,7 +68,7 @@ services:
       HF_HOME: /huggingface_cache
       LOG_LEVEL: ${LOG_LEVEL}
       POSTHOG_HOST: ${POSTHOG_HOST:-https://eu.i.posthog.com}
-      POSTHOG_KEY: ${POSTHOG_KEY:-phc_xXEqLMnYeDPuXA6HHwuasQMdSufDGryS8vZZuHmu9Qwd}
+      POSTHOG_KEY: ${POSTHOG_KEY:-}
       PRELOAD_BGEM3: ${PRELOAD_BGEM3}
       RERANKER_MODEL: ${RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
       TZ: ${TZ}
