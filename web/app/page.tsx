@@ -15,6 +15,11 @@ import { useModels } from '@/lib/use-models';
 
 const DESKTOP_SIDEBAR_QUERY = '(min-width: 768px)';
 
+type LegacyMediaQueryList = MediaQueryList & {
+  addListener: (listener: (event: MediaQueryListEvent) => void) => void;
+  removeListener: (listener: (event: MediaQueryListEvent) => void) => void;
+};
+
 const subscribeToMediaQuery = (
   media: MediaQueryList,
   onChange: (event: MediaQueryListEvent) => void,
@@ -27,20 +32,14 @@ const subscribeToMediaQuery = (
     };
   }
 
-  const addLegacyListener: unknown = Reflect.get(media, 'addListener');
-  const removeLegacyListener: unknown = Reflect.get(media, 'removeListener');
+  const legacyMedia = media as LegacyMediaQueryList;
 
-  if (
-    typeof addLegacyListener !== 'function' ||
-    typeof removeLegacyListener !== 'function'
-  ) {
-    return () => {};
-  }
-
-  addLegacyListener.call(media, onChange);
+  // eslint-disable-next-line @typescript-eslint/no-deprecated -- Safari fallback.
+  legacyMedia.addListener(onChange);
 
   return () => {
-    removeLegacyListener.call(media, onChange);
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- Safari fallback.
+    legacyMedia.removeListener(onChange);
   };
 };
 

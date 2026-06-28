@@ -46,7 +46,13 @@ type LegacyOnlyMediaQueryList = Omit<
   'addEventListener' | 'removeEventListener'
 > & {
   readonly addEventListener?: undefined;
+  readonly addListener: (
+    listener: (event: MediaQueryListEvent) => void,
+  ) => void;
   readonly removeEventListener?: undefined;
+  readonly removeListener: (
+    listener: (event: MediaQueryListEvent) => void,
+  ) => void;
 };
 
 const rows: ConversationRow[] = [
