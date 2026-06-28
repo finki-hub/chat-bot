@@ -102,15 +102,26 @@ def _is_answer_chunk(event_name: str, chunk: bytes | str | memoryview) -> bool:
     return event_name == "" and bool(chunk)
 
 
+_META_PREFIX = "event: meta"
+_META_PREFIX_BYTES = _META_PREFIX.encode()
+
+
 def _sniff_tokens(chunk: bytes | str | memoryview) -> dict[str, int] | None:
     """Token counts from a trailing ``meta`` frame's ``{"tokens": ...}`` data line, or None.
 
-    Only the token-count meta frame ``agents.py`` emits is parsed; ``token``/``thinking``
-    frames carry the answer text and are never inspected, so no answer text is read.
+    A cheap leading-prefix check runs first, so the per-chunk hot path (``token`` frames,
+    and the GPU-API's bare ``data:`` frames) returns without copying the whole chunk. Only
+    the token-count meta frame ``agents.py`` emits is then parsed; the answer text in
+    ``token``/``thinking`` frames is never inspected.
     """
-    if _sse_event_name(chunk) != "meta":
-        return None
-    text = chunk if isinstance(chunk, str) else bytes(chunk).decode(errors="ignore")
+    if isinstance(chunk, str):
+        if not chunk.startswith(_META_PREFIX):
+            return None
+        text = chunk
+    else:
+        if bytes(chunk[: len(_META_PREFIX_BYTES)]) != _META_PREFIX_BYTES:
+            return None
+        text = bytes(chunk).decode(errors="ignore")
     for line in text.split("\n"):
         if not line.startswith("data:"):
             continue
