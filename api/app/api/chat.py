@@ -304,7 +304,7 @@ async def _chat_response_stream(
     request: Request,
     db: Database,
     response_id: UUID,
-) -> AsyncGenerator[str]:
+) -> AsyncGenerator[bytes | str | memoryview]:
     """Build context (streaming retrieval status), then yield the agent answer stream."""
     logger.info(
         "Received chat request with payload: %s",
