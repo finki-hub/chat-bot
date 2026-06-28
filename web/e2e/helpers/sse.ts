@@ -3,12 +3,17 @@ import { type AddressInfo } from 'node:net';
 
 export type UiChunk =
   | {
+      data: Record<string, never>;
+      transient: true;
+      type: 'data-reset';
+    }
+  | {
       data: { code: string; message: string };
       transient: true;
       type: 'data-error';
     }
   | {
-      data: { label: string; tool?: string };
+      data: { label: string; stage?: string; tool?: string };
       transient: true;
       type: 'data-status';
     }
@@ -57,6 +62,40 @@ export const toolRunChunks = (opts: {
     { id: preambleId, type: 'text-start' },
     { delta: opts.preamble, id: preambleId, type: 'text-delta' },
     { id: preambleId, type: 'text-end' },
+    { data: {}, transient: true, type: 'data-reset' },
+    { id: answerId, type: 'text-start' },
+    { delta: opts.answer, id: answerId, type: 'text-delta' },
+    { id: answerId, type: 'text-end' },
+    { type: 'finish' },
+  ];
+};
+
+export const stagedRunChunks = (opts: {
+  answer: string;
+  inferenceModel: string;
+  responseId: string;
+  statusLabel: string;
+  tool: string;
+}): UiChunk[] => {
+  const answerId = 'txt-answer';
+  const stage = (s: string, tool?: string): UiChunk => ({
+    data: { label: opts.statusLabel, stage: s, ...(tool && { tool }) },
+    transient: true,
+    type: 'data-status',
+  });
+  return [
+    {
+      messageMetadata: {
+        inferenceModel: opts.inferenceModel,
+        responseId: opts.responseId,
+      },
+      type: 'start',
+    },
+    stage('contextualize'),
+    stage('retrieve', opts.tool),
+    stage('rerank'),
+    stage('context'),
+    { data: {}, transient: true, type: 'data-reset' },
     { id: answerId, type: 'text-start' },
     { delta: opts.answer, id: answerId, type: 'text-delta' },
     { id: answerId, type: 'text-end' },

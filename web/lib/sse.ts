@@ -3,7 +3,13 @@ import type { ChatErrorCode, MessageDiagnostics } from '@/lib/api-types';
 export type ParsedEvent =
   | { code: ChatErrorCode; message: string; type: 'error' }
   | { diagnostics: MessageDiagnostics; type: 'meta' }
-  | { label: string; state: string; tool?: string; type: 'status' }
+  | {
+      label: string;
+      stage?: string;
+      state: string;
+      tool?: string;
+      type: 'status';
+    }
   | { text: string; type: 'thinking' }
   | { text: string; type: 'token' }
   | { type: 'done' }
@@ -176,6 +182,7 @@ const buildEvent = (
         label: asString(obj['label']),
         state: asString(obj['state']),
         type: 'status',
+        ...(typeof obj['stage'] === 'string' && { stage: obj['stage'] }),
         ...(typeof obj['tool'] === 'string' && { tool: obj['tool'] }),
       };
     case 'thinking':

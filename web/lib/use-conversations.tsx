@@ -4,7 +4,12 @@ import { useChat } from '@ai-sdk/react';
 import { posthog } from 'posthog-js';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import type { ErrorNotice, FeedbackType, MyUIMessage } from '@/lib/api-types';
+import type {
+  ErrorNotice,
+  FeedbackType,
+  MyUIMessage,
+  StatusPart,
+} from '@/lib/api-types';
 
 import { fireAndForget } from '@/lib/async';
 import { renderAnswerActions } from '@/lib/conversation-actions';
@@ -40,9 +45,7 @@ export const useConversations = (
   const setActiveId = useUiStore((s) => s.setActiveConversationId);
 
   const { conversations, refreshConversations } = useConversationList();
-  const [activeStatus, setActiveStatus] = useState<
-    undefined | { label: string; tool?: string }
-  >();
+  const [activeStatus, setActiveStatus] = useState<StatusPart | undefined>();
   const [activeError, setActiveError] = useState<ErrorNotice | undefined>();
   const convoIdRef = useRef<null | string>(activeId);
   const startedAtRef = useRef<null | number>(null);
@@ -83,12 +86,20 @@ export const useConversations = (
   const { messages, regenerate, sendMessage, setMessages, status, stop } =
     useChat<MyUIMessage>({
       onData: (part) => {
-        if (part.type === 'data-status') {
-          setActiveStatus(part.data);
-        } else {
-          setActiveError(part.data);
-          // Stamp it onto the message in onFinish so the notice persists past refresh.
-          activeErrorRef.current = part.data;
+        switch (part.type) {
+          case 'data-error':
+            setActiveError(part.data);
+            // Stamp it onto the message in onFinish so the notice persists past refresh.
+            activeErrorRef.current = part.data;
+            break;
+
+          case 'data-reset':
+            setActiveStatus(undefined);
+            break;
+
+          case 'data-status':
+            setActiveStatus(part.data);
+            break;
         }
       },
       onError: () => {

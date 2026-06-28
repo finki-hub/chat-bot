@@ -261,6 +261,7 @@ describe('translateToUiStream', () => {
       textStart(T1),
       textDelta(T1, 'преамбула'),
       textEnd(T1),
+      { data: {}, transient: true, type: 'data-reset' },
       textStart(T2),
       textDelta(T2, 'одговор'),
       textEnd(T2),
