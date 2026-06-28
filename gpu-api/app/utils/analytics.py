@@ -72,24 +72,16 @@ def capture_exception(
     distinct_id: str = "server",
     properties: dict[str, object] | None = None,
 ) -> None:
-    # Residency: never forward the exc object — posthog-python serialises frame-locals + str(exc), which leak sovereign embedded/reranked text. Send a redacted $exception instead.
     client = _state.client
     if client is None:
         return
 
-    error_type = type(exc).__name__
+    # Capture the real exception (type, message, stacktrace) for debugging.
     try:
-        client.capture(
-            event="$exception",
+        client.capture_exception(
+            exc,
             distinct_id=distinct_id,
-            properties={
-                "service": _SERVICE,
-                "error_type": error_type,
-                "$exception_list": [
-                    {"type": error_type, "value": "(redacted for residency)"},
-                ],
-                **(properties or {}),
-            },
+            properties={"service": _SERVICE, **(properties or {})},
         )
     except Exception:
         logger.exception("PostHog capture_exception failed")
