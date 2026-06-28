@@ -5,10 +5,10 @@ import { getAnonUserId } from '@/lib/user';
 // PostHog browser init. Next.js runs this client-side before hydration, so the
 // first $pageview is captured early and no SSR guard is needed.
 //
-// Residency: this is the chat surface, where sovereign Macedonian prompt/answer
-// text renders. Error autocapture is OFF (an exception message/stack can embed the
-// prompt), and the conversation transcript + composer carry `.ph-no-capture`, which
-// masks them in session replay AND suppresses autocapture of their text.
+// Exception capture is intentionally ON — errors are surfaced to PostHog across
+// all apps per project decision. The conversation transcript and composer carry
+// `.ph-no-capture`, which masks them in session replay; maskAllInputs provides
+// an additional replay-layer mask so prompt/answer text is never recorded.
 const key = process.env['NEXT_PUBLIC_POSTHOG_KEY'];
 
 if (key !== undefined && key.length > 0) {
@@ -20,7 +20,7 @@ if (key !== undefined && key.length > 0) {
     // Reuse the existing anonymous id (the feedback endpoint stores the same one),
     // so the browser person matches server-side feedback. Never call identify().
     bootstrap: { distinctID: getAnonUserId() },
-    capture_exceptions: false,
+    capture_exceptions: true,
     person_profiles: 'always',
     session_recording: {
       maskAllInputs: true,
