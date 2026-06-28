@@ -2,6 +2,8 @@
 
 import type { ReactNode } from 'react';
 
+import { posthog } from 'posthog-js';
+
 import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { AnswerActions } from '@/components/chat/answer-actions';
@@ -48,6 +50,13 @@ export const renderAnswerActions =
           disabled
             ? undefined
             : () => {
+                /* eslint-disable camelcase -- PostHog event properties are snake_case. */
+                posthog.capture('chat_regenerated', {
+                  inference_model: message.metadata?.inferenceModel,
+                  message_index: messages.indexOf(message),
+                  response_id: message.metadata?.responseId,
+                });
+                /* eslint-enable camelcase -- end of PostHog snake_case properties. */
                 regenerate({ messageId: message.id });
               }
         }
