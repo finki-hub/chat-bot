@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from app.data.connection import Database
 from app.data.db import get_db
-from app.llms.agents import StreamObservation, meta_event
+from app.llms.agents import StreamObservation, meta_event, status_event
 from app.llms.chat import handle_chat
 from app.llms.context import get_links_context, get_retrieved_context
 from app.llms.models import CHAT_MODELS
@@ -295,36 +295,13 @@ router = APIRouter(
 )
 
 
-@router.post(
-    "/",
-    summary="Stream a chat response",
-    description=(
-        "Compute an embedding for the incoming question, retrieve top-N "
-        "similar questions for context, construct a prompt, and stream back "
-        "the LLM's answer as a text stream."
-    ),
-    response_class=StreamingResponse,
-    status_code=status.HTTP_200_OK,
-    responses={
-        status.HTTP_200_OK: {
-            "description": "Chunked stream of SSE events",
-            "content": {
-                "text/event-stream": {
-                    "schema": {
-                        "type": "string",
-                        "example": "data: Hello\n\ndata: World\n\n",
-                    },
-                },
-            },
-        },
-    },
-    operation_id="chatWithModel",
-)
-async def chat(
+async def _chat_response_stream(
     payload: ChatSchema,
     request: Request,
-    db: Database = db_dep,
-) -> StreamingResponse:
+    db: Database,
+    response_id: UUID,
+) -> AsyncGenerator[str]:
+    """Build context (streaming retrieval status), then yield the agent answer stream."""
     logger.info(
         "Received chat request with payload: %s",
         payload.model_dump(mode="json", exclude_defaults=True),
@@ -334,8 +311,6 @@ async def chat(
 
     timings, token = start_request_timings()
     try:
-        response_id = uuid4()
-        record_response_id(str(response_id))
         distinct_id = safe_distinct_id(
             request.headers.get("X-Distinct-Id"),
             str(response_id),
@@ -368,16 +343,34 @@ async def chat(
             },
         )
 
-        retrieved, links_context = await asyncio.gather(
-            get_retrieved_context(
-                db=db,
-                query=payload.query,
-                embedding_model=payload.embeddings_model,
-                query_transform_model=payload.query_transform_model,
-                history_text=history_text,
-            ),
-            get_links_context(db),
-        )
+        # Run retrieval and links loading concurrently, streaming retrieval
+        # stage events to the client as they happen.
+        stage_queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        def on_stage(stage: str) -> None:
+            stage_queue.put_nowait(status_event(stage=stage))
+
+        async def run_retrieval() -> str:
+            try:
+                return await get_retrieved_context(
+                    db=db,
+                    query=payload.query,
+                    embedding_model=payload.embeddings_model,
+                    query_transform_model=payload.query_transform_model,
+                    history_text=history_text,
+                    on_stage=on_stage,
+                )
+            finally:
+                stage_queue.put_nowait(None)
+
+        retrieval_task = asyncio.create_task(run_retrieval())
+        links_task = asyncio.create_task(get_links_context(db))
+
+        while (event := await stage_queue.get()) is not None:
+            yield event
+
+        retrieved = await retrieval_task
+        links_context = await links_task
 
         if not retrieved:
             capture(
@@ -392,8 +385,6 @@ async def chat(
                     "query_len": len(payload.query),
                 },
             )
-            # On a miss, leave the bare "nothing found" context alone so the prompt's
-            # tool-search directive isn't diluted by the links catalog.
             context = (
                 "Не можев да пронајдам релевантни информации во базата на податоци."
             )
@@ -430,14 +421,48 @@ async def chat(
             observation=observation,
         )
 
-        # Set the header on the StreamingResponse returned by handle_chat: Starlette
-        # serializes headers only when the body starts streaming, so this lands first.
-        response.headers["X-Response-Id"] = str(response_id)
-        return response
+        async for chunk in response.body_iterator:
+            yield chunk
     finally:
-        # The stream wrapper holds `timings` by closure, so the context var can be reset
-        # now (before streaming) without affecting the TTFT/total it records later.
         reset_request_timings(token)
+
+
+@router.post(
+    "/",
+    summary="Stream a chat response",
+    description=(
+        "Compute an embedding for the incoming question, retrieve top-N "
+        "similar questions for context, construct a prompt, and stream back "
+        "the LLM's answer as a text stream."
+    ),
+    response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Chunked stream of SSE events",
+            "content": {
+                "text/event-stream": {
+                    "schema": {
+                        "type": "string",
+                        "example": "data: Hello\n\ndata: World\n\n",
+                    },
+                },
+            },
+        },
+    },
+    operation_id="chatWithModel",
+)
+async def chat(
+    payload: ChatSchema,
+    request: Request,
+    db: Database = db_dep,
+) -> StreamingResponse:
+    response_id = uuid4()
+    record_response_id(str(response_id))
+    stream = _chat_response_stream(payload, request, db, response_id)
+    response = StreamingResponse(stream, media_type="text/event-stream")
+    response.headers["X-Response-Id"] = str(response_id)
+    return response
 
 
 @router.get(

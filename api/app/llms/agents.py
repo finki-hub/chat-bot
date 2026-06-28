@@ -33,8 +33,12 @@ def thinking_event(text: str) -> str:
     return _sse("thinking", {"text": text})
 
 
-def status_event(tool: str | None = None) -> str:
-    payload: dict[str, object] = {"state": "tool_call", "label": _STATUS_LABEL}
+def status_event(*, stage: str, tool: str | None = None) -> str:
+    payload: dict[str, object] = {
+        "state": "tool_call",
+        "stage": stage,
+        "label": _STATUS_LABEL,
+    }
     if tool:
         payload["tool"] = tool
     return _sse("status", payload)
@@ -325,7 +329,7 @@ async def create_agent_token_generator(
                     time.perf_counter(),
                     _content_len(event["data"].get("input")),
                 )
-                yield status_event(event["name"])
+                yield status_event(stage="retrieve", tool=event["name"])
                 pending_reset = True
                 continue
 
