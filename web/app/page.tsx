@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 
 import { Composer } from '@/components/chat/composer';
 import { ServiceBanner } from '@/components/chat/service-banner';
@@ -39,6 +39,7 @@ const ChatScreen = () => {
   const reasoningActive = reasoning && isReasoningCapableModel(model);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
+  const [sidebarSynced, setSidebarSynced] = useState(false);
 
   const { unavailable } = useHealth();
 
@@ -53,6 +54,7 @@ const ChatScreen = () => {
     };
 
     setSidebarOpen(media.matches);
+    setSidebarSynced(true);
 
     return subscribeToMediaQuery(media, syncSidebarWithViewport);
   }, [setSidebarOpen]);
@@ -98,6 +100,7 @@ const ChatScreen = () => {
           onRename={onRename}
           onSelect={onSelect}
           open={sidebarOpen}
+          synced={sidebarSynced}
         />
         <main className="flex min-w-0 flex-1 flex-col">
           <Thread
