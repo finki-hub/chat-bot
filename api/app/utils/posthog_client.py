@@ -17,12 +17,6 @@ _state = _State()
 
 
 def init_posthog(settings: Settings) -> None:
-    """Construct the per-worker PostHog client.
-
-    Call AFTER gunicorn forks (the ``post_fork`` hook): posthog-python's background
-    flush thread does not survive ``os.fork()``, so a client built pre-fork silently
-    drops every event in the workers. A no-op when ``POSTHOG_KEY`` is unset (dev/CI/tests).
-    """
     if not settings.POSTHOG_KEY:
         return
 
@@ -37,11 +31,6 @@ def capture(
     event: str,
     properties: dict[str, object] | None = None,
 ) -> None:
-    """Send one analytics event; a no-op when disabled, and never raising into the caller.
-
-    Residency: callers must pass metadata only (model ids, lengths, token counts,
-    timings) — never raw prompt or answer text.
-    """
     client = _state.client
     if client is None:
         return
@@ -61,15 +50,7 @@ def capture_exception(
     distinct_id: str = "server",
     properties: dict[str, object] | None = None,
 ) -> None:
-    """Report an unhandled exception to PostHog Error Tracking as a metadata-only
-    ``$exception`` event; a no-op when disabled, and never raising into the caller.
-
-    Residency: the exception object is NEVER handed to the SDK. posthog-python's
-    ``capture_exception`` serializes the full stacktrace WITH frame-local variables and
-    the raw ``str(exc)`` message, both of which can embed sovereign text (the user query,
-    the answer, retrieved chunks). Only the exception type, service and caller metadata
-    (request path, method, status) leave; the message/value is redacted.
-    """
+    # Residency: never forward the exc object — posthog-python serialises frame-locals + str(exc), which leak sovereign query/answer/retrieved text. Send a redacted $exception instead.
     client = _state.client
     if client is None:
         return
@@ -93,7 +74,6 @@ def capture_exception(
 
 
 def shutdown_posthog() -> None:
-    """Flush and stop the client (the gunicorn ``worker_exit`` hook)."""
     client = _state.client
     if client is None:
         return

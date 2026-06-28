@@ -1,21 +1,7 @@
-"""Lightweight, residency-safe topic classification for chat queries.
-
-Maps a query to a coarse university-FAQ topic by keyword matching so analytics can group
-questions by subject WITHOUT the raw query text ever leaving the server: only the resulting
-``topic`` label is emitted. Covers Macedonian (Cyrillic) and English terms; extend
-``_TOPIC_KEYWORDS`` to refine coverage. Returns ``OTHER_TOPIC`` when nothing matches.
-
-Matching is plain casefolded substring containment, which catches Macedonian inflections
-(``испит`` matches ``испитот`` / ``испити`` / ``испитна``) without a stemmer.
-"""
+"""Residency-safe coarse topic labelling for chat queries (keyword match; label only)."""
 
 OTHER_TOPIC = "other"
 
-# Ordered: the first topic with a keyword hit wins, so the more specific intents (thesis,
-# exams) are checked before the broader ones. ``technical_account`` precedes
-# ``courses_syllabus`` so a login/password question that names ``courses.finki`` is not
-# claimed by the ``course`` keyword. Keep keywords as stems so they match inflected forms
-# via substring containment.
 _TOPIC_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "thesis_diploma",
@@ -174,7 +160,6 @@ _TOPIC_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 
 def classify_topic(query: str) -> str:
-    """The coarse FAQ topic of ``query`` (a label only — the query text never leaves)."""
     text = query.casefold()
     for topic, keywords in _TOPIC_KEYWORDS:
         if any(keyword in text for keyword in keywords):

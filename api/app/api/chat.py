@@ -58,14 +58,10 @@ def _history_for_retrieval(payload: ChatSchema) -> str | None:
     )
 
 
-# X-Distinct-Id is an untrusted client header used verbatim as the PostHog person id.
-# Bound it to a short, opaque token (UUIDs, Discord snowflakes and PostHog anon ids all
-# fit) so a caller can't inject PII, smuggle free text, or explode person cardinality.
 _DISTINCT_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
 def _safe_distinct_id(raw: str | None, fallback: str) -> str:
-    """The caller-supplied analytics id if it's a short opaque token, else ``fallback``."""
     if raw is None:
         return fallback
     candidate = raw.strip()
@@ -92,11 +88,6 @@ def _sse_event_name(chunk: bytes | str | memoryview) -> str:
 
 
 def _is_answer_chunk(event_name: str, chunk: bytes | str | memoryview) -> bool:
-    """Whether ``chunk`` carries answer text: a protocol ``token`` frame, or the bare
-    ``data:`` frame the GPU-API path streams (which has no ``event:`` line). Control frames
-    (thinking/status/reset/error/done/meta all name their event) never count, so a run that
-    only ever reasons or errors out is correctly seen as having produced no answer.
-    """
     if event_name == "token":
         return True
     return event_name == "" and bool(chunk)
@@ -107,13 +98,6 @@ _META_PREFIX_BYTES = _META_PREFIX.encode()
 
 
 def _sniff_tokens(chunk: bytes | str | memoryview) -> dict[str, int] | None:
-    """Token counts from a trailing ``meta`` frame's ``{"tokens": ...}`` data line, or None.
-
-    A cheap leading-prefix check runs first, so the per-chunk hot path (``token`` frames,
-    and the GPU-API's bare ``data:`` frames) returns without copying the whole chunk. Only
-    the token-count meta frame ``agents.py`` emits is then parsed; the answer text in
-    ``token``/``thinking`` frames is never inspected.
-    """
     if isinstance(chunk, str):
         if not chunk.startswith(_META_PREFIX):
             return None
@@ -148,7 +132,6 @@ def _capture_chat_response(
     usage: dict[str, int] | None,
     outcome: str,
 ) -> None:
-    """Emit the PostHog AI-observability event for a finished stream (metadata only)."""
     props: dict[str, object] = {
         "$ai_model": payload.inference_model.value,
         "$ai_latency": (
@@ -186,11 +169,6 @@ async def _instrument_stream(
     The ``meta`` frame trails the body's ``done`` (``total_ms`` is known only once the
     body drains); consumers that stop at ``done`` ignore it and the protocol-v2 parsers
     drop unknown events, so it stays backward compatible.
-
-    The outcome is ``completed`` on a normal run, ``client_disconnect`` if the client hung
-    up, or ``empty_answer`` when the stream drained without ever producing an answer frame
-    (the gpt-5-mini/nano failure class). Token usage prefers the real provider counts the
-    agent generator folds into ``observation.usage`` and falls back to the meta-frame sniff.
     """
     outcome = "completed"
     usage: dict[str, int] | None = None
@@ -214,7 +192,6 @@ async def _instrument_stream(
                 usage = sniffed
             yield chunk
     except GeneratorExit:
-        # The client hung up mid-stream; record the partial run before unwinding.
         outcome = "client_disconnect"
         raise
     except asyncio.CancelledError:
@@ -299,17 +276,11 @@ async def chat(
 
     timings, token = start_request_timings()
     try:
-        # Minted before retrieval so it can tag chat_request + retrieval_miss and still
-        # back the X-Response-Id header below.
         response_id = uuid4()
-        # Prefer the caller's anonymous id (browser) so events stitch into one person;
-        # fall back to the response id for un-identified or malformed callers (e.g. Discord).
         distinct_id = _safe_distinct_id(
             request.headers.get("X-Distinct-Id"),
             str(response_id),
         )
-        # Threaded into the generator so token usage, tool calls, provider errors and
-        # fallbacks are reported against this request (metadata only).
         observation = StreamObservation(
             distinct_id=distinct_id,
             response_id=str(response_id),
@@ -328,8 +299,6 @@ async def chat(
                 "history_turns": len(payload.history),
             },
         )
-        # Server-side, residency-safe classification: only the topic label leaves, never
-        # the raw query text.
         capture(
             distinct_id,
             "query_classified",
@@ -372,7 +341,6 @@ async def chat(
             context = retrieved
             if links_context:
                 context = f"{retrieved}\n\n{links_context}"
-            # Which corpus entries actually backed the answer (ids only, never text).
             if timings.retrieval_ids:
                 capture(
                     distinct_id,
@@ -403,7 +371,6 @@ async def chat(
 
         # Set the header on the StreamingResponse returned by handle_chat: Starlette
         # serializes headers only when the body starts streaming, so this lands first.
-        # Done at the one chokepoint because the default agent path skips the SSE wrapper.
         response.headers["X-Response-Id"] = str(response_id)
         return response
     finally:

@@ -33,7 +33,6 @@ _RERANKER_TIMEOUT = httpx.Timeout(timeout=30.0)
 _RERANKER_MAX_RETRIES: int = 1
 # Chunks pulled in on each side of a retrieved chunk, to give the model a contiguous passage.
 _NEIGHBOR_WINDOW: int = 1
-# Cap on the corpus ids reported per request (ids only) — the top of the ranked set.
 _RETRIEVAL_IDS_CAP: int = 10
 
 

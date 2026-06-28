@@ -50,7 +50,6 @@ async def submit_feedback(
             detail="Failed to record feedback",
         )
 
-    # Metadata only: question_text / answer_text are deliberately excluded (residency).
     capture(
         str(payload.user_id),
         "chat_feedback",

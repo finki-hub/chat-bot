@@ -54,14 +54,6 @@ DONE_EVENT = _sse("done", {})
 
 @dataclass
 class StreamObservation:
-    """Per-request, mutable analytics holder threaded into the agent generator.
-
-    Carries the request ids so per-invocation events (``tool_called``, ``model_error``,
-    ``model_fallback``) group with the rest of the request, and exposes the live token
-    ``usage`` dict by reference so the SSE wrapper reads real provider counts directly
-    instead of sniffing a trailing meta frame. Residency: every field is metadata only.
-    """
-
     distinct_id: str
     response_id: str
     model: str = ""
@@ -72,7 +64,6 @@ class StreamObservation:
 
 
 def _error_status_code(exc: BaseException) -> int | None:
-    """An HTTP status code carried by a provider exception (e.g. 429), if any."""
     status = getattr(exc, "status_code", None)
     if isinstance(status, int):
         return status
@@ -82,7 +73,6 @@ def _error_status_code(exc: BaseException) -> int | None:
 
 
 def _content_len(value: object) -> int:
-    """Character length of a value's text form (a length only — never the text)."""
     if value is None:
         return 0
     if isinstance(value, str):
@@ -94,7 +84,6 @@ def _content_len(value: object) -> int:
 
 
 def _tool_succeeded(output: object) -> bool:
-    """Whether a tool's output indicates success; an error ToolMessage flips it to False."""
     return getattr(output, "status", None) != "error"
 
 
@@ -107,7 +96,6 @@ def capture_tool_called(
     arg_len: int,
     result_len: int,
 ) -> None:
-    """Record one tool invocation (lengths/timings only — never the tool args/result)."""
     if observation is None:
         return
     capture(
@@ -132,7 +120,6 @@ def capture_model_error(
     error_type: str,
     status_code: int | None = None,
 ) -> None:
-    """Record a failed provider call (metadata only)."""
     if observation is None:
         return
     capture(
@@ -155,7 +142,6 @@ def capture_model_fallback(
     to_model: str,
     reason: str,
 ) -> None:
-    """Record a switch to a different model/path (metadata only)."""
     if observation is None:
         return
     capture(
@@ -278,22 +264,14 @@ async def create_agent_token_generator(
 ) -> AsyncGenerator[str]:
     """Stream an agent run as SSE, mapping `astream_events` onto the protocol: each
     `on_tool_start` becomes a `status`, and a `reset` precedes the answer so any
-    pre-tool preamble is dropped.
-
-    When an `observation` is supplied, real token usage is folded into its shared `usage`
-    dict (read by the SSE wrapper), each tool call is recorded as a `tool_called` event,
-    and a failed provider call is recorded as a `model_error` event — metadata only.
-    """
+    pre-tool preamble is dropped."""
     streamed_text = False
     pending_reset = False
-    # Share the observation's usage dict by reference when present, so the SSE wrapper sees
-    # the real provider counts as they accumulate; fall back to a local dict otherwise.
     usage = (
         observation.usage
         if observation is not None
         else {"input": 0, "output": 0, "total": 0}
     )
-    # run_id -> (tool name, start time, arg length), to pair on_tool_start with its end.
     tool_runs: dict[str, tuple[str, float, int]] = {}
     try:
         async for event in agent.astream_events(

@@ -80,7 +80,6 @@ def record_retrieval_shape(candidate_count: int, top_distance: float | None) -> 
 
 
 def record_retrieval_ids(ids: list[str]) -> None:
-    """Record the corpus ids of the items kept for the prompt (ids only — never text)."""
     timings = _current.get()
     if timings is not None:
         timings.retrieval_ids = ids
