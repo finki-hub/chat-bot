@@ -28,6 +28,7 @@ class RequestTimings:
         self.reranker_score_max: float | None = None
         self.reranker_score_min: float | None = None
         self.reranker_above_threshold: int | None = None
+        self.response_id: str | None = None
 
     def record(self, name: str, elapsed_ms: float) -> None:
         self.spans[name] = self.spans.get(name, 0.0) + elapsed_ms
@@ -95,6 +96,17 @@ def record_reranker_scores(scores: list[float], above_threshold: int) -> None:
     timings.reranker_score_max = max(scores)
     timings.reranker_score_min = min(scores)
     timings.reranker_above_threshold = above_threshold
+
+
+def record_response_id(response_id: str) -> None:
+    timings = _current.get()
+    if timings is not None:
+        timings.response_id = response_id
+
+
+def current_response_id() -> str | None:
+    timings = _current.get()
+    return timings.response_id if timings is not None else None
 
 
 @contextmanager

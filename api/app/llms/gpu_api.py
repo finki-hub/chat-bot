@@ -16,6 +16,7 @@ from app.llms.models import GPU_API_MODELS, Model
 from app.llms.prompts import history_transcript
 from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
+from app.utils.timing import current_response_id
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,11 @@ settings = Settings()
 _STREAMING_TIMEOUT = httpx.Timeout(timeout=300.0)
 _EMBEDDINGS_TIMEOUT = httpx.Timeout(timeout=60.0)
 _GPU_ERROR_MESSAGE = "Се случи грешка при обработката на барањето. Обидете се повторно."
+
+
+def _response_id_headers() -> dict[str, str]:
+    rid = current_response_id()
+    return {"X-Response-Id": rid} if rid else {}
 
 
 async def generate_gpu_api_embeddings(
@@ -50,7 +56,7 @@ async def generate_gpu_api_embeddings(
     response = await client.post(
         gpu_api_url,
         json=payload,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", **_response_id_headers()},
         timeout=_EMBEDDINGS_TIMEOUT,
     )
 
@@ -111,7 +117,7 @@ def stream_gpu_api_response(
                 "POST",
                 gpu_api_url,
                 json=payload,
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", **_response_id_headers()},
                 timeout=_STREAMING_TIMEOUT,
             ) as response:
                 if response.status_code != 200:
