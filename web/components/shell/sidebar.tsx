@@ -69,7 +69,7 @@ export const Sidebar = ({
       {open ? (
         <button
           aria-label={t('header.toggleSidebar')}
-          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          className="fixed inset-y-0 left-64 right-0 z-40 bg-black/40 md:hidden"
           onClick={onClose}
           type="button"
         />
