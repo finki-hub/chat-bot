@@ -106,7 +106,7 @@ const ChatScreen = () => {
             activeError={activeError}
             activeStatus={activeStatus}
             messages={messages}
-            onPickSuggestion={submitMessage}
+            onPickSuggestion={unavailable ? undefined : submitMessage}
             onRetry={unavailable ? undefined : retry}
             renderActions={renderActions}
             status={status}
