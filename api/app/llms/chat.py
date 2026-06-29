@@ -6,6 +6,7 @@ from app.llms.agents import StreamObservation
 from app.llms.prompts import (
     DEFAULT_AGENT_SYSTEM_PROMPT,
     build_user_agent_prompt,
+    markdown_instructions,
     to_history_messages,
 )
 from app.llms.streams import stream_response_with_agent
@@ -32,7 +33,12 @@ async def handle_chat(
         payload.inference_model.value,
     )
 
-    system_prompt = payload.system_prompt or DEFAULT_AGENT_SYSTEM_PROMPT
+    system_prompt = "\n\n".join(
+        [
+            payload.system_prompt or DEFAULT_AGENT_SYSTEM_PROMPT,
+            markdown_instructions(payload.interface),
+        ],
+    )
     user_prompt = build_user_agent_prompt(context, payload.query)
     history = to_history_messages(
         [
