@@ -18,6 +18,7 @@ describe('lib/api-types', () => {
 
   it('models a ChatRequestBody (oldest-first, last is user)', () => {
     const body = {
+      interface: 'web',
       messages: [
         { content: 'здраво', role: 'user' },
         { content: 'здраво!', role: 'assistant' },
