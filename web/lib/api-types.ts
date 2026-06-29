@@ -93,6 +93,7 @@ export type MyMetadata = {
   feedback?: FeedbackType;
   inferenceModel?: string;
   responseId?: string;
+  sources?: readonly RetrievedSource[];
   timing?: { totalMs: number; ttftMs: null | number };
 };
 
@@ -112,6 +113,7 @@ export type ProtocolV2Event =
       data: { label: string; stage?: string; state: string; tool?: string };
       event: 'status';
     }
+  | { data: { sources: readonly RetrievedSource[] }; event: 'sources' }
   | { data: { text: string }; event: 'thinking' }
   | { data: { text: string }; event: 'token' }
   | {
@@ -128,5 +130,22 @@ export type ProtocolV2Event =
       };
       event: 'meta';
     };
+
+export type RetrievedSource = {
+  readonly chunkIndex?: number;
+  readonly id: string;
+  readonly kind: RetrievedSourceKind;
+  readonly links?: readonly RetrievedSourceLink[];
+  readonly section?: string;
+  readonly snippet?: string;
+  readonly title: string;
+};
+
+export type RetrievedSourceKind = 'chunk' | 'faq';
+
+export type RetrievedSourceLink = {
+  readonly label: string;
+  readonly url: string;
+};
 
 export type StatusPart = { label: string; stage?: string; tool?: string };
