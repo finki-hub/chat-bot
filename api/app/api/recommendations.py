@@ -1,9 +1,18 @@
 import asyncio
 import logging
 import time
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.api.recommendation_presenters import (
+    committee_alternative,
+    confidence,
+    mentor_score,
+    person_score,
+    proposal_text,
+    recommendation_evidence,
+)
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.data.connection import Database
 from app.data.db import get_db
@@ -18,8 +27,7 @@ from app.recommenders.recommend import (
     CoauthorIndex,
     MentorPriorIndex,
     Mode,
-    RankedPeople,
-    Recommendation,
+    SelectionConstraints,
     _accumulate_coauthor_edges,
     build_coauthor_prior,
     build_expertise_index,
@@ -27,8 +35,7 @@ from app.recommenders.recommend import (
     score_people,
     select_committee,
 )
-from app.schemas.diplomas import (
-    PersonScoreSchema,
+from app.schemas.recommendations import (
     RecommendationRequestSchema,
     RecommendationResponseSchema,
 )
@@ -75,51 +82,13 @@ async def _cancel_background_tasks(tasks: list[asyncio.Task]) -> None:
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
-def _person_score(
-    name: str,
-    ranked: RankedPeople,
-    rec: Recommendation,
-) -> PersonScoreSchema:
-    blended = ranked.blended.get(name)
-    final = rec.member_scores.get(name, blended)
-    prior = (final - (blended or 0.0)) if final is not None else 0.0
-    return PersonScoreSchema(
-        name=name,
-        score=final,
-        defense_score=ranked.defense.get(name, 0.0),
-        expertise_score=ranked.expertise.get(name, 0.0),
-        buddy_score=0.0,
-        prior_score=prior,
-        supporting_diploma_ids=ranked.supporting.get(name, []),
-    )
-
-
-def _mentor_score(
-    rec: Recommendation,
-    ranked: RankedPeople,
-) -> PersonScoreSchema:
-    name = rec.mentor or ""
-    if rec.mentor_is_given:
-        return PersonScoreSchema(
-            name=name,
-            score=None,
-            defense_score=0.0,
-            expertise_score=0.0,
-            buddy_score=0.0,
-            supporting_diploma_ids=[],
-        )
-    return _person_score(name, ranked, rec)
-
-
 @router.post(
     "/",
     summary="Recommend a thesis committee",
     description=(
-        "Given a proposed thesis title (and optionally a known mentor), recommend a "
-        "committee grounded in the most similar historical defenses. The mode is inferred "
-        "from the payload: a mentor present -> MEMBERS-ONLY (recommend only the two "
-        "members; the mentor is fixed and excluded); omitted -> FULL (recommend a mentor "
-        "and two members)."
+        "Given a proposed thesis title plus optional abstract, keywords, study program, "
+        "research area, constraints, and known mentor, recommend committee alternatives "
+        "grounded in similar historical defenses and professor-paper expertise."
     ),
     status_code=status.HTTP_200_OK,
     operation_id="recommendCommittee",
@@ -129,7 +98,7 @@ async def recommend_committee(
     db: Database = db_dep,
 ) -> RecommendationResponseSchema:
     mode = Mode.MEMBERS_ONLY if payload.mentor else Mode.FULL
-    text = payload.title.strip()
+    text = proposal_text(payload)
 
     query_embedding = await generate_embeddings(
         _prepare_text_for_embedding(text, DEFAULT_EMBEDDINGS_MODEL, is_document=False),
@@ -206,7 +175,8 @@ async def recommend_committee(
         await _cancel_background_tasks(background_tasks)
         raise
 
-    expertise = build_expertise_index(papers, weights)
+    now = datetime.now(UTC).date()
+    expertise = build_expertise_index(papers, weights, now_year=now.year)
     coauthors = (
         _accumulate_coauthor_edges(papers, weights)
         if weights.coauthor_weight > 0 or weights.coauthor_member_boost > 0
@@ -220,6 +190,7 @@ async def recommend_committee(
         weights,
         mode,
         given_mentor=payload.mentor,
+        now=now,
     )
 
     rec = select_committee(
@@ -229,12 +200,22 @@ async def recommend_committee(
         mentor_topk=payload.mentor_topk,
         mentor_prior=mentor_prior,
         coauthor_prior=coauthor_prior,
+        constraints=SelectionConstraints(
+            exclude=frozenset(payload.exclude_professors),
+            include=frozenset(payload.include_professors),
+            alternative_count=payload.alternatives,
+        ),
     )
+    confidence_score, confidence_reasons = confidence(retrieved, rec, _TOP_K)
 
     return RecommendationResponseSchema(
         mode=mode.value,
-        mentor=_mentor_score(rec, ranked),
+        mentor=mentor_score(rec, ranked),
         mentor_is_given=rec.mentor_is_given,
-        members=[_person_score(name, ranked, rec) for name in rec.members],
+        members=[person_score(name, ranked, rec) for name in rec.members],
         supporting_diploma_ids=rec.supporting_diploma_ids,
+        confidence=confidence_score,
+        confidence_reasons=confidence_reasons,
+        evidence=recommendation_evidence(retrieved, rec, ranked),
+        alternatives=[committee_alternative(alt) for alt in rec.alternatives],
     )
