@@ -16,11 +16,10 @@ async def get_links_query(db: Database) -> list[LinkSchema]:
     return [LinkSchema(**row) for row in result]
 
 
-async def fetch_links_for_context(db: Database, limit: int) -> list[Record]:
-    """Capped raw link rows for context: Records, not LinkSchema, so one malformed row can't blank the whole catalog (caller sanitizes/skips per row)."""
+async def fetch_links_for_context(db: Database) -> list[Record]:
+    """Raw link rows for context: Records, not LinkSchema, so one malformed row can't blank the whole catalog (caller sanitizes/skips per row)."""
     return await db.fetch(
-        "SELECT name, url, description FROM link ORDER BY name ASC LIMIT $1",
-        limit,
+        "SELECT name, url, description FROM link ORDER BY name ASC",
     )
 
 

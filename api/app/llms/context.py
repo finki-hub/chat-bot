@@ -1,29 +1,23 @@
 import asyncio
 import logging
-import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 from uuid import UUID
 
-import httpx
-
 from app.data.connection import Database
 from app.data.documents import get_chunks_window, get_closest_chunks
-from app.data.links import fetch_links_for_context
 from app.data.questions import get_closest_questions
 from app.llms.embeddings import generate_embeddings
 from app.llms.models import Model
 from app.llms.prompts import CONTEXTUALIZE_SYSTEM_PROMPT, HYDE_SYSTEM_PROMPT
 from app.llms.query_transform import transform_query
+from app.llms.reranker import post_rerank as _post_rerank
 from app.llms.text_utils import _prepare_text_for_embedding
 from app.schemas.documents import ChunkSchema
 from app.schemas.questions import QuestionSchema
 from app.utils.exceptions import RetrievalError
-from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
 from app.utils.timing import (
-    current_distinct_id,
-    current_response_id,
     record_reranker_scores,
     record_retrieval_ids,
     record_retrieval_shape,
@@ -37,8 +31,6 @@ settings = Settings()
 # Guarantee at least this many FAQ answers in the final context (if available), so a
 # long document's many chunks cannot crowd FAQ out of the shared rerank pool.
 RESERVED_FAQ_SLOTS: int = 3
-_RERANKER_TIMEOUT = httpx.Timeout(timeout=30.0)
-_RERANKER_MAX_RETRIES: int = 1
 # Chunks pulled in on each side of a retrieved chunk, to give the model a contiguous passage.
 _NEIGHBOR_WINDOW: int = 1
 _RETRIEVAL_IDS_CAP: int = 10
@@ -53,40 +45,6 @@ class _Candidate:
     distance: float | None = None  # carried only for the DEBUG trace
     doc_id: UUID | None = None  # chunk identity for neighbor expansion (None for FAQ)
     chunk_index: int | None = None
-
-
-async def _post_rerank(payload: dict) -> httpx.Response:
-    client = get_http_client()
-    for attempt in range(_RERANKER_MAX_RETRIES + 1):
-        try:
-            headers: dict[str, str] = {}
-            rid = current_response_id()
-            if rid:
-                headers["X-Response-Id"] = rid
-            did = current_distinct_id()
-            if did:
-                headers["X-Distinct-Id"] = did
-            response = await client.post(
-                f"{settings.GPU_API_URL}/rerank/",
-                json=payload,
-                headers=headers or None,
-                timeout=_RERANKER_TIMEOUT,
-            )
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
-            if attempt < _RERANKER_MAX_RETRIES:
-                logger.warning(
-                    "Reranker attempt %d failed (%s), retrying...",
-                    attempt + 1,
-                    exc,
-                )
-                continue
-            raise
-        else:
-            return response
-    raise RuntimeError(
-        "Unreachable: reranker retry loop exited without return or raise",
-    )
 
 
 async def _embed_variant(
@@ -532,49 +490,3 @@ def _render_blocks(
 
     items.sort(key=lambda item: item[0])
     return "\n\n---\n\n".join(text for _, text in items)
-
-
-# Bound the user-editable catalog's footprint in every prompt.
-_LINKS_MAX_ROWS = 50
-_LINK_NAME_MAX = 80
-_LINK_URL_MAX = 2048
-_LINK_DESC_MAX = 200
-
-
-def _sanitize_inline(text: str, max_len: int) -> str:
-    """Flatten a field to a bounded inline span, stripping newlines/control chars so a stored value can't fabricate prompt structure (fake headers or bullets)."""
-    spaced = "".join(" " if ch.isspace() else ch for ch in text)
-    cleaned = "".join(
-        ch for ch in spaced if not unicodedata.category(ch).startswith("C")
-    )
-    collapsed = " ".join(cleaned.split())
-    if len(collapsed) > max_len:
-        collapsed = collapsed[:max_len].rstrip() + "…"
-    return collapsed
-
-
-async def get_links_context(db: Database) -> str:
-    """Render the whole (capped) `link` catalog as a context block; per-row and fault-tolerant, so one bad row or a DB error degrades to "" instead of a broken answer."""
-    try:
-        with timed("links"):
-            rows = await fetch_links_for_context(db, _LINKS_MAX_ROWS)
-    except Exception:
-        logger.exception("Failed to load the link catalog for context")
-        return ""
-
-    lines: list[str] = []
-    for row in rows:
-        name = _sanitize_inline(row["name"] or "", _LINK_NAME_MAX)
-        url = _sanitize_inline(row["url"] or "", _LINK_URL_MAX)
-        if not name or not url:
-            continue
-        description = _sanitize_inline(row["description"] or "", _LINK_DESC_MAX)
-        line = f"- {name}: {url}"
-        if description:
-            line += f" ({description})"
-        lines.append(line)
-
-    if not lines:
-        return ""
-
-    return "Корисни линкови:\n" + "\n".join(lines)

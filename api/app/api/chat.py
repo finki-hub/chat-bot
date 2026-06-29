@@ -14,7 +14,8 @@ from app.data.connection import Database
 from app.data.db import get_db
 from app.llms.agents import StreamObservation, error_event, meta_event, status_event
 from app.llms.chat import handle_chat
-from app.llms.context import get_links_context, get_retrieved_context
+from app.llms.context import get_retrieved_context
+from app.llms.link_context import get_links_context
 from app.llms.models import CHAT_MODELS
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.schemas.chat import ChatSchema
@@ -368,7 +369,7 @@ async def _chat_response_stream(
                 stage_queue.put_nowait(None)
 
         retrieval_task = asyncio.create_task(run_retrieval())
-        links_task = asyncio.create_task(get_links_context(db))
+        links_task = asyncio.create_task(get_links_context(db, query=payload.query))
 
         try:
             while (event := await stage_queue.get()) is not None:
@@ -393,6 +394,8 @@ async def _chat_response_stream(
                 context = (
                     "Не можев да пронајдам релевантни информации во базата на податоци."
                 )
+                if links_context:
+                    context = f"{context}\n\n{links_context}"
             else:
                 context = retrieved
                 observation.context_chars = len(retrieved)
