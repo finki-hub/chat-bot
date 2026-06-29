@@ -6,6 +6,7 @@ import {
   MAX_MESSAGES,
   type MessageDiagnostics,
   type MyUIMessage,
+  type RetrievedSource,
 } from '@/lib/api-types';
 import { joinText, lastText } from '@/lib/message-parts';
 import { type ParsedEvent } from '@/lib/sse';
@@ -50,7 +51,10 @@ export type UiStreamPart =
   | { id: string; type: 'text-start' }
   | { messageMetadata: UiStreamMeta; type: 'start' }
   | {
-      messageMetadata: { diagnostics: MessageDiagnostics };
+      messageMetadata: {
+        diagnostics?: MessageDiagnostics;
+        sources?: readonly RetrievedSource[];
+      };
       type: 'message-metadata';
     };
 
@@ -201,6 +205,13 @@ export const translateToUiStream = async (
         // `reset` only delimits the dropped pre-tool text preamble — never reasoning.
         textPart.end();
         writer.write({ data: {}, transient: true, type: 'data-reset' });
+        break;
+
+      case 'sources':
+        writer.write({
+          messageMetadata: { sources: event.sources },
+          type: 'message-metadata',
+        });
         break;
 
       case 'status':

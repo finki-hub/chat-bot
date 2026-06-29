@@ -37,6 +37,7 @@ describe('POST /api/chat', () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
         sseBody(
+          'event: sources\ndata: {"sources":[{"id":"c1","kind":"chunk","title":"Статут","section":"Член 12","snippet":"Правила."}]}\n\n',
           'event: token\ndata: {"text":"Здраво"}\n\n',
           'event: token\ndata: {"text":"!"}\n\n',
           'event: done\ndata: {}\n\n',
@@ -91,6 +92,8 @@ describe('POST /api/chat', () => {
 
     expect(out).toContain('Здраво');
     expect(out).toContain('resp-123');
+    expect(out).toContain('Статут');
+    expect(out).toContain('sources');
     expect(out).toContain('text-delta');
   });
 
