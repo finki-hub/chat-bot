@@ -1,13 +1,11 @@
 import asyncio
 import logging
-import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 from uuid import UUID
 
 from app.data.connection import Database
 from app.data.documents import get_chunks_window, get_closest_chunks
-from app.data.links import fetch_links_for_context
 from app.data.questions import get_closest_questions
 from app.llms.embeddings import generate_embeddings
 from app.llms.models import Model
@@ -492,49 +490,3 @@ def _render_blocks(
 
     items.sort(key=lambda item: item[0])
     return "\n\n---\n\n".join(text for _, text in items)
-
-
-# Bound the user-editable catalog's footprint in every prompt.
-_LINKS_MAX_ROWS = 50
-_LINK_NAME_MAX = 80
-_LINK_URL_MAX = 2048
-_LINK_DESC_MAX = 200
-
-
-def _sanitize_inline(text: str, max_len: int) -> str:
-    """Flatten a field to a bounded inline span, stripping newlines/control chars so a stored value can't fabricate prompt structure (fake headers or bullets)."""
-    spaced = "".join(" " if ch.isspace() else ch for ch in text)
-    cleaned = "".join(
-        ch for ch in spaced if not unicodedata.category(ch).startswith("C")
-    )
-    collapsed = " ".join(cleaned.split())
-    if len(collapsed) > max_len:
-        collapsed = collapsed[:max_len].rstrip() + "…"
-    return collapsed
-
-
-async def get_links_context(db: Database) -> str:
-    """Render the whole (capped) `link` catalog as a context block; per-row and fault-tolerant, so one bad row or a DB error degrades to "" instead of a broken answer."""
-    try:
-        with timed("links"):
-            rows = await fetch_links_for_context(db, _LINKS_MAX_ROWS)
-    except Exception:
-        logger.exception("Failed to load the link catalog for context")
-        return ""
-
-    lines: list[str] = []
-    for row in rows:
-        name = _sanitize_inline(row["name"] or "", _LINK_NAME_MAX)
-        url = _sanitize_inline(row["url"] or "", _LINK_URL_MAX)
-        if not name or not url:
-            continue
-        description = _sanitize_inline(row["description"] or "", _LINK_DESC_MAX)
-        line = f"- {name}: {url}"
-        if description:
-            line += f" ({description})"
-        lines.append(line)
-
-    if not lines:
-        return ""
-
-    return "Корисни линкови:\n" + "\n".join(lines)
