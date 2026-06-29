@@ -52,11 +52,11 @@ export const messages = {
   'notFound.description': 'Страницата што ја барате не постои.',
   'notFound.home': 'Назад кон почетната',
   'notFound.title': 'Страницата не е најдена',
-  'searchStage.context': 'Составувам контекст…',
-  'searchStage.contextualize': 'Го разбирам прашањето…',
-  'searchStage.generate': 'Генерирам одговор…',
-  'searchStage.rerank': 'Рерангирам резултати…',
-  'searchStage.retrieve': 'Пребарувам база на знаење…',
+  'searchStage.context': 'Составување…',
+  'searchStage.contextualize': 'Разбирање…',
+  'searchStage.generate': 'Генерирање…',
+  'searchStage.rerank': 'Рерангирање…',
+  'searchStage.retrieve': 'Пребарување…',
   'searchTool.fallback': 'Пребарувам…',
   'searchTool.faq_search': 'Барам во прашања…',
   'searchTool.search_docs': 'Барам во документи…',
@@ -75,7 +75,7 @@ export const messages = {
   'thread.emptyTitle': 'Започни разговор',
   'thread.firstToken': 'прв токен',
   'thread.reasoning': 'Размислување',
-  'thread.thinking': 'Размислувам…',
+  'thread.thinking': 'Размислување…',
 } as const;
 
 export type TKey = keyof typeof messages;

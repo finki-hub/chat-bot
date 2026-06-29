@@ -31,9 +31,6 @@ const TOOL_LABELS: Record<string, string> = {
 };
 /* eslint-enable camelcase -- keys are backend tool names, not camelCase identifiers */
 
-export const searchStageIndex = (stage: SearchStage): number =>
-  SEARCH_STAGES.indexOf(stage);
-
 export const isSearchStage = (value: string): value is SearchStage =>
   (SEARCH_STAGES as readonly string[]).includes(value);
 

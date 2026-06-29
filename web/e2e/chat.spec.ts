@@ -73,9 +73,6 @@ test.describe('chat streaming (mocked BFF)', () => {
     const chip = page.getByTestId('search-status');
     await expect(chip).toBeVisible();
     await expect(chip).toContainText('Пребарувам');
-    await expect(
-      page.getByTestId('search-status-wrapper').getByTestId('elapsed-timer'),
-    ).toBeVisible();
 
     const answer = page.getByTestId('answer-text');
     await expect(answer).toContainText('Резултатите од испитите се објавуваат');
@@ -142,12 +139,11 @@ test.describe('chat streaming (mocked BFF)', () => {
 
     const stepper = page.getByTestId('search-stepper');
     await expect(stepper).toBeVisible();
-    // The stepper lists all five pipeline stages.
-    await expect(stepper).toContainText('Го разбирам прашањето…');
-    await expect(stepper).toContainText('Пребарувам база на знаење…');
-    await expect(stepper).toContainText('Рерангирам резултати…');
-    await expect(stepper).toContainText('Составувам контекст…');
-    await expect(stepper).toContainText('Генерирам одговор…');
+    // Progressive reveal: retrieval stages appear one-by-one as they run.
+    await expect(stepper).toContainText('Разбирање…');
+    await expect(stepper).toContainText('Пребарување…');
+    await expect(stepper).toContainText('Рерангирање…');
+    await expect(stepper).toContainText('Составување…');
 
     const answer = page.getByTestId('answer-text');
     await expect(answer).toContainText('Резултатите од испитите се објавуваат');

@@ -55,7 +55,6 @@ export const useConversations = (
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<
     null | string
   >(null);
-  const [streamStartedAt, setStreamStartedAt] = useState<null | number>(null);
 
   const persistFinished = useCallback(
     async (allMessages: readonly MyUIMessage[]): Promise<void> => {
@@ -155,7 +154,6 @@ export const useConversations = (
   useStreamTiming({
     firstTokenAtRef,
     messages,
-    setStreamStartedAt,
     startedAtRef,
     status,
   });
@@ -315,7 +313,6 @@ export const useConversations = (
     renderActions,
     retry,
     status,
-    streamStartedAt,
     submitMessage,
   };
 };

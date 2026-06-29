@@ -180,7 +180,7 @@ describe('AssistantMessage', () => {
     );
 
     expect(screen.getByTestId('search-stepper')).toBeInTheDocument();
-    expect(screen.getByText('Пребарувам база на знаење…')).toBeInTheDocument();
+    expect(screen.getByText('Пребарување…')).toBeInTheDocument();
   });
 
   it('advances the stepper to the generate stage after the status resets', () => {
@@ -197,7 +197,7 @@ describe('AssistantMessage', () => {
       />,
     );
 
-    expect(screen.getByText('Составувам контекст…')).toBeInTheDocument();
+    expect(screen.getByText('Составување…')).toBeInTheDocument();
 
     rerender(
       <AssistantMessage
@@ -207,7 +207,7 @@ describe('AssistantMessage', () => {
       />,
     );
 
-    expect(screen.getByText('Генерирам одговор…')).toBeInTheDocument();
+    expect(screen.getByText('Генерирање…')).toBeInTheDocument();
   });
 
   it('renders a Retry button for a non-interrupted error', () => {
@@ -485,16 +485,16 @@ describe('Thread', () => {
     expect(screen.queryByTestId(ANSWER_TEXT_TESTID)).not.toBeInTheDocument();
   });
 
-  it('shows a live elapsed timer while awaiting the reply', () => {
+  it('does not render an inline elapsed timer while awaiting the reply', () => {
     render(
       <Thread
         messages={[userMessage('прашање')]}
         status="submitted"
-        streamStartedAt={Date.now()}
       />,
     );
 
-    expect(screen.getByTestId('elapsed-timer')).toBeInTheDocument();
+    expect(screen.getByTestId('typing-indicator')).toBeInTheDocument();
+    expect(screen.queryByTestId('elapsed-timer')).toBeNull();
   });
 
   it('passes the active status only to the LAST assistant message while streaming', () => {

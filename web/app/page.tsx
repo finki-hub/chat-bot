@@ -79,7 +79,6 @@ const ChatScreen = () => {
     renderActions,
     retry,
     status,
-    streamStartedAt,
     submitMessage,
   } = useConversations(model, unavailable, reasoningActive);
 
@@ -111,7 +110,6 @@ const ChatScreen = () => {
             onRetry={unavailable ? undefined : retry}
             renderActions={renderActions}
             status={status}
-            streamStartedAt={streamStartedAt}
           />
           <Composer
             disabled={unavailable}

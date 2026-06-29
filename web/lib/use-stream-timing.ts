@@ -12,26 +12,21 @@ const hasAssistantText = (message: MyUIMessage): boolean =>
 export const useStreamTiming = ({
   firstTokenAtRef,
   messages,
-  setStreamStartedAt,
   startedAtRef,
   status,
 }: {
   firstTokenAtRef: RefObject<null | number>;
   messages: MyUIMessage[];
-  setStreamStartedAt: (value: null | number) => void;
   startedAtRef: RefObject<null | number>;
   status: 'error' | 'ready' | 'streaming' | 'submitted';
 }): void => {
   useEffect(() => {
-    if (status === 'submitted') {
-      const now = Date.now();
-      startedAtRef.current = now;
-      firstTokenAtRef.current = null;
-      setStreamStartedAt(now);
-    } else if (status === 'ready' || status === 'error') {
-      setStreamStartedAt(null);
+    if (status !== 'submitted') {
+      return;
     }
-  }, [status, firstTokenAtRef, setStreamStartedAt, startedAtRef]);
+    startedAtRef.current = Date.now();
+    firstTokenAtRef.current = null;
+  }, [status, firstTokenAtRef, startedAtRef]);
 
   useEffect(() => {
     if (firstTokenAtRef.current !== null || startedAtRef.current === null) {

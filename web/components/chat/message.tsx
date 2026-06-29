@@ -8,7 +8,6 @@ import {
   MessageContent,
   MessageResponse,
 } from '@/components/ai-elements/message';
-import { ElapsedTimer } from '@/components/chat/elapsed-timer';
 import { ReasoningDisclosure } from '@/components/chat/reasoning-disclosure';
 import { SearchStatus } from '@/components/chat/search-status';
 import { SearchStepper } from '@/components/chat/search-stepper';
@@ -22,6 +21,7 @@ import { formatThroughput } from '@/lib/diagnostics';
 import { formatDuration } from '@/lib/duration';
 import { formatSpanLabel, t } from '@/lib/i18n';
 import { reasoningParts, textParts } from '@/lib/message-parts';
+import { usePresence } from '@/lib/use-presence';
 import { useSearchStage } from '@/lib/use-search-stage';
 
 export type AssistantMessageProps = {
@@ -31,7 +31,6 @@ export type AssistantMessageProps = {
   onRetry?: () => void;
   pending?: boolean;
   statusPart?: StatusPart;
-  streamStartedAt?: null | number;
 };
 
 type Diagnostics = NonNullable<MyUIMessage['metadata']>['diagnostics'];
@@ -259,29 +258,32 @@ const MessageError = ({
   </div>
 );
 
+// Keep in sync with the `duration-300` exit transition on the stepper wrapper.
+const STEP_EXIT_MS = 300;
+
 const AssistantMessageStatus = ({
   errorPart,
-  liveTimer,
   pending,
   reasoningText,
   statusPart,
   text,
 }: {
   errorPart?: ErrorNotice;
-  liveTimer: ReactNode;
   pending?: boolean;
   reasoningText: string;
   statusPart?: StatusPart;
   text: null | string;
 }) => {
-  const maxStage = useSearchStage({
+  const stages = useSearchStage({
     pending,
     stage: statusPart?.stage,
+    statusActive: Boolean(statusPart),
     text,
   });
 
   const showStepper =
-    maxStage !== undefined && text === null && (pending ?? Boolean(statusPart));
+    stages.length > 0 && text === null && (pending ?? Boolean(statusPart));
+  const stepper = usePresence(showStepper, STEP_EXIT_MS);
   const showChip = Boolean(statusPart) && !text && !statusPart?.stage;
   const showDots =
     Boolean(pending) &&
@@ -289,36 +291,43 @@ const AssistantMessageStatus = ({
     !statusPart &&
     !errorPart &&
     reasoningText.length === 0 &&
-    maxStage === undefined;
+    stages.length === 0;
 
-  return (
-    <>
-      {showStepper ? (
-        <div className="flex items-start gap-2">
-          <SearchStepper activeStage={maxStage} />
-          {liveTimer}
+  if (stepper.mounted) {
+    // Collapse + fade the steps on exit (grid-rows 1fr→0fr squashes them
+    // upward) instead of unmounting abruptly when the answer arrives.
+    return (
+      <div
+        aria-hidden={stepper.exiting}
+        className={`grid transition-all duration-300 ease-out motion-reduce:transition-none ${
+          stepper.exiting
+            ? 'grid-rows-[0fr] opacity-0'
+            : 'grid-rows-[1fr] opacity-100'
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <SearchStepper stages={stages} />
         </div>
-      ) : null}
-      {showChip && statusPart ? (
-        <div
-          className="flex items-center gap-2"
-          data-testid="search-status-wrapper"
-        >
-          <SearchStatus
-            label={statusPart.label}
-            tool={statusPart.tool}
-          />
-          {liveTimer}
-        </div>
-      ) : null}
-      {showDots ? (
-        <div className="flex items-center gap-2">
-          <TypingIndicator />
-          {liveTimer}
-        </div>
-      ) : null}
-    </>
-  );
+      </div>
+    );
+  }
+
+  if (showChip && statusPart) {
+    return (
+      <div data-testid="search-status-wrapper">
+        <SearchStatus
+          label={statusPart.label}
+          tool={statusPart.tool}
+        />
+      </div>
+    );
+  }
+
+  if (showDots) {
+    return <TypingIndicator />;
+  }
+
+  return null;
 };
 export const AssistantMessage = ({
   actions,
@@ -327,7 +336,6 @@ export const AssistantMessage = ({
   onRetry,
   pending,
   statusPart,
-  streamStartedAt,
 }: AssistantMessageProps) => {
   const parts = textParts(message);
   const reasoningText = reasoningParts(message)
@@ -340,13 +348,10 @@ export const AssistantMessage = ({
   const inPreamble =
     Boolean(pending) && Boolean(statusPart) && parts.length <= 1;
   const text = inPreamble ? null : (parts.at(-1)?.text ?? null);
+  const answerVisible = Boolean(text);
   const reasoningStreaming =
     Boolean(pending) && reasoningText.length > 0 && text === null;
 
-  const liveTimer =
-    typeof streamStartedAt === 'number' ? (
-      <ElapsedTimer startedAt={streamStartedAt} />
-    ) : null;
   const timing = message.metadata?.timing;
   const diagnostics = message.metadata?.diagnostics;
   const inferenceModel = message.metadata?.inferenceModel;
@@ -354,7 +359,8 @@ export const AssistantMessage = ({
   return (
     <Message from="assistant">
       <MessageContent>
-        {reasoningText ? (
+        {/* Once the answer is visible, reasoning collapses to a toggle above it. */}
+        {answerVisible && reasoningText.length > 0 ? (
           <ReasoningDisclosure
             streaming={reasoningStreaming}
             text={reasoningText}
@@ -376,21 +382,28 @@ export const AssistantMessage = ({
         )}
         <AssistantMessageStatus
           errorPart={errorPart}
-          liveTimer={liveTimer}
           pending={pending}
           reasoningText={reasoningText}
           statusPart={statusPart}
           text={text}
         />
+        {/* While still streaming (no answer yet), reasoning streams in BELOW the
+            step list so it grows downward instead of displacing the steps. */}
+        {!answerVisible && reasoningText.length > 0 ? (
+          <ReasoningDisclosure
+            streaming={reasoningStreaming}
+            text={reasoningText}
+          />
+        ) : null}
         {errorPart ? (
           <MessageError
             errorPart={errorPart}
             onRetry={onRetry}
           />
         ) : null}
-        {actions === undefined || actions === null ? null : (
+        {answerVisible && actions !== undefined && actions !== null ? (
           <div className="mt-2">{actions}</div>
-        )}
+        ) : null}
       </MessageContent>
     </Message>
   );
