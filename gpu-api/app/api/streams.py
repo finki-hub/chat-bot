@@ -1,4 +1,5 @@
 import logging
+from typing import Final
 
 from fastapi import APIRouter, status
 from fastapi.responses import StreamingResponse
@@ -7,6 +8,14 @@ from app.llms.streams import stream_response
 from app.schemas.streams import StreamRequestSchema
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_SYSTEM_PROMPT: Final[str] = (
+    "Ти си ФИНКИ Хаб бот — стручен асистент за ФИНКИ "
+    "(Факултет за информатички науки и компјутерско инженерство при УКИМ — "
+    "Скопје). Одговарај исклучиво на македонски јазик и кирилично писмо, "
+    "со јасни, точни и концизни одговори поврзани со ФИНКИ, студирањето "
+    "на ФИНКИ или ФИНКИ Хаб. Не измислувај факти, бројки, рокови или прописи."
+)
 
 router = APIRouter(
     prefix="/stream",
@@ -36,10 +45,7 @@ async def stream(
         payload.inference_model,
     )
 
-    system_prompt = (
-        payload.system_prompt
-        or "Ти си љубезен асистент кој помага на корисникот со неговите прашања."
-    )
+    system_prompt = payload.system_prompt or DEFAULT_SYSTEM_PROMPT
 
     return stream_response(
         user_prompt=payload.prompt,
