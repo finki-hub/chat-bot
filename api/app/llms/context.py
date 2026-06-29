@@ -5,8 +5,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from uuid import UUID
 
-import httpx
-
 from app.data.connection import Database
 from app.data.documents import get_chunks_window, get_closest_chunks
 from app.data.links import fetch_links_for_context
@@ -15,15 +13,13 @@ from app.llms.embeddings import generate_embeddings
 from app.llms.models import Model
 from app.llms.prompts import CONTEXTUALIZE_SYSTEM_PROMPT, HYDE_SYSTEM_PROMPT
 from app.llms.query_transform import transform_query
+from app.llms.reranker import post_rerank as _post_rerank
 from app.llms.text_utils import _prepare_text_for_embedding
 from app.schemas.documents import ChunkSchema
 from app.schemas.questions import QuestionSchema
 from app.utils.exceptions import RetrievalError
-from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
 from app.utils.timing import (
-    current_distinct_id,
-    current_response_id,
     record_reranker_scores,
     record_retrieval_ids,
     record_retrieval_shape,
@@ -37,8 +33,6 @@ settings = Settings()
 # Guarantee at least this many FAQ answers in the final context (if available), so a
 # long document's many chunks cannot crowd FAQ out of the shared rerank pool.
 RESERVED_FAQ_SLOTS: int = 3
-_RERANKER_TIMEOUT = httpx.Timeout(timeout=30.0)
-_RERANKER_MAX_RETRIES: int = 1
 # Chunks pulled in on each side of a retrieved chunk, to give the model a contiguous passage.
 _NEIGHBOR_WINDOW: int = 1
 _RETRIEVAL_IDS_CAP: int = 10
@@ -53,40 +47,6 @@ class _Candidate:
     distance: float | None = None  # carried only for the DEBUG trace
     doc_id: UUID | None = None  # chunk identity for neighbor expansion (None for FAQ)
     chunk_index: int | None = None
-
-
-async def _post_rerank(payload: dict) -> httpx.Response:
-    client = get_http_client()
-    for attempt in range(_RERANKER_MAX_RETRIES + 1):
-        try:
-            headers: dict[str, str] = {}
-            rid = current_response_id()
-            if rid:
-                headers["X-Response-Id"] = rid
-            did = current_distinct_id()
-            if did:
-                headers["X-Distinct-Id"] = did
-            response = await client.post(
-                f"{settings.GPU_API_URL}/rerank/",
-                json=payload,
-                headers=headers or None,
-                timeout=_RERANKER_TIMEOUT,
-            )
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
-            if attempt < _RERANKER_MAX_RETRIES:
-                logger.warning(
-                    "Reranker attempt %d failed (%s), retrying...",
-                    attempt + 1,
-                    exc,
-                )
-                continue
-            raise
-        else:
-            return response
-    raise RuntimeError(
-        "Unreachable: reranker retry loop exited without return or raise",
-    )
 
 
 async def _embed_variant(
