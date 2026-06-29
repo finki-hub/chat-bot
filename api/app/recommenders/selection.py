@@ -60,12 +60,17 @@ def _apply_prior(
     return out
 
 
-def _pair_objective(
-    pair: tuple[str, str],
+def _members_objective(
+    members: tuple[str, ...],
     candidates: Mapping[str, float],
     ranked: RankedPeople,
 ) -> float:
-    a, b = pair
+    if not members:
+        return 0.0
+    if len(members) == 1:
+        return candidates[members[0]]
+
+    a, b = members
     key = frozenset((a, b))
     return (
         candidates[a]
@@ -75,11 +80,11 @@ def _pair_objective(
     )
 
 
-def _candidate_pairs(
+def _candidate_member_sets(
     candidates: Mapping[str, float],
     constraints: SelectionConstraints,
     mentor: str | None,
-) -> list[tuple[str, str]]:
+) -> list[tuple[str, ...]]:
     pool = sorted(
         (
             name
@@ -90,7 +95,7 @@ def _candidate_pairs(
         reverse=True,
     )
     if len(pool) < 2:
-        return []
+        return [tuple(pool)]
     return list(itertools.combinations(pool, 2))
 
 
@@ -102,15 +107,16 @@ def _member_alternatives(
     mentor_component: float,
 ) -> list[CommitteeAlternative]:
     alternatives: list[CommitteeAlternative] = []
-    for pair in _candidate_pairs(candidates, constraints, mentor):
-        if not _committee_contains_required(mentor, pair, constraints.include):
+    for members in _candidate_member_sets(candidates, constraints, mentor):
+        if not _committee_contains_required(mentor, members, constraints.include):
             continue
         alternatives.append(
             CommitteeAlternative(
                 mentor=mentor,
-                members=pair,
-                score=mentor_component + _pair_objective(pair, candidates, ranked),
-                supporting_diploma_ids=_collect_supporting(ranked, mentor, pair),
+                members=members,
+                score=mentor_component
+                + _members_objective(members, candidates, ranked),
+                supporting_diploma_ids=_collect_supporting(ranked, mentor, members),
             ),
         )
     alternatives.sort(key=lambda alt: alt.score, reverse=True)
