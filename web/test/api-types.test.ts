@@ -27,6 +27,7 @@ describe('lib/api-types', () => {
       temperature: 0.3,
     } satisfies ChatRequestBody;
 
+    expect(body.interface).toBe('web');
     expect(body.messages.at(-1)?.role).toBe('user');
     expect(body.temperature).toBe(0.3);
   });
