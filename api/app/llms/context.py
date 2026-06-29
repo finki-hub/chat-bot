@@ -223,6 +223,10 @@ async def get_retrieved_context(
                     max_tokens=200,
                 ),
             )
+    except asyncio.CancelledError:
+        original_embedding_task.cancel()
+        await asyncio.gather(original_embedding_task, return_exceptions=True)
+        raise
     except Exception as e:
         original_embedding_task.cancel()
         await asyncio.gather(original_embedding_task, return_exceptions=True)

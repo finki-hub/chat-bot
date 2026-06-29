@@ -181,6 +181,9 @@ async def recommend_committee(
 
     try:
         retrieved = await retrieved_task
+    except asyncio.CancelledError:
+        await _cancel_background_tasks(background_tasks)
+        raise
     except Exception:
         await _cancel_background_tasks(background_tasks)
         raise
@@ -196,6 +199,9 @@ async def recommend_committee(
         papers = await paper_task if paper_task is not None else []
         mentor_prior = await mentor_prior_task
         coauthor_prior = await coauthor_prior_task if coauthor_prior_task else None
+    except asyncio.CancelledError:
+        await _cancel_background_tasks(background_tasks)
+        raise
     except Exception:
         await _cancel_background_tasks(background_tasks)
         raise
