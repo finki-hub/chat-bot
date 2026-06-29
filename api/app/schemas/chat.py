@@ -9,6 +9,8 @@ from app.constants.defaults import (
 )
 from app.llms.models import Model
 
+ChatInterface = Literal["discord", "web"]
+
 
 class ConversationTurn(BaseModel):
     role: Literal["user", "assistant"] = Field(
@@ -45,6 +47,14 @@ class ChatSchema(BaseModel):
         description=(
             "The system prompt to use for the chat. "
             "This is a fixed prompt that sets the context for the chat model."
+        ),
+    )
+    interface: ChatInterface = Field(
+        "discord",
+        examples=["discord", "web"],
+        description=(
+            "The client interface that will render the answer. Discord supports "
+            "limited Markdown; web supports full Markdown, including tables."
         ),
     )
     embeddings_model: Model = Field(
