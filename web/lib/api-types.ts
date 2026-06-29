@@ -3,6 +3,7 @@ import type { UIMessage } from 'ai';
 export type ChatRequestBody = {
   embeddings_model?: ModelId;
   inference_model?: ModelId;
+  interface: ChatInterface;
   max_tokens?: number;
   messages: ConversationTurn[];
   query_transform_model?: ModelId;
@@ -11,6 +12,8 @@ export type ChatRequestBody = {
   temperature?: number;
   top_p?: number;
 };
+
+export type ChatInterface = 'discord' | 'web';
 
 export type ConversationRole = 'assistant' | 'user';
 

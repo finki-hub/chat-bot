@@ -84,6 +84,7 @@ export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
   });
 
   return {
+    interface: 'web',
     messages,
     /* eslint-disable camelcase -- snake_case mirrors the Python API wire contract */
     ...(body.embeddingsModel !== undefined && {

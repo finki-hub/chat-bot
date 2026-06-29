@@ -36,6 +36,7 @@ describe('toChatRequestBody', () => {
       embeddings_model: 'BAAI/bge-m3',
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       inference_model: MODEL,
+      interface: 'web',
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       max_tokens: 2_048,
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
@@ -75,7 +76,10 @@ describe('toChatRequestBody', () => {
   it('omits undefined sampling params', () => {
     const out = toChatRequestBody({ messages: [msg('user', 'hi')] });
 
-    expect(out).toStrictEqual({ messages: [{ content: 'hi', role: 'user' }] });
+    expect(out).toStrictEqual({
+      interface: 'web',
+      messages: [{ content: 'hi', role: 'user' }],
+    });
   });
 
   it('removes the regenerated assistant answer from the forwarded context', () => {
@@ -96,6 +100,7 @@ describe('toChatRequestBody', () => {
     expect(
       toChatRequestBody({ messages: [msg('user', 'hi')], reasoning: true }),
     ).toStrictEqual({
+      interface: 'web',
       messages: [{ content: 'hi', role: 'user' }],
       reasoning: true,
     });
