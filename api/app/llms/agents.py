@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk, BaseMessage
 from langgraph.graph.state import CompiledStateGraph
 
+from app.llms.retrieval_result import RetrievalSourcePayload
 from app.utils.posthog_client import capture
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,10 @@ def error_event(code: str, message: str) -> str:
 
 def meta_event(payload: dict[str, object]) -> str:
     return _sse("meta", payload)
+
+
+def sources_event(sources: list[RetrievalSourcePayload]) -> str:
+    return _sse("sources", {"sources": sources})
 
 
 RESET_EVENT = _sse("reset", {})
