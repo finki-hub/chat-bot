@@ -8,6 +8,7 @@ import {
 
 export type UseSearchStageArgs = {
   pending?: boolean;
+  reasoningActive?: boolean;
   stage?: string;
   statusActive?: boolean;
   text: null | string;
@@ -20,6 +21,7 @@ export type UseSearchStageArgs = {
 // turn shows just `generate` and never fabricates retrieval steps that never ran.
 export const useSearchStage = ({
   pending,
+  reasoningActive,
   stage,
   statusActive,
   text,
@@ -34,12 +36,18 @@ export const useSearchStage = ({
       } else {
         const index = SEARCH_STAGES.indexOf(stage);
         setMaxRetrieval((prev) => Math.max(index, prev));
+        // The pipeline path keeps the terminal `context` status active through
+        // generation (it sends no reset). Once the model starts thinking,
+        // generation has begun — advance the stepper to `generate`.
+        if (stage === 'context' && reasoningActive === true) {
+          setGenerating(true);
+        }
       }
     } else if (pending === true && statusActive !== true && text === null) {
       // A reset cleared the status; the model is now generating the answer.
       setGenerating(true);
     }
-  }, [stage, pending, statusActive, text]);
+  }, [stage, pending, reasoningActive, statusActive, text]);
 
   return useMemo<SearchStage[]>(() => {
     const stages: SearchStage[] =

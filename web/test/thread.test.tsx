@@ -210,6 +210,37 @@ describe('AssistantMessage', () => {
     expect(screen.getByText('Генерирање…')).toBeInTheDocument();
   });
 
+  it('streams the answer in the no-reset pipeline path (a stage status stays active)', () => {
+    // The retrieval pipeline keeps a `stage` status active through generation (no
+    // reset is sent), so the real answer must stream under it rather than be
+    // suppressed as a pre-tool preamble.
+    const msg = assistantWithParts([{ text: ANSWER, type: 'text' }]);
+    render(
+      <AssistantMessage
+        message={msg}
+        pending
+        statusPart={{ label: SEARCHING, stage: 'context' }}
+      />,
+    );
+
+    expect(screen.getByTestId(ANSWER_TEXT_TESTID)).toHaveTextContent(ANSWER);
+  });
+
+  it('advances the stepper to generate when reasoning begins at the context stage', () => {
+    const msg = assistantWithParts([
+      { text: 'Размислувам…', type: 'reasoning' },
+    ]);
+    render(
+      <AssistantMessage
+        message={msg}
+        pending
+        statusPart={{ label: SEARCHING, stage: 'context' }}
+      />,
+    );
+
+    expect(screen.getByText('Генерирање…')).toBeInTheDocument();
+  });
+
   it('renders a Retry button for a non-interrupted error', () => {
     const onRetry = vi.fn<() => void>();
     const msg = assistantWithParts([]);

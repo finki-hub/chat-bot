@@ -276,6 +276,7 @@ const AssistantMessageStatus = ({
 }) => {
   const stages = useSearchStage({
     pending,
+    reasoningActive: reasoningText.length > 0,
     stage: statusPart?.stage,
     statusActive: Boolean(statusPart),
     text,
@@ -341,12 +342,17 @@ export const AssistantMessage = ({
   const reasoningText = reasoningParts(message)
     .map((part) => part.text)
     .join('');
-  // While streaming with a tool status active, a text part that is still the
-  // FIRST part is the model's pre-tool preamble (the backend discards it via a
-  // `reset` once the real answer begins). Suppress it so it does not render and
-  // then get swapped for the answer once the answer part starts.
+  // A text part that is still the FIRST part while a stage-less tool/chip status
+  // is active is the model's pre-tool preamble (the backend discards it via a
+  // `reset` once the real answer begins); suppress it so it does not render and
+  // then get swapped for the answer. A retrieval `stage` status, by contrast,
+  // stays active through generation in the pipeline path (no reset is sent), so
+  // it must NOT suppress the real answer streaming under it.
   const inPreamble =
-    Boolean(pending) && Boolean(statusPart) && parts.length <= 1;
+    Boolean(pending) &&
+    Boolean(statusPart) &&
+    statusPart?.stage === undefined &&
+    parts.length <= 1;
   const text = inPreamble ? null : (parts.at(-1)?.text ?? null);
   const answerVisible = Boolean(text);
   const reasoningStreaming =
