@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 settings = Settings()
 
 # Bound the user-editable catalog's footprint in every prompt.
-_LINKS_MAX_ROWS: Final[int] = 50
+_LINKS_RENDER_MAX: Final[int] = 50
 _LINK_NAME_MAX: Final[int] = 80
 _LINK_URL_MAX: Final[int] = 2048
 _LINK_DESC_MAX: Final[int] = 200
@@ -136,7 +136,7 @@ async def get_links_context(db: Database, *, query: str | None = None) -> str:
     """Render relevant links first, followed by the capped link catalog."""
     try:
         with timed("links"):
-            rows = await fetch_links_for_context(db, _LINKS_MAX_ROWS)
+            rows = await fetch_links_for_context(db)
     except Exception:
         logger.exception("Failed to load the link catalog for context")
         return ""
@@ -156,10 +156,14 @@ async def get_links_context(db: Database, *, query: str | None = None) -> str:
             logger.exception("Failed to rerank link catalog; rendering unranked links")
 
     if not relevant:
-        return "Корисни линкови:\n" + "\n".join(_line(c) for c in candidates)
+        return "Корисни линкови:\n" + "\n".join(
+            _line(c) for c in candidates[:_LINKS_RENDER_MAX]
+        )
 
     relevant_keys = {c.url for c in relevant}
-    other_links = [c for c in candidates if c.url not in relevant_keys]
+    other_links = [c for c in candidates if c.url not in relevant_keys][
+        : _LINKS_RENDER_MAX - len(relevant)
+    ]
     sections = ["Најрелевантни линкови:\n" + "\n".join(_line(c) for c in relevant)]
     if other_links:
         sections.append(
