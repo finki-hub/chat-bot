@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 
@@ -63,6 +64,17 @@ async def _get_mentor_prior(db: Database) -> MentorPriorIndex:
     return prior
 
 
+async def _get_coauthor_prior(db: Database) -> MentorPriorIndex:
+    return build_coauthor_prior(await get_all_paper_authors(db))
+
+
+async def _cancel_background_tasks(tasks: list[asyncio.Task]) -> None:
+    for task in tasks:
+        if not task.done():
+            task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
 def _person_score(
     name: str,
     ranked: RankedPeople,
@@ -124,21 +136,6 @@ async def recommend_committee(
         DEFAULT_EMBEDDINGS_MODEL,
     )
 
-    retrieved = await retrieve_similar_diplomas(
-        db,
-        text,
-        DEFAULT_EMBEDDINGS_MODEL,
-        _INITIAL_K,
-        _TOP_K,
-        query_embedding=query_embedding,
-    )
-
-    if mode is Mode.FULL and not retrieved:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No similar defended theses found to base a recommendation on.",
-        )
-
     weights = ScoringWeights()
 
     use_papers = (
@@ -146,17 +143,63 @@ async def recommend_committee(
         or weights.coauthor_weight > 0
         or weights.coauthor_member_boost > 0
     )
-    papers = (
-        await retrieve_professor_papers(
+
+    retrieved_task = asyncio.create_task(
+        retrieve_similar_diplomas(
             db,
             text,
             DEFAULT_EMBEDDINGS_MODEL,
-            _PAPER_K,
+            _INITIAL_K,
+            _TOP_K,
             query_embedding=query_embedding,
+        ),
+    )
+    paper_task = (
+        asyncio.create_task(
+            retrieve_professor_papers(
+                db,
+                text,
+                DEFAULT_EMBEDDINGS_MODEL,
+                _PAPER_K,
+                query_embedding=query_embedding,
+            ),
         )
         if use_papers
-        else []
+        else None
     )
+    mentor_prior_task = asyncio.create_task(_get_mentor_prior(db))
+    coauthor_prior_task = (
+        asyncio.create_task(_get_coauthor_prior(db))
+        if weights.coauthor_prior_weight > 0
+        else None
+    )
+    background_tasks: list[asyncio.Task] = [mentor_prior_task]
+    if paper_task is not None:
+        background_tasks.append(paper_task)
+    if coauthor_prior_task is not None:
+        background_tasks.append(coauthor_prior_task)
+
+    try:
+        retrieved = await retrieved_task
+    except Exception:
+        await _cancel_background_tasks(background_tasks)
+        raise
+
+    if mode is Mode.FULL and not retrieved:
+        await _cancel_background_tasks(background_tasks)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No similar defended theses found to base a recommendation on.",
+        )
+
+    try:
+        papers = await paper_task if paper_task is not None else []
+        mentor_prior = await mentor_prior_task
+        coauthor_prior = await coauthor_prior_task if coauthor_prior_task else None
+    except Exception:
+        await _cancel_background_tasks(background_tasks)
+        raise
+
     expertise = build_expertise_index(papers, weights)
     coauthors = (
         _accumulate_coauthor_edges(papers, weights)
@@ -171,14 +214,6 @@ async def recommend_committee(
         weights,
         mode,
         given_mentor=payload.mentor,
-    )
-
-    mentor_prior = await _get_mentor_prior(db)
-
-    coauthor_prior = (
-        build_coauthor_prior(await get_all_paper_authors(db))
-        if weights.coauthor_prior_weight > 0
-        else None
     )
 
     rec = select_committee(

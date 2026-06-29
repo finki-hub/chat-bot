@@ -200,6 +200,10 @@ async def get_retrieved_context(
             history_text,
         )
 
+    original_embedding_task = asyncio.create_task(
+        _embed_variant(search_query, embedding_model, is_document=False),
+    )
+
     try:
         with timed("retrieval.rewrite_hyde"):
             rewritten_query, hyde_passage = await asyncio.gather(
@@ -220,6 +224,8 @@ async def get_retrieved_context(
                 ),
             )
     except Exception as e:
+        original_embedding_task.cancel()
+        await asyncio.gather(original_embedding_task, return_exceptions=True)
         raise RetrievalError("Failed during query transform / HyDE generation") from e
 
     # transform_query can return an empty/whitespace string on a refusal; a blank
@@ -237,7 +243,7 @@ async def get_retrieved_context(
     try:
         with timed("retrieval.embed"):
             emb_original, emb_rewritten, emb_hyde = await asyncio.gather(
-                _embed_variant(search_query, embedding_model, is_document=False),
+                original_embedding_task,
                 _embed_variant(rewritten_query, embedding_model, is_document=False),
                 _embed_variant(hyde_passage, embedding_model, is_document=True),
             )
