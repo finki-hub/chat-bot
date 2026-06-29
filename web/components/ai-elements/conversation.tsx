@@ -5,20 +5,54 @@ import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { ArrowDownIcon } from "lucide-react";
 import type { ComponentProps } from "react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+const prefersReducedMotion = () =>
+  typeof matchMedia === 'function' && matchMedia(REDUCED_MOTION_QUERY).matches;
+
+const usePrefersReducedMotion = () => {
+  const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
+
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') {
+      return;
+    }
+
+    const media = matchMedia(REDUCED_MOTION_QUERY);
+    const handleChange = (event: MediaQueryListEvent) => {
+      setReducedMotion(event.matches);
+    };
+
+    setReducedMotion(media.matches);
+    media.addEventListener('change', handleChange);
+
+    return () => {
+      media.removeEventListener('change', handleChange);
+    };
+  }, []);
+
+  return reducedMotion;
+};
 
 export type ConversationProps = ComponentProps<typeof StickToBottom>;
 
-export const Conversation = ({ className, ...props }: ConversationProps) => (
-  <StickToBottom
-    className={cn("relative flex-1 overflow-y-hidden", className)}
-    initial="smooth"
-    resize="smooth"
-    role="log"
-    {...props}
-  />
-);
+export const Conversation = ({ className, ...props }: ConversationProps) => {
+  const reducedMotion = usePrefersReducedMotion();
+  const scrollBehavior = reducedMotion ? 'instant' : 'smooth';
+
+  return (
+    <StickToBottom
+      className={cn("relative flex-1 overflow-y-hidden", className)}
+      initial={scrollBehavior}
+      resize={scrollBehavior}
+      role="log"
+      {...props}
+    />
+  );
+};
 
 export type ConversationContentProps = ComponentProps<
   typeof StickToBottom.Content
@@ -41,10 +75,16 @@ export const ConversationScrollButton = ({
   ...props
 }: ConversationScrollButtonProps) => {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext();
+  const reducedMotion = usePrefersReducedMotion();
 
   const handleScrollToBottom = useCallback(() => {
+    if (reducedMotion) {
+      scrollToBottom('instant');
+      return;
+    }
+
     scrollToBottom();
-  }, [scrollToBottom]);
+  }, [reducedMotion, scrollToBottom]);
 
   return (
     !isAtBottom && (

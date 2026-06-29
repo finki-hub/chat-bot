@@ -1,24 +1,36 @@
 import type { ReactNode } from 'react';
 
 import { render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ConversationScrollButton } from '@/components/ai-elements/conversation';
+import {
+  Conversation,
+  ConversationScrollButton,
+} from '@/components/ai-elements/conversation';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 
+type StickToBottomRootProps = {
+  readonly children?: ReactNode;
+  readonly initial?: boolean | ScrollBehavior;
+  readonly resize?: ScrollBehavior;
+};
+
 const stickToBottom = vi.hoisted(() => {
-  const scrollToBottom = vi.fn<() => void>();
+  const rootProps: StickToBottomRootProps[] = [];
+  const scrollToBottom = vi.fn<(behavior?: ScrollBehavior) => void>();
   // eslint-disable-next-line unicorn/consistent-function-scoping -- Vitest mock factories are hoisted, so mock components must be created inside vi.hoisted.
   const Content = ({ children }: { readonly children?: ReactNode }) => (
     <div>{children}</div>
   );
-  // eslint-disable-next-line unicorn/consistent-function-scoping -- Vitest mock factories are hoisted, so mock components must be created inside vi.hoisted.
-  const Root = ({ children }: { readonly children?: ReactNode }) => (
-    <div>{children}</div>
-  );
+  const Root = ({ children, initial, resize }: StickToBottomRootProps) => {
+    rootProps.push({ initial, resize });
+
+    return <div>{children}</div>;
+  };
   Root.Content = Content;
 
-  return { Root, scrollToBottom };
+  return { Root, rootProps, scrollToBottom };
 });
 
 vi.mock('use-stick-to-bottom', () => ({
@@ -29,9 +41,32 @@ vi.mock('use-stick-to-bottom', () => ({
   }),
 }));
 
+const createMediaQueryList = (
+  matches: boolean,
+  media: string,
+): MediaQueryList => {
+  const target = new EventTarget();
+
+  return {
+    addEventListener: target.addEventListener.bind(target),
+    addListener() {},
+    dispatchEvent: target.dispatchEvent.bind(target),
+    matches,
+    media,
+    onchange: null,
+    removeEventListener: target.removeEventListener.bind(target),
+    removeListener() {},
+  };
+};
+
 describe('ai-elements smoke', () => {
   beforeEach(() => {
+    stickToBottom.rootProps.length = 0;
     stickToBottom.scrollToBottom.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('renders a Message with text content', () => {
@@ -50,5 +85,28 @@ describe('ai-elements smoke', () => {
     expect(
       screen.getByRole('button', { name: 'Скролувај до најновата порака' }),
     ).toBeInTheDocument();
+  });
+
+  it('uses instant scrolling when reduced motion is requested', async () => {
+    vi.stubGlobal('matchMedia', (query: string) =>
+      createMediaQueryList(query === '(prefers-reduced-motion: reduce)', query),
+    );
+
+    render(
+      <Conversation>
+        <div />
+      </Conversation>,
+    );
+    render(<ConversationScrollButton />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Скролувај до најновата порака' }),
+    );
+
+    expect(stickToBottom.rootProps.at(-1)).toMatchObject({
+      initial: 'instant',
+      resize: 'instant',
+    });
+    expect(stickToBottom.scrollToBottom).toHaveBeenCalledWith('instant');
   });
 });
