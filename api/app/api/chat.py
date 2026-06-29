@@ -333,6 +333,7 @@ async def _chat_response_stream(
                 "embeddings_model": payload.embeddings_model.value,
                 "query_transform_model": payload.query_transform_model.value,
                 "reasoning": payload.reasoning,
+                "interface": payload.interface,
                 "temperature": payload.temperature,
                 "max_tokens": payload.max_tokens,
                 "query_len": len(payload.query),
