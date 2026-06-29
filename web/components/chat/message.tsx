@@ -1,7 +1,12 @@
-import { Clock3 } from 'lucide-react';
+import { BookOpenText, Clock3, ExternalLink } from 'lucide-react';
 import { type ReactNode } from 'react';
 
-import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
+import type {
+  ErrorNotice,
+  MyUIMessage,
+  RetrievedSource,
+  StatusPart,
+} from '@/lib/api-types';
 
 import {
   Message,
@@ -48,6 +53,88 @@ const DiagnosticsRow = ({ label, value }: { label: string; value: string }) => (
     <span className="shrink-0 tabular-nums">{value}</span>
   </div>
 );
+
+const SourceKindLabel = ({ source }: { source: RetrievedSource }) => (
+  <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+    {source.kind === 'faq' ? t('sources.faq') : t('sources.chunk')}
+  </span>
+);
+
+const SourceCard = ({ source }: { source: RetrievedSource }) => {
+  const firstLink = source.links?.[0];
+  const title = source.section
+    ? `${source.title} · ${source.section}`
+    : source.title;
+
+  return (
+    <li className="min-w-0 rounded-lg border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/35">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <SourceKindLabel source={source} />
+            {typeof source.chunkIndex === 'number' ? (
+              <span className="text-[10px] text-muted-foreground/70">
+                #{source.chunkIndex + 1}
+              </span>
+            ) : null}
+          </div>
+          <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
+            {title}
+          </p>
+        </div>
+        {firstLink ? (
+          <a
+            aria-label={`${t('sources.link')}: ${firstLink.label}`}
+            className="rounded-md p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+            href={firstLink.url}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <ExternalLink
+              aria-hidden="true"
+              className="size-3.5"
+            />
+          </a>
+        ) : null}
+      </div>
+      {source.snippet ? (
+        <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+          {source.snippet}
+        </p>
+      ) : null}
+    </li>
+  );
+};
+
+const SourceCards = ({ sources }: { sources: readonly RetrievedSource[] }) => {
+  if (sources.length === 0) {
+    return null;
+  }
+
+  return (
+    <section
+      aria-label={t('sources.title')}
+      className="mt-3 space-y-2"
+      data-testid="message-sources"
+    >
+      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <BookOpenText
+          aria-hidden="true"
+          className="size-3.5"
+        />
+        <span>{t('sources.title')}</span>
+      </div>
+      <ul className="grid gap-2 sm:grid-cols-2">
+        {sources.map((source) => (
+          <SourceCard
+            key={`${source.kind}:${source.id}`}
+            source={source}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+};
 
 const DiagnosticsGroup = ({ children }: { children: ReactNode }) => (
   <div className="flex flex-col gap-1 border-t border-border/60 pt-2 first:border-t-0 first:pt-0">
@@ -361,6 +448,7 @@ export const AssistantMessage = ({
   const timing = message.metadata?.timing;
   const diagnostics = message.metadata?.diagnostics;
   const inferenceModel = message.metadata?.inferenceModel;
+  const sources = message.metadata?.sources ?? [];
 
   return (
     <Message from="assistant">
@@ -386,6 +474,7 @@ export const AssistantMessage = ({
             timing={timing}
           />
         )}
+        {text === null ? null : <SourceCards sources={sources} />}
         <AssistantMessageStatus
           errorPart={errorPart}
           pending={pending}
