@@ -77,12 +77,14 @@ describe('POST /api/chat', () => {
 
     const sentBody = JSON.parse(init.body as string) as {
       inference_model?: string;
+      interface?: string;
       messages: Array<{ content: string; role: string }>;
     };
 
     expect(sentBody.messages).toStrictEqual([
       { content: 'Здраво', role: 'user' },
     ]);
+    expect(sentBody.interface).toBe('web');
     expect(sentBody.inference_model).toBe(MODEL);
 
     const out = await res.text();

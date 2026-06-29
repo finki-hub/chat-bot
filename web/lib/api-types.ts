@@ -1,8 +1,11 @@
 import type { UIMessage } from 'ai';
 
+export type ChatInterface = 'discord' | 'web';
+
 export type ChatRequestBody = {
   embeddings_model?: ModelId;
   inference_model?: ModelId;
+  interface: ChatInterface;
   max_tokens?: number;
   messages: ConversationTurn[];
   query_transform_model?: ModelId;
