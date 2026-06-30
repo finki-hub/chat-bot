@@ -76,7 +76,9 @@ test('protocol-less markdown links render as safe https links', async ({
 }) => {
   const server = await mockBackend(
     page,
-    answer('Повеќе на [FINKI](finki.ukim.mk) тука.'),
+    answer(
+      'Пример:\n\n```md\nUse [FINKI](finki.ukim.mk)\n```\n\nПовеќе на [FINKI](finki.ukim.mk) тука.',
+    ),
   );
   await page.goto('/');
   await send(page, 'Каде да видам повеќе?');
@@ -88,6 +90,13 @@ test('protocol-less markdown links render as safe https links', async ({
     hasText: 'FINKI',
   });
   await expect(link).toBeVisible();
+
+  const code = answerText.locator('code', {
+    hasText: 'Use [FINKI](finki.ukim.mk)',
+  });
+  await expect(code).toBeVisible();
+  await expect(code).not.toContainText('https://finki.ukim.mk');
+
   await link.click();
 
   const dialog = page.getByRole('dialog');
