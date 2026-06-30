@@ -1,4 +1,7 @@
-import { BookOpenText, ExternalLink } from 'lucide-react';
+'use client';
+
+import { BookOpenText, ChevronRight, ExternalLink } from 'lucide-react';
+import { useId, useState } from 'react';
 
 import type { RetrievedSource } from '@/lib/api-types';
 
@@ -66,6 +69,9 @@ export const SourceCards = ({
 }: {
   sources: readonly RetrievedSource[];
 }) => {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+
   if (sources.length === 0) {
     return null;
   }
@@ -76,21 +82,42 @@ export const SourceCards = ({
       className="mt-3 space-y-2"
       data-testid="message-sources"
     >
-      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <button
+        aria-controls={panelId}
+        aria-expanded={open}
+        aria-label={open ? t('sources.hide') : t('sources.show')}
+        className="inline-flex items-center gap-1.5 rounded-md text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={() => {
+          setOpen(!open);
+        }}
+        type="button"
+      >
+        <ChevronRight
+          aria-hidden="true"
+          className={`size-3 transition-transform ${open ? 'rotate-90' : ''}`}
+        />
         <BookOpenText
           aria-hidden="true"
           className="size-3.5"
         />
         <span>{t('sources.title')}</span>
-      </div>
-      <ul className="grid gap-2 sm:grid-cols-2">
-        {sources.map((source) => (
-          <SourceCard
-            key={`${source.kind}:${source.id}`}
-            source={source}
-          />
-        ))}
-      </ul>
+        <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground/70">
+          {sources.length}
+        </span>
+      </button>
+      {open ? (
+        <ul
+          className="grid gap-2 sm:grid-cols-2"
+          id={panelId}
+        >
+          {sources.map((source) => (
+            <SourceCard
+              key={`${source.kind}:${source.id}`}
+              source={source}
+            />
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 };

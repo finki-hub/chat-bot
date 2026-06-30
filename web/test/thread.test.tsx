@@ -331,7 +331,8 @@ describe('AssistantMessage', () => {
     expect(footnote).toHaveTextContent('2.3s');
   });
 
-  it('renders source cards for finished assistant answers', () => {
+  it('keeps source cards collapsed until the user expands them', async () => {
+    const user = userEvent.setup();
     const msg: MyUIMessage = {
       id: 'a1',
       metadata: {
@@ -362,7 +363,18 @@ describe('AssistantMessage', () => {
 
     render(<AssistantMessage message={msg} />);
 
-    expect(screen.getByTestId('message-sources')).toHaveTextContent('Извори');
+    const sources = screen.getByTestId('message-sources');
+    const toggle = screen.getByRole('button', { name: 'Прикажи извори' });
+
+    expect(sources).toHaveTextContent('Извори');
+    expect(sources).toHaveTextContent('2');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Упис')).toBeNull();
+    expect(screen.queryByText('Статут на ФИНКИ · Член 12')).toBeNull();
+
+    await user.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Упис')).toBeInTheDocument();
     expect(screen.getByText('Статут на ФИНКИ · Член 12')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Врска: iKnow' })).toHaveAttribute(
@@ -373,6 +385,13 @@ describe('AssistantMessage', () => {
       'href',
       'https://www.finki.ukim.mk/',
     );
+
+    await user.click(screen.getByRole('button', { name: 'Сокриј извори' }));
+
+    expect(
+      screen.getByRole('button', { name: 'Прикажи извори' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Упис')).toBeNull();
   });
 
   it('reveals the model and throughput rows in the diagnostics popover', async () => {
