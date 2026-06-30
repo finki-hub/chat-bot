@@ -39,6 +39,7 @@ export const messages = {
   'diagnostics.tokensOutput': 'токени (излез)',
   'diagnostics.tokensTotal': 'токени (вкупно)',
   'diagnostics.topDistance': 'најблиска дистанца',
+  'diagnostics.traceId': 'trace ID',
   'error.description': 'Се случи неочекувана грешка. Обидете се повторно.',
   'error.interrupted': 'Одговорот е прекинат.',
   'error.retry': 'Обиди се повторно',

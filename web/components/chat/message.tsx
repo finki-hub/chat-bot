@@ -43,10 +43,18 @@ const FOOTNOTE_CLASS =
 const formatMs = (ms: null | number | undefined): string =>
   typeof ms === 'number' ? formatDuration(ms) : '—';
 
-const DiagnosticsRow = ({ label, value }: { label: string; value: string }) => (
+const DiagnosticsRow = ({
+  label,
+  value,
+  valueClassName = 'shrink-0 tabular-nums',
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) => (
   <div className="flex items-center justify-between gap-6">
     <span className="min-w-0 truncate text-muted-foreground">{label}</span>
-    <span className="shrink-0 tabular-nums">{value}</span>
+    <span className={valueClassName}>{value}</span>
   </div>
 );
 
@@ -59,9 +67,11 @@ const DiagnosticsGroup = ({ children }: { children: ReactNode }) => (
 const DiagnosticsCard = ({
   diagnostics,
   inferenceModel,
+  traceId,
 }: {
   diagnostics: NonNullable<Diagnostics>;
   inferenceModel?: string;
+  traceId?: string;
 }) => {
   const spans = Object.entries(diagnostics.spans ?? {});
   const { tokens } = diagnostics;
@@ -73,12 +83,21 @@ const DiagnosticsCard = ({
   return (
     <div className="flex flex-col gap-2 text-xs">
       <p className="font-medium text-foreground">{t('diagnostics.title')}</p>
-      {inferenceModel ? (
+      {inferenceModel || traceId ? (
         <DiagnosticsGroup>
-          <DiagnosticsRow
-            label={t('diagnostics.model')}
-            value={inferenceModel}
-          />
+          {inferenceModel ? (
+            <DiagnosticsRow
+              label={t('diagnostics.model')}
+              value={inferenceModel}
+            />
+          ) : null}
+          {traceId ? (
+            <DiagnosticsRow
+              label={t('diagnostics.traceId')}
+              value={traceId}
+              valueClassName="max-w-44 break-all text-right font-mono text-[11px] leading-snug"
+            />
+          ) : null}
         </DiagnosticsGroup>
       ) : null}
       <DiagnosticsGroup>
@@ -173,10 +192,12 @@ const TimingSummary = ({ timing }: { timing: NonNullable<Timing> }) => (
 const MessageTiming = ({
   diagnostics,
   inferenceModel,
+  responseId,
   timing,
 }: {
   diagnostics: Diagnostics;
   inferenceModel?: string;
+  responseId?: string;
   timing: Timing;
 }) => {
   if (timing === undefined) {
@@ -223,6 +244,7 @@ const MessageTiming = ({
         <DiagnosticsCard
           diagnostics={diagnostics}
           inferenceModel={inferenceModel}
+          traceId={responseId}
         />
       </HoverCardContent>
     </HoverCard>
@@ -363,6 +385,7 @@ export const AssistantMessage = ({
   const diagnostics = message.metadata?.diagnostics;
   const inferenceModel = message.metadata?.inferenceModel;
   const sources = message.metadata?.sources ?? [];
+  const responseId = message.metadata?.responseId;
 
   return (
     <Message from="assistant">
@@ -385,6 +408,7 @@ export const AssistantMessage = ({
           <MessageTiming
             diagnostics={diagnostics}
             inferenceModel={inferenceModel}
+            responseId={responseId}
             timing={timing}
           />
         )}

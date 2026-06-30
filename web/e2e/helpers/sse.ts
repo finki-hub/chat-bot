@@ -24,6 +24,16 @@ export type UiChunk =
   | { id: string; type: 'text-end' }
   | { id: string; type: 'text-start' }
   | {
+      messageMetadata: {
+        diagnostics: {
+          serverTotalMs: number;
+          serverTtftMs: number;
+          tokens: { input: number; output: number; total: number };
+        };
+      };
+      type: 'message-metadata';
+    }
+  | {
       messageMetadata?: { inferenceModel?: string; responseId?: string };
       type: 'start';
     }
