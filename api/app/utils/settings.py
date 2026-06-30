@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # sigmoid for num_labels=1 rerankers like bge-reranker-v2-m3, so scores are 0..1) a
     # candidate must clear to enter the final context. Tune per reranker distribution.
     RERANKER_MIN_SCORE: float = 0.1
+    SOURCE_RERANKER_MIN_SCORE: float = 0.3
     MCP_HTTP_URLS: str = ""
     MCP_SSE_URLS: str = ""
     MCP_TOOLS_TTL: int = 3600
