@@ -71,6 +71,32 @@ test('clicking a link opens the shared confirmation modal', async ({
   await server.close();
 });
 
+test('protocol-less markdown links render as safe https links', async ({
+  page,
+}) => {
+  const server = await mockBackend(
+    page,
+    answer('Повеќе на [FINKI](finki.ukim.mk) тука.'),
+  );
+  await page.goto('/');
+  await send(page, 'Каде да видам повеќе?');
+
+  const answerText = page.getByTestId('answer-text');
+  await expect(answerText).not.toContainText('[blocked]');
+
+  const link = answerText.locator('[data-streamdown="link"]', {
+    hasText: 'FINKI',
+  });
+  await expect(link).toBeVisible();
+  await link.click();
+
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('https://finki.ukim.mk/');
+
+  await server.close();
+});
+
 test('delete-all clears the entire history after confirmation', async ({
   page,
 }) => {

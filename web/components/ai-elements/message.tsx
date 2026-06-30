@@ -57,6 +57,16 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 
+const markdownDomainLinkPattern =
+  /(\[[^\]\n]+\]\(\s*)(?![a-z][a-z\d+.-]*:|[#/.])((?:www\.)?(?:[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?\.)+[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?(?:[/?#][^\s)]*)?)(\s*(?:["'][^"']*["']|\([^)]*\))?\))/giu;
+
+const normalizeGeneratedMarkdownLinks = (content: string): string =>
+  content.replace(
+    markdownDomainLinkPattern,
+    (_match, prefix: string, target: string, suffix: string) =>
+      `${prefix}https://${target}${suffix}`
+  );
+
 const LinkSafetyModal = ({
   isOpen,
   onClose,
@@ -90,17 +100,26 @@ const linkSafety: LinkSafetyConfig = {
 };
 
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
-    <Streamdown
-      className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        className
-      )}
-      plugins={streamdownPlugins}
-      linkSafety={linkSafety}
-      {...props}
-    />
-  ),
+  ({ children, className, ...props }: MessageResponseProps) => {
+    const normalizedChildren =
+      typeof children === "string"
+        ? normalizeGeneratedMarkdownLinks(children)
+        : children;
+
+    return (
+      <Streamdown
+        className={cn(
+          "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          className
+        )}
+        plugins={streamdownPlugins}
+        linkSafety={linkSafety}
+        {...props}
+      >
+        {normalizedChildren}
+      </Streamdown>
+    );
+  },
   (prevProps, nextProps) =>
     prevProps.children === nextProps.children &&
     nextProps.isAnimating === prevProps.isAnimating
