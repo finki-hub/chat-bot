@@ -42,14 +42,6 @@ class ChatSchema(BaseModel):
             "to the model as prior context."
         ),
     )
-    system_prompt: str | None = Field(
-        None,
-        examples=["You are a helpful assistant."],
-        description=(
-            "The system prompt to use for the chat. "
-            "This is a fixed prompt that sets the context for the chat model."
-        ),
-    )
     interface: ChatInterface = Field(
         "discord",
         examples=["discord", "web"],

@@ -11,7 +11,6 @@ export type ChatRequestBody = {
   query_transform_mode?: QueryTransformMode;
   query_transform_model?: ModelId;
   reasoning?: boolean;
-  system_prompt?: null | string;
   temperature?: number;
   top_p?: number;
 };
