@@ -394,7 +394,7 @@ describe('AssistantMessage', () => {
     expect(screen.queryByText('Упис')).toBeNull();
   });
 
-  it('reveals the model and throughput rows in the diagnostics popover', async () => {
+  it('reveals the model, trace ID, and throughput rows in the diagnostics popover', async () => {
     const user = userEvent.setup();
     const msg: MyUIMessage = {
       id: 'a1',
@@ -406,6 +406,7 @@ describe('AssistantMessage', () => {
           tokens: { input: 10, output: 30, total: 40 },
         },
         inferenceModel: 'claude-sonnet-4-6',
+        responseId: '00000000-0000-4000-8000-000000000123',
         timing: { totalMs: 2_000, ttftMs: 200 },
       },
       parts: [{ text: 'Готово', type: 'text' }],
@@ -417,6 +418,10 @@ describe('AssistantMessage', () => {
 
     await expect(screen.findByText('модел')).resolves.toBeInTheDocument();
     expect(screen.getByText('claude-sonnet-4-6')).toBeInTheDocument();
+    expect(screen.getByText('trace ID')).toBeInTheDocument();
+    expect(
+      screen.getByText('00000000-0000-4000-8000-000000000123'),
+    ).toBeInTheDocument();
     expect(screen.getByText('брзина (ток./сек)')).toBeInTheDocument();
     expect(screen.getByText('20')).toBeInTheDocument();
   });

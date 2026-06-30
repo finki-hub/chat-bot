@@ -13,12 +13,13 @@ const STATUS_LABEL = '🔍 Пребарувам…';
 const TOOL = 'search_documents';
 const ANSWER = 'Резултатите од испитите се објавуваат на https://finki.ukim.mk';
 const LINK_NAME = /finki\.ukim\.mk/u;
+const DIAGNOSTICS_LABEL = /Дијагностика/u;
 
 test.describe('chat streaming (mocked BFF)', () => {
   test('shows the search chip, drops the preamble, renders the answer, and likes', async ({
     page,
   }) => {
-    const chunks = toolRunChunks({
+    const chatChunks = toolRunChunks({
       answer: ANSWER,
       inferenceModel: INFERENCE_MODEL,
       preamble: PREAMBLE,
@@ -26,6 +27,21 @@ test.describe('chat streaming (mocked BFF)', () => {
       statusLabel: STATUS_LABEL,
       tool: TOOL,
     });
+    const diagnosticsChunk = {
+      messageMetadata: {
+        diagnostics: {
+          serverTotalMs: 1_700,
+          serverTtftMs: 200,
+          tokens: { input: 10, output: 30, total: 40 },
+        },
+      },
+      type: 'message-metadata',
+    } satisfies (typeof chatChunks)[number];
+    const chunks = [
+      ...chatChunks.slice(0, -1),
+      diagnosticsChunk,
+      ...chatChunks.slice(-1),
+    ];
     const statusIndex = chunks.findIndex((c) => c.type === 'data-status');
     const chatServer = await startChatStreamServer({
       gapMs: 600,
@@ -86,6 +102,14 @@ test.describe('chat streaming (mocked BFF)', () => {
     const timing = page.getByTestId('message-timing');
     await expect(timing).toBeVisible();
     await expect(timing).toContainText('прв токен');
+    const diagnosticsTrigger = page.getByRole('button', {
+      name: DIAGNOSTICS_LABEL,
+    });
+    await expect(diagnosticsTrigger).toBeVisible();
+    await diagnosticsTrigger.hover();
+    await expect(page.getByText('trace ID')).toBeVisible();
+    await expect(page.getByText(RESPONSE_ID)).toBeVisible();
+    await page.mouse.move(0, 0);
 
     await page.getByTestId('like-button').click();
     await expect.poll(() => feedbackBody).not.toBeNull();
