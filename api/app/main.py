@@ -48,12 +48,10 @@ def _validate_security_config(current: Settings) -> None:
         msg = f"Production cannot start with insecure default secrets: {joined}"
         raise SecurityConfigurationError(msg)
 
-    for name in insecure_names:
-        logger.warning(
-            "%s is using its insecure built-in default; set it via the environment "
-            "to protect authenticated endpoints.",
-            name,
-        )
+    logger.warning(
+        "One or more authentication secrets are using insecure built-in defaults; "
+        "set them via the environment to protect authenticated endpoints.",
+    )
 
 
 @asynccontextmanager
