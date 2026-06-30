@@ -52,6 +52,26 @@ describe('lib/api-types', () => {
     expect(ev.data.tokens).toStrictEqual({ input: 12, output: 34, total: 46 });
   });
 
+  it('models a protocol-v2 sources event with snake_case wire fields', () => {
+    const ev = {
+      data: {
+        sources: [
+          {
+            // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+            chunk_index: 4,
+            id: 'c1',
+            kind: 'chunk',
+            title: 'Статут',
+          },
+        ],
+      },
+      event: 'sources',
+    } satisfies ProtocolV2Event;
+
+    expect(ev.event).toBe('sources');
+    expect(ev.data.sources[0]?.chunk_index).toBe(4);
+  });
+
   it('models the feedback wire + client payloads', () => {
     const wire = {
       client: 'web',

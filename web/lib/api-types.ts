@@ -113,7 +113,10 @@ export type ProtocolV2Event =
       data: { label: string; stage?: string; state: string; tool?: string };
       event: 'status';
     }
-  | { data: { sources: readonly RetrievedSource[] }; event: 'sources' }
+  | {
+      data: { sources: readonly ProtocolV2RetrievedSource[] };
+      event: 'sources';
+    }
   | { data: { text: string }; event: 'thinking' }
   | { data: { text: string }; event: 'token' }
   | {
@@ -130,6 +133,16 @@ export type ProtocolV2Event =
       };
       event: 'meta';
     };
+
+export type ProtocolV2RetrievedSource = {
+  readonly chunk_index?: number;
+  readonly id: string;
+  readonly kind: RetrievedSourceKind;
+  readonly links?: readonly RetrievedSourceLink[];
+  readonly section?: string;
+  readonly snippet?: string;
+  readonly title: string;
+};
 
 export type RetrievedSource = {
   readonly chunkIndex?: number;
