@@ -6,6 +6,7 @@ import {
   MAX_MESSAGES,
   type MessageDiagnostics,
   type MyUIMessage,
+  type QueryTransformMode,
 } from '@/lib/api-types';
 import { joinText, lastText } from '@/lib/message-parts';
 import { type ParsedEvent } from '@/lib/sse';
@@ -16,6 +17,7 @@ export type ChatClientBody = {
   messageId?: string;
   messages: MyUIMessage[];
   model?: string;
+  queryTransformMode?: QueryTransformMode;
   queryTransformModel?: string;
   reasoning?: boolean;
   temperature?: number;
@@ -94,6 +96,9 @@ export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
     ...(body.maxTokens !== undefined && { max_tokens: body.maxTokens }),
     ...(body.queryTransformModel !== undefined && {
       query_transform_model: body.queryTransformModel,
+    }),
+    ...(body.queryTransformMode !== undefined && {
+      query_transform_mode: body.queryTransformMode,
     }),
     ...(body.reasoning !== undefined && { reasoning: body.reasoning }),
     ...(body.temperature !== undefined && { temperature: body.temperature }),
