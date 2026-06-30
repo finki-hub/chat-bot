@@ -1,5 +1,13 @@
+from typing import Final
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
+
+_PRODUCTION_ENVIRONMENTS: Final[frozenset[str]] = frozenset({"prod", "production"})
+_INSECURE_SECRET_DEFAULTS: Final[dict[str, str]] = {
+    "API_KEY": "your_api_key_here",
+    "MCP_API_KEY": "SystemPass",
+}
 
 
 class Settings(BaseSettings):
@@ -10,6 +18,7 @@ class Settings(BaseSettings):
     APP_TITLE: str = "API"
     APP_DESCRIPTION: str = "API managing questions, links, and LLM interactions."
     API_VERSION: str = "1.0.0"
+    ENVIRONMENT: str = "development"
 
     LOG_LEVEL: str = "INFO"
     TZ: str = "Europe/Skopje"
@@ -53,6 +62,16 @@ class Settings(BaseSettings):
     def parse_comma_separated(cls, v: object) -> str:
         """Normalise the value to a plain string — empty or comma-separated URLs."""
         return str(v).strip() if v else ""
+
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.casefold() in _PRODUCTION_ENVIRONMENTS
+
+    def insecure_secret_names(self) -> list[str]:
+        return [
+            name
+            for name, default in _INSECURE_SECRET_DEFAULTS.items()
+            if getattr(self, name) == default
+        ]
 
     def mcp_http_url_list(self) -> list[str]:
         return [u for u in self.MCP_HTTP_URLS.split(",") if u]

@@ -33,22 +33,27 @@ settings = Settings()
 
 setup_logging(level=settings.LOG_LEVEL)
 
-# Auth secrets with guessable built-in defaults. Warn (not fail) at startup so dev still
-# boots, but a misconfigured prod doesn't silently ship a known key.
-_INSECURE_SECRET_DEFAULTS: dict[str, str] = {
-    "API_KEY": "your_api_key_here",
-    "MCP_API_KEY": "SystemPass",
-}
+
+class SecurityConfigurationError(RuntimeError):
+    """Raised when production starts with an unsafe security configuration."""
 
 
-def _warn_on_insecure_defaults(current: Settings) -> None:
-    for name, default in _INSECURE_SECRET_DEFAULTS.items():
-        if getattr(current, name) == default:
-            logger.warning(
-                "%s is using its insecure built-in default; set it via the environment "
-                "to protect authenticated endpoints.",
-                name,
-            )
+def _validate_security_config(current: Settings) -> None:
+    insecure_names = current.insecure_secret_names()
+    if not insecure_names:
+        return
+
+    if current.is_production():
+        joined = ", ".join(insecure_names)
+        msg = f"Production cannot start with insecure default secrets: {joined}"
+        raise SecurityConfigurationError(msg)
+
+    for name in insecure_names:
+        logger.warning(
+            "%s is using its insecure built-in default; set it via the environment "
+            "to protect authenticated endpoints.",
+            name,
+        )
 
 
 @asynccontextmanager
@@ -56,7 +61,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     App startup/shutdown: init DB, shared HTTP client, and run migrations.
     """
-    _warn_on_insecure_defaults(settings)
+    _validate_security_config(settings)
 
     db = Database(dsn=settings.DATABASE_URL)
     app.state.db = db
