@@ -1,5 +1,6 @@
 import pytest
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from app.llms.chat import handle_chat
 from app.llms.prompts import DEFAULT_AGENT_SYSTEM_PROMPT
@@ -12,7 +13,7 @@ async def test_handle_chat_ignores_client_system_prompt(monkeypatch):
 
     async def fake_stream_response_with_agent(*args, **kwargs):
         captured["system_prompt"] = kwargs["system_prompt"]
-        return StreamingResponse(iter(()))
+        return await run_in_threadpool(lambda: StreamingResponse(iter(())))
 
     monkeypatch.setattr(
         "app.llms.chat.stream_response_with_agent",

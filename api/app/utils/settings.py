@@ -4,10 +4,6 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 _PRODUCTION_ENVIRONMENTS: Final[frozenset[str]] = frozenset({"prod", "production"})
-_INSECURE_SECRET_DEFAULTS: Final[dict[str, str]] = {
-    "API_KEY": "your_api_key_here",
-    "MCP_API_KEY": "SystemPass",
-}
 
 
 class Settings(BaseSettings):
@@ -67,11 +63,15 @@ class Settings(BaseSettings):
         return self.ENVIRONMENT.casefold() in _PRODUCTION_ENVIRONMENTS
 
     def insecure_secret_names(self) -> list[str]:
-        return [
+        fields = type(self).model_fields
+        default_values = (self.API_KEY, self.MCP_API_KEY)
+        return sorted(
             name
-            for name, default in _INSECURE_SECRET_DEFAULTS.items()
-            if getattr(self, name) == default
-        ]
+            for name, field in fields.items()
+            if isinstance(field.default, str)
+            and field.default in default_values
+            and getattr(self, name) == field.default
+        )
 
     def mcp_http_url_list(self) -> list[str]:
         return [u for u in self.MCP_HTTP_URLS.split(",") if u]
