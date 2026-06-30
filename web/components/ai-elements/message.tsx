@@ -14,6 +14,7 @@ import {
   type LinkSafetyConfig,
   type LinkSafetyModalProps,
   Streamdown,
+  defaultRemarkPlugins,
 } from "streamdown";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
@@ -57,6 +58,56 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 
+type MarkdownNode = {
+  children?: unknown;
+  type?: unknown;
+  url?: unknown;
+};
+
+const urlSchemePattern = /^[a-z][a-z\d+.-]*:/iu;
+const domainUrlPattern =
+  /^(?:www\.)?(?:[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?\.)+[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?(?:[/?#].*)?$/iu;
+
+const isMarkdownNode = (value: unknown): value is MarkdownNode =>
+  typeof value === "object" && value !== null;
+
+const normalizeMarkdownLinkTarget = (url: string): string => {
+  if (
+    urlSchemePattern.test(url) ||
+    url.startsWith("#") ||
+    url.startsWith("/") ||
+    url.startsWith(".") ||
+    !domainUrlPattern.test(url)
+  ) {
+    return url;
+  }
+
+  return `https://${url}`;
+};
+
+const normalizeMarkdownLinks = (node: unknown): void => {
+  if (!isMarkdownNode(node)) {
+    return;
+  }
+
+  if (node.type === "link" && typeof node.url === "string") {
+    node.url = normalizeMarkdownLinkTarget(node.url);
+  }
+
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) {
+      normalizeMarkdownLinks(child);
+    }
+  }
+};
+
+const normalizeGeneratedMarkdownLinks = () => normalizeMarkdownLinks;
+
+const remarkPlugins = [
+  ...Object.values(defaultRemarkPlugins),
+  normalizeGeneratedMarkdownLinks,
+] satisfies NonNullable<MessageResponseProps["remarkPlugins"]>;
+
 const LinkSafetyModal = ({
   isOpen,
   onClose,
@@ -98,6 +149,7 @@ export const MessageResponse = memo(
       )}
       plugins={streamdownPlugins}
       linkSafety={linkSafety}
+      remarkPlugins={remarkPlugins}
       {...props}
     />
   ),
