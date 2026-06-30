@@ -128,6 +128,17 @@ def _ms(value: float | None) -> float | None:
     return round(value, 1) if value is not None else None
 
 
+def _query_transform_ms(timings: RequestTimings) -> float | None:
+    transform_ms = timings.spans.get("retrieval.query_transform")
+    if transform_ms is not None:
+        return transform_ms
+    rewrite_ms = timings.spans.get("retrieval.query_rewrite")
+    hyde_ms = timings.spans.get("retrieval.hyde")
+    if rewrite_ms is None and hyde_ms is None:
+        return None
+    return (rewrite_ms or 0.0) + (hyde_ms or 0.0)
+
+
 _WEB_SEARCH_HINTS = ("web_search", "web-search", "websearch", "search_web", "tavily")
 
 
@@ -172,7 +183,10 @@ def _capture_chat_response(
         "embedding_ms": _ms(timings.spans.get("retrieval.embed")),
         "retrieval_ms": _ms(timings.spans.get("retrieval.vector_search")),
         "rerank_ms": _ms(timings.spans.get("retrieval.rerank")),
-        "query_transform_ms": _ms(timings.spans.get("retrieval.rewrite_hyde")),
+        "query_transform_ms": _ms(_query_transform_ms(timings)),
+        "query_rewrite_ms": _ms(timings.spans.get("retrieval.query_rewrite")),
+        "hyde_ms": _ms(timings.spans.get("retrieval.hyde")),
+        "query_transform_mode": payload.query_transform_mode.value,
         "candidate_count": timings.candidate_count,
         "top_distance": timings.top_distance,
         "context_char_len": observation.context_chars,
@@ -279,6 +293,7 @@ async def _instrument_stream(
                     "inference_model": payload.inference_model.value,
                     "embeddings_model": payload.embeddings_model.value,
                     "query_transform_model": payload.query_transform_model.value,
+                    "query_transform_mode": payload.query_transform_mode.value,
                     "retrieval_hit": retrieval_hit,
                     "outcome": outcome,
                     **record,
@@ -339,6 +354,7 @@ async def _chat_response_stream(
                 "inference_model": payload.inference_model.value,
                 "embeddings_model": payload.embeddings_model.value,
                 "query_transform_model": payload.query_transform_model.value,
+                "query_transform_mode": payload.query_transform_mode.value,
                 "reasoning": payload.reasoning,
                 "interface": payload.interface,
                 "temperature": payload.temperature,
@@ -370,6 +386,7 @@ async def _chat_response_stream(
                     query=payload.query,
                     embedding_model=payload.embeddings_model,
                     query_transform_model=payload.query_transform_model,
+                    query_transform_mode=payload.query_transform_mode,
                     history_text=history_text,
                     on_stage=on_stage,
                 )
@@ -394,6 +411,7 @@ async def _chat_response_stream(
                         "response_id": str(response_id),
                         "embeddings_model": payload.embeddings_model.value,
                         "query_transform_model": payload.query_transform_model.value,
+                        "query_transform_mode": payload.query_transform_mode.value,
                         "candidate_count": timings.candidate_count,
                         "top_distance": timings.top_distance,
                         "query_len": len(payload.query),

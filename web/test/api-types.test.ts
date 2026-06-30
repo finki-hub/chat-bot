@@ -24,11 +24,14 @@ describe('lib/api-types', () => {
         { content: 'здраво!', role: 'assistant' },
         { content: 'кога е испитот?', role: 'user' },
       ],
+      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+      query_transform_mode: 'rewrite_hyde',
       temperature: 0.3,
     } satisfies ChatRequestBody;
 
     expect(body.interface).toBe('web');
     expect(body.messages.at(-1)?.role).toBe('user');
+    expect(body.query_transform_mode).toBe('rewrite_hyde');
     expect(body.temperature).toBe(0.3);
   });
 

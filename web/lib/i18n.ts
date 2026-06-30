@@ -26,6 +26,7 @@ export const messages = {
   'conversation.rename': 'Преименувај',
   'conversation.renamePrompt': 'Ново име на разговорот',
   'conversation.renameTitle': 'Преименувај разговор',
+  'conversation.scrollToLatest': 'Скролувај до најновата порака',
   'diagnostics.candidates': 'кандидати',
   'diagnostics.model': 'модел',
   'diagnostics.serverFirstByte': 'прв бајт (сервер)',

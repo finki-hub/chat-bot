@@ -2,10 +2,30 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.llms.models import Model
+from app.schemas.recommendations import (
+    CommitteeAlternativeSchema,
+    PersonScoreSchema,
+    RecommendationEvidenceSchema,
+    RecommendationRequestSchema,
+    RecommendationResponseSchema,
+    SupportingDiplomaSchema,
+)
+
+__all__ = [
+    "CommitteeAlternativeSchema",
+    "DiplomaSchema",
+    "FillDiplomaEmbeddingsSchema",
+    "PersonScoreSchema",
+    "ProfessorGroupSchema",
+    "RecommendationEvidenceSchema",
+    "RecommendationRequestSchema",
+    "RecommendationResponseSchema",
+    "SupportingDiplomaSchema",
+]
 
 
 class DiplomaSchema(BaseModel):
@@ -68,79 +88,6 @@ class FillDiplomaEmbeddingsSchema(BaseModel):
     )
 
 
-class RecommendationRequestSchema(BaseModel):
-    title: str = Field(
-        min_length=1,
-        examples=["Систем за препорака на ментори базиран на вградувања"],
-        description=(
-            "Thesis title (Macedonian/Cyrillic) — the ONLY text input. Required. "
-            "Usually short, occasionally a longer line. No description field exists."
-        ),
-    )
-    mentor: str | None = Field(
-        default=None,
-        examples=["Соња Гиевска"],
-        description=(
-            "Optional canonical mentor name. Provided -> MEMBERS-ONLY: recommend only "
-            "the two members; the mentor is fixed, excluded from candidates, and used as "
-            "a signal. Omitted -> FULL: recommend mentor + two members."
-        ),
-    )
-    mentor_topk: int = Field(
-        default=3,
-        ge=1,
-        le=10,
-        description="Mentor candidate breadth (FULL mode only).",
-    )
-
-    @field_validator("title", "mentor")
-    @classmethod
-    def _strip(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("must not be blank or whitespace-only")
-        return stripped
-
-
-class PersonScoreSchema(BaseModel):
-    name: str = Field(
-        examples=["Соња Гиевска"],
-        description="Canonical professor name",
-    )
-    score: float | None = Field(
-        default=None,
-        examples=[0.873],
-        description="Blended total score (None/echo for a given mentor)",
-    )
-    defense_score: float = Field(
-        examples=[0.62],
-        description="Defense co-occurrence component (explainability/ablation)",
-    )
-    expertise_score: float = Field(
-        examples=[0.41],
-        description="Paper-expertise component (explainability/ablation)",
-    )
-    buddy_score: float = Field(
-        default=0.0,
-        examples=[0.0],
-        description="Co-authorship component (0.0 when the signal is off)",
-    )
-    prior_score: float = Field(
-        default=0.0,
-        examples=[0.42],
-        description=(
-            "Mentor-conditioned co-membership prior component — the weighted habitual "
-            "'this mentor usually sits with' contribution to this member's score."
-        ),
-    )
-    supporting_diploma_ids: list[UUID] = Field(
-        default_factory=list,
-        description="Evidence: diploma ids that support this person",
-    )
-
-
 class ProfessorGroupSchema(BaseModel):
     source: Literal["defense", "coauthor"] = Field(
         examples=["defense"],
@@ -162,25 +109,4 @@ class ProfessorGroupSchema(BaseModel):
     min_weight: int = Field(
         examples=[2],
         description="Min co-occurrences within the window to form an edge",
-    )
-
-
-class RecommendationResponseSchema(BaseModel):
-    mode: Literal["full", "members_only"] = Field(
-        examples=["full"],
-        description="Inferred mode: 'full' (title only) or 'members_only' (title + mentor)",
-    )
-    mentor: PersonScoreSchema = Field(
-        description="FULL: recommended mentor; MEMBERS-ONLY: echoed given mentor",
-    )
-    mentor_is_given: bool = Field(
-        examples=[False],
-        description="False in FULL, True in MEMBERS-ONLY",
-    )
-    members: list[PersonScoreSchema] = Field(
-        description="The unordered member pair (2 entries); ordered by score desc for stable JSON only",
-    )
-    supporting_diploma_ids: list[UUID] = Field(
-        default_factory=list,
-        description="Top-level evidence trail",
     )

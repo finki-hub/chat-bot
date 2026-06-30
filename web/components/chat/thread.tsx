@@ -44,7 +44,9 @@ const Welcome = ({ onPick }: { onPick?: (text: string) => void }) => (
     <img
       alt="ФИНКИ Хаб"
       className="h-16 w-16 object-contain drop-shadow-sm"
+      height={64}
       src="/logo.png"
+      width={64}
     />
     <div className="space-y-2">
       <h2 className="text-2xl font-bold tracking-tight">

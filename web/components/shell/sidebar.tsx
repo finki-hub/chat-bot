@@ -113,7 +113,7 @@ export const Sidebar = ({
               <InputGroupInput
                 aria-label={t('sidebar.search')}
                 className="[&::-webkit-search-cancel-button]:appearance-none"
-                data-testid="conversation-search"
+                data-testid="search-conversations"
                 onChange={(e) => {
                   setQuery(e.target.value);
                 }}

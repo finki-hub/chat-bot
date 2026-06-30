@@ -8,8 +8,8 @@ genuinely relevant source that the distance pre-filter silently dropped.
 ## What it measures
 
 For every `(query -> expected source)` example, the runner drives the **real** retrieval
-stack (`transform_query` rewrite + HyDE, multi-query embedding, pgvector ANN over FAQ +
-chunks, cross-encoder rerank) and records:
+stack (query-variant generation, multi-query embedding, pgvector ANN over FAQ + chunks,
+cross-encoder rerank) and records:
 
 | Metric | Meaning |
 |---|---|
@@ -63,9 +63,21 @@ Compare embedders (this is the praksa A/B):
 # ... --embedding-model text-embedding-3-large
 ```
 
-Useful flags: `--no-transform` (embed the raw query only, to isolate retrieval from the
-rewrite/HyDE step), `--top-k`, `--initial-k`, `--ideal-limit`, `--concurrency`,
-`--json out.json` (per-example dump for diffing across runs).
+Useful flags: `--transform-mode raw|rewrite|hyde|rewrite_hyde`, `--no-transform`
+(legacy alias for `--transform-mode raw`), `--top-k`, `--initial-k`, `--ideal-limit`,
+`--concurrency`, `--json out.json` (per-example dump for diffing across runs).
+
+Run the same golden set across modes to isolate query-transformation impact:
+
+```bash
+for mode in raw rewrite hyde rewrite_hyde; do
+    docker exec -e PYTHONPATH=/app finki-hub-chat-bot-api-1 \
+        python /app/tests/eval/run_eval.py \
+        --golden /app/tests/eval/golden.jsonl \
+        --embedding-model BAAI/bge-m3 \
+        --transform-mode "$mode"
+done
+```
 
 ## Extending the set
 

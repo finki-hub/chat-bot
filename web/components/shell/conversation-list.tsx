@@ -71,7 +71,7 @@ export const ConversationList = ({
             key={c.id}
           >
             <button
-              className="flex-1 truncate text-left"
+              className="flex-1 truncate rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               onClick={() => {
                 onSelect(c.id);
               }}
@@ -79,10 +79,13 @@ export const ConversationList = ({
             >
               {c.title}
             </button>
-            <span className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+            <span
+              className="flex items-center gap-1 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
+              data-testid="row-actions"
+            >
               <button
                 aria-label={t('conversation.rename')}
-                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                className="rounded-md p-1 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
                 onClick={() => {
                   openRename(c);
                 }}
@@ -95,7 +98,7 @@ export const ConversationList = ({
               </button>
               <button
                 aria-label={t('conversation.delete')}
-                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-background hover:text-destructive"
+                className="rounded-md p-1 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring/50"
                 onClick={() => {
                   setPendingDelete(c);
                 }}
@@ -134,6 +137,8 @@ export const ConversationList = ({
           >
             <Input
               aria-label={t('conversation.renamePrompt')}
+              autoComplete="off"
+              name="conversation-title"
               onChange={(e) => {
                 setRenameValue(e.target.value);
               }}

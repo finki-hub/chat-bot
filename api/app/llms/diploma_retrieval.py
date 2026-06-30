@@ -24,6 +24,7 @@ def _to_retrieved(
     return RetrievedDiploma(
         id=diploma.id,
         external_id=diploma.external_id,
+        title=diploma.title,
         mentor=diploma.mentor,
         member1=diploma.member1,
         member2=diploma.member2,

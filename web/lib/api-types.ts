@@ -8,6 +8,7 @@ export type ChatRequestBody = {
   interface: ChatInterface;
   max_tokens?: number;
   messages: ConversationTurn[];
+  query_transform_mode?: QueryTransformMode;
   query_transform_model?: ModelId;
   reasoning?: boolean;
   system_prompt?: null | string;
@@ -24,6 +25,8 @@ export type ConversationTurn = {
 
 // eslint-disable-next-line sonarjs/redundant-type-aliases -- semantic alias for the public wire contract; consumers reference ModelId, not bare string
 export type ModelId = string;
+
+export type QueryTransformMode = 'hyde' | 'raw' | 'rewrite' | 'rewrite_hyde';
 
 export const MAX_MESSAGES = 50;
 export const MAX_CHARS_PER_TURN = 8_000;
