@@ -12,12 +12,19 @@ from fastapi.responses import StreamingResponse
 
 from app.data.connection import Database
 from app.data.db import get_db
-from app.llms.agents import StreamObservation, error_event, meta_event, status_event
+from app.llms.agents import (
+    StreamObservation,
+    error_event,
+    meta_event,
+    sources_event,
+    status_event,
+)
 from app.llms.chat import handle_chat
-from app.llms.context import get_retrieved_context
+from app.llms.context import get_retrieved_context_with_sources
 from app.llms.link_context import get_links_context
 from app.llms.models import CHAT_MODELS
 from app.llms.pricing import cost_usd, is_self_hosted
+from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
 from app.utils.posthog_client import capture, safe_distinct_id
 from app.utils.settings import Settings
@@ -372,9 +379,9 @@ async def _chat_response_stream(
         def on_stage(stage: str) -> None:
             stage_queue.put_nowait(status_event(stage=stage))
 
-        async def run_retrieval() -> str:
+        async def run_retrieval() -> RetrievedContext:
             try:
-                return await get_retrieved_context(
+                return await get_retrieved_context_with_sources(
                     db=db,
                     query=payload.query,
                     embedding_model=payload.embeddings_model,
@@ -396,7 +403,7 @@ async def _chat_response_stream(
             retrieved = await retrieval_task
             links_context = await links_task
 
-            if not retrieved:
+            if not retrieved.text:
                 capture(
                     distinct_id,
                     "retrieval_miss",
@@ -416,10 +423,10 @@ async def _chat_response_stream(
                 if links_context:
                     context = f"{context}\n\n{links_context}"
             else:
-                context = retrieved
-                observation.context_chars = len(retrieved)
+                context = retrieved.text
+                observation.context_chars = len(retrieved.text)
                 if links_context:
-                    context = f"{retrieved}\n\n{links_context}"
+                    context = f"{retrieved.text}\n\n{links_context}"
                 if timings.retrieval_ids:
                     capture(
                         distinct_id,
@@ -450,10 +457,13 @@ async def _chat_response_stream(
             payload=payload,
             response_id=response_id,
             timings=timings,
-            retrieval_hit=bool(retrieved),
+            retrieval_hit=bool(retrieved.text),
             distinct_id=distinct_id,
             observation=observation,
         )
+
+        if retrieved.sources:
+            yield sources_event(retrieved.sources_payload())
 
         async for chunk in response.body_iterator:
             yield chunk

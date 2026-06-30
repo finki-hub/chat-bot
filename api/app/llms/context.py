@@ -18,6 +18,11 @@ from app.llms.query_variants import (
     build_query_variants,
 )
 from app.llms.reranker import post_rerank as _post_rerank
+from app.llms.retrieval_result import (
+    RetrievalSource,
+    RetrievalSourceLink,
+    RetrievedContext,
+)
 from app.llms.text_utils import _prepare_text_for_embedding
 from app.schemas.documents import ChunkSchema
 from app.schemas.questions import QuestionSchema
@@ -48,6 +53,7 @@ class _Candidate:
     source: str  # 'faq' | 'chunk'
     rerank_text: str  # the candidate text scored by the cross-encoder
     context_text: str  # rendered into the final context string
+    retrieval_source: RetrievalSource
     distance: float | None = None  # carried only for the DEBUG trace
     doc_id: UUID | None = None  # chunk identity for neighbor expansion (None for FAQ)
     chunk_index: int | None = None
@@ -115,6 +121,16 @@ def _question_candidate(q: QuestionSchema) -> _Candidate:
         source="faq",
         rerank_text=rerank_text,
         context_text=context_text,
+        retrieval_source=RetrievalSource(
+            id=str(q.id),
+            kind="faq",
+            title=q.name,
+            links=tuple(
+                RetrievalSourceLink(label=label, url=str(url))
+                for label, url in (q.links or {}).items()
+            ),
+            snippet=q.content,
+        ),
         distance=q.distance,
     )
 
@@ -128,6 +144,14 @@ def _chunk_candidate(c: ChunkSchema) -> _Candidate:
         source="chunk",
         rerank_text=rerank_text,
         context_text=context_text,
+        retrieval_source=RetrievalSource(
+            id=str(c.id),
+            kind="chunk",
+            title=c.document_title,
+            chunk_index=c.chunk_index,
+            section=c.section,
+            snippet=c.content,
+        ),
         distance=c.distance,
         doc_id=c.document_id,
         chunk_index=c.chunk_index,
@@ -204,6 +228,32 @@ async def get_retrieved_context(
     top_k: int = 10,
     on_stage: Callable[[str], None] | None = None,
 ) -> str:
+    result = await get_retrieved_context_with_sources(
+        db=db,
+        query=query,
+        embedding_model=embedding_model,
+        query_transform_model=query_transform_model,
+        query_transform_mode=query_transform_mode,
+        history_text=history_text,
+        initial_k=initial_k,
+        top_k=top_k,
+        on_stage=on_stage,
+    )
+    return result.text
+
+
+async def get_retrieved_context_with_sources(
+    db: Database,
+    query: str,
+    embedding_model: Model,
+    query_transform_model: Model,
+    *,
+    query_transform_mode: QueryTransformMode = QueryTransformMode.REWRITE_HYDE,
+    history_text: str | None = None,
+    initial_k: int = 30,
+    top_k: int = 10,
+    on_stage: Callable[[str], None] | None = None,
+) -> RetrievedContext:
     """Multi-query (original + rewritten + HyDE) retrieval over FAQ and chunks, reranked by a cross-encoder with vector-order fallback."""
 
     logger.info(
@@ -303,7 +353,7 @@ async def get_retrieved_context(
             )
 
         if not candidates:
-            return ""
+            return RetrievedContext(text="")
 
     except Exception as e:
         raise RetrievalError("Failed during multi-query vector search") from e
@@ -401,7 +451,11 @@ async def get_retrieved_context(
     _stage("context")
 
     with timed("retrieval.expand"):
-        return await _expand_and_render(db, final)
+        text = await _expand_and_render(db, final)
+    return RetrievedContext(
+        text=text,
+        sources=tuple(c.retrieval_source for c in final),
+    )
 
 
 async def _contextualize_query(

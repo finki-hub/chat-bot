@@ -138,4 +138,35 @@ describe('parseProtocolV2', () => {
       },
     ]);
   });
+
+  it('maps source frames to typed retrieved sources and drops malformed entries', async () => {
+    const events = await collect(
+      'event: sources\ndata: {"sources":[{"id":"q1","kind":"faq","title":"Упис","links":[{"label":"iKnow","url":"https://iknow.ukim.mk/"}],"snippet":"Упис преку iKnow."},{"id":"bad","kind":"unknown","title":"bad"},{"id":"c1","kind":"chunk","title":"Статут","section":"Член 12","chunk_index":4,"snippet":"Правила."}]}\n\n',
+      DONE_FRAME,
+    );
+
+    expect(events).toStrictEqual([
+      {
+        sources: [
+          {
+            id: 'q1',
+            kind: 'faq',
+            links: [{ label: 'iKnow', url: 'https://iknow.ukim.mk/' }],
+            snippet: 'Упис преку iKnow.',
+            title: 'Упис',
+          },
+          {
+            chunkIndex: 4,
+            id: 'c1',
+            kind: 'chunk',
+            section: 'Член 12',
+            snippet: 'Правила.',
+            title: 'Статут',
+          },
+        ],
+        type: 'sources',
+      },
+      DONE,
+    ]);
+  });
 });

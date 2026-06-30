@@ -11,6 +11,7 @@ import {
 import { ReasoningDisclosure } from '@/components/chat/reasoning-disclosure';
 import { SearchStatus } from '@/components/chat/search-status';
 import { SearchStepper } from '@/components/chat/search-stepper';
+import { SourceCards } from '@/components/chat/source-cards';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import {
   HoverCard,
@@ -361,6 +362,7 @@ export const AssistantMessage = ({
   const timing = message.metadata?.timing;
   const diagnostics = message.metadata?.diagnostics;
   const inferenceModel = message.metadata?.inferenceModel;
+  const sources = message.metadata?.sources ?? [];
 
   return (
     <Message from="assistant">
@@ -386,6 +388,7 @@ export const AssistantMessage = ({
             timing={timing}
           />
         )}
+        {text === null ? null : <SourceCards sources={sources} />}
         <AssistantMessageStatus
           errorPart={errorPart}
           pending={pending}

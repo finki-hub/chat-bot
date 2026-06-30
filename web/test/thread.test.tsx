@@ -331,6 +331,50 @@ describe('AssistantMessage', () => {
     expect(footnote).toHaveTextContent('2.3s');
   });
 
+  it('renders source cards for finished assistant answers', () => {
+    const msg: MyUIMessage = {
+      id: 'a1',
+      metadata: {
+        sources: [
+          {
+            id: 'q1',
+            kind: 'faq',
+            links: [
+              { label: 'iKnow', url: 'https://iknow.ukim.mk/' },
+              { label: 'ФИНКИ', url: 'https://www.finki.ukim.mk/' },
+            ],
+            snippet: 'Уписот се прави преку iKnow.',
+            title: 'Упис',
+          },
+          {
+            chunkIndex: 4,
+            id: 'c1',
+            kind: 'chunk',
+            section: 'Член 12',
+            snippet: 'Правилата се наведени во членот.',
+            title: 'Статут на ФИНКИ',
+          },
+        ],
+      },
+      parts: [{ text: 'Готово', type: 'text' }],
+      role: 'assistant',
+    };
+
+    render(<AssistantMessage message={msg} />);
+
+    expect(screen.getByTestId('message-sources')).toHaveTextContent('Извори');
+    expect(screen.getByText('Упис')).toBeInTheDocument();
+    expect(screen.getByText('Статут на ФИНКИ · Член 12')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Врска: iKnow' })).toHaveAttribute(
+      'href',
+      'https://iknow.ukim.mk/',
+    );
+    expect(screen.getByRole('link', { name: 'Врска: ФИНКИ' })).toHaveAttribute(
+      'href',
+      'https://www.finki.ukim.mk/',
+    );
+  });
+
   it('reveals the model and throughput rows in the diagnostics popover', async () => {
     const user = userEvent.setup();
     const msg: MyUIMessage = {

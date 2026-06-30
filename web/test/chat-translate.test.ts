@@ -379,4 +379,36 @@ describe('translateToUiStream', () => {
       { messageMetadata: { diagnostics }, type: 'message-metadata' },
     ]);
   });
+
+  it('forwards source events as assistant message metadata', async () => {
+    const writer = new FakeWriter();
+    const sources = [
+      {
+        id: 'c1',
+        kind: 'chunk' as const,
+        section: 'Член 12',
+        snippet: 'Правила.',
+        title: 'Статут',
+      },
+    ];
+
+    await translateToUiStream(
+      events(
+        { sources, type: 'sources' },
+        { text: 'Одговор', type: 'token' },
+        DONE,
+      ),
+      writer,
+      {},
+      ids(),
+    );
+
+    expect(writer.parts).toStrictEqual([
+      startWith({}),
+      { messageMetadata: { sources }, type: 'message-metadata' },
+      textStart(T1),
+      textDelta(T1, 'Одговор'),
+      textEnd(T1),
+    ]);
+  });
 });

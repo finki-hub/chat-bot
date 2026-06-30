@@ -1,4 +1,10 @@
-import type { ChatErrorCode, MessageDiagnostics } from '@/lib/api-types';
+import type {
+  ChatErrorCode,
+  MessageDiagnostics,
+  RetrievedSource,
+  RetrievedSourceKind,
+  RetrievedSourceLink,
+} from '@/lib/api-types';
 
 export type ParsedEvent =
   | { code: ChatErrorCode; message: string; type: 'error' }
@@ -10,6 +16,7 @@ export type ParsedEvent =
       tool?: string;
       type: 'status';
     }
+  | { sources: readonly RetrievedSource[]; type: 'sources' }
   | { text: string; type: 'thinking' }
   | { text: string; type: 'token' }
   | { type: 'done' }
@@ -44,6 +51,79 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const asNumberOrNull = (value: unknown): null | number =>
   typeof value === 'number' ? value : null;
+
+const toSourceKind = (value: unknown): null | RetrievedSourceKind => {
+  if (value === 'chunk' || value === 'faq') {
+    return value;
+  }
+
+  return null;
+};
+
+const toSourceLinks = (value: unknown): readonly RetrievedSourceLink[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const links: RetrievedSourceLink[] = [];
+
+  for (const item of value) {
+    if (!isRecord(item)) {
+      continue;
+    }
+
+    const label = item['label'];
+    const url = item['url'];
+
+    if (typeof label === 'string' && typeof url === 'string') {
+      links.push({ label, url });
+    }
+  }
+
+  return links;
+};
+
+const toSources = (
+  obj: Record<string, unknown>,
+): readonly RetrievedSource[] => {
+  const rawSources = obj['sources'];
+
+  if (!Array.isArray(rawSources)) {
+    return [];
+  }
+
+  const sources: RetrievedSource[] = [];
+
+  for (const item of rawSources) {
+    if (!isRecord(item)) {
+      continue;
+    }
+
+    const id = item['id'];
+    const kind = toSourceKind(item['kind']);
+    const title = item['title'];
+
+    if (typeof id !== 'string' || kind === null || typeof title !== 'string') {
+      continue;
+    }
+
+    const links = toSourceLinks(item['links']);
+
+    sources.push({
+      id,
+      kind,
+      title,
+      ...(typeof item['chunk_index'] === 'number' && {
+        chunkIndex: item['chunk_index'],
+      }),
+      ...(typeof item['section'] === 'string' && { section: item['section'] }),
+      ...(typeof item['snippet'] === 'string' && { snippet: item['snippet'] }),
+      ...(links.length > 0 && { links }),
+    });
+  }
+
+  return sources;
+};
 
 const toSpans = (value: unknown): Record<string, number> => {
   if (!isRecord(value)) {
@@ -177,6 +257,8 @@ const buildEvent = (
       return { diagnostics: toDiagnostics(obj), type: 'meta' };
     case 'reset':
       return { type: 'reset' };
+    case 'sources':
+      return { sources: toSources(obj), type: 'sources' };
     case 'status':
       return {
         label: asString(obj['label']),
