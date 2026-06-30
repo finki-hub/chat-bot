@@ -23,8 +23,7 @@ export type ParsedEvent =
   | { type: 'reset' };
 
 export type SseSource =
-  | AsyncIterable<string | Uint8Array>
-  | ReadableStream<Uint8Array>;
+  AsyncIterable<string | Uint8Array> | ReadableStream<Uint8Array>;
 
 const ERROR_CODES: ReadonlySet<ChatErrorCode> = new Set([
   'agent_error',
