@@ -31,6 +31,7 @@ services:
       POSTHOG_HOST: ${POSTHOG_HOST:-https://eu.i.posthog.com}
       POSTHOG_KEY: ${POSTHOG_KEY:-}
       RERANKER_MIN_SCORE: ${RERANKER_MIN_SCORE:-0.1}
+      SOURCE_RERANKER_MIN_SCORE: ${SOURCE_RERANKER_MIN_SCORE:-0.3}
       TZ: ${TZ}
       WORKERS: ${WORKERS}
     image: ghcr.io/finki-hub/chat-bot-api:latest
