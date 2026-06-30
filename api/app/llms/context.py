@@ -95,6 +95,7 @@ def _embedding_for_variant(
             return _embed_variant(text, embedding_model, is_document=is_document)
         case unreachable:
             assert_never(unreachable)
+    raise AssertionError(f"Unhandled query variant kind: {kind}")
 
 
 def _question_candidate(q: QuestionSchema) -> _Candidate:

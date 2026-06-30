@@ -34,6 +34,7 @@ def query_variant_count(mode: QueryTransformMode) -> int:
             return 3
         case unreachable:
             assert_never(unreachable)
+    raise AssertionError(f"Unhandled query transform mode: {mode}")
 
 
 async def build_query_variants(
@@ -76,6 +77,7 @@ async def build_query_variants(
             )
         case unreachable:
             assert_never(unreachable)
+    raise AssertionError(f"Unhandled query transform mode: {mode}")
 
 
 async def _rewrite_query(search_query: str, query_transform_model: Model) -> str:
