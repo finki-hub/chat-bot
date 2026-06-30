@@ -25,5 +25,8 @@ __pycache__/
 # OMC
 .omc/
 
+# Local git worktrees
+.worktrees/
+
 # Wrangler (Cloudflare CLI local state/cache)
 .wrangler/
