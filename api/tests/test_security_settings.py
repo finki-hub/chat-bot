@@ -1,7 +1,11 @@
+from pathlib import Path
+
 import pytest
 
 from app.main import SecurityConfigurationError, _validate_security_config
 from app.utils.settings import Settings
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_validate_security_config_allows_development_defaults():
@@ -21,3 +25,9 @@ def test_validate_security_config_allows_production_custom_secrets():
     )
 
     _validate_security_config(settings)
+
+
+def test_production_compose_enables_production_environment():
+    compose = (REPO_ROOT / "compose.prod.yaml").read_text()
+
+    assert "ENVIRONMENT: ${ENVIRONMENT:-production}" in compose
