@@ -3,8 +3,8 @@
 Runs a golden set of (query -> expected source) examples through the *real* retrieval
 stack and measures recall at two stages, so a threshold/model/prompt change can be
 A/B'd objectively instead of by hand. It deliberately reuses the production building
-blocks (`transform_query`, `_embed_variant`, `get_closest_*`, the cross-encoder rerank)
-so the numbers reflect what `/chat` actually retrieves.
+blocks (`build_query_variants`, `_embed_variant`, `get_closest_*`, the cross-encoder
+rerank) so the numbers reflect what `/chat` actually retrieves.
 
 Two recalls are reported per example, and their gap is the headline signal:
 
@@ -48,8 +48,11 @@ from app.llms.context import (
     _question_candidate,
 )
 from app.llms.models import MODEL_DISTANCE_THRESHOLDS, Model
-from app.llms.prompts import HYDE_SYSTEM_PROMPT
-from app.llms.query_transform import transform_query
+from app.llms.query_modes import QueryTransformMode
+from app.llms.query_variants import (
+    build_query_variants,
+    query_variant_count,
+)
 from app.utils.http_client import close_http_client, init_http_client
 from app.utils.settings import Settings
 
@@ -215,37 +218,18 @@ async def evaluate_one(
     *,
     embedding_model: Model,
     qt_model: Model,
-    per_query_k: int,
+    initial_k: int,
     top_k: int,
     ideal_limit: int,
-    use_transforms: bool,
+    transform_mode: QueryTransformMode,
 ) -> Result:
     want = anchor_key(ex.anchor)
 
-    if use_transforms:
-        rewritten, hyde = await asyncio.gather(
-            transform_query(
-                ex.query,
-                qt_model,
-                temperature=0.0,
-                top_p=1.0,
-                max_tokens=128,
-            ),
-            transform_query(
-                ex.query,
-                qt_model,
-                system_prompt=HYDE_SYSTEM_PROMPT,
-                temperature=0.7,
-                top_p=0.9,
-                max_tokens=200,
-            ),
-        )
-        rewritten = rewritten.strip() or ex.query
-        hyde = hyde.strip() or ex.query
-        variants = [(ex.query, False), (rewritten, False), (hyde, True)]
-    else:
-        rewritten = ex.query
-        variants = [(ex.query, False)]
+    variant_bundle = await build_query_variants(ex.query, qt_model, transform_mode)
+    variants = [
+        (variant.text, variant.is_document) for variant in variant_bundle.variants
+    ]
+    per_query_k = initial_k // len(variants) + 1
 
     embeddings = await asyncio.gather(
         *(
@@ -336,11 +320,12 @@ async def evaluate_one(
             if chunk_key(ch) == want:
                 ann_prod = True
 
-    # --- rerank (query = rewritten, as in production) + min-score filter ---
     final_hit = False
     rank: int | None = None
     if cand_rerank:
-        response = await _post_rerank({"query": rewritten, "documents": cand_rerank})
+        response = await _post_rerank(
+            {"query": variant_bundle.rerank_query, "documents": cand_rerank},
+        )
         ranked = response.json()["reranked_documents"]
         kept_nat: list[tuple] = []
         for item in ranked:
@@ -399,7 +384,8 @@ async def main_async(ns: argparse.Namespace) -> int:
         examples = examples[: ns.limit]
     embedding_model = Model(ns.embedding_model)
     qt_model = Model(ns.query_transform_model)
-    per_query_k = ns.initial_k // 3 + 1
+    transform_mode = QueryTransformMode.RAW if ns.no_transform else ns.transform_mode
+    per_query_k = ns.initial_k // query_variant_count(transform_mode) + 1
 
     init_http_client()
     db = Database(dsn=settings.DATABASE_URL)
@@ -417,10 +403,10 @@ async def main_async(ns: argparse.Namespace) -> int:
                         ex,
                         embedding_model=embedding_model,
                         qt_model=qt_model,
-                        per_query_k=per_query_k,
+                        initial_k=ns.initial_k,
                         top_k=ns.top_k,
                         ideal_limit=ns.ideal_limit,
-                        use_transforms=not ns.no_transform,
+                        transform_mode=transform_mode,
                     )
                 except Exception as exc:  # one bad example shouldn't abort the run
                     print(
@@ -436,7 +422,7 @@ async def main_async(ns: argparse.Namespace) -> int:
 
     header = (
         f"golden={ns.golden}  n={len(examples)}  embed={embedding_model.value}  "
-        f"qt={qt_model.value}  transforms={'off' if ns.no_transform else 'on'}  "
+        f"qt={qt_model.value}  transform_mode={transform_mode.value}  "
         f"per_query_k={per_query_k}  top_k={ns.top_k}  reranker_min={settings.RERANKER_MIN_SCORE}"
     )
     print(header)
@@ -447,9 +433,9 @@ async def main_async(ns: argparse.Namespace) -> int:
             "config": {
                 "embedding_model": embedding_model.value,
                 "query_transform_model": qt_model.value,
+                "query_transform_mode": transform_mode.value,
                 "per_query_k": per_query_k,
                 "top_k": ns.top_k,
-                "transforms": not ns.no_transform,
                 "reranker_min_score": settings.RERANKER_MIN_SCORE,
             },
             "results": [
@@ -482,10 +468,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--embedding-model", default=Model.BGE_M3_LOCAL.value)
     p.add_argument("--query-transform-model", default=Model.GPT_5_4_MINI.value)
     p.add_argument(
+        "--transform-mode",
+        choices=list(QueryTransformMode),
+        default=QueryTransformMode.REWRITE_HYDE,
+        type=QueryTransformMode,
+        help="query variants to compare: raw, rewrite, hyde, or rewrite_hyde",
+    )
+    p.add_argument(
         "--initial-k",
         type=int,
         default=30,
-        help="total ANN budget; per-variant k = initial_k//3 + 1",
+        help="total ANN budget; per-variant k = initial_k//variant_count + 1",
     )
     p.add_argument("--top-k", type=int, default=10)
     p.add_argument(
@@ -497,7 +490,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--no-transform",
         action="store_true",
-        help="skip rewrite+HyDE; embed the raw query only",
+        help="legacy alias for --transform-mode raw",
     )
     p.add_argument("--concurrency", type=int, default=4)
     p.add_argument(
