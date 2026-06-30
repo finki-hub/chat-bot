@@ -7,7 +7,8 @@ from app.constants.defaults import (
     DEFAULT_INFERENCE_MODEL,
     DEFAULT_QUERY_TRANSFORM_MODEL,
 )
-from app.llms.models import Model
+from app.llms.models import QUERY_TRANSFORM_MODELS, Model
+from app.llms.query_modes import QueryTransformMode
 
 ChatInterface = Literal["discord", "web"]
 
@@ -81,6 +82,14 @@ class ChatSchema(BaseModel):
             "during retrieval. Must be a chat-capable model."
         ),
     )
+    query_transform_mode: QueryTransformMode = Field(
+        QueryTransformMode.REWRITE_HYDE,
+        examples=[QueryTransformMode.REWRITE_HYDE.value],
+        description=(
+            "Which query transformation variants to add before retrieval. "
+            "The raw query is always searched; rewrite and HyDE add extra variants."
+        ),
+    )
     temperature: float = Field(
         0.3,
         ge=0.0,
@@ -132,6 +141,13 @@ class ChatSchema(BaseModel):
     ) -> list[ConversationTurn]:
         if value[-1].role != "user":
             raise ValueError("the last message must be from the user")
+        return value
+
+    @field_validator("query_transform_model")
+    @classmethod
+    def _must_support_query_transform(cls, value: Model) -> Model:
+        if value not in QUERY_TRANSFORM_MODELS:
+            raise ValueError("query_transform_model must be a chat-capable model")
         return value
 
     @property

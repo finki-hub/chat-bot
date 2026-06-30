@@ -26,6 +26,7 @@ describe('toChatRequestBody', () => {
       maxTokens: 2_048,
       messages: [msg('user', 'Кога е ', 'испитот?')],
       model: MODEL,
+      queryTransformMode: 'rewrite',
       queryTransformModel: 'gpt-5.4-mini',
       temperature: 0.5,
       topP: 0.9,
@@ -40,6 +41,8 @@ describe('toChatRequestBody', () => {
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       max_tokens: 2_048,
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
+      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+      query_transform_mode: 'rewrite',
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       query_transform_model: 'gpt-5.4-mini',
       temperature: 0.5,

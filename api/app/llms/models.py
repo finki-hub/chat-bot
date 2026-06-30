@@ -100,6 +100,53 @@ CHAT_MODELS: frozenset[Model] = frozenset(
     },
 )
 
+OPENAI_QUERY_TRANSFORM_MODELS: frozenset[Model] = frozenset(
+    {
+        Model.GPT_4O_MINI,
+        Model.GPT_4_1,
+        Model.GPT_4_1_MINI,
+        Model.GPT_4_1_NANO,
+        Model.GPT_5_4,
+        Model.GPT_5_4_MINI,
+        Model.GPT_5_2,
+        Model.GPT_5_MINI,
+        Model.GPT_5_NANO,
+    },
+)
+GOOGLE_QUERY_TRANSFORM_MODELS: frozenset[Model] = frozenset(
+    {
+        Model.GEMINI_2_5_FLASH,
+        Model.GEMINI_2_5_PRO,
+        Model.GEMINI_3_FLASH_PREVIEW,
+    },
+)
+ANTHROPIC_QUERY_TRANSFORM_MODELS: frozenset[Model] = frozenset(
+    {
+        Model.CLAUDE_OPUS_4_8,
+        Model.CLAUDE_OPUS_4_7,
+        Model.CLAUDE_SONNET_4_6,
+        Model.CLAUDE_HAIKU_4_5,
+    },
+)
+OLLAMA_QUERY_TRANSFORM_MODELS: frozenset[Model] = frozenset(
+    {
+        Model.LLAMA_3_3_70B,
+        Model.MISTRAL,
+        Model.DEEPSEEK_R1_70B,
+        Model.QWEN2_5_72B,
+        Model.DOMESTIC_YAK_8B_INSTRUCT_GGUF,
+        Model.VEZILKALLM_GGUF,
+    },
+)
+QUERY_TRANSFORM_MODELS: frozenset[Model] = frozenset(
+    {
+        *OPENAI_QUERY_TRANSFORM_MODELS,
+        *GOOGLE_QUERY_TRANSFORM_MODELS,
+        *ANTHROPIC_QUERY_TRANSFORM_MODELS,
+        *OLLAMA_QUERY_TRANSFORM_MODELS,
+    },
+)
+
 REASONING_CAPABLE_MODELS: frozenset[Model] = frozenset(
     {
         Model.DEEPSEEK_R1_70B,

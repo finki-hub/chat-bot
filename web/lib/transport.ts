@@ -1,6 +1,6 @@
 import { DefaultChatTransport } from 'ai';
 
-import type { ModelId, MyUIMessage } from '@/lib/api-types';
+import type { ModelId, MyUIMessage, QueryTransformMode } from '@/lib/api-types';
 
 import { getAnonUserId } from '@/lib/user';
 
@@ -8,6 +8,7 @@ export type ChatExtras = {
   embeddingsModel?: ModelId;
   maxTokens?: number;
   model: ModelId;
+  queryTransformMode?: QueryTransformMode;
   queryTransformModel?: ModelId;
   reasoning?: boolean;
   temperature?: number;

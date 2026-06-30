@@ -1,7 +1,8 @@
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import assert_never
 from uuid import UUID
 
 from app.data.connection import Database
@@ -9,8 +10,13 @@ from app.data.documents import get_chunks_window, get_closest_chunks
 from app.data.questions import get_closest_questions
 from app.llms.embeddings import generate_embeddings
 from app.llms.models import Model
-from app.llms.prompts import CONTEXTUALIZE_SYSTEM_PROMPT, HYDE_SYSTEM_PROMPT
+from app.llms.prompts import CONTEXTUALIZE_SYSTEM_PROMPT
+from app.llms.query_modes import QueryTransformMode
 from app.llms.query_transform import transform_query
+from app.llms.query_variants import (
+    QueryVariantKind,
+    build_query_variants,
+)
 from app.llms.reranker import post_rerank as _post_rerank
 from app.llms.text_utils import _prepare_text_for_embedding
 from app.schemas.documents import ChunkSchema
@@ -72,6 +78,24 @@ async def _search_both(
         get_closest_chunks(db, embedding, embedding_model, limit=limit),
     )
     return questions, chunks
+
+
+def _embedding_for_variant(
+    kind: QueryVariantKind,
+    text: str,
+    embedding_model: Model,
+    *,
+    is_document: bool,
+    original_embedding_task: asyncio.Task[list[float]],
+) -> Awaitable[list[float]]:
+    match kind:
+        case "raw":
+            return original_embedding_task
+        case "rewrite" | "hyde":
+            return _embed_variant(text, embedding_model, is_document=is_document)
+        case unreachable:
+            assert_never(unreachable)
+    raise AssertionError(f"Unhandled query variant kind: {kind}")
 
 
 def _question_candidate(q: QuestionSchema) -> _Candidate:
@@ -174,6 +198,7 @@ async def get_retrieved_context(
     embedding_model: Model,
     query_transform_model: Model,
     *,
+    query_transform_mode: QueryTransformMode = QueryTransformMode.REWRITE_HYDE,
     history_text: str | None = None,
     initial_k: int = 30,
     top_k: int = 10,
@@ -205,23 +230,11 @@ async def get_retrieved_context(
     )
 
     try:
-        with timed("retrieval.rewrite_hyde"):
-            rewritten_query, hyde_passage = await asyncio.gather(
-                transform_query(
-                    search_query,
-                    query_transform_model,
-                    temperature=0.0,
-                    top_p=1.0,
-                    max_tokens=128,
-                ),
-                transform_query(
-                    search_query,
-                    query_transform_model,
-                    system_prompt=HYDE_SYSTEM_PROMPT,
-                    temperature=0.7,
-                    top_p=0.9,
-                    max_tokens=200,
-                ),
+        with timed("retrieval.query_transform"):
+            variant_bundle = await build_query_variants(
+                search_query,
+                query_transform_model,
+                query_transform_mode,
             )
     except asyncio.CancelledError:
         original_embedding_task.cancel()
@@ -232,36 +245,42 @@ async def get_retrieved_context(
         await asyncio.gather(original_embedding_task, return_exceptions=True)
         raise RetrievalError("Failed during query transform / HyDE generation") from e
 
-    # transform_query can return an empty/whitespace string on a refusal; a blank
-    # rewrite makes the cross-encoder score every candidate 0.0 and bypass reranking.
-    rewritten_query = rewritten_query.strip() or search_query
-    hyde_passage = hyde_passage.strip() or search_query
+    logger.info(
+        "Query transform mode %s produced variants: %s",
+        query_transform_mode.value,
+        [(variant.kind, len(variant.text)) for variant in variant_bundle.variants],
+    )
 
-    logger.info("Transformed query: '%s'", rewritten_query)
-    logger.info("HyDE passage: '%s'", hyde_passage)
-
-    per_query_k = initial_k // 3 + 1
+    per_query_k = initial_k // len(variant_bundle.variants) + 1
 
     _stage("retrieve")
 
     try:
         with timed("retrieval.embed"):
-            emb_original, emb_rewritten, emb_hyde = await asyncio.gather(
-                original_embedding_task,
-                _embed_variant(rewritten_query, embedding_model, is_document=False),
-                _embed_variant(hyde_passage, embedding_model, is_document=True),
+            embeddings = await asyncio.gather(
+                *(
+                    _embedding_for_variant(
+                        variant.kind,
+                        variant.text,
+                        embedding_model,
+                        is_document=variant.is_document,
+                        original_embedding_task=original_embedding_task,
+                    )
+                    for variant in variant_bundle.variants
+                ),
             )
 
         with timed("retrieval.vector_search"):
-            hyde_res, rewritten_res, original_res = await asyncio.gather(
-                _search_both(db, emb_hyde, embedding_model, per_query_k),
-                _search_both(db, emb_rewritten, embedding_model, per_query_k),
-                _search_both(db, emb_original, embedding_model, per_query_k),
+            search_results = await asyncio.gather(
+                *(
+                    _search_both(db, embedding, embedding_model, per_query_k)
+                    for embedding in embeddings
+                ),
             )
 
         candidates = _build_candidates(
-            [hyde_res[0], rewritten_res[0], original_res[0]],
-            [hyde_res[1], rewritten_res[1], original_res[1]],
+            [questions for questions, _chunks in search_results],
+            [chunks for _questions, chunks in search_results],
         )
 
         distances = [c.distance for c in candidates if c.distance is not None]
@@ -298,7 +317,7 @@ async def get_retrieved_context(
 
         with timed("retrieval.rerank"):
             response = await _post_rerank(
-                {"query": rewritten_query, "documents": rerank_texts},
+                {"query": variant_bundle.rerank_query, "documents": rerank_texts},
             )
         ranked = response.json()["reranked_documents"]
 
