@@ -339,7 +339,10 @@ describe('AssistantMessage', () => {
           {
             id: 'q1',
             kind: 'faq',
-            links: [{ label: 'iKnow', url: 'https://iknow.ukim.mk/' }],
+            links: [
+              { label: 'iKnow', url: 'https://iknow.ukim.mk/' },
+              { label: 'ФИНКИ', url: 'https://www.finki.ukim.mk/' },
+            ],
             snippet: 'Уписот се прави преку iKnow.',
             title: 'Упис',
           },
@@ -365,6 +368,10 @@ describe('AssistantMessage', () => {
     expect(screen.getByRole('link', { name: 'Врска: iKnow' })).toHaveAttribute(
       'href',
       'https://iknow.ukim.mk/',
+    );
+    expect(screen.getByRole('link', { name: 'Врска: ФИНКИ' })).toHaveAttribute(
+      'href',
+      'https://www.finki.ukim.mk/',
     );
   });
 
