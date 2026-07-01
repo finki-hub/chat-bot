@@ -29,7 +29,7 @@ router = APIRouter(
 @router.post(
     "/",
     summary="Stream a chat response from a self-hosted model",
-    description="Streams a chat response from a self-hosted model using the specified inference model and system prompt.",
+    description="Streams a chat response from a self-hosted model using the configured system prompt.",
     response_model=None,
     status_code=status.HTTP_200_OK,
     operation_id="selfHostedChat",
@@ -48,12 +48,10 @@ async def stream(
         payload.inference_model,
     )
 
-    system_prompt = payload.system_prompt or DEFAULT_SYSTEM_PROMPT
-
     return stream_response(
         user_prompt=payload.prompt,
         model=payload.inference_model,
-        system_prompt=system_prompt,
+        system_prompt=DEFAULT_SYSTEM_PROMPT,
         temperature=payload.temperature,
         top_p=payload.top_p,
         max_tokens=payload.max_tokens,

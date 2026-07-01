@@ -15,14 +15,14 @@ services:
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
-      API_KEY: ${API_KEY}
+      API_KEY: ${API_KEY:?API_KEY is required}
       CHAT_HISTORY_MAX_TURNS: ${CHAT_HISTORY_MAX_TURNS:-10}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       GOOGLE_BASE_URL: ${GOOGLE_BASE_URL:-}
       GPU_API_URL: ${GPU_API_URL}
       LOG_LEVEL: ${LOG_LEVEL}
-      MCP_API_KEY: ${MCP_API_KEY}
+      MCP_API_KEY: ${MCP_API_KEY:?MCP_API_KEY is required}
       MCP_HTTP_URLS: ${MCP_HTTP_URLS}
       MCP_SSE_URLS: ${MCP_SSE_URLS}
       OLLAMA_URL: ${OLLAMA_URL}
@@ -102,7 +102,7 @@ services:
         condition: service_started
     environment:
       API_BASE_URL: ${WEB_API_BASE_URL:-http://api:8880}
-      CHAT_API_KEY: ${API_KEY}
+      CHAT_API_KEY: ${API_KEY:?API_KEY is required}
       TZ: ${TZ}
     image: ghcr.io/finki-hub/chat-bot-web:latest
     networks:

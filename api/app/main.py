@@ -33,22 +33,16 @@ settings = Settings()
 
 setup_logging(level=settings.LOG_LEVEL)
 
-# Auth secrets with guessable built-in defaults. Warn (not fail) at startup so dev still
-# boots, but a misconfigured prod doesn't silently ship a known key.
-_INSECURE_SECRET_DEFAULTS: dict[str, str] = {
-    "API_KEY": "your_api_key_here",
-    "MCP_API_KEY": "SystemPass",
-}
-
 
 def _warn_on_insecure_defaults(current: Settings) -> None:
-    for name, default in _INSECURE_SECRET_DEFAULTS.items():
-        if getattr(current, name) == default:
-            logger.warning(
-                "%s is using its insecure built-in default; set it via the environment "
-                "to protect authenticated endpoints.",
-                name,
-            )
+    insecure_names = current.insecure_secret_names()
+    if not insecure_names:
+        return
+
+    logger.warning(
+        "One or more authentication secrets are using insecure built-in defaults; "
+        "set non-default values to protect authenticated endpoints.",
+    )
 
 
 @asynccontextmanager
@@ -56,9 +50,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     App startup/shutdown: init DB, shared HTTP client, and run migrations.
     """
-    _warn_on_insecure_defaults(settings)
+    current_settings: Settings = app.state.settings
+    _warn_on_insecure_defaults(current_settings)
 
-    db = Database(dsn=settings.DATABASE_URL)
+    db = Database(dsn=current_settings.DATABASE_URL)
     app.state.db = db
 
     await db.init()
