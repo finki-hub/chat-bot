@@ -3,8 +3,7 @@ from pathlib import Path
 import pytest
 
 from app.main import (
-    SecurityConfigurationError,
-    _validate_security_config,
+    _warn_on_insecure_defaults,
     lifespan,
     make_app,
 )
@@ -13,51 +12,43 @@ from app.utils.settings import Settings
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_validate_security_config_allows_development_defaults():
-    _validate_security_config(Settings(ENVIRONMENT="development"))
+def test_warn_on_insecure_defaults_warns_for_default_secrets(caplog):
+    _warn_on_insecure_defaults(Settings())
+
+    assert "One or more authentication secrets" in caplog.text
 
 
-def test_validate_security_config_rejects_production_default_secrets():
-    with pytest.raises(SecurityConfigurationError, match="API_KEY, MCP_API_KEY"):
-        _validate_security_config(Settings(ENVIRONMENT="production"))
-
-
-def test_validate_security_config_rejects_production_blank_secrets():
+def test_warn_on_insecure_defaults_warns_for_blank_secrets(caplog):
     settings = Settings(
         API_KEY="",
-        ENVIRONMENT="production",
         MCP_API_KEY="   ",
     )
 
-    with pytest.raises(SecurityConfigurationError, match="API_KEY, MCP_API_KEY"):
-        _validate_security_config(settings)
+    _warn_on_insecure_defaults(settings)
+
+    assert "One or more authentication secrets" in caplog.text
 
 
-def test_validate_security_config_rejects_production_whitespace_default_secrets():
+def test_warn_on_insecure_defaults_warns_for_whitespace_default_secrets(caplog):
     settings = Settings(
         API_KEY=" your_api_key_here ",
-        ENVIRONMENT="production",
         MCP_API_KEY=" SystemPass ",
     )
 
-    with pytest.raises(SecurityConfigurationError, match="API_KEY, MCP_API_KEY"):
-        _validate_security_config(settings)
+    _warn_on_insecure_defaults(settings)
+
+    assert "One or more authentication secrets" in caplog.text
 
 
-def test_validate_security_config_allows_production_custom_secrets():
+def test_warn_on_insecure_defaults_allows_custom_secrets(caplog):
     settings = Settings(
         API_KEY="custom-api-key",
-        ENVIRONMENT="production",
         MCP_API_KEY="custom-mcp-key",
     )
 
-    _validate_security_config(settings)
+    _warn_on_insecure_defaults(settings)
 
-
-def test_production_compose_enables_production_environment():
-    compose = (REPO_ROOT / "compose.prod.yaml").read_text()
-
-    assert "ENVIRONMENT: ${ENVIRONMENT:-production}" in compose
+    assert "One or more authentication secrets" not in caplog.text
 
 
 def test_production_compose_requires_auth_secrets():
@@ -69,12 +60,24 @@ def test_production_compose_requires_auth_secrets():
 
 
 @pytest.mark.anyio
-async def test_lifespan_validates_app_settings():
-    app = make_app(Settings(ENVIRONMENT="production"))
+async def test_lifespan_warns_for_insecure_app_settings(monkeypatch, caplog):
+    class FakeDatabase:
+        def __init__(self, dsn: str) -> None:
+            return None
 
-    with pytest.raises(SecurityConfigurationError, match="API_KEY, MCP_API_KEY"):
-        async with lifespan(app):
-            pass
+        async def init(self) -> None:
+            return None
+
+        async def disconnect(self) -> None:
+            return None
+
+    monkeypatch.setattr("app.main.Database", FakeDatabase)
+    app = make_app(Settings())
+
+    async with lifespan(app):
+        pass
+
+    assert "One or more authentication secrets" in caplog.text
 
 
 @pytest.mark.anyio
@@ -96,7 +99,6 @@ async def test_lifespan_uses_app_settings_database_url(monkeypatch):
         Settings(
             API_KEY="custom-api-key",
             DATABASE_URL="postgresql://custom-user:custom-pass@custom-host/custom-db",
-            ENVIRONMENT="production",
             MCP_API_KEY="custom-mcp-key",
         ),
     )

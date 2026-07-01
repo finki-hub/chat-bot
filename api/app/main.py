@@ -34,23 +34,14 @@ settings = Settings()
 setup_logging(level=settings.LOG_LEVEL)
 
 
-class SecurityConfigurationError(RuntimeError):
-    """Raised when production starts with an unsafe security configuration."""
-
-
-def _validate_security_config(current: Settings) -> None:
+def _warn_on_insecure_defaults(current: Settings) -> None:
     insecure_names = current.insecure_secret_names()
     if not insecure_names:
         return
 
-    if current.is_production():
-        joined = ", ".join(insecure_names)
-        msg = f"Production cannot start with insecure default secrets: {joined}"
-        raise SecurityConfigurationError(msg)
-
     logger.warning(
         "One or more authentication secrets are using insecure built-in defaults; "
-        "set them via the environment to protect authenticated endpoints.",
+        "set non-default values to protect authenticated endpoints.",
     )
 
 
@@ -60,7 +51,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     App startup/shutdown: init DB, shared HTTP client, and run migrations.
     """
     current_settings: Settings = app.state.settings
-    _validate_security_config(current_settings)
+    _warn_on_insecure_defaults(current_settings)
 
     db = Database(dsn=current_settings.DATABASE_URL)
     app.state.db = db
