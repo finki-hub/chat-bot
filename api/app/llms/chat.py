@@ -35,7 +35,7 @@ async def handle_chat(
 
     system_prompt = "\n\n".join(
         [
-            payload.system_prompt or DEFAULT_AGENT_SYSTEM_PROMPT,
+            DEFAULT_AGENT_SYSTEM_PROMPT,
             markdown_instructions(payload.interface),
         ],
     )
