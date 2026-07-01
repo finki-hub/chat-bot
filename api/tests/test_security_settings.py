@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 
-import app.main as app_main
 from app.main import (
     SecurityConfigurationError,
     _validate_security_config,
@@ -92,7 +91,7 @@ async def test_lifespan_uses_app_settings_database_url(monkeypatch):
         async def disconnect(self) -> None:
             return None
 
-    monkeypatch.setattr(app_main, "Database", FakeDatabase)
+    monkeypatch.setattr("app.main.Database", FakeDatabase)
     app = make_app(
         Settings(
             API_KEY="custom-api-key",
