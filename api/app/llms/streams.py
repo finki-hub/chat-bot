@@ -112,6 +112,7 @@ async def stream_response_with_agent(
         case (
             Model.CLAUDE_OPUS_4_8
             | Model.CLAUDE_OPUS_4_7
+            | Model.CLAUDE_SONNET_5
             | Model.CLAUDE_SONNET_4_6
             | Model.CLAUDE_HAIKU_4_5
         ):
