@@ -9,7 +9,8 @@ _MCP_API_KEY_DEFAULT: Final[str] = "SystemPass"
 
 
 def _is_insecure_secret(value: str, default: str) -> bool:
-    return value.strip() == "" or value == default
+    normalized = value.strip()
+    return normalized in ("", default)
 
 
 class Settings(BaseSettings):

@@ -59,9 +59,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     App startup/shutdown: init DB, shared HTTP client, and run migrations.
     """
-    _validate_security_config(settings)
+    current_settings: Settings = app.state.settings
+    _validate_security_config(current_settings)
 
-    db = Database(dsn=settings.DATABASE_URL)
+    db = Database(dsn=current_settings.DATABASE_URL)
     app.state.db = db
 
     await db.init()
