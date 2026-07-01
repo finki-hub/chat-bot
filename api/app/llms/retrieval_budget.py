@@ -18,11 +18,24 @@ class RetrievalBudget:
     per_query_k: int
 
 
+@dataclass(frozen=True, slots=True)
+class UnsupportedRetrievalBudgetModeError(RuntimeError):
+    mode: QueryTransformMode
+
+    def __str__(self) -> str:
+        return f"Missing retrieval budget for query transform mode: {self.mode.value}"
+
+
 def retrieval_budget(
     mode: QueryTransformMode,
     requested_initial_k: int,
 ) -> RetrievalBudget:
-    initial_k = max(requested_initial_k, _MIN_INITIAL_K_BY_MODE[mode])
+    try:
+        min_initial_k = _MIN_INITIAL_K_BY_MODE[mode]
+    except KeyError as exc:
+        raise UnsupportedRetrievalBudgetModeError(mode) from exc
+
+    initial_k = max(requested_initial_k, min_initial_k)
     return RetrievalBudget(
         initial_k=initial_k,
         per_query_k=initial_k // query_variant_count(mode) + 1,
