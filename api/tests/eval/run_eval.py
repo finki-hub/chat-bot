@@ -230,6 +230,7 @@ async def evaluate_one(
         (variant.text, variant.is_document) for variant in variant_bundle.variants
     ]
     budget = retrieval_budget(transform_mode, initial_k)
+    ideal_probe_limit = max(ideal_limit, budget.per_query_k)
 
     embeddings = await asyncio.gather(
         *(
@@ -246,14 +247,14 @@ async def evaluate_one(
                     db,
                     emb,
                     embedding_model,
-                    limit=ideal_limit,
+                    limit=ideal_probe_limit,
                     threshold=NO_THRESHOLD,
                 ),
                 get_closest_chunks(
                     db,
                     emb,
                     embedding_model,
-                    limit=ideal_limit,
+                    limit=ideal_probe_limit,
                     threshold=NO_THRESHOLD,
                 ),
             )
@@ -396,6 +397,7 @@ async def main_async(ns: argparse.Namespace) -> int:
     qt_model = Model(ns.query_transform_model)
     transform_mode = QueryTransformMode.RAW if ns.no_transform else ns.transform_mode
     budget = retrieval_budget(transform_mode, ns.initial_k)
+    ideal_probe_limit = max(ns.ideal_limit, budget.per_query_k)
 
     init_http_client()
     db = Database(dsn=settings.DATABASE_URL)
@@ -415,7 +417,7 @@ async def main_async(ns: argparse.Namespace) -> int:
                         qt_model=qt_model,
                         initial_k=ns.initial_k,
                         top_k=ns.top_k,
-                        ideal_limit=ns.ideal_limit,
+                        ideal_limit=ideal_probe_limit,
                         transform_mode=transform_mode,
                     )
                 except Exception as exc:  # one bad example shouldn't abort the run
@@ -433,7 +435,7 @@ async def main_async(ns: argparse.Namespace) -> int:
     header = (
         f"golden={ns.golden}  n={len(examples)}  embed={embedding_model.value}  "
         f"qt={qt_model.value}  transform_mode={transform_mode.value}  "
-        f"initial_k={budget.initial_k}  per_query_k={budget.per_query_k}  top_k={ns.top_k}  reranker_min={settings.RERANKER_MIN_SCORE}"
+        f"initial_k={budget.initial_k}  per_query_k={budget.per_query_k}  ideal_limit={ideal_probe_limit}  top_k={ns.top_k}  reranker_min={settings.RERANKER_MIN_SCORE}"
     )
     print(header)
     print(agg.report())
@@ -446,6 +448,7 @@ async def main_async(ns: argparse.Namespace) -> int:
                 "query_transform_mode": transform_mode.value,
                 "initial_k": budget.initial_k,
                 "per_query_k": budget.per_query_k,
+                "ideal_limit": ideal_probe_limit,
                 "top_k": ns.top_k,
                 "reranker_min_score": settings.RERANKER_MIN_SCORE,
             },
