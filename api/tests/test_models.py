@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator
 
-import pytest
+import anyio
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import BaseMessage
 
@@ -22,8 +22,7 @@ def test_claude_sonnet_5_is_a_supported_anthropic_chat_model():
     assert model in REASONING_CAPABLE_MODELS
 
 
-@pytest.mark.anyio
-async def test_claude_sonnet_5_routes_to_anthropic(monkeypatch):
+def test_claude_sonnet_5_routes_to_anthropic(monkeypatch):
     model = Model("claude-sonnet-5")
 
     async def fake_stream_anthropic_agent_response(
@@ -52,14 +51,17 @@ async def test_claude_sonnet_5_routes_to_anthropic(monkeypatch):
         fake_stream_anthropic_agent_response,
     )
 
-    response = await streams.stream_response_with_agent(
-        "test",
-        model,
-        system_prompt="system",
-        history=[],
-        temperature=0.0,
-        top_p=1.0,
-        max_tokens=128,
-    )
+    async def route_response() -> StreamingResponse:
+        return await streams.stream_response_with_agent(
+            "test",
+            model,
+            system_prompt="system",
+            history=[],
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=128,
+        )
+
+    response = anyio.run(route_response)
 
     assert response.headers["x-routed-model"] == "claude-sonnet-5"
