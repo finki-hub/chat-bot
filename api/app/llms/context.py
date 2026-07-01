@@ -22,6 +22,7 @@ from app.llms.retrieval_result import (
     RetrievalSource,
     RetrievalSourceLink,
     RetrievedContext,
+    visible_sources,
 )
 from app.llms.text_utils import _prepare_text_for_embedding
 from app.schemas.documents import ChunkSchema
@@ -385,6 +386,7 @@ async def get_retrieved_context_with_sources(
             )
 
         ranked_candidates: list[_Candidate] = []
+        scores_by_key: dict[str, float] = {}
         dropped: list[tuple[str, str, float]] = []
         for item in ranked:
             idx = item["index"]
@@ -395,12 +397,15 @@ async def get_retrieved_context_with_sources(
                     len(candidates),
                 )
                 continue
-            if item["score"] < settings.RERANKER_MIN_SCORE:
+            candidate = candidates[idx]
+            score = item["score"]
+            scores_by_key[candidate.key] = score
+            if score < settings.RERANKER_MIN_SCORE:
                 dropped.append(
-                    (candidates[idx].key, candidates[idx].source, item["score"]),
+                    (candidate.key, candidate.source, score),
                 )
                 continue
-            ranked_candidates.append(candidates[idx])
+            ranked_candidates.append(candidate)
 
         record_reranker_scores(
             [item["score"] for item in ranked if 0 <= item["index"] < len(candidates)],
@@ -433,6 +438,13 @@ async def get_retrieved_context_with_sources(
                 ranked_candidates = [candidates[best_idx]]
 
         final = _select_with_faq_reservation(ranked_candidates, top_k)
+        sources = visible_sources(
+            [
+                (candidate.retrieval_source, scores_by_key.get(candidate.key))
+                for candidate in final
+            ],
+            source_score_floor=settings.SOURCE_RERANKER_MIN_SCORE,
+        )
 
         logger.info(
             "Selected %d documents after reranking (faq=%d, chunk=%d)",
@@ -445,6 +457,7 @@ async def get_retrieved_context_with_sources(
             "Reranking call failed. Using vector search order as a fallback",
         )
         final = _select_with_faq_reservation(candidates, top_k)
+        sources = ()
 
     record_retrieval_ids([c.key for c in final[:_RETRIEVAL_IDS_CAP]])
 
@@ -454,7 +467,7 @@ async def get_retrieved_context_with_sources(
         text = await _expand_and_render(db, final)
     return RetrievedContext(
         text=text,
-        sources=tuple(c.retrieval_source for c in final),
+        sources=sources,
     )
 
 
