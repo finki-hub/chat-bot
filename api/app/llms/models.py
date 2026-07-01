@@ -30,6 +30,7 @@ class Model(Enum):
 
     CLAUDE_OPUS_4_8 = "claude-opus-4-8"
     CLAUDE_OPUS_4_7 = "claude-opus-4-7"
+    CLAUDE_SONNET_5 = "claude-sonnet-5"
     CLAUDE_SONNET_4_6 = "claude-sonnet-4-6"
     CLAUDE_HAIKU_4_5 = "claude-haiku-4-5"
 
@@ -93,6 +94,7 @@ CHAT_MODELS: frozenset[Model] = frozenset(
         Model.GEMINI_3_FLASH_PREVIEW,
         Model.CLAUDE_OPUS_4_8,
         Model.CLAUDE_OPUS_4_7,
+        Model.CLAUDE_SONNET_5,
         Model.CLAUDE_SONNET_4_6,
         Model.CLAUDE_HAIKU_4_5,
         Model.QWEN2_1_5_B_INSTRUCT,
@@ -124,6 +126,7 @@ ANTHROPIC_QUERY_TRANSFORM_MODELS: frozenset[Model] = frozenset(
     {
         Model.CLAUDE_OPUS_4_8,
         Model.CLAUDE_OPUS_4_7,
+        Model.CLAUDE_SONNET_5,
         Model.CLAUDE_SONNET_4_6,
         Model.CLAUDE_HAIKU_4_5,
     },
@@ -160,6 +163,7 @@ REASONING_CAPABLE_MODELS: frozenset[Model] = frozenset(
         Model.GEMINI_3_FLASH_PREVIEW,
         Model.CLAUDE_OPUS_4_8,
         Model.CLAUDE_OPUS_4_7,
+        Model.CLAUDE_SONNET_5,
         Model.CLAUDE_SONNET_4_6,
         Model.CLAUDE_HAIKU_4_5,
     },
