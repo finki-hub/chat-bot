@@ -20,7 +20,8 @@ const ARIA_EXPANDED = 'aria-expanded';
 const ANSWER_TEXT_TESTID = 'answer-text';
 const CHUNK_SOURCE_TITLE = 'Статут на ФИНКИ · Член 12';
 const CHUNK_SOURCE_TITLE_RE = /Статут на ФИНКИ · Член 12/u;
-const COLLAPSED_CHUNK_TEXT = 'Правилата се наведени во членот.';
+const COLLAPSED_CHUNK_TEXT =
+  'Правилата за запишување и заверка на семестарот се наведени во овој член…';
 const EXPANDED_CHUNK_TEXT_RE = /Вториот став/u;
 const TIMING_TESTID = 'message-timing';
 
@@ -339,7 +340,7 @@ describe('AssistantMessage', () => {
   it('keeps source cards collapsed until the user expands them', async () => {
     const user = userEvent.setup();
     const chunkSnippet =
-      'Правилата се наведени во членот. Вториот став содржи дополнителни детали што треба да се прикажат кога картичката е отворена.';
+      'Правилата за запишување и заверка на семестарот се наведени во овој член со повеќе детали. Вториот став содржи дополнителни детали што треба да се прикажат кога картичката е отворена.';
     const msg: MyUIMessage = {
       id: 'a1',
       metadata: {

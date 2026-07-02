@@ -13,11 +13,9 @@ const WHITESPACE_RE = /\s+/u;
 
 const snippetPreview = (snippet: string): string => {
   const sentenceEnd = snippet.search(SENTENCE_END_RE);
-  if (sentenceEnd >= 0) {
-    return snippet.slice(0, sentenceEnd + 1);
-  }
-
-  const words = snippet.trim().split(WHITESPACE_RE);
+  const sentencePreview =
+    sentenceEnd >= 0 ? snippet.slice(0, sentenceEnd + 1) : snippet;
+  const words = sentencePreview.trim().split(WHITESPACE_RE);
   const preview = words.slice(0, PREVIEW_WORD_LIMIT).join(' ');
   return words.length > PREVIEW_WORD_LIMIT ? `${preview}…` : preview;
 };
