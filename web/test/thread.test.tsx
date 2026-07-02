@@ -20,6 +20,7 @@ const ARIA_EXPANDED = 'aria-expanded';
 const ANSWER_TEXT_TESTID = 'answer-text';
 const CHUNK_SOURCE_TITLE = 'Статут на ФИНКИ · Член 12';
 const CHUNK_SOURCE_TITLE_RE = /Статут на ФИНКИ · Член 12/u;
+const COLLAPSED_CHUNK_TEXT = 'Правилата се наведени во членот.';
 const EXPANDED_CHUNK_TEXT_RE = /Вториот став/u;
 const TIMING_TESTID = 'message-timing';
 
@@ -387,16 +388,19 @@ describe('AssistantMessage', () => {
     const chunkButton = screen.getByRole('button', {
       name: CHUNK_SOURCE_TITLE_RE,
     });
-    const chunkText = screen.getByText(EXPANDED_CHUNK_TEXT_RE);
+    const chunkText = screen.getByText(COLLAPSED_CHUNK_TEXT);
 
     expect(chunkButton).toHaveAttribute(ARIA_EXPANDED, 'false');
     expect(chunkText).toHaveClass('line-clamp-2');
+    expect(screen.queryByText(EXPANDED_CHUNK_TEXT_RE)).toBeNull();
 
     await user.click(chunkButton);
 
+    const expandedChunkText = screen.getByText(EXPANDED_CHUNK_TEXT_RE);
+
     expect(chunkButton).toHaveAttribute(ARIA_EXPANDED, 'true');
-    expect(chunkText).not.toHaveClass('line-clamp-2');
-    expect(chunkText).toHaveClass('whitespace-pre-wrap');
+    expect(expandedChunkText).not.toHaveClass('line-clamp-2');
+    expect(expandedChunkText).toHaveClass('whitespace-pre-wrap');
 
     expect(screen.getByRole('link', { name: 'Врска: iKnow' })).toHaveAttribute(
       'href',

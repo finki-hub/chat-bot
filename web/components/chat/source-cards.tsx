@@ -7,6 +7,21 @@ import type { RetrievedSource } from '@/lib/api-types';
 
 import { t } from '@/lib/i18n';
 
+const PREVIEW_WORD_LIMIT = 12;
+const SENTENCE_END_RE = /[.!?]/u;
+const WHITESPACE_RE = /\s+/u;
+
+const snippetPreview = (snippet: string): string => {
+  const sentenceEnd = snippet.search(SENTENCE_END_RE);
+  if (sentenceEnd >= 0) {
+    return snippet.slice(0, sentenceEnd + 1);
+  }
+
+  const words = snippet.trim().split(WHITESPACE_RE);
+  const preview = words.slice(0, PREVIEW_WORD_LIMIT).join(' ');
+  return words.length > PREVIEW_WORD_LIMIT ? `${preview}…` : preview;
+};
+
 const SourceKindLabel = ({ source }: { source: RetrievedSource }) => (
   <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
     {source.kind === 'faq' ? t('sources.faq') : t('sources.chunk')}
@@ -15,9 +30,11 @@ const SourceKindLabel = ({ source }: { source: RetrievedSource }) => (
 
 const SourceCard = ({ source }: { source: RetrievedSource }) => {
   const [expanded, setExpanded] = useState(false);
-  const hasSnippet = Boolean(source.snippet);
+  const snippet = source.snippet ?? '';
+  const hasSnippet = snippet.length > 0;
   const links = source.links ?? [];
   const snippetId = useId();
+  const visibleSnippet = expanded ? snippet : snippetPreview(snippet);
   const title = source.section
     ? `${source.title} · ${source.section}`
     : source.title;
@@ -45,7 +62,7 @@ const SourceCard = ({ source }: { source: RetrievedSource }) => {
           className={`mt-2 text-xs leading-relaxed text-muted-foreground ${expanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}
           id={snippetId}
         >
-          {source.snippet}
+          {visibleSnippet}
         </p>
       ) : null}
     </>
