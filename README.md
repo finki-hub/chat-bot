@@ -1,6 +1,6 @@
 # FINKI Hub / Chat Bot
 
-RAG chat bot and web front-end for the [`FINKI Hub`](https://discord.gg/finki-studenti-810997107376914444) Discord server, powered by [FastAPI](https://github.com/fastapi/fastapi), [LangChain](https://github.com/langchain-ai/langchain), and Next.js. It uses [PostgreSQL](https://github.com/postgres/postgres) with [pgvector](https://github.com/pgvector/pgvector) for storage and vector search, and supports multiple LLM providers plus self-hosted GPU-backed models.
+RAG chat bot and web front-end for the [`FINKI Hub`](https://discord.gg/finki-studenti-810997107376914444) Discord server, powered by [FastAPI](https://github.com/fastapi/fastapi), [LangChain](https://github.com/langchain-ai/langchain), and [Next.js](https://github.com/vercel/next.js). It uses [PostgreSQL](https://github.com/postgres/postgres) with [pgvector](https://github.com/pgvector/pgvector) for storage and vector search, and supports multiple LLM providers plus self-hosted GPU-backed models.
 
 It answers questions using a retrieval pipeline over an FAQ dataset (the `question` table) and over chunked source-of-truth documents (the `document` / `chunk` tables — laws, rulebooks, procedures), retrieved together in a single reranked pass. It also manages links, chat feedback, diplomas, professor publications/groups, and thesis committee recommendations.
 
