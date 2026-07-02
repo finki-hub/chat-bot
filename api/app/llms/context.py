@@ -18,6 +18,7 @@ from app.llms.query_variants import (
     build_query_variants,
 )
 from app.llms.reranker import post_rerank as _post_rerank
+from app.llms.retrieval_budget import retrieval_budget
 from app.llms.retrieval_result import (
     RetrievalSource,
     RetrievalSourceLink,
@@ -302,7 +303,7 @@ async def get_retrieved_context_with_sources(
         [(variant.kind, len(variant.text)) for variant in variant_bundle.variants],
     )
 
-    per_query_k = initial_k // len(variant_bundle.variants) + 1
+    budget = retrieval_budget(query_transform_mode, initial_k)
 
     _stage("retrieve")
 
@@ -324,7 +325,7 @@ async def get_retrieved_context_with_sources(
         with timed("retrieval.vector_search"):
             search_results = await asyncio.gather(
                 *(
-                    _search_both(db, embedding, embedding_model, per_query_k)
+                    _search_both(db, embedding, embedding_model, budget.per_query_k)
                     for embedding in embeddings
                 ),
             )
