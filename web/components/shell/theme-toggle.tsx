@@ -19,30 +19,51 @@ const prefersDark = (): boolean =>
   typeof matchMedia === 'function' &&
   matchMedia('(prefers-color-scheme: dark)').matches;
 
+const fallbackTheme = (): Theme => (prefersDark() ? 'dark' : 'light');
+
+const readStoredThemeValue = (): null | string => {
+  try {
+    return localStorage.getItem(storageKey);
+  } catch {
+    return null;
+  }
+};
+
+const writeStoredTheme = (theme: Theme): boolean => {
+  try {
+    localStorage.setItem(storageKey, theme);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const readStoredTheme = (): Theme => {
   if (typeof localStorage === 'undefined') {
-    return 'light';
+    return fallbackTheme();
   }
 
-  const stored = localStorage.getItem(storageKey);
+  const stored = readStoredThemeValue();
   if (isTheme(stored)) {
     return stored;
   }
 
-  return prefersDark() ? 'dark' : 'light';
+  return fallbackTheme();
 };
 
 const syncThemeChrome = (theme: Theme) => {
   document.documentElement.style.colorScheme = theme;
   document
-    .querySelector<HTMLMetaElement>('meta[name="theme-color"]')
-    ?.setAttribute('content', themeColors[theme]);
+    .querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')
+    .forEach((meta) => {
+      meta.setAttribute('content', themeColors[theme]);
+    });
 };
 
 const applyTheme = (theme: Theme) => {
   document.documentElement.dataset['kbTheme'] = theme;
   syncThemeChrome(theme);
-  localStorage.setItem(storageKey, theme);
+  writeStoredTheme(theme);
 };
 
 export const ThemeToggle = () => {

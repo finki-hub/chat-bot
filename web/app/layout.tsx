@@ -49,7 +49,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: LIGHT_THEME_COLOR,
+  themeColor: [
+    { color: LIGHT_THEME_COLOR, media: '(prefers-color-scheme: light)' },
+    { color: DARK_THEME_COLOR, media: '(prefers-color-scheme: dark)' },
+  ],
 };
 
 const noFlashTheme = `(() => {
@@ -66,8 +69,10 @@ const noFlashTheme = `(() => {
     root.dataset.kbTheme = theme;
     root.style.colorScheme = theme;
     document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute('content', themeColors[theme]);
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((meta) => {
+        meta.setAttribute('content', themeColors[theme]);
+      });
   } catch {}
 })();`;
 
