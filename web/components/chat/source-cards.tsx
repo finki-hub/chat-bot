@@ -60,7 +60,7 @@ const SourceCard = ({ source }: { source: RetrievedSource }) => {
             aria-expanded={expanded}
             className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => {
-              setExpanded(!expanded);
+              setExpanded((current) => !current);
             }}
             type="button"
           >
@@ -117,7 +117,7 @@ export const SourceCards = ({
         aria-label={open ? t('sources.hide') : t('sources.show')}
         className="inline-flex items-center gap-1.5 rounded-md text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={() => {
-          setOpen(!open);
+          setOpen((current) => !current);
         }}
         type="button"
       >
