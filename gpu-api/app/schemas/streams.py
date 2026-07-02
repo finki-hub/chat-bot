@@ -8,10 +8,6 @@ class StreamRequestSchema(BaseModel):
     inference_model: Model = Field(
         description="The inference model to use for the chat response.",
     )
-    system_prompt: str | None = Field(
-        None,
-        description="An optional system prompt to guide the model.",
-    )
     temperature: float = Field(
         ge=0,
         le=1,

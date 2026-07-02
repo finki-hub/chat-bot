@@ -60,3 +60,15 @@ class RetrievedContext:
 
     def sources_payload(self) -> list[RetrievalSourcePayload]:
         return [source.as_payload() for source in self.sources]
+
+
+def visible_sources(
+    scored_sources: list[tuple[RetrievalSource, float | None]],
+    *,
+    source_score_floor: float,
+) -> tuple[RetrievalSource, ...]:
+    return tuple(
+        source
+        for source, score in scored_sources
+        if score is not None and score >= source_score_floor
+    )

@@ -27,7 +27,7 @@ settings = Settings()
 # Model, temperature, top_p, max_tokens, reasoning -> LLM
 anthropic_llm_clients: dict[tuple[str, float, float, int, bool], ChatAnthropic] = {}
 
-# Opus 4.7/4.8 reject `budget_tokens`; they use summarized adaptive thinking instead.
+# Models that reject `budget_tokens`; they use summarized adaptive thinking instead.
 _ADAPTIVE_THINKING_MODELS: frozenset[Model] = ANTHROPIC_NO_SAMPLING_MODELS
 
 # Anthropic rejects an enabled-thinking `budget_tokens` below 1024 and requires
@@ -40,8 +40,6 @@ def _thinking_config(
     model: Model,
     max_tokens: int,
 ) -> tuple[dict[str, object], int]:
-    """The Anthropic ``thinking`` payload and effective ``max_tokens`` (adaptive for Opus
-    4.7/4.8, else an explicit budget clamped to Anthropic's 1024-token floor)."""
     if model in _ADAPTIVE_THINKING_MODELS:
         return {"type": "adaptive", "display": "summarized"}, max_tokens
 
@@ -66,20 +64,24 @@ def get_anthropic_llm(
     Return a singleton ChatAnthropic instance for the specified model and parameters.
 
     Anthropic's API is stricter about sampling parameters than the other providers:
-    Claude Opus 4.7 / 4.8 reject `temperature`, `top_p`, and `top_k` outright (HTTP 400),
+    Some models reject non-default `temperature`, `top_p`, and `top_k` outright (HTTP 400),
     and every Claude 4+ model rejects requests that set both `temperature` and `top_p`.
     To stay within those limits we never forward `top_p`, and forward `temperature` only
     for models that accept it (see `ANTHROPIC_NO_SAMPLING_MODELS`).
 
     When `reasoning` is on, extended thinking additionally requires `temperature` to be
     unset (the API uses its default of 1), so we send `None` for every reasoning request.
+    Claude Sonnet 5 enables adaptive thinking by default, so non-reasoning requests
+    explicitly disable it to preserve the UI toggle's semantics.
     """
     key = (model.value, temperature, top_p, max_tokens, reasoning)
 
     if key not in anthropic_llm_clients:
-        thinking, effective_max = (
-            _thinking_config(model, max_tokens) if reasoning else (None, max_tokens)
-        )
+        thinking, effective_max = (None, max_tokens)
+        if reasoning:
+            thinking, effective_max = _thinking_config(model, max_tokens)
+        elif model == Model.CLAUDE_SONNET_5:
+            thinking = {"type": "disabled"}
         temperature_arg = (
             None
             if (reasoning or model in ANTHROPIC_NO_SAMPLING_MODELS)

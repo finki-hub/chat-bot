@@ -3,7 +3,11 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.llms.agents import sources_event
-from app.llms.context import _chunk_candidate, _question_candidate
+from app.llms.context import (
+    _chunk_candidate,
+    _question_candidate,
+)
+from app.llms.retrieval_result import visible_sources
 from app.schemas.documents import ChunkSchema
 from app.schemas.questions import QuestionSchema
 
@@ -78,3 +82,51 @@ def test_sources_event_serializes_sources_frame():
             },
         ],
     }
+
+
+def test_visible_sources_uses_stricter_source_score_gate():
+    q = QuestionSchema(
+        id=uuid4(),
+        name="Упис",
+        content="Уписот се прави преку iKnow.",
+        links={},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    weak = QuestionSchema(
+        id=uuid4(),
+        name="Нерелевантно",
+        content="Ова е слаб кандидат.",
+        links={},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    visible = visible_sources(
+        [
+            (_question_candidate(q).retrieval_source, 0.45),
+            (_question_candidate(weak).retrieval_source, 0.29),
+        ],
+        source_score_floor=0.3,
+    )
+
+    assert [source.title for source in visible] == ["Упис"]
+
+
+def test_visible_sources_are_empty_for_unscored_vector_fallback():
+    q = QuestionSchema(
+        id=uuid4(),
+        name="Упис",
+        content="Уписот се прави преку iKnow.",
+        links={},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    assert (
+        visible_sources(
+            [(_question_candidate(q).retrieval_source, None)],
+            source_score_floor=0.3,
+        )
+        == ()
+    )

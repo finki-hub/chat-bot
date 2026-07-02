@@ -30,6 +30,7 @@ class Model(Enum):
 
     CLAUDE_OPUS_4_8 = "claude-opus-4-8"
     CLAUDE_OPUS_4_7 = "claude-opus-4-7"
+    CLAUDE_SONNET_5 = "claude-sonnet-5"
     CLAUDE_SONNET_4_6 = "claude-sonnet-4-6"
     CLAUDE_HAIKU_4_5 = "claude-haiku-4-5"
 
@@ -93,6 +94,7 @@ CHAT_MODELS: frozenset[Model] = frozenset(
         Model.GEMINI_3_FLASH_PREVIEW,
         Model.CLAUDE_OPUS_4_8,
         Model.CLAUDE_OPUS_4_7,
+        Model.CLAUDE_SONNET_5,
         Model.CLAUDE_SONNET_4_6,
         Model.CLAUDE_HAIKU_4_5,
         Model.QWEN2_1_5_B_INSTRUCT,
@@ -124,6 +126,7 @@ ANTHROPIC_QUERY_TRANSFORM_MODELS: frozenset[Model] = frozenset(
     {
         Model.CLAUDE_OPUS_4_8,
         Model.CLAUDE_OPUS_4_7,
+        Model.CLAUDE_SONNET_5,
         Model.CLAUDE_SONNET_4_6,
         Model.CLAUDE_HAIKU_4_5,
     },
@@ -160,6 +163,7 @@ REASONING_CAPABLE_MODELS: frozenset[Model] = frozenset(
         Model.GEMINI_3_FLASH_PREVIEW,
         Model.CLAUDE_OPUS_4_8,
         Model.CLAUDE_OPUS_4_7,
+        Model.CLAUDE_SONNET_5,
         Model.CLAUDE_SONNET_4_6,
         Model.CLAUDE_HAIKU_4_5,
     },
@@ -177,15 +181,14 @@ OPENAI_MINIMAL_EFFORT_MODELS: frozenset[Model] = frozenset(
     },
 )
 
-# Anthropic models that reject sampling parameters (temperature / top_p / top_k).
-# Claude Opus 4.7 and 4.8 return HTTP 400 if any of these are sent, so no sampling
-# parameters are forwarded for them. Every Claude 4+ model additionally rejects
-# requests that set both temperature and top_p, which is why the Anthropic client
-# never forwards top_p for any Claude model.
+# Anthropic models that reject non-default sampling parameters (temperature / top_p /
+# top_k). The Anthropic client never forwards top_p for any Claude model because every
+# Claude 4+ model rejects requests that set both temperature and top_p.
 ANTHROPIC_NO_SAMPLING_MODELS: frozenset[Model] = frozenset(
     {
         Model.CLAUDE_OPUS_4_8,
         Model.CLAUDE_OPUS_4_7,
+        Model.CLAUDE_SONNET_5,
     },
 )
 
