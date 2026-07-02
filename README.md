@@ -50,6 +50,57 @@ npm run dev   # serves http://localhost:3000
 
 Standalone, it needs `web/.env.local` with `API_BASE_URL` (the chat API base, e.g. `http://localhost:8880`) and `CHAT_API_KEY` (the master `x-api-key`, used server-side by the BFF for feedback submission).
 
+## Configuration
+
+The root [`.env.sample`](.env.sample) contains the variables used by the Docker stacks. The most important ones are:
+
+- `API_KEY` - required for authenticated API writes, embedding fill jobs, diploma sync, and feedback submission; change the sample value before deployment
+- `MCP_API_KEY` - required by the production compose file; change the sample value before deployment
+- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT` - used by the database service and by the API `DATABASE_URL`
+- `GPU_API_URL` - API-to-GPU-API base URL; Docker defaults to `http://gpu-api:8888`
+- `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OLLAMA_URL` and optional `*_BASE_URL` overrides - provider configuration for chat, embeddings, and query transformation models
+- `MCP_HTTP_URLS`, `MCP_SSE_URLS` - optional MCP tool server URLs for the API agent
+- `POSTHOG_KEY`, `POSTHOG_HOST` - optional analytics configuration
+- `RERANKER_MIN_SCORE`, `SOURCE_RERANKER_MIN_SCORE`, `CHAT_HISTORY_MAX_TURNS` - retrieval and chat tuning
+- `PRELOAD_BGEM3`, `RERANKER_MODEL` - GPU API model loading and reranker selection
+
+The standalone web app reads `API_BASE_URL` and `CHAT_API_KEY` from `web/.env.local`. Optional web-facing variables include `SITE_URL`, `NEXT_PUBLIC_POSTHOG_KEY`, and `NEXT_PUBLIC_POSTHOG_HOST`.
+
+## Local Checks
+
+API:
+
+```bash
+cd api
+uv sync
+uv run pytest
+uv run ruff check .
+uv run mypy .
+```
+
+GPU API:
+
+```bash
+cd gpu-api
+uv sync
+uv run ruff check .
+uv run mypy .
+```
+
+Web:
+
+```bash
+cd web
+npm install
+npm run check
+npm run lint
+npm run test
+npm run e2e:install
+npm run e2e
+```
+
+The API container entrypoint is [`api/start.sh`](api/start.sh), which runs migrations and then starts `gunicorn -c gunicorn.conf.py app.main:app`. The GPU API container starts the same FastAPI/Gunicorn entrypoint directly from [`gpu-api/gunicorn.conf.py`](gpu-api/gunicorn.conf.py). The web container runs the Next.js standalone server built by [`web/Dockerfile`](web/Dockerfile).
+
 ## Endpoints
 
 This is an incomplete list. You may view all available endpoints on the OpenAPI documentation (`/docs`).
