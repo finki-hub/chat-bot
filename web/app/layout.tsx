@@ -12,6 +12,8 @@ const DESCRIPTION =
   'Разговарај со ФИНКИ Хаб асистентот за прашања поврзани со студиите на ФИНКИ.';
 const SITE_URL = process.env['SITE_URL'] ?? 'https://chat.finki-hub.com';
 const OG_IMAGE = `${SITE_URL}/favicon-96x96.png`;
+const LIGHT_THEME_COLOR = '#ffffff';
+const DARK_THEME_COLOR = '#0a0a0a';
 
 export const metadata: Metadata = {
   alternates: {
@@ -48,21 +50,29 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { color: '#ffffff', media: '(prefers-color-scheme: light)' },
-    { color: '#0a0a0a', media: '(prefers-color-scheme: dark)' },
+    { color: LIGHT_THEME_COLOR, media: '(prefers-color-scheme: light)' },
+    { color: DARK_THEME_COLOR, media: '(prefers-color-scheme: dark)' },
   ],
 };
 
 const noFlashTheme = `(() => {
   try {
+    const themeColors = { dark: '${DARK_THEME_COLOR}', light: '${LIGHT_THEME_COLOR}' };
     const stored = localStorage.getItem('theme');
     const theme =
       stored === 'dark' || stored === 'light'
         ? stored
-        : matchMedia('(prefers-color-scheme: dark)').matches
+        : typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches
           ? 'dark'
           : 'light';
-    document.documentElement.dataset.kbTheme = theme;
+    const root = document.documentElement;
+    root.dataset.kbTheme = theme;
+    root.style.colorScheme = theme;
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((meta) => {
+        meta.setAttribute('content', themeColors[theme]);
+      });
   } catch {}
 })();`;
 
