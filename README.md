@@ -52,7 +52,7 @@ Standalone, it needs `web/.env.local` with `API_BASE_URL` (the chat API base, e.
 
 ## Configuration
 
-The root [`.env.sample`](.env.sample) contains the variables used by the Docker stacks. The most important ones are:
+The root [`.env.sample`](.env.sample) contains the main variables used by the Docker stacks:
 
 - `API_KEY` - required for authenticated API writes, embedding fill jobs, diploma sync, and feedback submission; change the sample value before deployment
 - `MCP_API_KEY` - required by the production compose file; change the sample value before deployment
@@ -60,9 +60,10 @@ The root [`.env.sample`](.env.sample) contains the variables used by the Docker 
 - `GPU_API_URL` - API-to-GPU-API base URL; Docker defaults to `http://gpu-api:8888`
 - `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OLLAMA_URL` and optional `*_BASE_URL` overrides - provider configuration for chat, embeddings, and query transformation models
 - `MCP_HTTP_URLS`, `MCP_SSE_URLS` - optional MCP tool server URLs for the API agent
-- `POSTHOG_KEY`, `POSTHOG_HOST` - optional analytics configuration
 - `RERANKER_MIN_SCORE`, `SOURCE_RERANKER_MIN_SCORE`, `CHAT_HISTORY_MAX_TURNS` - retrieval and chat tuning
-- `PRELOAD_BGEM3`, `RERANKER_MODEL` - GPU API model loading and reranker selection
+- `PRELOAD_BGEM3` - whether the GPU API preloads the BGE-M3 embedder
+
+The compose files also support optional variables that are not listed in `.env.sample` because they have built-in defaults: `POSTHOG_KEY`, `POSTHOG_HOST`, `RERANKER_MODEL`, and `WEB_API_BASE_URL`.
 
 The standalone web app reads `API_BASE_URL` and `CHAT_API_KEY` from `web/.env.local`. Optional web-facing variables include `SITE_URL`, `NEXT_PUBLIC_POSTHOG_KEY`, and `NEXT_PUBLIC_POSTHOG_HOST`.
 
