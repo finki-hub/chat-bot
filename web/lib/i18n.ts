@@ -23,6 +23,7 @@ export const messages = {
   'conversation.deleteDescription':
     'Ова дејство е трајно и не може да се врати.',
   'conversation.deleteTitle': 'Избриши разговор?',
+  'conversation.generateTitle': 'Генерирај име',
   'conversation.rename': 'Преименувај',
   'conversation.renamePrompt': 'Ново име на разговорот',
   'conversation.renameTitle': 'Преименувај разговор',

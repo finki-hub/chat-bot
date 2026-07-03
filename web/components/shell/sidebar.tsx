@@ -17,9 +17,11 @@ import { cn } from '@/lib/utils';
 export type SidebarProps = {
   activeId: null | string;
   conversations: ConversationRow[];
+  generatingTitleId?: null | string;
   onClearAll: () => void;
   onClose: () => void;
   onDelete: (id: string) => void;
+  onGenerateTitle?: (id: string) => void;
   onNewChat: () => void;
   onRename: (id: string, title: string) => void;
   onSelect: (id: string) => void;
@@ -39,9 +41,11 @@ const closeIfMobile = (onClose: () => void) => {
 export const Sidebar = ({
   activeId,
   conversations,
+  generatingTitleId,
   onClearAll,
   onClose,
   onDelete,
+  onGenerateTitle,
   onNewChat,
   onRename,
   onSelect,
@@ -154,7 +158,9 @@ export const Sidebar = ({
               <ConversationList
                 activeId={activeId}
                 conversations={filtered}
+                generatingTitleId={generatingTitleId}
                 onDelete={onDelete}
+                onGenerateTitle={onGenerateTitle}
                 onRename={onRename}
                 onSelect={handleSelect}
               />
