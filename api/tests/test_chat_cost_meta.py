@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from uuid import uuid4
 
 import anyio
+import pytest
 
 from app.api import chat as chat_api
 from app.llms.agents import StreamObservation
@@ -46,9 +47,8 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
     chunks = anyio.run(collect)
     meta = json.loads(chunks[-1].split("data:", 1)[1].strip())
 
-    assert meta["cost"] == {
-        "input_usd": 0.001,
-        "output_usd": 0.005,
-        "total_usd": 0.006,
-    }
-    assert captured[-1][2]["$ai_total_cost_usd"] == 0.006
+    assert meta["cost"]["input_usd"] == pytest.approx(0.001)
+    assert meta["cost"]["output_usd"] == pytest.approx(0.005)
+    assert meta["cost"]["total_usd"] == pytest.approx(0.006)
+    assert len(captured) == 1
+    assert captured[0][2]["$ai_total_cost_usd"] == pytest.approx(0.006)
