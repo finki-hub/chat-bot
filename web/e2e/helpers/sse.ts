@@ -31,6 +31,8 @@ export type UiChunk =
           serverTtftMs: number;
           tokens: { input: number; output: number; total: number };
         };
+        inferenceModel?: string;
+        responseId?: string;
       };
       type: 'message-metadata';
     }
