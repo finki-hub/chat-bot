@@ -16,7 +16,13 @@ beforeAll(() => {
 const SEARCHING = '🔍 Пребарувам…';
 const PREAMBLE = 'Дозволете да проверам во базата…';
 const ANSWER = 'Испитите се во јануари.';
+const ARIA_EXPANDED = 'aria-expanded';
 const ANSWER_TEXT_TESTID = 'answer-text';
+const CHUNK_SOURCE_TITLE = 'Статут на ФИНКИ · Член 12';
+const CHUNK_SOURCE_TITLE_RE = /Статут на ФИНКИ · Член 12/u;
+const COLLAPSED_CHUNK_TEXT =
+  'Правилата за запишување и заверка на семестарот се наведени во овој член…';
+const EXPANDED_CHUNK_TEXT_RE = /Вториот став/u;
 const TIMING_TESTID = 'message-timing';
 
 const assistantWithParts = (parts: MyUIMessage['parts']): MyUIMessage => ({
@@ -333,6 +339,8 @@ describe('AssistantMessage', () => {
 
   it('keeps source cards collapsed until the user expands them', async () => {
     const user = userEvent.setup();
+    const chunkSnippet =
+      'Правилата за запишување и заверка на семестарот се наведени во овој член со повеќе детали. Вториот став содржи дополнителни детали што треба да се прикажат кога картичката е отворена.';
     const msg: MyUIMessage = {
       id: 'a1',
       metadata: {
@@ -352,7 +360,7 @@ describe('AssistantMessage', () => {
             id: 'c1',
             kind: 'chunk',
             section: 'Член 12',
-            snippet: 'Правилата се наведени во членот.',
+            snippet: chunkSnippet,
             title: 'Статут на ФИНКИ',
           },
         ],
@@ -368,15 +376,33 @@ describe('AssistantMessage', () => {
 
     expect(sources).toHaveTextContent('Извори');
     expect(sources).toHaveTextContent('2');
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute(ARIA_EXPANDED, 'false');
     expect(screen.queryByText('Упис')).toBeNull();
-    expect(screen.queryByText('Статут на ФИНКИ · Член 12')).toBeNull();
+    expect(screen.queryByText(CHUNK_SOURCE_TITLE)).toBeNull();
 
     await user.click(toggle);
 
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveAttribute(ARIA_EXPANDED, 'true');
     expect(screen.getByText('Упис')).toBeInTheDocument();
-    expect(screen.getByText('Статут на ФИНКИ · Член 12')).toBeInTheDocument();
+    expect(screen.getByText(CHUNK_SOURCE_TITLE)).toBeInTheDocument();
+
+    const chunkButton = screen.getByRole('button', {
+      name: CHUNK_SOURCE_TITLE_RE,
+    });
+    const chunkText = screen.getByText(COLLAPSED_CHUNK_TEXT);
+
+    expect(chunkButton).toHaveAttribute(ARIA_EXPANDED, 'false');
+    expect(chunkText).toHaveClass('line-clamp-2');
+    expect(screen.queryByText(EXPANDED_CHUNK_TEXT_RE)).toBeNull();
+
+    await user.click(chunkButton);
+
+    const expandedChunkText = screen.getByText(EXPANDED_CHUNK_TEXT_RE);
+
+    expect(chunkButton).toHaveAttribute(ARIA_EXPANDED, 'true');
+    expect(expandedChunkText).not.toHaveClass('line-clamp-2');
+    expect(expandedChunkText).toHaveClass('whitespace-pre-wrap');
+
     expect(screen.getByRole('link', { name: 'Врска: iKnow' })).toHaveAttribute(
       'href',
       'https://iknow.ukim.mk/',
@@ -390,7 +416,7 @@ describe('AssistantMessage', () => {
 
     expect(
       screen.getByRole('button', { name: 'Прикажи извори' }),
-    ).toHaveAttribute('aria-expanded', 'false');
+    ).toHaveAttribute(ARIA_EXPANDED, 'false');
     expect(screen.queryByText('Упис')).toBeNull();
   });
 
