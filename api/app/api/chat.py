@@ -142,6 +142,23 @@ def _query_transform_ms(timings: RequestTimings) -> float | None:
 _WEB_SEARCH_HINTS = ("web_search", "web-search", "websearch", "search_web", "tavily")
 
 
+def _chat_request_log_fields(
+    payload: ChatSchema,
+) -> dict[str, bool | float | int | str]:
+    return {
+        "inference_model": payload.inference_model.value,
+        "embeddings_model": payload.embeddings_model.value,
+        "query_transform_model": payload.query_transform_model.value,
+        "query_transform_mode": payload.query_transform_mode.value,
+        "reasoning": payload.reasoning,
+        "interface": payload.interface,
+        "temperature": payload.temperature,
+        "max_tokens": payload.max_tokens,
+        "query_len": len(payload.query),
+        "history_turns": len(payload.history),
+    }
+
+
 def _used_web_search(tool_names: set[str]) -> bool:
     return any(
         hint in name.lower() for name in tool_names for hint in _WEB_SEARCH_HINTS
@@ -347,8 +364,8 @@ async def _chat_response_stream(
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Build context (streaming retrieval status), then yield the agent answer stream."""
     logger.info(
-        "Received chat request with payload: %s",
-        payload.model_dump(mode="json", exclude_defaults=True),
+        "Received chat request: %s",
+        _chat_request_log_fields(payload),
     )
 
     history_text = _history_for_retrieval(payload)

@@ -52,3 +52,21 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
     assert meta["cost"]["total_usd"] == pytest.approx(0.006)
     assert len(captured) == 1
     assert captured[0][2]["$ai_total_cost_usd"] == pytest.approx(0.006)
+
+
+def test_chat_request_log_fields_do_not_include_message_content():
+    payload = ChatSchema(
+        interface="web",
+        inference_model=Model.CLAUDE_HAIKU_4_5,
+        messages=[
+            {"role": "user", "content": "private first question"},
+            {"role": "assistant", "content": "private previous answer"},
+            {"role": "user", "content": "private latest question"},
+        ],
+    )
+
+    fields = chat_api._chat_request_log_fields(payload)  # noqa: SLF001
+
+    assert "private" not in repr(fields)
+    assert fields["query_len"] == len("private latest question")
+    assert fields["history_turns"] == 2
