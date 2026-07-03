@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["mypy>=2.1.0", "ruff>=0.15.20"]
+dev = ["mypy>=2.1.0", "pytest>=9.1.1", "ruff>=0.15.20"]
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
@@ -33,6 +33,9 @@ torchvision = [
 
 [tool.mypy]
 python_version = "3.14"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py314"
@@ -87,3 +90,6 @@ ignore = [
   "E501",
   "PLR0913",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["INP001", "ANN", "S101"]
