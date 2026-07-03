@@ -15,6 +15,5 @@ jobs:
     uses: finki-hub/.github/.github/workflows/pytest.yaml@main
     with:
       working-directory: ./gpu-api
-      python-version: "3.14"
       sync-args: --frozen
       pytest-args: -q

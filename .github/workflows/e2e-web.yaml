@@ -14,7 +14,6 @@ jobs:
   playwright:
     uses: finki-hub/.github/.github/workflows/playwright.yaml@main
     with:
-      node-version: "24"
       working-directory: ./web
       env-vars: |
         API_BASE_URL=http://localhost:8880
