@@ -15,6 +15,20 @@ export type ChatRequestBody = {
   top_p?: number;
 };
 
+export type ChatTitleClientPayload = {
+  readonly messages: readonly ConversationTurn[];
+  readonly queryTransformModel?: ModelId;
+};
+
+export type ChatTitleRequestBody = {
+  readonly messages: readonly ConversationTurn[];
+  readonly query_transform_model?: ModelId;
+};
+
+export type ChatTitleResponse = {
+  readonly title: string;
+};
+
 export type ConversationRole = 'assistant' | 'user';
 
 export type ConversationTurn = {

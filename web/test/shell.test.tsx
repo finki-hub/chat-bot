@@ -226,6 +226,28 @@ describe('ConversationList', () => {
 
     expect(onRename).toHaveBeenCalledWith('c1', 'Ново име');
   });
+
+  it('generates a conversation title from the row actions', () => {
+    const onGenerateTitle = vi.fn<(id: string) => void>();
+
+    render(
+      <ConversationList
+        activeId={null}
+        conversations={rows}
+        onDelete={noop()}
+        onGenerateTitle={onGenerateTitle}
+        onRename={noop()}
+        onSelect={noop()}
+      />,
+    );
+
+    const item = screen.getByTestId('conversation-c1');
+    fireEvent.click(
+      within(item).getByRole('button', { name: 'Генерирај име' }),
+    );
+
+    expect(onGenerateTitle).toHaveBeenCalledWith('c1');
+  });
 });
 
 describe('Sidebar', () => {
@@ -417,6 +439,9 @@ const respondTo = (
   if (url.endsWith('/api/chat')) {
     return Promise.resolve(sseChatResponse(chat));
   }
+  if (url.endsWith('/api/chat/title')) {
+    return Promise.resolve(jsonOk({ title: 'Испитен рок' }));
+  }
 
   return Promise.resolve(jsonOk({}));
 };
@@ -515,6 +540,24 @@ describe('ChatPage persistence', () => {
     expect(roles).toContain('assistant');
     expect(msgs.find((m) => m.role === 'assistant')?.metadata?.responseId).toBe(
       RESPONSE_ID,
+    );
+  });
+
+  it('generates and persists a title after the first message is sent', async () => {
+    const user = userEvent.setup();
+
+    renderChatPage();
+
+    await user.type(screen.getByRole('textbox'), 'Кога е испитот?');
+    await user.keyboard('{Enter}');
+
+    await waitFor(
+      async () => {
+        const convos = await db.conversations.toArray();
+
+        expect(convos.at(0)?.title).toBe('Испитен рок');
+      },
+      { timeout: 5_000 },
     );
   });
 

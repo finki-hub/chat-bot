@@ -9,6 +9,7 @@ import {
   listConversations,
   loadMessages,
   renameConversation,
+  renameConversationIfTitle,
   saveMessages,
   setMessageFeedback,
 } from '@/lib/db';
@@ -73,6 +74,27 @@ describe('conversations', () => {
     expect(list[0]?.title).toBe('A2');
     expect(a.id).toBe('a');
     expect(b.id).toBe('b');
+  });
+
+  it('renames a conversation only when the current title still matches', async () => {
+    await createConversation({ id: 'guarded', model: 'm', title: 'Прашање?' });
+
+    const renamed = await renameConversationIfTitle(
+      'guarded',
+      'Прашање?',
+      'Испитен рок',
+    );
+    const skipped = await renameConversationIfTitle(
+      'guarded',
+      'Прашање?',
+      'Презапиши',
+    );
+
+    expect([renamed, skipped]).toStrictEqual([true, false]);
+
+    const list = await listConversations();
+
+    expect(list.find((c) => c.id === 'guarded')?.title).toBe('Испитен рок');
   });
 });
 
