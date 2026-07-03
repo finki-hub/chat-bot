@@ -99,6 +99,42 @@ describe('POST /api/chat/title', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('returns 413 when the payload has too many messages', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await POST(
+      jsonRequest({
+        messages: [
+          { content: '1', role: 'user' },
+          { content: '2', role: 'assistant' },
+          { content: '3', role: 'user' },
+          { content: '4', role: 'assistant' },
+          { content: '5', role: 'user' },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(413);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 413 when a message content is too long', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await POST(
+      jsonRequest({
+        messages: [{ content: 'x'.repeat(8_001), role: 'user' }],
+      }),
+    );
+
+    expect(res.status).toBe(413);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('returns 502 when the title service returns an invalid body', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

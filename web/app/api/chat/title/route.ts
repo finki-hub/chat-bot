@@ -10,6 +10,14 @@ import { API_BASE_URL } from '@/lib/env';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const MAX_TITLE_CONTENT_LENGTH = 8_000;
+const MAX_TITLE_MESSAGES = 4;
+
+type ParsePayloadResult =
+  | { readonly kind: 'invalid' }
+  | { readonly kind: 'ok'; readonly payload: ChatTitleClientPayload }
+  | { readonly kind: 'tooLarge' };
+
 const isRole = (value: unknown): value is ConversationRole =>
   value === 'assistant' || value === 'user';
 
@@ -32,23 +40,37 @@ const parseTurn = (value: unknown): ConversationTurn | null => {
   return { content, role };
 };
 
-const parsePayload = (value: unknown): ChatTitleClientPayload | null => {
+const parsePayload = (value: unknown): ParsePayloadResult => {
   if (typeof value !== 'object' || value === null) {
-    return null;
+    return { kind: 'invalid' };
   }
 
   const candidate = value as Record<string, unknown>;
   const rawMessages = candidate['messages'];
 
   if (!Array.isArray(rawMessages) || rawMessages.length === 0) {
-    return null;
+    return { kind: 'invalid' };
+  }
+
+  if (rawMessages.length > MAX_TITLE_MESSAGES) {
+    return { kind: 'tooLarge' };
   }
 
   const messages: ConversationTurn[] = [];
   for (const rawMessage of rawMessages) {
+    if (typeof rawMessage === 'object' && rawMessage !== null) {
+      const { content } = rawMessage as Record<string, unknown>;
+      if (
+        typeof content === 'string' &&
+        content.length > MAX_TITLE_CONTENT_LENGTH
+      ) {
+        return { kind: 'tooLarge' };
+      }
+    }
+
     const turn = parseTurn(rawMessage);
     if (turn === null) {
-      return null;
+      return { kind: 'invalid' };
     }
     messages.push(turn);
   }
@@ -59,10 +81,13 @@ const parsePayload = (value: unknown): ChatTitleClientPayload | null => {
       : candidate['queryTransformModel'];
 
   return {
-    messages,
-    ...(typeof queryTransformModel === 'string' && {
-      queryTransformModel,
-    }),
+    kind: 'ok',
+    payload: {
+      messages,
+      ...(typeof queryTransformModel === 'string' && {
+        queryTransformModel,
+      }),
+    },
   };
 };
 
@@ -109,14 +134,20 @@ export const POST = async (req: Request): Promise<Response> => {
     return jsonError('Invalid JSON body', 400);
   }
 
-  const payload = parsePayload(raw);
+  const result = parsePayload(raw);
 
-  if (payload === null) {
+  if (result.kind === 'tooLarge') {
+    return jsonError('Title payload is too large.', 413);
+  }
+
+  if (result.kind === 'invalid') {
     return jsonError(
       'Invalid title payload: at least one message is required.',
       400,
     );
   }
+
+  const { payload } = result;
 
   let upstream: Response;
 
