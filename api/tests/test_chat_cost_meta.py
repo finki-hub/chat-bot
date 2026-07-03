@@ -18,6 +18,12 @@ async def _body() -> AsyncIterator[str]:
     yield "event: done\ndata: {}\n\n"
 
 
+async def _body_with_thinking() -> AsyncIterator[str]:
+    yield 'event: thinking\ndata: {"text":"private chain of thought"}\n\n'
+    yield 'event: token\ndata: {"text":"answer"}\n\n'
+    yield "event: done\ndata: {}\n\n"
+
+
 def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
     captured: list[tuple[str, str, dict[str, object]]] = []
     monkeypatch.setattr(
@@ -52,3 +58,35 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
     assert meta["cost"]["total_usd"] == pytest.approx(0.006)
     assert len(captured) == 1
     assert captured[0][2]["$ai_total_cost_usd"] == pytest.approx(0.006)
+
+
+def test_chat_stream_does_not_forward_private_thinking_events(monkeypatch):
+    monkeypatch.setattr(chat_api, "capture", lambda *args: None)
+    payload = ChatSchema(
+        interface="web",
+        inference_model=Model.CLAUDE_HAIKU_4_5,
+        messages=[{"role": "user", "content": "Прашање?"}],
+        reasoning=True,
+    )
+    observation = StreamObservation(distinct_id="user-1", response_id="response-1")
+
+    async def collect() -> list[str]:
+        stream = chat_api._instrument_stream(  # noqa: SLF001
+            _body_with_thinking(),
+            payload=payload,
+            response_id=uuid4(),
+            timings=RequestTimings(),
+            retrieval_hit=True,
+            distinct_id="user-1",
+            observation=observation,
+        )
+        return [str(chunk) async for chunk in stream]
+
+    chunks = anyio.run(collect)
+    body = "".join(chunks)
+    meta = json.loads(chunks[-1].split("data:", 1)[1].strip())
+
+    assert "event: thinking" not in body
+    assert "private chain of thought" not in body
+    assert 'event: token\ndata: {"text":"answer"}' in body
+    assert meta["timing"]["thinking_ms"] is not None

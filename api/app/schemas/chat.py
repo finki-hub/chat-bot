@@ -119,9 +119,9 @@ class ChatSchema(BaseModel):
         examples=[True],
         description=(
             "Enable the model's extended-thinking / reasoning mode. When true and the "
-            "selected model supports it, the model reasons before answering and the "
-            "reasoning is streamed on a separate `thinking` SSE channel. Models without "
-            "a reasoning mode ignore this flag."
+            "selected model supports it, the model reasons before answering. Private "
+            "reasoning traces are not streamed to public clients. Models without a "
+            "reasoning mode ignore this flag."
         ),
     )
 

@@ -243,8 +243,8 @@ async def _instrument_stream(
     distinct_id: str,
     observation: StreamObservation,
 ) -> AsyncGenerator[bytes | str | memoryview]:
-    """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
-    log one chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
+    """Stamp TTFT, thinking and total while filtering private thinking frames,
+    then log one chat.timing line and emit a trailing ``meta`` frame.
 
     Thinking time spans the first ``thinking`` frame to the first ``token`` frame, so it
     lands in the same ``meta`` diagnostics as TTFT and total.
@@ -261,8 +261,8 @@ async def _instrument_stream(
     try:
         async for chunk in body:
             timings.mark_ttft()
+            event_name = _sse_event_name(chunk)
             if marking or not answered:
-                event_name = _sse_event_name(chunk)
                 if marking:
                     if event_name == "thinking":
                         timings.mark_thinking()
@@ -274,6 +274,8 @@ async def _instrument_stream(
             sniffed = _sniff_tokens(chunk)
             if sniffed is not None:
                 usage = sniffed
+            if event_name == "thinking":
+                continue
             yield chunk
     except GeneratorExit:
         outcome = "client_disconnect"
