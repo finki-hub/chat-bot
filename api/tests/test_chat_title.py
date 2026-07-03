@@ -1,6 +1,9 @@
+import logging
+
 import anyio
 
 from app.api import chat_title
+from app.llms import query_transform
 from app.llms.models import Model
 from app.schemas.chat_title import ChatTitleSchema
 
@@ -71,3 +74,38 @@ def test_chat_title_falls_back_to_first_user_message_when_model_returns_empty(
     response = anyio.run(chat_title.generate_chat_title, payload)
 
     assert response.title == "Како да пријавам испит?"
+
+
+def test_query_transform_logs_metadata_without_raw_query(monkeypatch, caplog):
+    async def fake_transform_query_with_openai(
+        query: str,
+        model: Model,
+        *,
+        system_prompt: str,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+    ) -> str:
+        return "Испитен рок"
+
+    monkeypatch.setattr(
+        query_transform,
+        "transform_query_with_openai",
+        fake_transform_query_with_openai,
+    )
+    caplog.set_level(logging.INFO, logger=query_transform.__name__)
+
+    async def run_transform_query() -> None:
+        await query_transform.transform_query(
+            "Conversation transcript: private student question",
+            Model.GPT_5_4_MINI,
+            system_prompt="system",
+            temperature=0.2,
+            top_p=1.0,
+            max_tokens=32,
+        )
+
+    anyio.run(run_transform_query)
+
+    assert "private student question" not in caplog.text
+    assert "query_length" in caplog.text
