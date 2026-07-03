@@ -26,6 +26,7 @@ export type UiChunk =
   | {
       messageMetadata: {
         diagnostics: {
+          cost?: { inputUsd: number; outputUsd: number; totalUsd: number };
           serverTotalMs: number;
           serverTtftMs: number;
           tokens: { input: number; output: number; total: number };

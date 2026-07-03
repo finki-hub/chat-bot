@@ -64,6 +64,18 @@ const DiagnosticsGroup = ({ children }: { children: ReactNode }) => (
   </div>
 );
 
+const CostDiagnosticsRow = ({
+  cost,
+}: {
+  cost: NonNullable<Diagnostics>['cost'];
+}) =>
+  cost === undefined ? null : (
+    <DiagnosticsRow
+      label={t('diagnostics.cost')}
+      value={`$${cost.totalUsd.toFixed(6)}`}
+    />
+  );
+
 const DiagnosticsCard = ({
   diagnostics,
   inferenceModel,
@@ -168,6 +180,7 @@ const DiagnosticsCard = ({
               value={throughput}
             />
           )}
+          <CostDiagnosticsRow cost={diagnostics.cost} />
         </DiagnosticsGroup>
       )}
     </div>

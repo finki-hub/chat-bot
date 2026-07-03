@@ -401,6 +401,7 @@ describe('AssistantMessage', () => {
       metadata: {
         // 30 output tokens over a 1.5s window → 20 tok/s.
         diagnostics: {
+          cost: { inputUsd: 0.00003, outputUsd: 0.00045, totalUsd: 0.00048 },
           serverTotalMs: 1_700,
           serverTtftMs: 200,
           tokens: { input: 10, output: 30, total: 40 },
@@ -424,6 +425,8 @@ describe('AssistantMessage', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('брзина (ток./сек)')).toBeInTheDocument();
     expect(screen.getByText('20')).toBeInTheDocument();
+    expect(screen.getByText('цена')).toBeInTheDocument();
+    expect(screen.getByText('$0.000480')).toBeInTheDocument();
   });
 
   it('keeps the footnote a plain element when diagnostics are absent', () => {
