@@ -1,13 +1,13 @@
 import logging
 
 from fastapi.responses import StreamingResponse
+from langchain_core.messages import HumanMessage
 
 from app.llms.agents import StreamObservation
 from app.llms.prompts import (
     DEFAULT_AGENT_SYSTEM_PROMPT,
     build_user_agent_prompt,
     markdown_instructions,
-    to_history_messages,
 )
 from app.llms.streams import stream_response_with_agent
 from app.schemas.chat import ChatSchema
@@ -40,12 +40,10 @@ async def handle_chat(
         ],
     )
     user_prompt = build_user_agent_prompt(context, payload.query)
-    history = to_history_messages(
-        [
-            (turn.role, turn.content)
-            for turn in payload.capped_history(settings.CHAT_HISTORY_MAX_TURNS)
-        ],
-    )
+    history = [
+        HumanMessage(content=f"Client-supplied {turn.role} turn:\n{turn.content}")
+        for turn in payload.capped_history(settings.CHAT_HISTORY_MAX_TURNS)
+    ]
 
     return await stream_response_with_agent(
         user_prompt,
