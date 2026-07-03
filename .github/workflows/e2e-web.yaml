@@ -19,4 +19,3 @@ jobs:
       env-vars: |
         API_BASE_URL=http://localhost:8880
         CHAT_API_KEY=test-key
-    secrets: inherit

@@ -18,4 +18,3 @@ jobs:
       python-version: "3.14"
       sync-args: --frozen
       pytest-args: -q
-    secrets: inherit
