@@ -30,10 +30,13 @@ test.describe('chat streaming (mocked BFF)', () => {
     const diagnosticsChunk = {
       messageMetadata: {
         diagnostics: {
+          cost: { inputUsd: 0.00003, outputUsd: 0.00045, totalUsd: 0.00048 },
           serverTotalMs: 1_700,
           serverTtftMs: 200,
           tokens: { input: 10, output: 30, total: 40 },
         },
+        inferenceModel: INFERENCE_MODEL,
+        responseId: RESPONSE_ID,
       },
       type: 'message-metadata',
     } satisfies (typeof chatChunks)[number];
@@ -109,6 +112,8 @@ test.describe('chat streaming (mocked BFF)', () => {
     await diagnosticsTrigger.hover();
     await expect(page.getByText('trace ID')).toBeVisible();
     await expect(page.getByText(RESPONSE_ID)).toBeVisible();
+    await expect(page.getByText('цена')).toBeVisible();
+    await expect(page.getByText('$0.000480')).toBeVisible();
     await page.mouse.move(0, 0);
 
     await page.getByTestId('like-button').click();

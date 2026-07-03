@@ -28,6 +28,7 @@ export const messages = {
   'conversation.renameTitle': 'Преименувај разговор',
   'conversation.scrollToLatest': 'Скролувај до најновата порака',
   'diagnostics.candidates': 'кандидати',
+  'diagnostics.cost': 'цена',
   'diagnostics.model': 'модел',
   'diagnostics.serverFirstByte': 'прв бајт (сервер)',
   'diagnostics.serverTotal': 'вкупно (сервер)',

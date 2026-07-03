@@ -170,6 +170,22 @@ const toDiagnostics = (obj: Record<string, unknown>): MessageDiagnostics => {
     }
   }
 
+  const cost = obj['cost'];
+
+  if (isRecord(cost)) {
+    const inputUsd = cost['input_usd'];
+    const outputUsd = cost['output_usd'];
+    const totalUsd = cost['total_usd'];
+
+    if (
+      typeof inputUsd === 'number' &&
+      typeof outputUsd === 'number' &&
+      typeof totalUsd === 'number'
+    ) {
+      diagnostics.cost = { inputUsd, outputUsd, totalUsd };
+    }
+  }
+
   return diagnostics;
 };
 
