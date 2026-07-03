@@ -22,4 +22,5 @@ jobs:
         with:
           enable-cache: true
       - run: uv python install 3.14
+      - run: uv sync --frozen
       - run: uv run pytest -q
