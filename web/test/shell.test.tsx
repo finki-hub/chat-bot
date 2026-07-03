@@ -274,8 +274,9 @@ describe('Sidebar', () => {
     expect(aside).toHaveAttribute('inert');
   });
 
-  it('clears all conversations after confirmation', () => {
+  it('clears all conversations after confirmation', async () => {
     const onClearAll = vi.fn<() => void>();
+    const user = userEvent.setup();
     render(
       <Sidebar
         activeId="c1"
@@ -290,11 +291,11 @@ describe('Sidebar', () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId('delete-all'));
+    await user.click(screen.getByTestId('delete-all'));
 
     expect(onClearAll).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByTestId('confirm-action'));
+    await user.click(screen.getByTestId('confirm-action'));
 
     expect(onClearAll).toHaveBeenCalledOnce();
   });
