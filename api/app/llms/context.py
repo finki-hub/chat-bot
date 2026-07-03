@@ -497,7 +497,12 @@ async def _contextualize_query(
         return query
     condensed = condensed.strip()
     if condensed and condensed != query:
-        logger.info("Contextualized query: '%s' -> '%s'", query, condensed)
+        logger.info(
+            "Contextualized query: query_len=%d condensed_len=%d history_len=%d",
+            len(query),
+            len(condensed),
+            len(history_text),
+        )
         return condensed
     return query
 
