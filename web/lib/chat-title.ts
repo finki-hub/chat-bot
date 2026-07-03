@@ -1,10 +1,30 @@
-import type { ChatTitleResponse, ModelId, MyUIMessage } from '@/lib/api-types';
+import type { ModelId, MyUIMessage } from '@/lib/api-types';
 
 import { toChatTitleRequestBody } from '@/lib/chat-title-translate';
 
 type GenerateTitleInput = {
   readonly messages: readonly MyUIMessage[];
   readonly queryTransformModel: ModelId;
+};
+
+const parseTitle = (value: unknown): null | string => {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+
+  if (!('title' in value)) {
+    return null;
+  }
+
+  const { title } = value;
+
+  if (typeof title !== 'string') {
+    return null;
+  }
+
+  const trimmed = title.trim();
+
+  return trimmed.length > 0 ? trimmed : null;
 };
 
 export const generateChatTitle = async ({
@@ -23,8 +43,16 @@ export const generateChatTitle = async ({
     return null;
   }
 
-  const body = (await response.json()) as ChatTitleResponse;
-  const title = body.title.trim();
+  let body: unknown;
 
-  return title.length > 0 ? title : null;
+  try {
+    body = await response.json();
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return null;
+    }
+    throw error;
+  }
+
+  return parseTitle(body);
 };
