@@ -12,15 +12,10 @@ permissions:
 
 jobs:
   pytest:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./api
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-      - run: uv python install 3.14
-      - run: uv sync --frozen
-      - run: uv run pytest -q
+    uses: finki-hub/.github/.github/workflows/pytest.yaml@main
+    with:
+      working-directory: ./api
+      python-version: "3.14"
+      sync-args: --frozen
+      pytest-args: -q
+    secrets: inherit

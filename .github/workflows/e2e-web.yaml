@@ -12,20 +12,11 @@ permissions:
 
 jobs:
   playwright:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./web
-    env:
-      API_BASE_URL: http://localhost:8880
-      CHAT_API_KEY: test-key
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - run: npx --no-install playwright install --with-deps chromium
-      - run: npm run e2e
+    uses: finki-hub/.github/.github/workflows/playwright.yaml@main
+    with:
+      node-version: "24"
+      working-directory: ./web
+      env-vars: |
+        API_BASE_URL=http://localhost:8880
+        CHAT_API_KEY=test-key
+    secrets: inherit
