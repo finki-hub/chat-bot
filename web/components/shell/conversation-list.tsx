@@ -41,6 +41,7 @@ export const ConversationList = ({
   const [pendingDelete, setPendingDelete] = useState<ConversationRow | null>(
     null,
   );
+  const isGeneratingAnyTitle = generatingTitleId !== null;
 
   const openRename = (conversation: ConversationRow) => {
     setRenameTarget(conversation);
@@ -95,7 +96,7 @@ export const ConversationList = ({
                     aria-busy={isGeneratingTitle || undefined}
                     aria-label={t('conversation.generateTitle')}
                     className="rounded-md p-1 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60"
-                    disabled={isGeneratingTitle}
+                    disabled={isGeneratingAnyTitle}
                     onClick={() => {
                       onGenerateTitle(c.id);
                     }}
