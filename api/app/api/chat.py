@@ -255,6 +255,7 @@ async def _instrument_stream(
     """
     outcome = "completed"
     usage: dict[str, int] | None = None
+    meta_payload: dict[str, object] = {}
     marking = True
     answered = False
     try:
@@ -300,17 +301,33 @@ async def _instrument_stream(
                 },
             ),
         )
+        effective_usage = (
+            observation.usage if any(observation.usage.values()) else usage
+        )
         _capture_chat_response(
             distinct_id=distinct_id,
             payload=payload,
             response_id=response_id,
             timings=timings,
             retrieval_hit=retrieval_hit,
-            usage=observation.usage if any(observation.usage.values()) else usage,
+            usage=effective_usage,
             outcome=outcome,
             observation=observation,
         )
-    yield meta_event({"timing": record})
+        meta_payload = {"timing": record}
+        if effective_usage is not None:
+            costs = cost_usd(
+                payload.inference_model,
+                effective_usage["input"],
+                effective_usage["output"],
+            )
+            if costs is not None:
+                meta_payload["cost"] = {
+                    "input_usd": round(costs[0], 6),
+                    "output_usd": round(costs[1], 6),
+                    "total_usd": round(costs[2], 6),
+                }
+    yield meta_event(meta_payload)
 
 
 db_dep = Depends(get_db)
