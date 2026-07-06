@@ -129,7 +129,7 @@ export const AnswerActions = ({
         className={cn(
           BTN,
           vote === 'like' &&
-            'bg-green-600/10 text-green-600 hover:bg-green-600/15 hover:text-green-600',
+            'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground',
         )}
         data-testid="like-button"
         disabled={pending}
@@ -149,7 +149,7 @@ export const AnswerActions = ({
         className={cn(
           BTN,
           vote === 'dislike' &&
-            'bg-red-600/10 text-red-600 hover:bg-red-600/15 hover:text-red-600',
+            'bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:text-destructive-foreground',
         )}
         data-testid="dislike-button"
         disabled={pending}

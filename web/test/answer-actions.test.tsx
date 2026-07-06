@@ -101,7 +101,7 @@ describe('AnswerActions feedback', () => {
     });
   });
 
-  it('paints the like button green once pressed', async () => {
+  it('marks the like button with selected action colors once pressed', async () => {
     render(<AnswerActions message={assistant('resp-9')} />);
     const like = screen.getByRole('button', { name: 'Допаѓа' });
     fireEvent.click(like);
@@ -110,7 +110,8 @@ describe('AnswerActions feedback', () => {
       expect(like).toHaveAttribute(PRESSED, 'true');
     });
 
-    expect(like.className).toContain('text-green-600');
+    expect(like.className).toContain('bg-primary');
+    expect(like.className).toContain('text-primary-foreground');
     expect(like.className).not.toContain('text-muted-foreground');
   });
 
