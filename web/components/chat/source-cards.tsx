@@ -89,7 +89,7 @@ const SourceCard = ({ source }: { source: RetrievedSource }) => {
             {links.map((link) => (
               <a
                 aria-label={`${t('sources.link')}: ${link.label}`}
-                className="rounded-md p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+                className="rounded-md p-1 text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 href={link.url}
                 key={`${link.label}:${link.url}`}
                 rel="noreferrer"
