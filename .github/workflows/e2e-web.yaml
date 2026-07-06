@@ -1,0 +1,20 @@
+name: E2E (Web)
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  playwright:
+    uses: finki-hub/.github/.github/workflows/playwright.yaml@main
+    with:
+      working-directory: ./web
+      env-vars: |
+        API_BASE_URL=http://localhost:8880
+        CHAT_API_KEY=test-key

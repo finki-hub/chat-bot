@@ -69,9 +69,11 @@ const ChatScreen = () => {
     activeId,
     activeStatus,
     conversations,
+    generatingTitleId,
     messages,
     onClearAll,
     onDelete,
+    onGenerateTitle,
     onNewChat,
     onRename,
     onSelect,
@@ -90,11 +92,13 @@ const ChatScreen = () => {
         <Sidebar
           activeId={activeId}
           conversations={conversations}
+          generatingTitleId={generatingTitleId}
           onClearAll={onClearAll}
           onClose={() => {
             setSidebarOpen(false);
           }}
           onDelete={onDelete}
+          onGenerateTitle={onGenerateTitle}
           onNewChat={onNewChat}
           onRename={onRename}
           onSelect={onSelect}

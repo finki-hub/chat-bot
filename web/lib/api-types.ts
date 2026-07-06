@@ -15,6 +15,20 @@ export type ChatRequestBody = {
   top_p?: number;
 };
 
+export type ChatTitleClientPayload = {
+  readonly messages: readonly ConversationTurn[];
+  readonly queryTransformModel?: ModelId;
+};
+
+export type ChatTitleRequestBody = {
+  readonly messages: readonly ConversationTurn[];
+  readonly query_transform_model?: ModelId;
+};
+
+export type ChatTitleResponse = {
+  readonly title: string;
+};
+
 export type ConversationRole = 'assistant' | 'user';
 
 export type ConversationTurn = {
@@ -73,6 +87,7 @@ export type FeedbackType = 'dislike' | 'like';
 // and not all providers report token usage.
 export type MessageDiagnostics = {
   candidateCount?: null | number;
+  cost?: { inputUsd: number; outputUsd: number; totalUsd: number };
   serverTotalMs?: null | number;
   serverTtftMs?: null | number;
   spans?: Record<string, number>;
@@ -112,17 +127,8 @@ export type ProtocolV2Event =
       event: 'error';
     }
   | {
-      data: { label: string; stage?: string; state: string; tool?: string };
-      event: 'status';
-    }
-  | {
-      data: { sources: readonly ProtocolV2RetrievedSource[] };
-      event: 'sources';
-    }
-  | { data: { text: string }; event: 'thinking' }
-  | { data: { text: string }; event: 'token' }
-  | {
       data: {
+        cost?: { input_usd: number; output_usd: number; total_usd: number };
         timing?: {
           candidate_count: null | number;
           spans: Record<string, number>;
@@ -134,7 +140,17 @@ export type ProtocolV2Event =
         tokens?: { input: number; output: number; total: number };
       };
       event: 'meta';
-    };
+    }
+  | {
+      data: { label: string; stage?: string; state: string; tool?: string };
+      event: 'status';
+    }
+  | {
+      data: { sources: readonly ProtocolV2RetrievedSource[] };
+      event: 'sources';
+    }
+  | { data: { text: string }; event: 'thinking' }
+  | { data: { text: string }; event: 'token' };
 
 export type ProtocolV2RetrievedSource = {
   readonly chunk_index?: number;

@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from 'lucide-react';
+import { LoaderCircle, Pencil, Trash2, WandSparkles } from 'lucide-react';
 import { useState } from 'react';
 
 import type { ConversationRow } from '@/lib/db';
@@ -18,7 +18,9 @@ import { t } from '@/lib/i18n';
 export type ConversationListProps = {
   activeId: null | string;
   conversations: ConversationRow[];
+  generatingTitleId?: null | string;
   onDelete: (id: string) => void;
+  onGenerateTitle?: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onSelect: (id: string) => void;
 };
@@ -26,7 +28,9 @@ export type ConversationListProps = {
 export const ConversationList = ({
   activeId,
   conversations,
+  generatingTitleId = null,
   onDelete,
+  onGenerateTitle,
   onRename,
   onSelect,
 }: ConversationListProps) => {
@@ -37,6 +41,7 @@ export const ConversationList = ({
   const [pendingDelete, setPendingDelete] = useState<ConversationRow | null>(
     null,
   );
+  const isGeneratingAnyTitle = generatingTitleId !== null;
 
   const openRename = (conversation: ConversationRow) => {
     setRenameTarget(conversation);
@@ -61,57 +66,85 @@ export const ConversationList = ({
   return (
     <>
       <ul className="flex flex-col gap-1">
-        {conversations.map((c) => (
-          <li
-            aria-current={c.id === activeId ? 'true' : undefined}
-            className={`group flex items-center justify-between gap-1 rounded-lg px-2.5 py-1.5 text-sm text-foreground/80 transition-colors duration-150 hover:bg-muted/70 ${
-              c.id === activeId ? 'bg-muted font-medium text-foreground' : ''
-            }`}
-            data-testid={`conversation-${c.id}`}
-            key={c.id}
-          >
-            <button
-              className="flex-1 truncate rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-              onClick={() => {
-                onSelect(c.id);
-              }}
-              type="button"
-            >
-              {c.title}
-            </button>
-            <span
-              className="flex items-center gap-1 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
-              data-testid="row-actions"
+        {conversations.map((c) => {
+          const isGeneratingTitle = generatingTitleId === c.id;
+
+          return (
+            <li
+              aria-current={c.id === activeId ? 'true' : undefined}
+              className={`group flex items-center justify-between gap-1 rounded-lg px-2.5 py-1.5 text-sm text-foreground/80 transition-colors duration-150 hover:bg-muted/70 ${
+                c.id === activeId ? 'bg-muted font-medium text-foreground' : ''
+              }`}
+              data-testid={`conversation-${c.id}`}
+              key={c.id}
             >
               <button
-                aria-label={t('conversation.rename')}
-                className="rounded-md p-1 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                className="flex-1 truncate rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 onClick={() => {
-                  openRename(c);
+                  onSelect(c.id);
                 }}
                 type="button"
               >
-                <Pencil
-                  aria-hidden="true"
-                  className="size-3.5"
-                />
+                {c.title}
               </button>
-              <button
-                aria-label={t('conversation.delete')}
-                className="rounded-md p-1 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring/50"
-                onClick={() => {
-                  setPendingDelete(c);
-                }}
-                type="button"
+              <span
+                className="flex items-center gap-1 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
+                data-testid="row-actions"
               >
-                <Trash2
-                  aria-hidden="true"
-                  className="size-3.5"
-                />
-              </button>
-            </span>
-          </li>
-        ))}
+                {onGenerateTitle ? (
+                  <button
+                    aria-busy={isGeneratingTitle || undefined}
+                    aria-label={t('conversation.generateTitle')}
+                    className="rounded-md p-1 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60"
+                    disabled={isGeneratingAnyTitle}
+                    onClick={() => {
+                      onGenerateTitle(c.id);
+                    }}
+                    type="button"
+                  >
+                    {isGeneratingTitle ? (
+                      <LoaderCircle
+                        aria-hidden="true"
+                        className="size-3.5 animate-spin"
+                      />
+                    ) : (
+                      <WandSparkles
+                        aria-hidden="true"
+                        className="size-3.5"
+                      />
+                    )}
+                  </button>
+                ) : null}
+                <button
+                  aria-label={t('conversation.rename')}
+                  className="rounded-md p-1 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                  onClick={() => {
+                    openRename(c);
+                  }}
+                  type="button"
+                >
+                  <Pencil
+                    aria-hidden="true"
+                    className="size-3.5"
+                  />
+                </button>
+                <button
+                  aria-label={t('conversation.delete')}
+                  className="rounded-md p-1 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring/50"
+                  onClick={() => {
+                    setPendingDelete(c);
+                  }}
+                  type="button"
+                >
+                  <Trash2
+                    aria-hidden="true"
+                    className="size-3.5"
+                  />
+                </button>
+              </span>
+            </li>
+          );
+        })}
       </ul>
 
       <Dialog

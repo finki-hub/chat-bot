@@ -80,6 +80,20 @@ export const renameConversation = async (
   await db.conversations.update(id, { title, updatedAt: nextNow() });
 };
 
+export const renameConversationIfTitle = async (
+  id: string,
+  expectedTitle: string,
+  title: string,
+): Promise<boolean> =>
+  db.transaction('rw', db.conversations, async () => {
+    const row = await db.conversations.get(id);
+    if (row?.title !== expectedTitle) {
+      return false;
+    }
+    await db.conversations.update(id, { title, updatedAt: nextNow() });
+    return true;
+  });
+
 export const deleteConversation = async (id: string): Promise<void> => {
   await db.transaction('rw', db.conversations, db.messages, async () => {
     await db.messages.where('conversationId').equals(id).delete();
