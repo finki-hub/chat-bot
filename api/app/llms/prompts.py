@@ -97,7 +97,7 @@ def stitch_conversation(
     for message in history:
         tag = "user" if isinstance(message, HumanMessage) else "assistant"
         parts.append(f"<|{tag}|> {_escape_prompt_data(str(message.content))}")
-    parts.append(f"<|user|> {_escape_prompt_data(user_prompt)}")
+    parts.append(f"<|user|> {user_prompt}")
     parts.append("<|assistant|>")
     return "\n\n".join(parts)
 
