@@ -26,7 +26,7 @@ async def transform_query(
     max_tokens: int,
 ) -> str:
     logger.info(
-        "Transforming query with model=%s query_len=%d",
+        "Transforming query with model=%s query_length=%d",
         model.value,
         len(query),
     )

@@ -124,7 +124,7 @@ def test_query_transform_logs_lengths_without_raw_query(caplog, monkeypatch):
 
     assert result == "transformed query"
     assert "private transform query" not in caplog.text
-    assert "query_len=" in caplog.text
+    assert "query_length=" in caplog.text
     assert "model=" in caplog.text
 
 
