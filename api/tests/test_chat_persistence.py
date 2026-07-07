@@ -2,7 +2,6 @@ from datetime import timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from chat_persistence_fake import FakeChatDatabase
 
 from app.data.chat_persistence import (
     clear_active_stream_if_current,
@@ -22,6 +21,7 @@ from app.schemas.chat_persistence import (
     ChatMessageRole,
     ChatMessageUpsert,
 )
+from tests.chat_persistence_fake import FakeChatDatabase
 
 OWNER_ID = UUID("00000000-0000-4000-8000-000000000001")
 INTRUDER_ID = UUID("00000000-0000-4000-8000-000000000002")

@@ -1,12 +1,12 @@
 from datetime import timedelta
 from uuid import UUID, uuid4
 
-from chat_persistence_fake import FakeChatDatabase
 from fastapi.testclient import TestClient
 
 from app.data.db import get_db
 from app.main import make_app
 from app.utils.settings import Settings
+from tests.chat_persistence_fake import FakeChatDatabase
 
 
 def _client(db: FakeChatDatabase) -> TestClient:
