@@ -18,7 +18,8 @@ BUCKETS: Final[tuple[str, ...]] = (
 )
 
 
-class EvalJsonError(Exception): ...
+class EvalJsonError(Exception):
+    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,35 +80,27 @@ class EvalComparison:
 
 
 def _mapping(value: JsonValue, path: str) -> dict[str, JsonValue]:
-    match value:
-        case dict() as parsed:
-            return parsed
-        case _:
-            raise EvalJsonError(f"{path}: expected object")
+    if isinstance(value, dict):
+        return value
+    raise EvalJsonError(f"{path}: expected object")
 
 
 def _items(value: JsonValue, path: str) -> list[JsonValue]:
-    match value:
-        case list() as parsed:
-            return parsed
-        case _:
-            raise EvalJsonError(f"{path}: expected array")
+    if isinstance(value, list):
+        return value
+    raise EvalJsonError(f"{path}: expected array")
 
 
 def _text(value: JsonValue, path: str) -> str:
-    match value:
-        case str() as parsed:
-            return parsed
-        case _:
-            raise EvalJsonError(f"{path}: expected string")
+    if isinstance(value, str):
+        return value
+    raise EvalJsonError(f"{path}: expected string")
 
 
 def _flag(value: JsonValue, path: str) -> bool:
-    match value:
-        case bool() as parsed:
-            return parsed
-        case _:
-            raise EvalJsonError(f"{path}: expected boolean")
+    if isinstance(value, bool):
+        return value
+    raise EvalJsonError(f"{path}: expected boolean")
 
 
 def _rank(value: JsonValue, path: str) -> int | None:
