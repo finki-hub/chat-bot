@@ -20,7 +20,7 @@ def test_settings_parses_structured_mcp_servers(monkeypatch):
             [
                 {
                     "name": "search",
-                    "url": "http://search-mcp:8808/mcp",
+                    "url": "https://search-mcp:8808/mcp",
                     "transport": "streamable_http",
                     "api_key": "search-key",
                     "allowed_tools": ["web_search"],
@@ -28,7 +28,7 @@ def test_settings_parses_structured_mcp_servers(monkeypatch):
                 },
                 {
                     "name": "events",
-                    "url": "http://events-mcp:8808/sse",
+                    "url": "https://events-mcp:8808/sse",
                     "transport": "sse",
                 },
             ],
@@ -52,12 +52,12 @@ def test_settings_rejects_duplicate_mcp_server_names():
             MCP_SERVERS=[
                 {
                     "name": "search",
-                    "url": "http://search-mcp:8808/mcp",
+                    "url": "https://search-mcp:8808/mcp",
                     "transport": "streamable_http",
                 },
                 {
                     "name": "search",
-                    "url": "http://other-mcp:8808/mcp",
+                    "url": "https://other-mcp:8808/mcp",
                     "transport": "streamable_http",
                 },
             ],
@@ -70,7 +70,7 @@ def test_settings_rejects_blank_mcp_server_identity():
             MCP_SERVERS=[
                 {
                     "name": "   ",
-                    "url": "http://search-mcp:8808/mcp",
+                    "url": "https://search-mcp:8808/mcp",
                     "transport": "streamable_http",
                 },
             ],
@@ -83,7 +83,7 @@ def test_insecure_secret_names_include_default_structured_mcp_key():
         MCP_SERVERS=[
             {
                 "name": "local",
-                "url": "http://local-mcp:8808/mcp",
+                "url": "https://local-mcp:8808/mcp",
                 "transport": "streamable_http",
                 "api_key": " SystemPass ",
             },
@@ -108,13 +108,13 @@ def test_build_mcp_client_uses_per_server_headers(monkeypatch):
             MCP_SERVERS=[
                 {
                     "name": "search",
-                    "url": "http://search-mcp:8808/mcp",
+                    "url": "https://search-mcp:8808/mcp",
                     "transport": "streamable_http",
                     "api_key": "search-key",
                 },
                 {
                     "name": "events",
-                    "url": "http://events-mcp:8808/sse",
+                    "url": "https://events-mcp:8808/sse",
                     "transport": "sse",
                 },
             ],
@@ -126,12 +126,12 @@ def test_build_mcp_client_uses_per_server_headers(monkeypatch):
 
     assert captured_connections == {
         "search": {
-            "url": "http://search-mcp:8808/mcp",
+            "url": "https://search-mcp:8808/mcp",
             "transport": "streamable_http",
             "headers": {"X-Api-Key": "search-key"},
         },
         "events": {
-            "url": "http://events-mcp:8808/sse",
+            "url": "https://events-mcp:8808/sse",
             "transport": "sse",
         },
     }
@@ -165,14 +165,14 @@ async def test_get_mcp_tools_filters_each_server(monkeypatch):
             MCP_SERVERS=[
                 {
                     "name": "search",
-                    "url": "http://search-mcp:8808/mcp",
+                    "url": "https://search-mcp:8808/mcp",
                     "transport": "streamable_http",
                     "allowed_tools": ["web_search", "web_fetch"],
                     "blocked_tools": ["web_fetch"],
                 },
                 {
                     "name": "records",
-                    "url": "http://records-mcp:8808/mcp",
+                    "url": "https://records-mcp:8808/mcp",
                     "transport": "streamable_http",
                     "blocked_tools": ["delete_record"],
                 },
@@ -185,6 +185,24 @@ async def test_get_mcp_tools_filters_each_server(monkeypatch):
     tools = await mcp.get_mcp_tools()
 
     assert [tool.name for tool in tools] == ["web_search", "lookup"]
+
+
+@pytest.mark.anyio
+async def test_get_mcp_tools_caches_empty_list_when_no_servers(monkeypatch):
+    def fail_build_client():
+        msg = "MCP client should not be built without configured servers"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(mcp, "build_mcp_client", fail_build_client)
+    monkeypatch.setattr(mcp, "settings", Settings(MCP_SERVERS=[]))
+    monkeypatch.setattr(mcp, "mcp_tools", None)
+    monkeypatch.setattr(mcp, "mcp_tools_fetched_at", -10_000.0)
+
+    tools = await mcp.get_mcp_tools()
+
+    assert tools == []
+    assert mcp.mcp_tools == []
+    assert mcp.mcp_tools_fetched_at > 0
 
 
 @pytest.mark.anyio
@@ -207,7 +225,7 @@ async def test_get_mcp_tools_caches_intentionally_empty_filter_result(monkeypatc
             MCP_SERVERS=[
                 {
                     "name": "blocked",
-                    "url": "http://blocked-mcp:8808/mcp",
+                    "url": "https://blocked-mcp:8808/mcp",
                     "transport": "streamable_http",
                     "blocked_tools": ["blocked_tool"],
                 },
@@ -215,7 +233,7 @@ async def test_get_mcp_tools_caches_intentionally_empty_filter_result(monkeypatc
         ),
     )
     monkeypatch.setattr(mcp, "mcp_tools", [ToolStub("stale_tool")])
-    monkeypatch.setattr(mcp, "mcp_tools_fetched_at", 0.0)
+    monkeypatch.setattr(mcp, "mcp_tools_fetched_at", -10_000.0)
 
     tools = await mcp.get_mcp_tools()
 

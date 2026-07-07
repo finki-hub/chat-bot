@@ -111,8 +111,13 @@ async def get_mcp_tools() -> list[BaseTool]:
     if mcp_tools is not None and (now - mcp_tools_fetched_at) < ttl:
         return mcp_tools
 
-    client = build_mcp_client()
     servers = settings.mcp_server_configs()
+    if not servers:
+        mcp_tools = []
+        mcp_tools_fetched_at = now
+        return mcp_tools
+
+    client = build_mcp_client()
     # Timed only on an actual fetch (cache hits return above), so the span's presence on
     # a request flags a refresh — and a degraded MCP server, which refetches every time.
     fetched_source_tool_count = 0
