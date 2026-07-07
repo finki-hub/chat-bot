@@ -9,14 +9,14 @@ dependencies = [
   "gunicorn>=26.0.0",
   "langchain>=1.3.11",
   "langchain-huggingface>=1.2.2",
-  "posthog>=7.21.3",
+  "posthog>=7.22.0",
   "sentence-transformers>=5.6.0",
   "torch>=2.11.0",
-  "transformers>=5.12.1",
+  "transformers>=5.13.0",
 ]
 
 [dependency-groups]
-dev = ["mypy>=2.1.0", "ruff>=0.15.20"]
+dev = ["mypy>=2.1.0", "pytest>=9.1.1", "ruff>=0.15.20"]
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
@@ -33,6 +33,9 @@ torchvision = [
 
 [tool.mypy]
 python_version = "3.14"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py314"
@@ -87,3 +90,6 @@ ignore = [
   "E501",
   "PLR0913",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["INP001", "ANN", "S101"]

@@ -12,6 +12,7 @@ import type {
 } from '@/lib/api-types';
 
 import { fireAndForget } from '@/lib/async';
+import { generateChatTitle } from '@/lib/chat-title';
 import { renderAnswerActions } from '@/lib/conversation-actions';
 import {
   applyFeedback,
@@ -23,7 +24,10 @@ import {
   clearAllConversations,
   createConversation,
   deleteConversation,
+  loadMessages,
+  type MessageRow,
   renameConversation,
+  renameConversationIfTitle,
   replaceConversationMessages,
   saveMessages,
   setMessageFeedback,
@@ -35,6 +39,13 @@ import { useUiStore } from '@/lib/ui-store';
 import { useConversationHydration } from '@/lib/use-conversation-hydration';
 import { useConversationList } from '@/lib/use-conversation-list';
 import { useStreamTiming } from '@/lib/use-stream-timing';
+
+const fromRow = (row: MessageRow): MyUIMessage => ({
+  id: row.id,
+  metadata: row.metadata,
+  parts: row.parts,
+  role: row.role,
+});
 
 export const useConversations = (
   model: string,
@@ -55,6 +66,9 @@ export const useConversations = (
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<
     null | string
   >(null);
+  const [generatingTitleId, setGeneratingTitleId] = useState<null | string>(
+    null,
+  );
 
   const persistFinished = useCallback(
     async (allMessages: readonly MyUIMessage[]): Promise<void> => {
@@ -167,6 +181,32 @@ export const useConversations = (
     setMessages,
   });
 
+  const applyGeneratedTitle = useCallback(
+    async (
+      id: string,
+      titleMessages: readonly MyUIMessage[],
+      expectedTitle: string,
+    ): Promise<void> => {
+      setGeneratingTitleId(id);
+      try {
+        const title = await generateChatTitle({
+          messages: titleMessages,
+          queryTransformModel: modelRef.current,
+        });
+
+        if (title === null) {
+          return;
+        }
+
+        await renameConversationIfTitle(id, expectedTitle, title);
+        await refreshConversations();
+      } finally {
+        setGeneratingTitleId((current) => (current === id ? null : current));
+      }
+    },
+    [refreshConversations],
+  );
+
   const handleNewChat = useCallback(() => {
     // The Chat instance is shared across conversations; stop before leaving.
     void stop();
@@ -181,10 +221,12 @@ export const useConversations = (
       setActiveError(undefined);
       const existing = convoIdRef.current;
       let cid = existing;
+      let expectedTitle: null | string = null;
       if (!existing) {
+        expectedTitle = deriveTitle(text);
         const convo = await createConversation({
           model,
-          title: deriveTitle(text),
+          title: expectedTitle,
         });
         cid = convo.id;
         // eslint-disable-next-line require-atomic-updates -- fresh id, not a read-modify-write race
@@ -202,9 +244,18 @@ export const useConversations = (
         role: 'user',
       };
       await saveMessages(cid, [userMessage]);
+      if (expectedTitle !== null) {
+        fireAndForget(applyGeneratedTitle(cid, [userMessage], expectedTitle));
+      }
       fireAndForget(sendMessage(userMessage));
     },
-    [model, refreshConversations, sendMessage, setActiveId],
+    [
+      applyGeneratedTitle,
+      model,
+      refreshConversations,
+      sendMessage,
+      setActiveId,
+    ],
   );
 
   const handleSelect = useCallback(
@@ -272,6 +323,26 @@ export const useConversations = (
     [refreshConversations],
   );
 
+  const handleGenerateTitle = useCallback(
+    (id: string) => {
+      const expectedTitle = conversations.find((c) => c.id === id)?.title;
+      if (expectedTitle === undefined) {
+        return;
+      }
+
+      const run = async (): Promise<void> => {
+        const rows = await loadMessages(id);
+        if (rows.length === 0) {
+          return;
+        }
+        await applyGeneratedTitle(id, rows.map(fromRow), expectedTitle);
+      };
+
+      fireAndForget(run());
+    },
+    [applyGeneratedTitle, conversations],
+  );
+
   const recordFeedback = useCallback(
     (messageId: string, vote: FeedbackType) => {
       setMessages(applyFeedback(messageId, vote));
@@ -303,9 +374,11 @@ export const useConversations = (
     activeId,
     activeStatus,
     conversations,
+    generatingTitleId,
     messages: visibleMessages,
     onClearAll: handleClearAll,
     onDelete: handleDelete,
+    onGenerateTitle: handleGenerateTitle,
     onNewChat: handleNewChat,
     onRename: handleRename,
     onSelect: handleSelect,

@@ -243,7 +243,7 @@ const MessageTiming = ({
       <HoverCardTrigger asChild>
         <button
           aria-label={triggerLabel}
-          className={`${FOOTNOTE_CLASS} cursor-help hover:text-muted-foreground`}
+          className={`${FOOTNOTE_CLASS} cursor-help rounded-md hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
           data-testid="message-timing"
           type="button"
         >
@@ -282,7 +282,7 @@ const MessageError = ({
         <p className="text-destructive">{errorPart.message}</p>
         {onRetry ? (
           <button
-            className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted"
+            className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={onRetry}
             type="button"
           >
