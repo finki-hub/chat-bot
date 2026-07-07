@@ -1,0 +1,306 @@
+import argparse
+import json
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Final, Literal, assert_never
+
+AnchorType = Literal["Q", "C", "none"]
+BucketName = Literal[
+    "overall",
+    "source=faq",
+    "source=chunk",
+    "difficulty=easy",
+    "difficulty=hard",
+    "abstain",
+]
+JsonValue = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+
+BUCKETS: Final[tuple[BucketName, ...]] = (
+    "overall",
+    "source=faq",
+    "source=chunk",
+    "difficulty=easy",
+    "difficulty=hard",
+    "abstain",
+)
+
+
+class EvalJsonError(Exception): ...
+
+
+@dataclass(frozen=True, slots=True)
+class EvalCase:
+    id: str
+    anchor_type: AnchorType
+    difficulty: str
+    category: str
+    ann_ideal: bool
+    ann_prod: bool
+    final: bool
+    rank: int | None
+
+    @property
+    def is_abstain(self) -> bool:
+        return self.anchor_type == "none"
+
+    @property
+    def succeeded(self) -> bool:
+        return not self.final if self.is_abstain else self.final
+
+    @property
+    def failure_reason(self) -> str:
+        if self.succeeded:
+            return "PASS"
+        if self.is_abstain:
+            return "ABSTAIN-LEAK"
+        if not self.ann_ideal:
+            return "ANN-MISS"
+        if not self.ann_prod:
+            return "ANN-PROD-MISS"
+        return "RERANK-MISS"
+
+
+@dataclass(frozen=True, slots=True)
+class BucketSummary:
+    count: int
+    final_count: int
+    mrr: float
+
+    @property
+    def final_rate(self) -> float:
+        return 0.0 if self.count == 0 else self.final_count / self.count
+
+
+@dataclass(frozen=True, slots=True)
+class BucketDelta:
+    baseline: BucketSummary
+    current: BucketSummary
+
+
+@dataclass(frozen=True, slots=True)
+class CaseDelta:
+    id: str
+    baseline: EvalCase
+    current: EvalCase
+
+
+@dataclass(frozen=True, slots=True)
+class EvalComparison:
+    bucket_deltas: dict[BucketName, BucketDelta]
+    fixed: list[CaseDelta]
+    new_regressions: list[CaseDelta]
+    unchanged_misses: list[CaseDelta]
+
+
+def _mapping(value: JsonValue, path: str) -> dict[str, JsonValue]:
+    match value:
+        case dict() as parsed:
+            return parsed
+        case _:
+            raise EvalJsonError(f"{path}: expected object")
+
+
+def _items(value: JsonValue, path: str) -> list[JsonValue]:
+    match value:
+        case list() as parsed:
+            return parsed
+        case _:
+            raise EvalJsonError(f"{path}: expected array")
+
+
+def _text(value: JsonValue, path: str) -> str:
+    match value:
+        case str() as parsed:
+            return parsed
+        case _:
+            raise EvalJsonError(f"{path}: expected string")
+
+
+def _flag(value: JsonValue, path: str) -> bool:
+    match value:
+        case bool() as parsed:
+            return parsed
+        case _:
+            raise EvalJsonError(f"{path}: expected boolean")
+
+
+def _rank(value: JsonValue, path: str) -> int | None:
+    match value:
+        case None:
+            return None
+        case int() as parsed:
+            return parsed
+        case _:
+            raise EvalJsonError(f"{path}: expected integer or null")
+
+
+def _anchor_type(value: JsonValue, path: str) -> AnchorType:
+    raw = _text(_mapping(value, path).get("type"), f"{path}.type")
+    match raw:
+        case "Q" | "C" | "none" as parsed:
+            return parsed
+        case _:
+            raise EvalJsonError(f"{path}.type: expected Q, C, or none")
+
+
+def _case(value: JsonValue, path: str) -> EvalCase:
+    row = _mapping(value, path)
+    return EvalCase(
+        id=_text(row.get("id"), f"{path}.id"),
+        anchor_type=_anchor_type(row.get("anchor"), f"{path}.anchor"),
+        difficulty=_text(row.get("difficulty", ""), f"{path}.difficulty"),
+        category=_text(row.get("category", ""), f"{path}.category"),
+        ann_ideal=_flag(row.get("ann_ideal"), f"{path}.ann_ideal"),
+        ann_prod=_flag(row.get("ann_prod"), f"{path}.ann_prod"),
+        final=_flag(row.get("final"), f"{path}.final"),
+        rank=_rank(row.get("rank"), f"{path}.rank"),
+    )
+
+
+def _cases(data: dict[str, JsonValue], path: str) -> dict[str, EvalCase]:
+    rows = _items(data.get("results"), f"{path}.results")
+    parsed = [_case(row, f"{path}.results[{index}]") for index, row in enumerate(rows)]
+    return {case.id: case for case in parsed}
+
+
+def load_eval(path: Path) -> dict[str, EvalCase]:
+    try:
+        data: JsonValue = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise EvalJsonError(f"{path}: {exc}") from exc
+    return _cases(_mapping(data, str(path)), str(path))
+
+
+def _in_bucket(case: EvalCase, bucket: BucketName) -> bool:
+    match bucket:
+        case "overall":
+            return not case.is_abstain
+        case "source=faq":
+            return case.anchor_type == "Q"
+        case "source=chunk":
+            return case.anchor_type == "C"
+        case "difficulty=easy":
+            return (not case.is_abstain) and case.difficulty == "easy"
+        case "difficulty=hard":
+            return (not case.is_abstain) and case.difficulty == "hard"
+        case "abstain":
+            return case.is_abstain
+        case unreachable:
+            assert_never(unreachable)
+
+
+def _summary(cases: list[EvalCase], bucket: BucketName) -> BucketSummary:
+    bucket_cases = [case for case in cases if _in_bucket(case, bucket)]
+    final_count = sum(1 for case in bucket_cases if case.final)
+    reciprocal_ranks = [1 / case.rank for case in bucket_cases if case.rank is not None]
+    mrr = sum(reciprocal_ranks) / len(bucket_cases) if bucket_cases else 0.0
+    return BucketSummary(len(bucket_cases), final_count, mrr)
+
+
+def compare_runs(
+    baseline: dict[str, JsonValue],
+    current: dict[str, JsonValue],
+) -> EvalComparison:
+    return compare_cases(_cases(baseline, "baseline"), _cases(current, "current"))
+
+
+def compare_cases(
+    baseline: dict[str, EvalCase],
+    current: dict[str, EvalCase],
+) -> EvalComparison:
+    baseline_ids = set(baseline)
+    current_ids = set(current)
+    pairs = [
+        (baseline[id_], current[id_]) for id_ in sorted(baseline_ids & current_ids)
+    ]
+    baseline_cases = [baseline_case for baseline_case, _current_case in pairs]
+    current_cases = [current_case for _baseline_case, current_case in pairs]
+    bucket_deltas: dict[BucketName, BucketDelta] = {
+        bucket: BucketDelta(
+            _summary(baseline_cases, bucket),
+            _summary(current_cases, bucket),
+        )
+        for bucket in BUCKETS
+    }
+    fixed = [
+        CaseDelta(base.id, base, cur)
+        for base, cur in pairs
+        if not base.succeeded and cur.succeeded
+    ]
+    regressions = [
+        CaseDelta(base.id, base, cur)
+        for base, cur in pairs
+        if base.succeeded and not cur.succeeded
+    ]
+    unchanged = [
+        CaseDelta(base.id, base, cur)
+        for base, cur in pairs
+        if not base.succeeded and not cur.succeeded
+    ]
+    return EvalComparison(
+        bucket_deltas=bucket_deltas,
+        fixed=fixed,
+        new_regressions=regressions,
+        unchanged_misses=unchanged,
+    )
+
+
+def _format_rate(summary: BucketSummary) -> str:
+    return (
+        "n=0"
+        if summary.count == 0
+        else f"{summary.final_count}/{summary.count} ({100 * summary.final_rate:.1f}%)"
+    )
+
+
+def _case_line(case: CaseDelta) -> str:
+    return (
+        f"  {case.id} ({case.current.difficulty}/{case.current.category}) "
+        f"{case.baseline.failure_reason} -> {case.current.failure_reason}"
+    )
+
+
+def _append_cases(lines: list[str], title: str, cases: list[CaseDelta]) -> None:
+    lines.append(title)
+    lines.extend([_case_line(case) for case in cases] if cases else ["  none"])
+
+
+def render_report(comparison: EvalComparison, *, max_regressions: int = 0) -> str:
+    lines = ["Retrieval eval comparison", "", "Buckets"]
+    for bucket, delta in comparison.bucket_deltas.items():
+        lines.append(
+            f"  {bucket}: {_format_rate(delta.baseline)} -> {_format_rate(delta.current)} "
+            f"({100 * (delta.current.final_rate - delta.baseline.final_rate):+.1f} pp, MRR {delta.baseline.mrr:.3f} -> {delta.current.mrr:.3f})",
+        )
+    lines.append("")
+    _append_cases(lines, "Fixed cases", comparison.fixed)
+    lines.append("")
+    _append_cases(lines, "New regressions", comparison.new_regressions)
+    lines.append("")
+    _append_cases(lines, "Unchanged misses", comparison.unchanged_misses)
+    decision = "FAIL" if len(comparison.new_regressions) > max_regressions else "PASS"
+    lines.append("")
+    lines.append(
+        f"Decision: {decision} ({len(comparison.new_regressions)} new regressions, budget {max_regressions})",
+    )
+    return "\n".join(lines)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Compare retrieval eval JSON outputs")
+    parser.add_argument("--baseline", required=True, type=Path)
+    parser.add_argument("--current", required=True, type=Path)
+    parser.add_argument("--max-regressions", default=0, type=int)
+    ns = parser.parse_args(argv)
+    try:
+        comparison = compare_cases(load_eval(ns.baseline), load_eval(ns.current))
+    except EvalJsonError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    print(render_report(comparison, max_regressions=ns.max_regressions))
+    return 1 if len(comparison.new_regressions) > ns.max_regressions else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
