@@ -1,4 +1,5 @@
 import { DefaultChatTransport } from 'ai';
+import { posthog } from 'posthog-js';
 
 import type { ModelId, MyUIMessage, QueryTransformMode } from '@/lib/api-types';
 
@@ -27,6 +28,7 @@ export const buildChatTransport = (
         messages,
         trigger,
         ...getExtras(),
+        posthogSessionId: posthog.get_session_id(),
         userId: getAnonUserId(),
       },
     }),

@@ -42,6 +42,7 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
             timings=RequestTimings(),
             retrieval_hit=True,
             distinct_id="user-1",
+            session_id="session-1",
             observation=observation,
         )
         return [str(chunk) async for chunk in stream]
@@ -56,6 +57,7 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
     props = captured[0][2]
     assert props["$ai_total_cost_usd"] == pytest.approx(0.006)
     assert props["$ai_input"] == [{"role": "user", "content": "Прашање?"}]
+    assert props["$session_id"] == "session-1"
     assert props["$ai_output_choices"] == [
         {"role": "assistant", "content": "answer"},
     ]

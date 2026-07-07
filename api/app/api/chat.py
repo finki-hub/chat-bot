@@ -26,7 +26,7 @@ from app.llms.models import CHAT_MODELS
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
-from app.utils.posthog_client import capture, safe_distinct_id
+from app.utils.posthog_client import capture, safe_distinct_id, safe_session_id
 from app.utils.settings import Settings
 from app.utils.timing import (
     RequestTimings,
@@ -170,6 +170,10 @@ def _chat_request_posthog_fields(payload: ChatSchema) -> dict[str, object]:
     }
 
 
+def _session_props(session_id: str | None) -> dict[str, object]:
+    return {} if session_id is None else {"$session_id": session_id}
+
+
 def _used_web_search(tool_names: set[str]) -> bool:
     return any(
         hint in name.lower() for name in tool_names for hint in _WEB_SEARCH_HINTS
@@ -187,6 +191,7 @@ def _capture_chat_response(
     outcome: str,
     observation: StreamObservation,
     answer_text: str,
+    session_id: str | None,
 ) -> None:
     model = payload.inference_model
     generation_ms: float | None = None
@@ -227,6 +232,7 @@ def _capture_chat_response(
         "answer_char_len": observation.answer_chars,
         "tool_call_count": observation.tool_call_count,
         "used_web_search": _used_web_search(observation.tool_names),
+        **_session_props(session_id),
     }
 
     if observation.finish_reason:
@@ -300,6 +306,7 @@ async def _instrument_stream(
     timings: RequestTimings,
     retrieval_hit: bool,
     distinct_id: str,
+    session_id: str | None,
     observation: StreamObservation,
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
@@ -379,6 +386,7 @@ async def _instrument_stream(
             outcome=outcome,
             observation=observation,
             answer_text="".join(answer_parts),
+            session_id=session_id,
         )
         meta_payload = {"timing": record}
         if effective_usage is not None:
@@ -425,6 +433,7 @@ async def _chat_response_stream(
             request.headers.get("X-Distinct-Id"),
             str(response_id),
         )
+        session_id = safe_session_id(request.headers.get("X-PostHog-Session-Id"))
         record_distinct_id(distinct_id)
         observation = StreamObservation(
             distinct_id=distinct_id,
@@ -433,7 +442,11 @@ async def _chat_response_stream(
         capture(
             distinct_id,
             "chat_request",
-            {"response_id": str(response_id), **_chat_request_posthog_fields(payload)},
+            {
+                "response_id": str(response_id),
+                **_chat_request_posthog_fields(payload),
+                **_session_props(session_id),
+            },
         )
         capture(
             distinct_id,
@@ -441,6 +454,7 @@ async def _chat_response_stream(
             {
                 "response_id": str(response_id),
                 "topic": classify_topic(payload.query),
+                **_session_props(session_id),
             },
         )
 
@@ -487,6 +501,7 @@ async def _chat_response_stream(
                         "candidate_count": timings.candidate_count,
                         "top_distance": timings.top_distance,
                         "query_len": len(payload.query),
+                        **_session_props(session_id),
                     },
                 )
                 context = (
@@ -508,6 +523,7 @@ async def _chat_response_stream(
                             "embeddings_model": payload.embeddings_model.value,
                             "retrieval_ids": timings.retrieval_ids,
                             "retrieval_count": len(timings.retrieval_ids),
+                            **_session_props(session_id),
                         },
                     )
 
@@ -532,6 +548,7 @@ async def _chat_response_stream(
             retrieval_hit=bool(retrieved.text),
             distinct_id=distinct_id,
             observation=observation,
+            session_id=session_id,
         )
 
         if retrieved.sources:

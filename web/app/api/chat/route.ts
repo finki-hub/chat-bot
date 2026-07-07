@@ -56,6 +56,10 @@ export const POST = async (req: Request): Promise<Response> => {
           clientBody.userId.length > 0 && {
             'X-Distinct-Id': clientBody.userId,
           }),
+        ...(typeof clientBody.posthogSessionId === 'string' &&
+          clientBody.posthogSessionId.length > 0 && {
+            'X-PostHog-Session-Id': clientBody.posthogSessionId,
+          }),
       },
       method: 'POST',
       // Propagate client aborts so stopping the chat tears down upstream generation.
