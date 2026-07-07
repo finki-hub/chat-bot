@@ -33,6 +33,10 @@ dev = [
 python_version = "3.14"
 plugins = ['pydantic.mypy']
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 

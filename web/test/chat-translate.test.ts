@@ -51,7 +51,7 @@ describe('toChatRequestBody', () => {
     });
   });
 
-  it('keeps only the last 50 messages (oldest-first)', () => {
+  it('keeps only the last 10 messages (oldest-first)', () => {
     const messages = Array.from({ length: 60 }, (_, i) =>
       msg(i % 2 === 0 ? 'user' : 'assistant', `m${i}`),
     );
@@ -60,20 +60,20 @@ describe('toChatRequestBody', () => {
 
     const out = toChatRequestBody({ messages });
 
-    expect(out.messages).toHaveLength(50);
-    expect(out.messages[0]?.content).toBe('m10');
+    expect(out.messages).toHaveLength(10);
+    expect(out.messages[0]?.content).toBe('m50');
     expect(out.messages.at(-1)).toStrictEqual({
       content: 'last',
       role: 'user',
     });
   });
 
-  it('truncates each turn to 8000 chars', () => {
+  it('truncates each turn to 2000 chars', () => {
     const out = toChatRequestBody({
-      messages: [msg('user', 'я'.repeat(9_000))],
+      messages: [msg('user', 'я'.repeat(3_000))],
     });
 
-    expect(out.messages[0]?.content).toHaveLength(8_000);
+    expect(out.messages[0]?.content).toHaveLength(2_000);
   });
 
   it('omits undefined sampling params', () => {
