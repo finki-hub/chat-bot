@@ -59,6 +59,15 @@ def test_production_compose_requires_auth_secrets():
     assert "MCP_SERVERS: ${MCP_SERVERS:-[]}" in compose
 
 
+def test_compose_forwards_legacy_mcp_settings_for_compatibility():
+    for compose_file in ("compose.yaml", "compose.prod.yaml"):
+        compose = (REPO_ROOT / compose_file).read_text()
+
+        assert "MCP_API_KEY: ${MCP_API_KEY:-}" in compose
+        assert "MCP_HTTP_URLS: ${MCP_HTTP_URLS:-}" in compose
+        assert "MCP_SSE_URLS: ${MCP_SSE_URLS:-}" in compose
+
+
 @pytest.mark.anyio
 async def test_lifespan_warns_for_insecure_app_settings(monkeypatch, caplog):
     class FakeDatabase:

@@ -55,7 +55,7 @@ Standalone, it needs `web/.env.local` with `API_BASE_URL` (the chat API base, e.
 The root [`.env.sample`](.env.sample) contains the main variables used by the Docker stacks:
 
 - `API_KEY` - required for authenticated API writes, embedding fill jobs, diploma sync, and feedback submission; change the sample value before deployment
-- `MCP_SERVERS` - optional JSON array of named MCP tool servers. Each entry supports `name`, `url`, `transport` (`streamable_http` or `sse`), optional per-server `api_key`, and optional `allowed_tools` / `blocked_tools` lists for tool exposure control
+- `MCP_SERVERS` - optional JSON array of named MCP tool servers. Each entry supports `name`, `url`, `transport` (`streamable_http` or `sse`), optional per-server `api_key`, and optional `allowed_tools` / `blocked_tools` lists for tool exposure control. Existing `MCP_HTTP_URLS`, `MCP_SSE_URLS`, and `MCP_API_KEY` values are still forwarded by the compose files for compatibility, but new deployments should use `MCP_SERVERS`
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT` - used by the database service and by the API `DATABASE_URL`
 - `DATABASE_POOL_MIN_SIZE`, `DATABASE_POOL_MAX_SIZE` - asyncpg pool sizing per API worker
 - `GPU_API_URL` - API-to-GPU-API base URL; Docker defaults to `http://gpu-api:8888`
