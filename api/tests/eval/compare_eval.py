@@ -5,10 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
 
+from . import eval_json_path, resolve_eval_json_path
+
 AnchorType = Literal["Q", "C", "none"]
 JsonValue = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 
-BUCKETS: Final[tuple[str, ...]] = (
+BUCKETS: Final = (
     "overall",
     "source=faq",
     "source=chunk",
@@ -144,10 +146,11 @@ def _cases(data: dict[str, JsonValue], path: str) -> dict[str, EvalCase]:
 
 def load_eval(path: Path) -> dict[str, EvalCase]:
     try:
-        data: JsonValue = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        safe_path = resolve_eval_json_path(path)
+        data: JsonValue = json.loads(safe_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
         raise EvalJsonError(f"{path}: {exc}") from exc
-    return _cases(_mapping(data, str(path)), str(path))
+    return _cases(_mapping(data, str(safe_path)), str(safe_path))
 
 
 def _in_bucket(case: EvalCase, bucket: str) -> bool:
@@ -169,8 +172,12 @@ def _in_bucket(case: EvalCase, bucket: str) -> bool:
 def _summary(cases: list[EvalCase], bucket: str) -> BucketSummary:
     bucket_cases = [case for case in cases if _in_bucket(case, bucket)]
     final_count = sum(1 for case in bucket_cases if case.final)
-    reciprocal_ranks = [1 / case.rank for case in bucket_cases if case.rank is not None]
-    mrr = sum(reciprocal_ranks) / len(bucket_cases) if bucket_cases else 0.0
+    mrr = (
+        sum(1 / case.rank for case in bucket_cases if case.rank is not None)
+        / len(bucket_cases)
+        if bucket_cases
+        else 0.0
+    )
     return BucketSummary(len(bucket_cases), final_count, mrr)
 
 
@@ -196,11 +203,8 @@ def compare_cases(
     ]
     baseline_cases = [baseline_case for baseline_case, _current_case in pairs]
     current_cases = [current_case for _baseline_case, current_case in pairs]
-    bucket_deltas: dict[str, tuple[BucketSummary, BucketSummary]] = {
-        bucket: (
-            _summary(baseline_cases, bucket),
-            _summary(current_cases, bucket),
-        )
+    bucket_deltas = {
+        bucket: (_summary(baseline_cases, bucket), _summary(current_cases, bucket))
         for bucket in BUCKETS
     }
     fixed = [
@@ -249,9 +253,10 @@ def _append_cases(lines: list[str], title: str, cases: list[CaseDelta]) -> None:
 def render_report(comparison: EvalComparison, *, max_regressions: int = 0) -> str:
     lines = ["Retrieval eval comparison", "", "Buckets"]
     for bucket, (baseline, current) in comparison.bucket_deltas.items():
+        delta = 100 * (current.final_rate - baseline.final_rate)
         lines.append(
             f"  {bucket}: {_format_rate(baseline)} -> {_format_rate(current)} "
-            f"({100 * (current.final_rate - baseline.final_rate):+.1f} pp, MRR {baseline.mrr:.3f} -> {current.mrr:.3f})",
+            f"({delta:+.1f} pp, MRR {baseline.mrr:.3f} -> {current.mrr:.3f})",
         )
     lines.append("")
     _append_cases(lines, "Fixed cases", comparison.fixed)
@@ -269,8 +274,8 @@ def render_report(comparison: EvalComparison, *, max_regressions: int = 0) -> st
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Compare retrieval eval JSON outputs")
-    parser.add_argument("--baseline", required=True, type=Path)
-    parser.add_argument("--current", required=True, type=Path)
+    parser.add_argument("--baseline", required=True, type=eval_json_path)
+    parser.add_argument("--current", required=True, type=eval_json_path)
     parser.add_argument("--max-regressions", default=0, type=_non_negative_int)
     ns = parser.parse_args(argv)
     try:

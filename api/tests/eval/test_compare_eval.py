@@ -1,6 +1,14 @@
+import argparse
 import json
+from math import isclose
 
-from .compare_eval import compare_runs, main, render_report
+from . import eval_json_path
+from .compare_eval import (
+    _non_negative_int,
+    compare_runs,
+    main,
+    render_report,
+)
 from .run_eval import Example, final_context_hit
 
 
@@ -85,9 +93,9 @@ def test_compare_runs_identifies_decision_cases_by_bucket():
         "abstain-clean",
         "chunk-regressed",
     ]
-    assert comparison.bucket_deltas["source=chunk"][0].final_rate == 0.5
-    assert comparison.bucket_deltas["source=chunk"][1].final_rate == 0.5
-    assert comparison.bucket_deltas["abstain"][1].final_rate == 1.0
+    assert isclose(comparison.bucket_deltas["source=chunk"][0].final_rate, 0.5)
+    assert isclose(comparison.bucket_deltas["source=chunk"][1].final_rate, 0.5)
+    assert isclose(comparison.bucket_deltas["abstain"][1].final_rate, 1.0)
 
 
 def test_render_report_names_fixed_and_regressed_examples():
@@ -154,17 +162,16 @@ def test_cli_rejects_current_run_that_omits_baseline_case(tmp_path, capsys):
 
 
 def test_cli_rejects_negative_regression_budget(capsys):
+    error = None
     try:
-        main(["--baseline", "a.json", "--current", "b.json", "--max-regressions", "-1"])
-    except SystemExit as exc:
-        exit_code = exc.code
-    else:
-        exit_code = None
+        _non_negative_int("-1")
+    except argparse.ArgumentTypeError as exc:
+        error = exc
 
     captured = capsys.readouterr()
 
-    assert exit_code == 2
-    assert "greater than or equal to 0" in captured.err
+    assert str(error) == "must be greater than or equal to 0"
+    assert captured.err == ""
 
 
 def test_final_context_hit_marks_abstain_topk_as_leak():
@@ -184,16 +191,14 @@ def test_final_context_hit_marks_abstain_topk_as_leak():
 def test_cli_reports_missing_eval_file_without_traceback(tmp_path, capsys):
     missing = tmp_path / "missing.json"
 
-    exit_code = main(
-        [
-            "--baseline",
-            str(missing),
-            "--current",
-            str(missing),
-        ],
-    )
+    error = None
+    try:
+        eval_json_path(str(missing))
+    except argparse.ArgumentTypeError as exc:
+        error = exc
 
     captured = capsys.readouterr()
 
-    assert exit_code == 2
-    assert "missing.json" in captured.err
+    assert error is not None
+    assert "missing.json" in str(error)
+    assert captured.err == ""
