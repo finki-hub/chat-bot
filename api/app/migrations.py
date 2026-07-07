@@ -1,4 +1,4 @@
-import asyncio
+import anyio
 
 from app.data.connection import Database
 from app.utils.settings import Settings
@@ -12,8 +12,11 @@ async def main() -> None:
     db = Database(dsn=settings.DATABASE_URL)
 
     await db.init()
-    await db.run_migrations()
+    try:
+        await db.run_migrations()
+    finally:
+        await db.disconnect()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    anyio.run(main)

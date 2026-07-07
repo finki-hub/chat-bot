@@ -103,6 +103,8 @@ npm run e2e
 
 The API container entrypoint is [`api/start.sh`](api/start.sh), which runs migrations and then starts `gunicorn -c gunicorn.conf.py app.main:app`. The GPU API container starts the same FastAPI/Gunicorn entrypoint directly from [`gpu-api/gunicorn.conf.py`](gpu-api/gunicorn.conf.py). The web container runs the Next.js standalone server built by [`web/Dockerfile`](web/Dockerfile).
 
+Database migrations live in [`api/resources/migrations`](api/resources/migrations) as ordered `.sql` files. Add new schema changes as the next numbered migration instead of editing an already-applied migration.
+
 ## Endpoints
 
 This is an incomplete list. You may view all available endpoints on the OpenAPI documentation (`/docs`).
