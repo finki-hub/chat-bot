@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.chat import router as chat_router
+from app.api.chat_state import router as chat_state_router
 from app.api.chat_title import router as chat_title_router
 from app.api.diplomas import router as diplomas_router
 from app.api.documents import router as documents_router
@@ -121,6 +122,7 @@ def make_app(settings: Settings) -> FastAPI:
     app.include_router(groups_router)
     app.include_router(links_router)
     app.include_router(chat_router)
+    app.include_router(chat_state_router)
     app.include_router(chat_title_router)
     app.include_router(feedback_router)
 
