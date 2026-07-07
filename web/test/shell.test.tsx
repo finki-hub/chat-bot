@@ -9,6 +9,7 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { SessionProvider } from 'next-auth/react';
 import {
   afterEach,
   beforeAll,
@@ -464,9 +465,11 @@ const renderChatPage = (): ReturnType<typeof rtlRender> => {
   });
 
   return rtlRender(
-    <QueryClientProvider client={queryClient}>
-      <ChatPage />
-    </QueryClientProvider>,
+    <SessionProvider>
+      <QueryClientProvider client={queryClient}>
+        <ChatPage />
+      </QueryClientProvider>
+    </SessionProvider>,
   );
 };
 
