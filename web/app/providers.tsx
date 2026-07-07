@@ -1,6 +1,7 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SessionProvider } from 'next-auth/react';
 import { posthog } from 'posthog-js';
 import { PostHogProvider } from 'posthog-js/react';
 import { type ReactNode, useEffect, useState } from 'react';
@@ -37,11 +38,13 @@ export const Providers = ({ children }: ProvidersProps) => {
   }, []);
 
   return (
-    <PostHogProvider client={posthog}>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>{hydrated ? children : null}</TooltipProvider>
-      </QueryClientProvider>
-    </PostHogProvider>
+    <SessionProvider>
+      <PostHogProvider client={posthog}>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>{hydrated ? children : null}</TooltipProvider>
+        </QueryClientProvider>
+      </PostHogProvider>
+    </SessionProvider>
   );
 };
 

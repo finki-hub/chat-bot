@@ -1,7 +1,17 @@
 import { DefaultChatTransport } from 'ai';
 import { posthog } from 'posthog-js';
 
-import type { ModelId, MyUIMessage, QueryTransformMode } from '@/lib/api-types';
+import type {
+  ModelId,
+  MyMetadata,
+  MyUIMessage,
+  QueryTransformMode,
+} from '@/lib/api-types';
+
+export type AssistantSnapshot = {
+  readonly content: string;
+  readonly metadata: MyMetadata;
+};
 
 export type ChatExtras = {
   embeddingsModel?: ModelId;
@@ -12,6 +22,11 @@ export type ChatExtras = {
   reasoning?: boolean;
   temperature?: number;
   topP?: number;
+};
+
+export type StopChatStreamOptions = {
+  readonly activeStreamId?: string;
+  readonly assistantSnapshot?: AssistantSnapshot;
 };
 
 export const buildChatTransport = (
@@ -44,12 +59,21 @@ export class StopChatStreamError extends Error {
   }
 }
 
-export const stopChatStream = async (conversationId: string): Promise<void> => {
+export const stopChatStream = async (
+  conversationId: string,
+  options?: StopChatStreamOptions,
+): Promise<void> => {
+  const init: RequestInit =
+    options === undefined
+      ? { method: 'POST' }
+      : {
+          body: JSON.stringify(options),
+          headers: { 'content-type': 'application/json' },
+          method: 'POST',
+        };
   const response = await fetch(
     `/api/chat/${encodeURIComponent(conversationId)}/stop`,
-    {
-      method: 'POST',
-    },
+    init,
   );
 
   if (!response.ok) {

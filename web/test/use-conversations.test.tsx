@@ -12,7 +12,9 @@ type UseChatOptions = {
 };
 
 const localStop = vi.fn<() => void>();
-const stopChatStream = vi.fn<(id: string) => Promise<void>>();
+const stopChatStream =
+  vi.fn<(id: string, snapshot?: unknown) => Promise<void>>();
+const chatMessages: MyUIMessage[] = [];
 const useChatOptions: UseChatOptions[] = [];
 
 vi.mock('@ai-sdk/react', () => ({
@@ -20,7 +22,7 @@ vi.mock('@ai-sdk/react', () => ({
     useChatOptions.push(options);
 
     return {
-      messages: [] as MyUIMessage[],
+      messages: chatMessages,
       regenerate: vi.fn<() => Promise<void>>(),
       sendMessage: vi.fn<(message: MyUIMessage) => Promise<void>>(),
       setMessages: vi.fn<(messages: MyUIMessage[]) => void>(),
@@ -38,7 +40,8 @@ vi.mock('@/lib/transport', () => ({
   buildChatTransport: vi.fn<() => { readonly kind: 'transport' }>(() => ({
     kind: 'transport',
   })),
-  stopChatStream: (id: string) => stopChatStream(id),
+  stopChatStream: (id: string, snapshot?: unknown) =>
+    stopChatStream(id, snapshot),
 }));
 
 vi.mock('@/lib/use-conversation-hydration', () => ({
@@ -71,6 +74,7 @@ vi.mock('@/lib/db', () => ({
 describe('useConversations resumable streaming', () => {
   beforeEach(() => {
     localStop.mockClear();
+    chatMessages.length = 0;
     stopChatStream.mockReset();
     stopChatStream.mockResolvedValue();
     useChatOptions.length = 0;
@@ -126,6 +130,44 @@ describe('useConversations resumable streaming', () => {
       expect(calls).toStrictEqual(['server', 'local']);
     });
 
-    expect(stopChatStream).toHaveBeenCalledWith('conv-stop');
+    expect(stopChatStream).toHaveBeenCalledWith('conv-stop', undefined);
+  });
+
+  it('sends the active assistant snapshot when explicitly stopping a stream', async () => {
+    useUiStore.setState({ activeConversationId: 'conv-stop' });
+    chatMessages.push(
+      {
+        id: 'u1',
+        parts: [{ text: 'Question', type: 'text' }],
+        role: 'user',
+      },
+      {
+        id: 'a1',
+        metadata: {
+          inferenceModel: 'model-a',
+          responseId: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d22',
+        },
+        parts: [{ text: 'Partial answer', type: 'text' }],
+        role: 'assistant',
+      },
+    );
+    const { result } = renderHook(() => useConversations('model-a'));
+
+    act(() => {
+      result.current.onStop();
+    });
+
+    await waitFor(() => {
+      expect(stopChatStream).toHaveBeenCalledWith('conv-stop', {
+        activeStreamId: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d22',
+        assistantSnapshot: {
+          content: 'Partial answer',
+          metadata: {
+            inferenceModel: 'model-a',
+            responseId: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d22',
+          },
+        },
+      });
+    });
   });
 });

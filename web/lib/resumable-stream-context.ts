@@ -1,5 +1,4 @@
 import 'server-only';
-import { createClient } from 'redis';
 import {
   createResumableStreamContext,
   type ResumableStreamContext,
@@ -66,13 +65,10 @@ export const normalizePythonResponseStreamId = (
 export const createChatResumableStreamContext = ({
   waitUntil,
 }: CreateContextOptions = {}): ResumableStreamContext => {
-  const publisher = createClient({ url: RESUMABLE_STREAM_REDIS_URL });
-  const subscriber = createClient({ url: RESUMABLE_STREAM_REDIS_URL });
+  process.env['REDIS_URL'] = RESUMABLE_STREAM_REDIS_URL;
 
   return createResumableStreamContext({
     keyPrefix: STREAM_KEY_PREFIX,
-    publisher,
-    subscriber,
     waitUntil: waitUntil ?? null,
   });
 };

@@ -34,6 +34,26 @@ const fromRow = (row: MessageRow): MyUIMessage => ({
   role: row.role,
 });
 
+const mergeCurrentWithLocal = (
+  current: MyUIMessage[],
+  localMessages: MyUIMessage[],
+): MyUIMessage[] => {
+  if (current.length > localMessages.length) {
+    return current;
+  }
+
+  const localIds = new Set(localMessages.map((message) => message.id));
+  const extraCurrentMessages = current.filter(
+    (message) => !localIds.has(message.id),
+  );
+
+  if (extraCurrentMessages.length === 0) {
+    return localMessages;
+  }
+
+  return [...localMessages, ...extraCurrentMessages];
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -140,7 +160,7 @@ export const useConversationHydration = ({
         if (!isCancelled()) {
           const localMessages = loaded.map(fromRow);
           setMessages((current) =>
-            current.length > localMessages.length ? current : localMessages,
+            mergeCurrentWithLocal(current, localMessages),
           );
         }
         return;

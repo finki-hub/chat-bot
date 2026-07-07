@@ -7,97 +7,20 @@ type FakeStreamContext = {
   readonly marker: 'fake-resumable-context';
 };
 
-type RedisClientMock = {
-  readonly connect: ReturnType<typeof vi.fn<() => Promise<unknown>>>;
-  readonly get: ReturnType<
-    typeof vi.fn<(key: string) => Promise<null | string>>
-  >;
-  readonly incr: ReturnType<typeof vi.fn<(key: string) => Promise<number>>>;
-  readonly publish: ReturnType<
-    typeof vi.fn<(channel: string, message: string) => Promise<number>>
-  >;
-  readonly set: ReturnType<
-    typeof vi.fn<
-      (
-        key: string,
-        value: string,
-        options?: { readonly EX?: number },
-      ) => Promise<'OK'>
-    >
-  >;
-  readonly subscribe: ReturnType<
-    typeof vi.fn<
-      (channel: string, callback: (message: string) => void) => Promise<void>
-    >
-  >;
-  readonly unsubscribe: ReturnType<
-    typeof vi.fn<(channel: string) => Promise<void>>
-  >;
-};
-
-type RedisCreateOptions = {
-  readonly url: string;
-};
-
 type StreamContextOptions = {
   readonly keyPrefix?: string;
-  readonly publisher: RedisClientMock;
-  readonly subscriber: RedisClientMock;
   readonly waitUntil: ((promise: Promise<unknown>) => void) | null;
 };
 
 const mocks = vi.hoisted(() => {
-  const redisClients: RedisClientMock[] = [];
-  const createClient = vi.fn<(options: RedisCreateOptions) => RedisClientMock>(
-    (options) => {
-      if (options.url.length === 0) {
-        throw new Error('expected Redis URL');
-      }
-
-      const client: RedisClientMock = {
-        connect: vi.fn<() => Promise<unknown>>(() => Promise.resolve()),
-        get: vi.fn<(key: string) => Promise<null | string>>(() =>
-          Promise.resolve(null),
-        ),
-        incr: vi.fn<(key: string) => Promise<number>>(() => Promise.resolve(1)),
-        publish: vi.fn<(channel: string, message: string) => Promise<number>>(
-          () => Promise.resolve(1),
-        ),
-        set: vi.fn<
-          (
-            key: string,
-            value: string,
-            options?: { readonly EX?: number },
-          ) => Promise<'OK'>
-        >(() => Promise.resolve('OK')),
-        subscribe: vi.fn<
-          (
-            channel: string,
-            callback: (message: string) => void,
-          ) => Promise<void>
-        >(() => Promise.resolve()),
-        unsubscribe: vi.fn<(channel: string) => Promise<void>>(() =>
-          Promise.resolve(),
-        ),
-      };
-
-      redisClients.push(client);
-
-      return client;
-    },
-  );
   const createResumableStreamContext = vi.fn<
     (options: StreamContextOptions) => FakeStreamContext
   >(() => ({
     marker: 'fake-resumable-context',
   }));
 
-  return { createClient, createResumableStreamContext, redisClients };
+  return { createResumableStreamContext };
 });
-
-vi.mock('redis', () => ({
-  createClient: mocks.createClient,
-}));
 
 vi.mock('resumable-stream/redis', () => ({
   createResumableStreamContext: mocks.createResumableStreamContext,
@@ -123,7 +46,6 @@ describe('resumable stream context utilities', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    mocks.redisClients.length = 0;
     resetEnv();
   });
 
@@ -140,20 +62,12 @@ describe('resumable stream context utilities', () => {
     // When: a route asks for the resumable stream context.
     const context = createChatResumableStreamContext({ waitUntil });
 
-    // Then: publisher/subscriber Redis clients are created with the private URL.
+    // Then: the library's default Redis clients will read the private URL.
     expect(context).toStrictEqual({ marker: 'fake-resumable-context' });
-    expect(mocks.createClient).toHaveBeenCalledTimes(2);
-    expect(mocks.createClient).toHaveBeenNthCalledWith(1, {
-      url: STREAM_REDIS_URL,
-    });
-    expect(mocks.createClient).toHaveBeenNthCalledWith(2, {
-      url: STREAM_REDIS_URL,
-    });
+    expect(process.env['REDIS_URL']).toBe(STREAM_REDIS_URL);
     expect(mocks.createResumableStreamContext).toHaveBeenCalledOnce();
     expect(getContextOptions()).toStrictEqual({
       keyPrefix: 'finki-hub-chat',
-      publisher: mocks.redisClients[0],
-      subscriber: mocks.redisClients[1],
       waitUntil,
     });
   });

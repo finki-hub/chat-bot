@@ -1,0 +1,178 @@
+'use client';
+
+import { useChat } from '@ai-sdk/react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+
+import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
+
+import { fireAndForget } from '@/lib/async';
+import {
+  finalizeMessage,
+  replaceFinishedMessage,
+} from '@/lib/conversation-message-state';
+import { replaceConversationMessages } from '@/lib/db';
+import { t } from '@/lib/i18n';
+import { buildChatTransport } from '@/lib/transport';
+import { useConversationHydration } from '@/lib/use-conversation-hydration';
+import { useStreamTiming } from '@/lib/use-stream-timing';
+
+type UseConversationChatRuntimeOptions = {
+  readonly activeId: null | string;
+  readonly model: string;
+  readonly reasoning: boolean;
+  readonly refreshConversations: () => Promise<void>;
+  readonly setActiveId: (id: null | string) => void;
+};
+
+export const useConversationChatRuntime = ({
+  activeId,
+  model,
+  reasoning,
+  refreshConversations,
+  setActiveId,
+}: UseConversationChatRuntimeOptions) => {
+  const [activeStatus, setActiveStatus] = useState<StatusPart | undefined>();
+  const [activeError, setActiveError] = useState<ErrorNotice | undefined>();
+  const convoIdRef = useRef<null | string>(activeId);
+  const startedAtRef = useRef<null | number>(null);
+  const firstTokenAtRef = useRef<null | number>(null);
+  const activeErrorRef = useRef<ErrorNotice | undefined>(undefined);
+  const regeneratingMessageIdRef = useRef<null | string>(null);
+  const [regeneratingMessageId, setRegeneratingMessageId] = useState<
+    null | string
+  >(null);
+
+  const persistFinished = useCallback(
+    async (allMessages: readonly MyUIMessage[]): Promise<void> => {
+      const cid = convoIdRef.current;
+      if (!cid) {
+        return;
+      }
+      await replaceConversationMessages(cid, [...allMessages]);
+      await refreshConversations();
+    },
+    [refreshConversations],
+  );
+
+  const modelRef = useRef(model);
+  modelRef.current = model;
+  const reasoningRef = useRef(reasoning);
+  reasoningRef.current = reasoning;
+  const transport = useMemo(
+    () =>
+      buildChatTransport(() => ({
+        model: modelRef.current,
+        reasoning: reasoningRef.current,
+      })),
+    [],
+  );
+
+  const { messages, regenerate, sendMessage, setMessages, status, stop } =
+    useChat<MyUIMessage>({
+      id: activeId ?? undefined,
+      onData: (part) => {
+        switch (part.type) {
+          case 'data-error':
+            setActiveError(part.data);
+            activeErrorRef.current = part.data;
+            break;
+
+          case 'data-reset':
+            setActiveStatus(undefined);
+            break;
+
+          case 'data-status':
+            setActiveStatus(part.data);
+            break;
+        }
+      },
+      onError: () => {
+        regeneratingMessageIdRef.current = null;
+        setRegeneratingMessageId(null);
+        setActiveError(
+          (prev) =>
+            prev ?? { code: 'network', message: t('error.description') },
+        );
+      },
+      onFinish: ({ isAbort, isError, message }) => {
+        setActiveStatus(undefined);
+        const replacementId = regeneratingMessageIdRef.current;
+        const error = activeErrorRef.current;
+        activeErrorRef.current = undefined;
+        if (isAbort || isError) {
+          regeneratingMessageIdRef.current = null;
+          setRegeneratingMessageId(null);
+          return;
+        }
+        if (replacementId !== null && message.id === replacementId) {
+          return;
+        }
+        regeneratingMessageIdRef.current = null;
+        setRegeneratingMessageId(null);
+        const finalizedBase = finalizeMessage(
+          message,
+          startedAtRef.current,
+          firstTokenAtRef.current,
+        );
+        const withError =
+          error === undefined
+            ? finalizedBase
+            : {
+                ...finalizedBase,
+                metadata: { ...finalizedBase.metadata, error },
+              };
+        const finalized =
+          replacementId === null
+            ? withError
+            : { ...withError, id: replacementId };
+        setMessages((prev) => {
+          const next = replaceFinishedMessage({
+            pruneAfterReplacement: replacementId !== null,
+            replacement: finalized,
+            streamMessageId: message.id,
+          })(prev);
+          fireAndForget(persistFinished(next));
+          return next;
+        });
+      },
+      resume: activeId !== null,
+      transport,
+    });
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
+
+  useStreamTiming({
+    firstTokenAtRef,
+    messages,
+    startedAtRef,
+    status,
+  });
+
+  useConversationHydration({
+    activeId,
+    convoIdRef,
+    model,
+    setActiveError,
+    setActiveId,
+    setActiveStatus,
+    setMessages,
+  });
+
+  return {
+    activeError,
+    activeStatus,
+    convoIdRef,
+    messages,
+    modelRef,
+    regenerate,
+    regeneratingMessageId,
+    regeneratingMessageIdRef,
+    sendMessageRef,
+    setActiveError,
+    setActiveStatus,
+    setMessages,
+    setRegeneratingMessageId,
+    status,
+    stop,
+  };
+};

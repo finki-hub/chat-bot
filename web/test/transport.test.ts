@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { MyUIMessage } from '@/lib/api-types';
+import type { MyMetadata, MyUIMessage } from '@/lib/api-types';
 
 import {
   buildChatTransport,
@@ -15,6 +15,8 @@ vi.mock('posthog-js', () => ({
 }));
 
 const SUBMIT = 'submit-message' as const;
+const ACTIVE_STREAM_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d22';
+const GPT_MODEL = 'gpt-5.4-mini';
 
 type PrepareArgs = {
   id: string;
@@ -74,9 +76,9 @@ describe('buildChatTransport', () => {
     const prepare = getPrepare({
       embeddingsModel: 'BAAI/bge-m3',
       maxTokens: 2_048,
-      model: 'gpt-5.4-mini',
+      model: GPT_MODEL,
       queryTransformMode: 'rewrite_hyde',
-      queryTransformModel: 'gpt-5.4-mini',
+      queryTransformModel: GPT_MODEL,
       temperature: 0.5,
       topP: 0.9,
     });
@@ -89,9 +91,9 @@ describe('buildChatTransport', () => {
     expect(body).toMatchObject({
       embeddingsModel: 'BAAI/bge-m3',
       maxTokens: 2_048,
-      model: 'gpt-5.4-mini',
+      model: GPT_MODEL,
       queryTransformMode: 'rewrite_hyde',
-      queryTransformModel: 'gpt-5.4-mini',
+      queryTransformModel: GPT_MODEL,
       temperature: 0.5,
       topP: 0.9,
     });
@@ -138,9 +140,23 @@ describe('buildChatTransport', () => {
       .mockResolvedValue(new Response(null));
     vi.stubGlobal('fetch', fetchMock);
 
-    await stopChatStream('conv-7');
+    await stopChatStream('conv-7', {
+      activeStreamId: ACTIVE_STREAM_ID,
+      assistantSnapshot: {
+        content: 'partial answer',
+        metadata: { inferenceModel: GPT_MODEL } satisfies MyMetadata,
+      },
+    });
 
     expect(fetchMock).toHaveBeenCalledWith('/api/chat/conv-7/stop', {
+      body: JSON.stringify({
+        activeStreamId: ACTIVE_STREAM_ID,
+        assistantSnapshot: {
+          content: 'partial answer',
+          metadata: { inferenceModel: GPT_MODEL },
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
       method: 'POST',
     });
   });

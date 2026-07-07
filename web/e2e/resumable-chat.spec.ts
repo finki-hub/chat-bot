@@ -9,7 +9,6 @@ const FINAL_TOKEN = ' и продолжение по освежување.';
 const STOP_TOKEN = 'Делумен одговор';
 const LONG_GAP_MS = 30_000;
 const CHAT_STREAM_URL_PATTERN = /\/api\/chat\/[^/]+\/stream$/u;
-const USER_ID_PATTERN = /[0-9a-f-]{36}/u;
 
 type PostRequestBody = {
   readonly id?: unknown;
@@ -57,6 +56,16 @@ const installModelRoute = async (page: Page): Promise<void> => {
   });
 };
 
+const installHealthRoute = async (page: Page): Promise<void> => {
+  await page.route('**/api/health', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ status: 'ok' }),
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
+};
+
 const clearBrowserConversationStorage = async (page: Page): Promise<void> => {
   await page.evaluate(
     () =>
@@ -82,6 +91,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     page,
   }) => {
     // Given: the initial POST emits one token slowly while the resume endpoint can replay the full stream.
+    await installHealthRoute(page);
     await installModelRoute(page);
     const firstLegServer = await startChatStreamServer({
       gapMs: LONG_GAP_MS,
@@ -89,8 +99,8 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
       tail: [],
     });
     let conversationId: null | string = null;
-    const historyRequests: string[] = [];
-    const resumeRequests: string[] = [];
+    let historyRequests = 0;
+    let resumeRequests = 0;
     let allowResumeReplay = false;
     let allowServerHistory = false;
 
@@ -102,7 +112,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
       });
     });
     await page.route('**/api/chat/*/stream', async (route) => {
-      resumeRequests.push(route.request().headers()['x-client-user-id'] ?? '');
+      resumeRequests += 1;
       if (!allowResumeReplay) {
         await route.fulfill({ status: 204 });
         return;
@@ -119,7 +129,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
       });
     });
     await page.route('**/api/chat/*/history', async (route) => {
-      historyRequests.push(route.request().headers()['x-client-user-id'] ?? '');
+      historyRequests += 1;
       if (!allowServerHistory) {
         await route.fulfill({ status: 404 });
         return;
@@ -175,14 +185,13 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     );
     await page.reload();
 
-    // Then: the UI consumes the resumed SSE, records user ownership on the request, and persists the final answer.
+    // Then: the UI consumes the resumed SSE and persists the final answer.
     const resumed = await resumeResponse;
     expect(resumed.status()).toBe(200);
     await expect(page.getByTestId('answer-text').last()).toContainText(
       `${FIRST_TOKEN}${FINAL_TOKEN}`,
     );
-    expect(resumeRequests.length).toBeGreaterThan(0);
-    expect(resumeRequests.at(-1)).toMatch(USER_ID_PATTERN);
+    expect(resumeRequests).toBeGreaterThan(0);
     expect(conversationId).not.toBeNull();
 
     await page.unroute('**/api/chat/*/stream');
@@ -195,7 +204,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     await expect(page.getByTestId('answer-text').last()).toContainText(
       `${FIRST_TOKEN}${FINAL_TOKEN}`,
     );
-    expect(historyRequests.at(-1)).toMatch(USER_ID_PATTERN);
+    expect(historyRequests).toBeGreaterThan(0);
 
     await firstLegServer.close();
   });
@@ -204,13 +213,14 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     page,
   }) => {
     // Given: an active stream has rendered a partial answer.
+    await installHealthRoute(page);
     await installModelRoute(page);
     const activeServer = await startChatStreamServer({
       gapMs: LONG_GAP_MS,
       head: chunksForAnswer(STOP_TOKEN).slice(0, 3),
       tail: [],
     });
-    const stopRequests: string[] = [];
+    const stopRequests: unknown[] = [];
     const resumeStatuses: number[] = [];
 
     await page.route('**/api/chat', async (route) => {
@@ -220,7 +230,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
       });
     });
     await page.route('**/api/chat/*/stop', async (route) => {
-      stopRequests.push(route.request().headers()['x-client-user-id'] ?? '');
+      stopRequests.push(JSON.parse(route.request().postData() ?? '{}'));
       await route.fulfill({
         body: JSON.stringify({ aborted: true, stopped: true }),
         contentType: 'application/json',
@@ -253,7 +263,10 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     expect(noActive.status()).toBe(204);
     expect(resumeStatuses.length).toBeGreaterThan(0);
     expect(resumeStatuses.every((status) => status === 204)).toBe(true);
-    expect(stopRequests[0]).toMatch(USER_ID_PATTERN);
+    expect(stopRequests[0]).toMatchObject({
+      activeStreamId: RESPONSE_ID,
+      assistantSnapshot: { content: STOP_TOKEN },
+    });
 
     await activeServer.close();
   });
