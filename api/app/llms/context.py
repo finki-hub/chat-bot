@@ -259,9 +259,9 @@ async def get_retrieved_context_with_sources(
     """Multi-query (original + rewritten + HyDE) retrieval over FAQ and chunks, reranked by a cross-encoder with vector-order fallback."""
 
     logger.info(
-        "Retrieving context for query: '%s' with embedding model: %s",
-        query,
-        embedding_model,
+        "Retrieving context: query_len=%d embedding_model=%s",
+        len(query),
+        embedding_model.value,
     )
 
     def _stage(stage: str) -> None:
@@ -497,7 +497,12 @@ async def _contextualize_query(
         return query
     condensed = condensed.strip()
     if condensed and condensed != query:
-        logger.info("Contextualized query: '%s' -> '%s'", query, condensed)
+        logger.info(
+            "Contextualized query: query_len=%d condensed_len=%d history_char_len=%d",
+            len(query),
+            len(condensed),
+            len(history_text),
+        )
         return condensed
     return query
 

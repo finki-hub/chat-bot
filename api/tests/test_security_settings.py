@@ -62,7 +62,7 @@ def test_production_compose_requires_auth_secrets():
 @pytest.mark.anyio
 async def test_lifespan_warns_for_insecure_app_settings(monkeypatch, caplog):
     class FakeDatabase:
-        def __init__(self, dsn: str) -> None:
+        def __init__(self, dsn: str, min_size: int, max_size: int) -> None:
             return None
 
         async def init(self) -> None:
@@ -81,12 +81,12 @@ async def test_lifespan_warns_for_insecure_app_settings(monkeypatch, caplog):
 
 
 @pytest.mark.anyio
-async def test_lifespan_uses_app_settings_database_url(monkeypatch):
-    captured_dsns: list[str] = []
+async def test_lifespan_uses_app_settings_database_config(monkeypatch):
+    captured_config: list[tuple[str, int, int]] = []
 
     class FakeDatabase:
-        def __init__(self, dsn: str) -> None:
-            captured_dsns.append(dsn)
+        def __init__(self, dsn: str, min_size: int, max_size: int) -> None:
+            captured_config.append((dsn, min_size, max_size))
 
         async def init(self) -> None:
             return None
@@ -98,6 +98,8 @@ async def test_lifespan_uses_app_settings_database_url(monkeypatch):
     app = make_app(
         Settings(
             API_KEY="custom-api-key",
+            DATABASE_POOL_MAX_SIZE=12,
+            DATABASE_POOL_MIN_SIZE=2,
             DATABASE_URL="postgresql://custom-user:custom-pass@custom-host/custom-db",
             MCP_API_KEY="custom-mcp-key",
         ),
@@ -106,6 +108,14 @@ async def test_lifespan_uses_app_settings_database_url(monkeypatch):
     async with lifespan(app):
         pass
 
-    assert captured_dsns == [
-        "postgresql://custom-user:custom-pass@custom-host/custom-db",
+    assert captured_config == [
+        ("postgresql://custom-user:custom-pass@custom-host/custom-db", 2, 12),
     ]
+
+
+def test_database_pool_min_size_cannot_exceed_max_size():
+    with pytest.raises(ValueError, match="DATABASE_POOL_MIN_SIZE"):
+        Settings(
+            DATABASE_POOL_MAX_SIZE=1,
+            DATABASE_POOL_MIN_SIZE=2,
+        )

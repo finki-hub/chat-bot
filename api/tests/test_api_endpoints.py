@@ -7,7 +7,7 @@ from app.utils.settings import Settings
 class HealthyDatabase:
     pool = True
 
-    def __init__(self, dsn: str) -> None:
+    def __init__(self, dsn: str, min_size: int, max_size: int) -> None:
         self.dsn = dsn
 
     async def init(self) -> None:

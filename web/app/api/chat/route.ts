@@ -132,6 +132,10 @@ export const POST = async (req: Request): Promise<Response> => {
         'content-type': 'application/json',
         'x-api-key': CHAT_API_KEY,
         'X-Distinct-Id': userId,
+        ...(typeof clientBody.posthogSessionId === 'string' &&
+          clientBody.posthogSessionId.length > 0 && {
+            'X-PostHog-Session-Id': clientBody.posthogSessionId,
+          }),
       },
       method: 'POST',
       signal: upstreamController.signal,

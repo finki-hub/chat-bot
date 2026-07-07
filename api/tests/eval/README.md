@@ -81,8 +81,9 @@ done
 
 ## Extending the set
 
-* Add real user questions from the api logs (`grep "Retrieving context for query"`) — the
-  most representative source — and label the expected source by hand.
+* Add privacy-approved real user questions from support exports or manually curated
+  examples, then label the expected source by hand. Operational logs intentionally keep
+  only query lengths and metadata, not raw chat text.
 * Regenerate from the corpus when documents change; anchors are stable keys, so existing
   examples keep working unless the underlying document/section is removed.
 * Keep `abstain` examples current with new out-of-scope / injection patterns.

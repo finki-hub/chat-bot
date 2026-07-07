@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 _SERVICE = "chat-bot-api"
 
 _DISTINCT_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
+_SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
 def safe_distinct_id(raw: str | None, fallback: str) -> str:
@@ -28,6 +29,16 @@ def safe_distinct_id(raw: str | None, fallback: str) -> str:
     if _DISTINCT_ID_RE.fullmatch(candidate):
         return candidate
     return fallback
+
+
+def safe_session_id(raw: str | None) -> str | None:
+    """The caller-supplied PostHog session id if it is a short opaque token."""
+    if raw is None:
+        return None
+    candidate = raw.strip()
+    if _SESSION_ID_RE.fullmatch(candidate):
+        return candidate
+    return None
 
 
 class _State:

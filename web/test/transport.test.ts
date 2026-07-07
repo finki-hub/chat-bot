@@ -9,6 +9,11 @@ import {
   StopChatStreamError,
 } from '@/lib/transport';
 
+vi.mock('posthog-js', () => ({
+  // eslint-disable-next-line camelcase -- PostHog SDK method name.
+  posthog: { get_session_id: () => 'session-test-id' },
+}));
+
 const SUBMIT = 'submit-message' as const;
 
 type PrepareArgs = {
@@ -58,6 +63,7 @@ describe('buildChatTransport', () => {
       messageId: 'm-1',
       messages: sampleMessages,
       model: 'claude-sonnet-4-6',
+      posthogSessionId: 'session-test-id',
       temperature: 0.3,
       trigger: SUBMIT,
     });

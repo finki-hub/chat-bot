@@ -146,9 +146,9 @@ async def transform_query_with_anthropic(
     """
 
     logger.info(
-        "Transforming query: '%s' with model: %s",
-        query,
-        model,
+        "Transforming query with model=%s query_len=%d",
+        model.value,
+        len(query),
     )
 
     try:

@@ -53,7 +53,26 @@ describe('POST /api/chat', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await (await importPost())(chatRequest());
+    const { POST } = await import('@/app/api/chat/route');
+    const req = new Request('http://localhost/api/chat', {
+      body: JSON.stringify({
+        id: CONVERSATION_ID,
+        messages: [
+          { id: 'u1', parts: [{ text: 'Здраво', type: 'text' }], role: 'user' },
+        ],
+        model: MODEL,
+        posthogSessionId: 'session-test-id',
+      }),
+      headers: { 'content-type': JSON_CONTENT_TYPE },
+      method: 'POST',
+    });
+
+    const res = await POST(req);
+
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const sentBody = JSON.parse(init.body as string) as {
       inference_model?: string;
@@ -70,6 +89,12 @@ describe('POST /api/chat', () => {
     ]);
     expect(sentBody.interface).toBe('web');
     expect(sentBody.inference_model).toBe(MODEL);
+    expect(init.headers).toStrictEqual({
+      'content-type': JSON_CONTENT_TYPE,
+      'x-api-key': 'test-key',
+      'X-Distinct-Id': USER_ID,
+      'X-PostHog-Session-Id': 'session-test-id',
+    });
     expect(out).toContain('Здраво');
     expect(out).toContain(RESPONSE_ID);
     expect(out).toContain('Статут');

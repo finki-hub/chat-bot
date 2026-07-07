@@ -23,8 +23,7 @@ if (key !== undefined && key.length > 0) {
     capture_pageview: 'history_change',
     person_profiles: 'identified_only',
     session_recording: {
-      maskAllInputs: true,
-      maskTextSelector: '.ph-no-capture',
+      maskAllInputs: false,
     },
   });
   /* eslint-enable camelcase -- end of PostHog snake_case options. */
