@@ -42,8 +42,8 @@ async def handle_rerank(
     request: Request,
 ) -> RerankResponseSchema:
     logger.info(
-        "Received rerank request with query: %s and %d documents",
-        payload.query,
+        "Received rerank request: query_len=%d docs=%d",
+        len(payload.query),
         len(payload.documents),
     )
 

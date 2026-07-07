@@ -43,9 +43,9 @@ async def stream(
     payload: StreamRequestSchema,
 ) -> StreamingResponse:
     logger.info(
-        "Received stream request with prompt: %s, model: %s",
-        payload.prompt,
-        payload.inference_model,
+        "Received stream request: model=%s prompt_len=%d",
+        payload.inference_model.value,
+        len(payload.prompt),
     )
 
     return stream_response(

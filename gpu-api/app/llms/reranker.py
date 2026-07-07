@@ -45,9 +45,9 @@ def rerank_documents(query: str, documents: list[str]) -> list[tuple[float, int]
     Returns a list of (score, original_index) tuples sorted by score descending.
     """
     logger.info(
-        "Reranking %d documents for query: %s",
+        "Reranking documents: query_len=%d docs=%d",
+        len(query),
         len(documents),
-        query,
     )
 
     if not documents or not query:
