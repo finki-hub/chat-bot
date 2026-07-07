@@ -3,10 +3,9 @@
 from asyncpg import Record
 
 from app.data.connection import Database
+from app.data.embedding_sql import embedding_column_name, embedding_vector_sql
 from app.llms.models import (
-    HALFVEC_EMBEDDING_MODELS,
     MODEL_DISTANCE_THRESHOLDS,
-    MODEL_EMBEDDINGS_COLUMNS,
     Model,
 )
 from app.schemas.diplomas import DiplomaSchema
@@ -79,18 +78,10 @@ async def get_closest_diplomas(
     *,
     exclude_external_id: str | None = None,
 ) -> list[DiplomaSchema]:
-    embedding_column = MODEL_EMBEDDINGS_COLUMNS[model]
+    embedding = embedding_vector_sql(model, embedded_query)
 
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
-
-    if model in HALFVEC_EMBEDDING_MODELS:
-        dims = len(embedded_query)
-        col_expr = f"{embedding_column}::halfvec({dims})"
-        param_expr = f"$1::halfvec({dims})"
-    else:
-        col_expr = embedding_column
-        param_expr = "$1"
 
     exclude_clause = ""
     if exclude_external_id is not None:
@@ -109,11 +100,11 @@ async def get_closest_diplomas(
         date_of_submission,
         created_at,
         updated_at,
-        {col_expr} <=> {param_expr} AS distance
+        {embedding.distance_operand} <=> {embedding.query_operand} AS distance
     FROM diploma
-    WHERE {embedding_column} IS NOT NULL
+    WHERE {embedding.column_ref} IS NOT NULL
         AND status = 'Одбрана'
-        AND {col_expr} <=> {param_expr} < $3
+        AND {embedding.distance_operand} <=> {embedding.query_operand} < $3
         {exclude_clause}
     ORDER BY distance
     LIMIT $2
@@ -152,7 +143,7 @@ async def get_diplomas_without_embeddings(
     db: Database,
     model: Model,
 ) -> list[DiplomaSchema]:
-    embedding_column = MODEL_EMBEDDINGS_COLUMNS[model]
+    embedding_column = embedding_column_name(model)
     query = f"SELECT * FROM diploma WHERE {embedding_column} IS NULL ORDER BY external_id ASC"  # noqa: S608
     result = await db.fetch(query)
 
@@ -201,7 +192,7 @@ async def get_backtest_population(
     db: Database,
     model: Model,
 ) -> list[Record]:
-    embedding_column = MODEL_EMBEDDINGS_COLUMNS[model]
+    embedding_column = embedding_column_name(model)
     query = f"""
     SELECT external_id, title, mentor, member1, member2
     FROM diploma

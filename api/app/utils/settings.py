@@ -1,6 +1,6 @@
-from typing import Final
+from typing import Final, Self
 
-from pydantic import field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 _API_KEY_DEFAULT: Final[str] = "your_api_key_here"
@@ -38,6 +38,8 @@ class Settings(BaseSettings):
 
     API_KEY: str = _API_KEY_DEFAULT
     DATABASE_URL: str = "postgresql://user:password@host:port/db"
+    DATABASE_POOL_MIN_SIZE: int = Field(default=1, ge=0)
+    DATABASE_POOL_MAX_SIZE: int = Field(default=10, ge=1)
 
     OPENAI_API_KEY: str = "your_openai_api_key_here"
     GOOGLE_API_KEY: str = "your_google_api_key_here"
@@ -58,6 +60,13 @@ class Settings(BaseSettings):
 
     HOST: str = "0.0.0.0"  # noqa: S104
     PORT: int = 8880
+
+    @model_validator(mode="after")
+    def validate_database_pool_sizes(self) -> Self:
+        if self.DATABASE_POOL_MIN_SIZE > self.DATABASE_POOL_MAX_SIZE:
+            msg = "DATABASE_POOL_MIN_SIZE must be <= DATABASE_POOL_MAX_SIZE"
+            raise ValueError(msg)
+        return self
 
     @field_validator("MCP_HTTP_URLS", "MCP_SSE_URLS", mode="before")
     @classmethod

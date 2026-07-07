@@ -9,7 +9,11 @@ async def main() -> None:
     Connects to the database and runs all schema migrations.
     """
     settings = Settings()
-    db = Database(dsn=settings.DATABASE_URL)
+    db = Database(
+        dsn=settings.DATABASE_URL,
+        min_size=settings.DATABASE_POOL_MIN_SIZE,
+        max_size=settings.DATABASE_POOL_MAX_SIZE,
+    )
 
     await db.init()
     try:

@@ -3,10 +3,9 @@
 import json
 
 from app.data.connection import Database
+from app.data.embedding_sql import embedding_column_name, embedding_vector_sql
 from app.llms.models import (
-    HALFVEC_EMBEDDING_MODELS,
     MODEL_DISTANCE_THRESHOLDS,
-    MODEL_EMBEDDINGS_COLUMNS,
     Model,
 )
 from app.schemas.questions import (
@@ -68,7 +67,7 @@ async def get_questions_without_embeddings_query(
     db: Database,
     model: Model,
 ) -> list[QuestionSchema]:
-    embedding_column = MODEL_EMBEDDINGS_COLUMNS[model]
+    embedding_column = embedding_column_name(model)
     query = f"SELECT * FROM question WHERE {embedding_column} IS NULL ORDER BY name ASC"  # noqa: S608
     result = await db.fetch(query)
 
@@ -192,18 +191,10 @@ async def get_closest_questions(
     limit: int = 8,
     threshold: float | None = None,
 ) -> list[QuestionSchema]:
-    embedding_column = MODEL_EMBEDDINGS_COLUMNS[model]
+    embedding = embedding_vector_sql(model, embedded_query)
 
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
-
-    if model in HALFVEC_EMBEDDING_MODELS:
-        dims = len(embedded_query)
-        col_expr = f"{embedding_column}::halfvec({dims})"
-        param_expr = f"$1::halfvec({dims})"
-    else:
-        col_expr = embedding_column
-        param_expr = "$1"
 
     sql = f"""
     SELECT
@@ -214,9 +205,10 @@ async def get_closest_questions(
         links,
         created_at,
         updated_at,
-        {col_expr} <=> {param_expr} AS distance
+        {embedding.distance_operand} <=> {embedding.query_operand} AS distance
     FROM question
-    WHERE {embedding_column} IS NOT NULL AND {col_expr} <=> {param_expr} < $3
+    WHERE {embedding.column_ref} IS NOT NULL
+        AND {embedding.distance_operand} <=> {embedding.query_operand} < $3
     ORDER BY distance
     LIMIT $2
     """  # noqa: S608

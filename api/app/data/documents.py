@@ -7,11 +7,10 @@ from uuid import UUID
 from asyncpg import Record
 
 from app.data.connection import Database
+from app.data.embedding_sql import embedding_vector_sql
 from app.llms.chunking import Chunk
 from app.llms.models import (
-    HALFVEC_EMBEDDING_MODELS,
     MODEL_DISTANCE_THRESHOLDS,
-    MODEL_EMBEDDINGS_COLUMNS,
     Model,
 )
 from app.schemas.documents import ChunkSchema, DocumentSchema, IngestDocumentSchema
@@ -112,18 +111,10 @@ async def get_closest_chunks(
     threshold: float | None = None,
 ) -> list[ChunkSchema]:
     """Vector search over the chunk table (mirrors get_closest_questions)."""
-    embedding_column = MODEL_EMBEDDINGS_COLUMNS[model]
+    embedding = embedding_vector_sql(model, embedded_query, table_alias="c")
 
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
-
-    if model in HALFVEC_EMBEDDING_MODELS:
-        dims = len(embedded_query)
-        col_expr = f"c.{embedding_column}::halfvec({dims})"
-        param_expr = f"$1::halfvec({dims})"
-    else:
-        col_expr = f"c.{embedding_column}"
-        param_expr = "$1"
 
     sql = f"""
     SELECT
@@ -134,10 +125,11 @@ async def get_closest_chunks(
         c.section,
         d.name AS document_name,
         d.title AS document_title,
-        {col_expr} <=> {param_expr} AS distance
+        {embedding.distance_operand} <=> {embedding.query_operand} AS distance
     FROM chunk c
     JOIN document d ON d.id = c.document_id
-    WHERE c.{embedding_column} IS NOT NULL AND {col_expr} <=> {param_expr} < $3
+    WHERE {embedding.column_ref} IS NOT NULL
+        AND {embedding.distance_operand} <=> {embedding.query_operand} < $3
     ORDER BY distance
     LIMIT $2
     """  # noqa: S608

@@ -54,7 +54,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     current_settings: Settings = app.state.settings
     _warn_on_insecure_defaults(current_settings)
 
-    db = Database(dsn=current_settings.DATABASE_URL)
+    db = Database(
+        dsn=current_settings.DATABASE_URL,
+        min_size=current_settings.DATABASE_POOL_MIN_SIZE,
+        max_size=current_settings.DATABASE_POOL_MAX_SIZE,
+    )
     app.state.db = db
 
     await db.init()
