@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CONVERSATION_ID,
   installRouteMocks,
-  OTHER_USER_ID,
   resetRouteMocks,
   RESPONSE_ID,
   routeMocks,
@@ -24,9 +23,8 @@ const importGet = async (): Promise<
   return GET;
 };
 
-const streamRequest = (userId = USER_ID): Request =>
+const streamRequest = (): Request =>
   new Request(`http://localhost/api/chat/${CONVERSATION_ID}/stream`, {
-    headers: { 'X-Client-User-Id': userId },
     method: 'GET',
   });
 
@@ -124,10 +122,8 @@ describe('GET /api/chat/[id]/stream', () => {
       new ChatStateRequestError(404),
     );
 
-    // When: a different anonymous user attempts to resume.
-    const res = await (
-      await importGet()
-    )(streamRequest(OTHER_USER_ID), routeContext());
+    // When: the authenticated user attempts to resume inaccessible state.
+    const res = await (await importGet())(streamRequest(), routeContext());
 
     // Then: the route preserves the ownership failure and returns no SSE body.
     expect(res.status).toBe(404);
@@ -135,6 +131,19 @@ describe('GET /api/chat/[id]/stream', () => {
     expect(
       routeMocks.resumableContext.resumeExistingStream,
     ).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when there is no authenticated session', async () => {
+    const { AuthenticationRequiredError } =
+      await import('@/lib/authenticated-chat-user');
+    routeMocks.getAuthenticatedChatUserId.mockRejectedValueOnce(
+      new AuthenticationRequiredError(),
+    );
+
+    const res = await (await importGet())(streamRequest(), routeContext());
+
+    expect(res.status).toBe(401);
+    expect(routeMocks.stateClient.loadConversation).not.toHaveBeenCalled();
   });
 
   it('clears stale API active state and returns 204 when Redis expired', async () => {

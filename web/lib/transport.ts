@@ -2,8 +2,6 @@ import { DefaultChatTransport } from 'ai';
 
 import type { ModelId, MyUIMessage, QueryTransformMode } from '@/lib/api-types';
 
-import { getAnonUserId } from '@/lib/user';
-
 export type ChatExtras = {
   embeddingsModel?: ModelId;
   maxTokens?: number;
@@ -22,7 +20,6 @@ export const buildChatTransport = (
     api: '/api/chat',
     prepareReconnectToStreamRequest: ({ id }) => ({
       api: `/api/chat/${encodeURIComponent(id)}/stream`,
-      headers: { 'X-Client-User-Id': getAnonUserId() },
     }),
     prepareSendMessagesRequest: ({ id, messageId, messages, trigger }) => ({
       body: {
@@ -31,14 +28,29 @@ export const buildChatTransport = (
         messages,
         trigger,
         ...getExtras(),
-        userId: getAnonUserId(),
       },
     }),
   });
 
+export class StopChatStreamError extends Error {
+  readonly status: number;
+
+  constructor(status: number, options?: ErrorOptions) {
+    super('Stop chat stream failed', options);
+    this.name = 'StopChatStreamError';
+    this.status = status;
+  }
+}
+
 export const stopChatStream = async (conversationId: string): Promise<void> => {
-  await fetch(`/api/chat/${encodeURIComponent(conversationId)}/stop`, {
-    headers: { 'X-Client-User-Id': getAnonUserId() },
-    method: 'POST',
-  });
+  const response = await fetch(
+    `/api/chat/${encodeURIComponent(conversationId)}/stop`,
+    {
+      method: 'POST',
+    },
+  );
+
+  if (!response.ok) {
+    throw new StopChatStreamError(response.status);
+  }
 };

@@ -1,4 +1,8 @@
 import {
+  AuthenticationRequiredError,
+  getAuthenticatedChatUserId,
+} from '@/lib/authenticated-chat-user';
+import {
   type ChatStateMetadata,
   ChatStateRequestError,
   createChatStateClient,
@@ -62,7 +66,16 @@ const parseStopBody = async (request: Request): Promise<StopBody> => {
     return { activeStreamId: null, assistantSnapshot: null };
   }
 
-  const payload: unknown = JSON.parse(text);
+  let payload: unknown;
+
+  try {
+    payload = JSON.parse(text) as unknown;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return { activeStreamId: null, assistantSnapshot: null };
+    }
+    throw error;
+  }
 
   if (!isRecord(payload)) {
     return { activeStreamId: null, assistantSnapshot: null };
@@ -87,12 +100,6 @@ const parseStopBody = async (request: Request): Promise<StopBody> => {
   return { activeStreamId, assistantSnapshot };
 };
 
-const clientUserId = (request: Request): null | string => {
-  const userId = request.headers.get('X-Client-User-Id');
-
-  return userId === null || userId.length === 0 ? null : userId;
-};
-
 const ignoreMissing = async (operation: Promise<void>): Promise<void> => {
   try {
     await operation;
@@ -109,12 +116,6 @@ export const POST = async (
   request: Request,
   { params }: RouteContext,
 ): Promise<Response> => {
-  const userId = clientUserId(request);
-
-  if (userId === null) {
-    return Response.json({ aborted: false, stopped: false }, { status: 400 });
-  }
-
   const [{ id: conversationId }, body] = await Promise.all([
     params,
     parseStopBody(request),
@@ -122,6 +123,7 @@ export const POST = async (
   const chatState = createChatStateClient();
 
   try {
+    const userId = await getAuthenticatedChatUserId();
     const { conversation } = await chatState.loadConversation({
       conversationId,
       userId,
@@ -174,6 +176,9 @@ export const POST = async (
 
     return Response.json({ aborted, stopped: true });
   } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return Response.json({ aborted: false, stopped: false }, { status: 401 });
+    }
     if (error instanceof ChatStateRequestError) {
       return new Response(null, { status: error.status });
     }

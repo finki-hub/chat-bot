@@ -132,6 +132,10 @@ services:
         condition: service_healthy
     environment:
       API_BASE_URL: ${WEB_API_BASE_URL:-http://api:8880}
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET}
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
       CHAT_API_KEY: ${API_KEY}
       RESUMABLE_STREAM_REDIS_URL: ${RESUMABLE_STREAM_REDIS_URL:-redis://stream-store:6379}
       TZ: ${TZ}

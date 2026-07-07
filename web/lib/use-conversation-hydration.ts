@@ -14,7 +14,6 @@ import {
 } from '@/lib/db';
 import { joinText } from '@/lib/message-parts';
 import { deriveTitle } from '@/lib/messages';
-import { getAnonUserId } from '@/lib/user';
 
 type UseConversationHydrationOptions = {
   readonly activeId: null | string;
@@ -79,16 +78,27 @@ const isServerHistory = (value: unknown): value is ServerHistory => {
 };
 
 const loadServerHistory = async (id: string): Promise<null | ServerHistory> => {
-  const response = await fetch(`/api/chat/${encodeURIComponent(id)}/history`, {
-    headers: { 'X-Client-User-Id': getAnonUserId() },
-    method: 'GET',
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`/api/chat/${encodeURIComponent(id)}/history`, {
+      method: 'GET',
+    });
+  } catch {
+    return null;
+  }
 
   if (!response.ok) {
     return null;
   }
 
-  const body: unknown = await response.json();
+  let body: unknown;
+
+  try {
+    body = await response.json();
+  } catch {
+    return null;
+  }
 
   return isServerHistory(body) ? body : null;
 };
@@ -123,6 +133,23 @@ export const useConversationHydration = ({
     const isCancelled = (): boolean => cancelled;
 
     const hydrate = async (id: string): Promise<void> => {
+      const convo = await getConversation(id);
+
+      if (convo !== undefined && !isCancelled()) {
+        const loaded = await loadMessages(id);
+        if (!isCancelled()) {
+          const localMessages = loaded.map(fromRow);
+          setMessages((current) =>
+            current.length > localMessages.length ? current : localMessages,
+          );
+        }
+        return;
+      }
+
+      if (convo !== undefined || isCancelled()) {
+        return;
+      }
+
       const serverHistory = await loadServerHistory(id);
       if (serverHistory !== null) {
         if (!isCancelled()) {
@@ -138,24 +165,9 @@ export const useConversationHydration = ({
         return;
       }
 
-      const convo = await getConversation(id);
-
-      if (!isCancelled() && convo === undefined) {
+      if (!isCancelled()) {
         setActiveId(null);
         setMessages([]);
-        return;
-      }
-
-      if (convo === undefined || isCancelled()) {
-        return;
-      }
-
-      const loaded = await loadMessages(id);
-      if (!isCancelled()) {
-        const localMessages = loaded.map(fromRow);
-        setMessages((current) =>
-          current.length > localMessages.length ? current : localMessages,
-        );
       }
     };
 

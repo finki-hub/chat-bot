@@ -28,10 +28,7 @@ const importPost = async (): Promise<
 const stopRequest = (body: object = {}): Request =>
   new Request(`http://localhost/api/chat/${CONVERSATION_ID}/stop`, {
     body: JSON.stringify(body),
-    headers: {
-      'content-type': 'application/json',
-      'X-Client-User-Id': USER_ID,
-    },
+    headers: { 'content-type': 'application/json' },
     method: 'POST',
   });
 
@@ -161,6 +158,19 @@ describe('POST /api/chat/[id]/stop', () => {
       streamId: RESPONSE_ID,
       userId: USER_ID,
     });
+  });
+
+  it('returns 401 when there is no authenticated session', async () => {
+    const { AuthenticationRequiredError } =
+      await import('@/lib/authenticated-chat-user');
+    routeMocks.getAuthenticatedChatUserId.mockRejectedValueOnce(
+      new AuthenticationRequiredError(),
+    );
+
+    const res = await (await importPost())(stopRequest(), routeContext());
+
+    expect(res.status).toBe(401);
+    expect(routeMocks.stateClient.loadConversation).not.toHaveBeenCalled();
   });
 });
 

@@ -2,6 +2,10 @@ import { UI_MESSAGE_STREAM_HEADERS } from 'ai';
 import { after } from 'next/server';
 
 import {
+  AuthenticationRequiredError,
+  getAuthenticatedChatUserId,
+} from '@/lib/authenticated-chat-user';
+import {
   ChatStateRequestError,
   createChatStateClient,
 } from '@/lib/chat-state-client';
@@ -14,28 +18,17 @@ type RouteContext = {
   readonly params: Promise<{ readonly id: string }>;
 };
 
-const clientUserId = (request: Request): null | string => {
-  const userId = request.headers.get('X-Client-User-Id');
-
-  return userId === null || userId.length === 0 ? null : userId;
-};
-
 const empty = (status: number): Response => new Response(null, { status });
 
 export const GET = async (
-  request: Request,
+  _request: Request,
   { params }: RouteContext,
 ): Promise<Response> => {
-  const userId = clientUserId(request);
-
-  if (userId === null) {
-    return empty(400);
-  }
-
   const { id: conversationId } = await params;
   const chatState = createChatStateClient();
 
   try {
+    const userId = await getAuthenticatedChatUserId();
     const { conversation } = await chatState.loadConversation({
       conversationId,
       userId,
@@ -62,6 +55,9 @@ export const GET = async (
 
     return new Response(stream, { headers: UI_MESSAGE_STREAM_HEADERS });
   } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return empty(401);
+    }
     if (error instanceof ChatStateRequestError) {
       return empty(error.status);
     }

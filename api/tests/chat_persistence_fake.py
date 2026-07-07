@@ -1,13 +1,38 @@
 from datetime import UTC, datetime
+from uuid import uuid4
 
 
 class FakeChatDatabase:
     def __init__(self) -> None:
         self.conversations: dict[object, dict[str, object]] = {}
         self.messages: dict[object, dict[str, object]] = {}
+        self.users: dict[tuple[object, object], dict[str, object]] = {}
         self.now = datetime(2026, 7, 7, tzinfo=UTC)
 
     async def fetchrow(self, query: str, *args: object) -> dict[str, object] | None:
+        if "INSERT INTO chat_user" in query:
+            provider, provider_subject, email, name, avatar_url = args
+            user_key = (provider, provider_subject)
+            current = self.users.get(user_key)
+            if current is None:
+                current = {
+                    "id": uuid4(),
+                    "provider": provider,
+                    "provider_subject": provider_subject,
+                    "email": email,
+                    "name": name,
+                    "avatar_url": avatar_url,
+                    "created_at": self.now,
+                    "updated_at": self.now,
+                }
+                self.users[user_key] = current
+                return current
+            current["email"] = email
+            current["name"] = name
+            current["avatar_url"] = avatar_url
+            current["updated_at"] = self.now
+            return current
+
         if "INSERT INTO chat_conversation" in query:
             conversation_id, user_id, model, title = args
             inserted = self._conversation_row(

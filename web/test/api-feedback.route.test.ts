@@ -4,6 +4,12 @@ import type { FeedbackAck, FeedbackClientPayload } from '@/lib/api-types';
 
 import { POST } from '@/app/api/feedback/route';
 
+const { getAuthenticatedChatUserIdMock } = vi.hoisted(() => ({
+  getAuthenticatedChatUserIdMock: vi
+    .fn<() => Promise<string>>()
+    .mockResolvedValue('api-user-1'),
+}));
+
 vi.mock('@/lib/env', () => ({
   API_BASE_URL: 'https://api:8880',
   CHAT_API_KEY: 'super-secret-key',
@@ -12,6 +18,19 @@ vi.mock('@/lib/env', () => ({
     CHAT_API_KEY: 'super-secret-key',
   },
 }));
+vi.mock('@/lib/authenticated-chat-user', () => {
+  class AuthenticationRequiredError extends Error {
+    constructor() {
+      super('Authentication required');
+      this.name = 'AuthenticationRequiredError';
+    }
+  }
+
+  return {
+    AuthenticationRequiredError,
+    getAuthenticatedChatUserId: getAuthenticatedChatUserIdMock,
+  };
+});
 
 const jsonRequest = (body: unknown): Request =>
   new Request('https://localhost/api/feedback', {
@@ -40,12 +59,12 @@ const validPayload: FeedbackClientPayload = {
   inferenceModel: 'claude-sonnet-4-6',
   questionText: 'Кога е испитот?',
   responseId: 'r-123',
-  userId: 'anon-abc',
 };
 
 describe('POST /api/feedback', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    getAuthenticatedChatUserIdMock.mockResolvedValue('api-user-1');
   });
 
   afterEach(() => {
@@ -79,7 +98,7 @@ describe('POST /api/feedback', () => {
       inference_model: 'claude-sonnet-4-6',
       question_text: 'Кога е испитот?',
       response_id: 'r-123',
-      user_id: 'anon-abc',
+      user_id: 'api-user-1',
     });
     /* eslint-enable camelcase -- snake_case mirrors the Python API wire contract */
 
@@ -96,7 +115,6 @@ describe('POST /api/feedback', () => {
       jsonRequest({
         feedbackType: 'dislike',
         responseId: 'r-123',
-        userId: 'anon-abc',
       } satisfies FeedbackClientPayload),
     );
 
@@ -107,7 +125,7 @@ describe('POST /api/feedback', () => {
       client: 'web',
       feedback_type: 'dislike',
       response_id: 'r-123',
-      user_id: 'anon-abc',
+      user_id: 'api-user-1',
     });
     /* eslint-enable camelcase -- snake_case mirrors the Python API wire contract */
   });
@@ -127,24 +145,27 @@ describe('POST /api/feedback', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await POST(
-      jsonRequest({ feedbackType: 'like', userId: 'anon-abc' }),
-    );
+    const res = await POST(jsonRequest({ feedbackType: 'like' }));
 
     expect(res.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when userId is empty', async () => {
+  it('returns 401 when the browser is not authenticated', async () => {
     const fetchMock = vi.fn<typeof fetch>();
 
     vi.stubGlobal('fetch', fetchMock);
-
-    const res = await POST(
-      jsonRequest({ feedbackType: 'like', responseId: 'r-123', userId: '' }),
+    const { AuthenticationRequiredError } =
+      await import('@/lib/authenticated-chat-user');
+    getAuthenticatedChatUserIdMock.mockRejectedValueOnce(
+      new AuthenticationRequiredError(),
     );
 
-    expect(res.status).toBe(400);
+    const res = await POST(
+      jsonRequest({ feedbackType: 'like', responseId: 'r-123' }),
+    );
+
+    expect(res.status).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -157,7 +178,6 @@ describe('POST /api/feedback', () => {
       jsonRequest({
         feedbackType: 'meh',
         responseId: 'r-123',
-        userId: 'anon-abc',
       }),
     );
 

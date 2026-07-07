@@ -4,6 +4,10 @@ import { after } from 'next/server';
 import type { MyUIMessage } from '@/lib/api-types';
 
 import {
+  AuthenticationRequiredError,
+  getAuthenticatedChatUserId,
+} from '@/lib/authenticated-chat-user';
+import {
   type ChatStateMetadata,
   createChatStateClient,
 } from '@/lib/chat-state-client';
@@ -13,7 +17,7 @@ import {
   translateToUiStream,
   type UiStreamMeta,
 } from '@/lib/chat-translate';
-import { API_BASE_URL } from '@/lib/env';
+import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
 import { joinText } from '@/lib/message-parts';
 import {
   activeChatProducers,
@@ -61,6 +65,9 @@ const errorResponse = (meta: UiStreamMeta, code: string, message: string) => {
   return createUIMessageStreamResponse({ stream });
 };
 
+const unauthenticated = (): Response =>
+  Response.json({ error: 'Authentication required' }, { status: 401 });
+
 const requiredText = (value: string | undefined): null | string =>
   value === undefined || value.length === 0 ? null : value;
 
@@ -93,14 +100,14 @@ export const POST = async (req: Request): Promise<Response> => {
     const chatBody = toChatRequestBody(clientBody);
     const inferenceModel = chatBody.inference_model;
     const conversationId = requiredText(clientBody.id);
-    const userId = requiredText(clientBody.userId);
+    const userId = await getAuthenticatedChatUserId();
     const userMessage = lastUserMessageForState(clientBody);
 
-    if (conversationId === null || userId === null || userMessage === null) {
+    if (conversationId === null || userMessage === null) {
       return errorResponse(
         { inferenceModel },
         'malformed_input',
-        'Missing conversation id, user id, or user message',
+        'Missing conversation id or user message',
       );
     }
 
@@ -123,11 +130,8 @@ export const POST = async (req: Request): Promise<Response> => {
       body: JSON.stringify(chatBody),
       headers: {
         'content-type': 'application/json',
-        // Forward the browser's anonymous id so server-side analytics share its distinct_id.
-        ...(typeof clientBody.userId === 'string' &&
-          clientBody.userId.length > 0 && {
-            'X-Distinct-Id': clientBody.userId,
-          }),
+        'x-api-key': CHAT_API_KEY,
+        'X-Distinct-Id': userId,
       },
       method: 'POST',
       signal: upstreamController.signal,
@@ -211,8 +215,10 @@ export const POST = async (req: Request): Promise<Response> => {
       stream,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Request failed';
+    if (error instanceof AuthenticationRequiredError) {
+      return unauthenticated();
+    }
 
-    return errorResponse({}, 'internal', message);
+    return errorResponse({}, 'internal', 'Request failed');
   }
 };

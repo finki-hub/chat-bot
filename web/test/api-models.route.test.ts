@@ -38,11 +38,13 @@ describe('GET /api/models', () => {
 
     expect(url).toBe('https://api:8880/chat/models');
     expect(init.method ?? 'GET').toBe('GET');
+    expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
 
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe(
       'public, max-age=300, stale-while-revalidate=600',
     );
+    expect(res.headers.get('x-api-key')).toBeNull();
     await expect(res.json()).resolves.toStrictEqual(models);
   });
 

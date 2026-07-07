@@ -3,13 +3,12 @@ import {
   type ConversationTurn,
   type ErrorNotice,
   MAX_CHARS_PER_TURN,
-  MAX_MESSAGES,
   type MessageDiagnostics,
   type MyUIMessage,
   type QueryTransformMode,
   type RetrievedSource,
 } from '@/lib/api-types';
-import { joinText, lastText } from '@/lib/message-parts';
+import { joinText } from '@/lib/message-parts';
 import { type ParsedEvent } from '@/lib/sse';
 
 export type ChatClientBody = {
@@ -24,7 +23,6 @@ export type ChatClientBody = {
   temperature?: number;
   topP?: number;
   trigger?: string;
-  userId?: string;
 };
 
 export type UiStreamMeta = { inferenceModel?: string; responseId?: string };
@@ -64,7 +62,7 @@ export type UiStreamWriter = {
   write: (part: UiStreamPart) => void;
 };
 
-const messagesForRequest = (body: ChatClientBody): MyUIMessage[] => {
+const messagesForRequest = (body: ChatClientBody): readonly MyUIMessage[] => {
   if (body.messageId === undefined || !body.trigger?.includes('regenerate')) {
     return body.messages;
   }
@@ -78,15 +76,16 @@ const messagesForRequest = (body: ChatClientBody): MyUIMessage[] => {
     : body.messages.slice(0, messageIndex);
 };
 
-export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
-  const trimmed = messagesForRequest(body).slice(-MAX_MESSAGES);
-  const messages: ConversationTurn[] = trimmed.map((message) => {
-    const role = message.role === 'assistant' ? 'assistant' : 'user';
-    // Use the last assistant part: a `reset` discards a preamble into an earlier part.
-    const content =
-      (role === 'assistant' ? lastText(message) : joinText(message)) ?? '';
+const currentUserMessage = (body: ChatClientBody): MyUIMessage | undefined =>
+  messagesForRequest(body).findLast((message) => message.role === 'user');
 
-    return { content: content.slice(0, MAX_CHARS_PER_TURN), role };
+export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
+  const userMessage = currentUserMessage(body);
+  const trimmed = userMessage === undefined ? [] : [userMessage];
+  const messages: ConversationTurn[] = trimmed.map((message) => {
+    const content = joinText(message);
+
+    return { content: content.slice(0, MAX_CHARS_PER_TURN), role: 'user' };
   });
 
   return {

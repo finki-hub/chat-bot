@@ -24,9 +24,8 @@ class ChatMessageRole(StrEnum):
 
 class ChatConversationCreate(BaseModel):
     id: UUID = Field(description="Stable web conversation id minted by the BFF")
-    user_id: str = Field(
-        min_length=1,
-        description="Anonymous web user id that owns the conversation",
+    user_id: UUID = Field(
+        description="API-owned user id that owns the conversation",
     )
     model: str | None = Field(
         default=None,
@@ -34,7 +33,7 @@ class ChatConversationCreate(BaseModel):
     )
     title: str | None = Field(default=None, description="Display title, if known")
 
-    @field_validator("user_id", "model", "title")
+    @field_validator("model", "title")
     @classmethod
     def _strip_present_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -66,7 +65,7 @@ class ChatConversationUpdate(BaseModel):
 
 class ChatConversation(BaseModel):
     id: UUID
-    user_id: str
+    user_id: UUID
     active_stream_id: UUID | None = None
     active_response_id: UUID | None = None
     active_status: ActiveStreamStatus | None = None

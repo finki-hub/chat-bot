@@ -21,15 +21,18 @@ class ChatPersistenceDatabase(Protocol):
         self,
         query: str,
         *args: object,
-    ) -> Sequence[Mapping[str, object]]: ...
+    ) -> Sequence[Mapping[str, object]]:
+        raise NotImplementedError
 
     async def fetchrow(
         self,
         query: str,
         *args: object,
-    ) -> Mapping[str, object] | None: ...
+    ) -> Mapping[str, object] | None:
+        raise NotImplementedError
 
-    async def fetchval(self, query: str, *args: object, column: int = 0) -> object: ...
+    async def fetchval(self, query: str, *args: object, column: int = 0) -> object:
+        raise NotImplementedError
 
 
 async def create_conversation(
@@ -61,7 +64,7 @@ async def update_conversation(
     db: ChatPersistenceDatabase,
     *,
     conversation_id: UUID,
-    user_id: str,
+    user_id: UUID,
     update: ChatConversationUpdate,
 ) -> ChatConversation | None:
     row = await db.fetchrow(
@@ -86,7 +89,7 @@ async def update_conversation(
 async def list_conversations(
     db: ChatPersistenceDatabase,
     *,
-    user_id: str,
+    user_id: UUID,
     limit: int = 50,
 ) -> list[ChatConversation]:
     rows = await db.fetch(
@@ -107,7 +110,7 @@ async def load_conversation(
     db: ChatPersistenceDatabase,
     *,
     conversation_id: UUID,
-    user_id: str,
+    user_id: UUID,
 ) -> ChatConversationWithMessages | None:
     conversation_row = await db.fetchrow(
         """
@@ -137,7 +140,7 @@ async def load_conversation(
 async def get_conversation_owner(
     db: ChatPersistenceDatabase,
     conversation_id: UUID,
-) -> str | None:
+) -> UUID | None:
     row = await db.fetchrow(
         """
         SELECT user_id FROM chat_conversation
@@ -147,7 +150,12 @@ async def get_conversation_owner(
     )
     if row is None:
         return None
-    return str(row["user_id"])
+    owner = row["user_id"]
+    if isinstance(owner, UUID):
+        return owner
+    if isinstance(owner, str):
+        return UUID(owner)
+    raise RuntimeError("chat_conversation user_id was not a UUID")
 
 
 async def upsert_message(
@@ -182,7 +190,7 @@ async def set_active_stream(
     db: ChatPersistenceDatabase,
     *,
     conversation_id: UUID,
-    user_id: str,
+    user_id: UUID,
     active_stream_id: UUID,
     active_response_id: UUID,
     active_status: ActiveStreamStatus,
@@ -210,7 +218,7 @@ async def clear_active_stream_if_current(
     db: ChatPersistenceDatabase,
     *,
     conversation_id: UUID,
-    user_id: str,
+    user_id: UUID,
     active_stream_id: UUID,
 ) -> ChatConversation | None:
     row = await db.fetchrow(

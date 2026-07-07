@@ -63,7 +63,6 @@ export type FeedbackClientPayload = {
   inferenceModel?: string;
   questionText?: string;
   responseId: string;
-  userId: string;
 };
 
 export type FeedbackSchema = {

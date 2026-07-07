@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CONVERSATION_ID,
   installRouteMocks,
-  OTHER_USER_ID,
   resetRouteMocks,
   RESPONSE_ID,
   routeMocks,
@@ -21,9 +20,8 @@ const importGet = async (): Promise<
   return GET;
 };
 
-const historyRequest = (userId = USER_ID): Request =>
+const historyRequest = (): Request =>
   new Request(`http://localhost/api/chat/${CONVERSATION_ID}/history`, {
-    headers: { 'X-Client-User-Id': userId },
     method: 'GET',
   });
 
@@ -89,13 +87,24 @@ describe('GET /api/chat/[id]/history', () => {
       new ChatStateRequestError(404),
     );
 
-    // When: a different anonymous user asks for completed history.
-    const res = await (
-      await importGet()
-    )(historyRequest(OTHER_USER_ID), routeContext());
+    // When: the authenticated user asks for inaccessible completed history.
+    const res = await (await importGet())(historyRequest(), routeContext());
 
     // Then: the route preserves the ownership failure and returns no body.
     expect(res.status).toBe(404);
     await expect(res.text()).resolves.toBe('');
+  });
+
+  it('returns 401 when there is no authenticated session', async () => {
+    const { AuthenticationRequiredError } =
+      await import('@/lib/authenticated-chat-user');
+    routeMocks.getAuthenticatedChatUserId.mockRejectedValueOnce(
+      new AuthenticationRequiredError(),
+    );
+
+    const res = await (await importGet())(historyRequest(), routeContext());
+
+    expect(res.status).toBe(401);
+    expect(routeMocks.stateClient.loadConversation).not.toHaveBeenCalled();
   });
 });

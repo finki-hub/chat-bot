@@ -7,15 +7,7 @@ from app.schemas.chat_persistence import ActiveStreamStatus, JsonValue
 
 
 class UserScopedRequest(BaseModel):
-    user_id: str = Field(min_length=1)
-
-    @field_validator("user_id")
-    @classmethod
-    def _strip_user_id(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("must not be blank or whitespace-only")
-        return stripped
+    user_id: UUID
 
 
 class SetActiveStreamRequest(UserScopedRequest):

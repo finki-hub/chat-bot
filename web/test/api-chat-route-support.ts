@@ -88,6 +88,7 @@ export const routeMocks = {
   consumedResumableStreams: [] as string[],
   createChatResumableStreamContext: vi.fn(),
   createChatStateClient: vi.fn(),
+  getAuthenticatedChatUserId: vi.fn(async () => USER_ID),
   resumableContext: {
     createNewResumableStream: vi.fn(
       async (streamId: string, makeStream: () => ReadableStream<string>) => {
@@ -146,6 +147,7 @@ export const routeMocks = {
 export const resetRouteMocks = (): void => {
   vi.clearAllMocks();
   routeMocks.consumedResumableStreams.length = 0;
+  routeMocks.getAuthenticatedChatUserId.mockResolvedValue(USER_ID);
   routeMocks.createChatStateClient.mockReturnValue(routeMocks.stateClient);
   routeMocks.createChatResumableStreamContext.mockReturnValue(
     routeMocks.resumableContext,
@@ -158,6 +160,19 @@ export const installRouteMocks = (): void => {
     CHAT_API_KEY: 'test-key',
     env: { API_BASE_URL, CHAT_API_KEY: 'test-key' },
   }));
+  vi.doMock('@/lib/authenticated-chat-user', () => {
+    class AuthenticationRequiredError extends Error {
+      constructor() {
+        super('Authentication required');
+        this.name = 'AuthenticationRequiredError';
+      }
+    }
+
+    return {
+      AuthenticationRequiredError,
+      getAuthenticatedChatUserId: routeMocks.getAuthenticatedChatUserId,
+    };
+  });
   vi.doMock('@/lib/chat-state-client', async (importOriginal) => {
     const actual =
       await importOriginal<typeof import('@/lib/chat-state-client')>();
@@ -200,7 +215,6 @@ export const chatRequest = (
         },
       ],
       model: MODEL,
-      userId: USER_ID,
     }),
     headers: { 'content-type': JSON_CONTENT_TYPE },
     method: 'POST',

@@ -50,7 +50,7 @@ async def mark_active_stream_stopped_if_current(
     db: ChatPersistenceDatabase,
     *,
     conversation_id: UUID,
-    user_id: str,
+    user_id: UUID,
     active_stream_id: UUID,
 ) -> ChatConversation | None:
     row = await db.fetchrow(

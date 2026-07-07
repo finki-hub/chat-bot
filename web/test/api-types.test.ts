@@ -88,15 +88,14 @@ describe('lib/api-types', () => {
     const payload = {
       feedbackType: 'like',
       responseId: wire.response_id,
-      userId: wire.user_id,
     } satisfies FeedbackClientPayload;
 
     expect(wire.client).toBe('web');
     expect(wire.feedback_type).toBe('like');
     expect(wire.response_id).toBe('00000000-0000-4000-8000-000000000000');
+    expect(wire.user_id).toBe('anon-1');
     expect(payload.feedbackType).toBe('like');
     expect(payload.responseId).toBe(wire.response_id);
-    expect(payload.userId).toBe('anon-1');
   });
 
   it('models a typed UIMessage with metadata + data-status part', () => {

@@ -248,9 +248,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS professor_group_window_idx ON professor_group 
     source, window_start, window_end, group_index
 );
 
+CREATE TABLE IF NOT EXISTS chat_user (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    provider TEXT NOT NULL CHECK (provider IN ('google')),
+    provider_subject TEXT NOT NULL,
+    email TEXT,
+    name TEXT,
+    avatar_url TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (provider, provider_subject)
+);
+
 CREATE TABLE IF NOT EXISTS chat_conversation (
     id UUID PRIMARY KEY,
-    user_id TEXT NOT NULL,
+    user_id UUID NOT NULL REFERENCES chat_user (id) ON DELETE CASCADE,
     active_stream_id UUID,
     active_response_id UUID,
     active_status TEXT CHECK (active_status IN ('pending', 'streaming', 'completed', 'stopped', 'error')),

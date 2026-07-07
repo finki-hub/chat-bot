@@ -6,12 +6,8 @@ import {
   buildChatTransport,
   type ChatExtras,
   stopChatStream,
+  StopChatStreamError,
 } from '@/lib/transport';
-
-vi.mock('@/lib/user', () => ({
-  ANON_USER_ID_KEY: 'finkiHub.anonUserId',
-  getAnonUserId: () => 'anon-test-id',
-}));
 
 const SUBMIT = 'submit-message' as const;
 
@@ -45,7 +41,7 @@ const sampleMessages: MyUIMessage[] = [
 ];
 
 describe('buildChatTransport', () => {
-  it('puts messages, id, trigger, extras, and userId into the request body', () => {
+  it('puts messages, id, trigger, and extras into the request body', () => {
     const prepare = getPrepare({
       model: 'claude-sonnet-4-6',
       temperature: 0.3,
@@ -64,8 +60,8 @@ describe('buildChatTransport', () => {
       model: 'claude-sonnet-4-6',
       temperature: 0.3,
       trigger: SUBMIT,
-      userId: 'anon-test-id',
     });
+    expect(body).not.toHaveProperty('userId');
   });
 
   it('forwards all sampling params when present', () => {
@@ -119,7 +115,7 @@ describe('buildChatTransport', () => {
     expect((second.body as { model: string }).model).toBe('model-b');
   });
 
-  it('prepares resume requests with the conversation stream URL and anonymous user header', () => {
+  it('prepares resume requests with only the conversation stream URL', () => {
     const transport = buildChatTransport(() => ({
       model: 'model-a',
     })) as unknown as PrepareTransport;
@@ -127,12 +123,10 @@ describe('buildChatTransport', () => {
     const request = transport.prepareReconnectToStreamRequest({ id: 'conv-7' });
 
     expect(request.api).toBe('/api/chat/conv-7/stream');
-    expect(request.headers).toStrictEqual({
-      'X-Client-User-Id': 'anon-test-id',
-    });
+    expect(request.headers).toBeUndefined();
   });
 
-  it('calls the explicit stop endpoint with the anonymous user header', async () => {
+  it('calls the explicit stop endpoint without client ownership headers', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response(null));
@@ -141,8 +135,23 @@ describe('buildChatTransport', () => {
     await stopChatStream('conv-7');
 
     expect(fetchMock).toHaveBeenCalledWith('/api/chat/conv-7/stop', {
-      headers: { 'X-Client-User-Id': 'anon-test-id' },
       method: 'POST',
+    });
+  });
+
+  it('throws when the explicit stop endpoint rejects the request', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response(null, { status: 500 })),
+    );
+
+    await expect(stopChatStream('conv-7')).rejects.toBeInstanceOf(
+      StopChatStreamError,
+    );
+    await expect(stopChatStream('conv-7')).rejects.toMatchObject({
+      status: 500,
     });
   });
 });

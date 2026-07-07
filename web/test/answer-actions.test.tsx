@@ -60,8 +60,7 @@ describe('AnswerActions', () => {
 });
 
 describe('AnswerActions feedback', () => {
-  it('posts a like to /api/feedback with the anon user id and metadata', async () => {
-    localStorage.setItem('finkiHub.anonUserId', 'user-xyz');
+  it('posts a like to /api/feedback with metadata only', async () => {
     render(
       <AnswerActions
         message={assistant('resp-9', 'Готов одговор')}
@@ -87,8 +86,8 @@ describe('AnswerActions feedback', () => {
       inferenceModel: 'claude-sonnet-4-6',
       questionText: 'Прашање?',
       responseId: 'resp-9',
-      userId: 'user-xyz',
     });
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('userId');
   });
 
   it('optimistically marks the chosen vote as pressed', async () => {

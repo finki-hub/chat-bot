@@ -1,6 +1,6 @@
 import type { ModelId } from '@/lib/api-types';
 
-import { API_BASE_URL } from '@/lib/env';
+import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,7 +24,7 @@ export const GET = async (): Promise<Response> => {
 
   try {
     upstream = await fetch(`${API_BASE_URL}/chat/models`, {
-      headers: { accept: 'application/json' },
+      headers: { accept: 'application/json', 'x-api-key': CHAT_API_KEY },
       method: 'GET',
     });
   } catch {

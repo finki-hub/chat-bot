@@ -1,5 +1,5 @@
 from datetime import timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from chat_persistence_fake import FakeChatDatabase
@@ -23,6 +23,9 @@ from app.schemas.chat_persistence import (
     ChatMessageUpsert,
 )
 
+OWNER_ID = UUID("00000000-0000-4000-8000-000000000001")
+INTRUDER_ID = UUID("00000000-0000-4000-8000-000000000002")
+
 
 @pytest.mark.anyio
 async def test_chat_persistence_happy_path_orders_messages_and_clears_current_stream() -> (
@@ -35,7 +38,7 @@ async def test_chat_persistence_happy_path_orders_messages_and_clears_current_st
         db,
         ChatConversationCreate(
             id=uuid4(),
-            user_id="anon-user-1",
+            user_id=OWNER_ID,
             model="claude-sonnet-5",
             title="Enrollment",
         ),
@@ -52,7 +55,7 @@ async def test_chat_persistence_happy_path_orders_messages_and_clears_current_st
     active = await set_active_stream(
         db,
         conversation_id=conversation.id,
-        user_id="anon-user-1",
+        user_id=OWNER_ID,
         active_stream_id=response_id,
         active_response_id=response_id,
         active_status=ActiveStreamStatus.STREAMING,
@@ -73,13 +76,13 @@ async def test_chat_persistence_happy_path_orders_messages_and_clears_current_st
     cleared = await clear_active_stream_if_current(
         db,
         conversation_id=conversation.id,
-        user_id="anon-user-1",
+        user_id=OWNER_ID,
         active_stream_id=response_id,
     )
     loaded = await load_conversation(
         db,
         conversation_id=conversation.id,
-        user_id="anon-user-1",
+        user_id=OWNER_ID,
     )
 
     # Then: response_id compatibility and message order are preserved.
@@ -104,7 +107,7 @@ async def test_chat_persistence_clear_with_stale_stream_id_keeps_newer_active_st
     db = FakeChatDatabase()
     conversation = await create_conversation(
         db,
-        ChatConversationCreate(id=uuid4(), user_id="owner", model=None, title=None),
+        ChatConversationCreate(id=uuid4(), user_id=OWNER_ID, model=None, title=None),
     )
     stale_stream_id = uuid4()
     current_stream_id = uuid4()
@@ -112,7 +115,7 @@ async def test_chat_persistence_clear_with_stale_stream_id_keeps_newer_active_st
         await set_active_stream(
             db,
             conversation_id=conversation.id,
-            user_id="owner",
+            user_id=OWNER_ID,
             active_stream_id=stream_id,
             active_response_id=stream_id,
             active_status=ActiveStreamStatus.STREAMING,
@@ -122,13 +125,13 @@ async def test_chat_persistence_clear_with_stale_stream_id_keeps_newer_active_st
     stale_clear = await clear_active_stream_if_current(
         db,
         conversation_id=conversation.id,
-        user_id="owner",
+        user_id=OWNER_ID,
         active_stream_id=stale_stream_id,
     )
     loaded = await load_conversation(
         db,
         conversation_id=conversation.id,
-        user_id="owner",
+        user_id=OWNER_ID,
     )
 
     # Then: the newer stream remains current.
@@ -145,19 +148,24 @@ async def test_chat_persistence_lists_updates_owner_and_clears_stale_streams() -
         db,
         ChatConversationCreate(
             id=uuid4(),
-            user_id="owner",
+            user_id=OWNER_ID,
             model="old-model",
             title="Old",
         ),
     )
     second = await create_conversation(
         db,
-        ChatConversationCreate(id=uuid4(), user_id="owner", model=None, title="Second"),
+        ChatConversationCreate(
+            id=uuid4(),
+            user_id=OWNER_ID,
+            model=None,
+            title="Second",
+        ),
     )
     await set_active_stream(
         db,
         conversation_id=first.id,
-        user_id="owner",
+        user_id=OWNER_ID,
         active_stream_id=uuid4(),
         active_response_id=uuid4(),
         active_status=ActiveStreamStatus.STREAMING,
@@ -168,26 +176,26 @@ async def test_chat_persistence_lists_updates_owner_and_clears_stale_streams() -
     updated = await update_conversation(
         db,
         conversation_id=second.id,
-        user_id="owner",
+        user_id=OWNER_ID,
         update=ChatConversationUpdate(model="new-model", title="Updated"),
     )
     owner = await get_conversation_owner(db, first.id)
     missing_for_wrong_owner = await load_conversation(
         db,
         conversation_id=first.id,
-        user_id="intruder",
+        user_id=INTRUDER_ID,
     )
     cleared_count = await clear_stale_active_streams(
         db,
         stale_before=db.now - timedelta(hours=1),
     )
-    conversations = await list_conversations(db, user_id="owner", limit=10)
+    conversations = await list_conversations(db, user_id=OWNER_ID, limit=10)
 
     # Then: only owner-visible rows are returned and stale active state is removed.
     assert updated is not None
     assert updated.model == "new-model"
     assert updated.title == "Updated"
-    assert owner == "owner"
+    assert owner == OWNER_ID
     assert missing_for_wrong_owner is None
     assert cleared_count == 1
     assert db.conversations[first.id]["active_stream_id"] is None

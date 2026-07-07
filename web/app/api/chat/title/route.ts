@@ -5,7 +5,7 @@ import type {
   ConversationTurn,
 } from '@/lib/api-types';
 
-import { API_BASE_URL } from '@/lib/env';
+import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -154,7 +154,10 @@ export const POST = async (req: Request): Promise<Response> => {
   try {
     upstream = await fetch(`${API_BASE_URL}/chat/title`, {
       body: JSON.stringify(toSchema(payload)),
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': CHAT_API_KEY,
+      },
       method: 'POST',
       signal: req.signal,
     });

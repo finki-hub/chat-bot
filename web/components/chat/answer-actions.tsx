@@ -6,7 +6,6 @@ import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { t } from '@/lib/i18n';
 import { lastText } from '@/lib/message-parts';
-import { getAnonUserId } from '@/lib/user';
 import { cn } from '@/lib/utils';
 
 export type AnswerActionsProps = {
@@ -69,7 +68,6 @@ export const AnswerActions = ({
           inferenceModel: message.metadata?.inferenceModel,
           questionText,
           responseId,
-          userId: getAnonUserId(),
         }),
         headers: { 'content-type': 'application/json' },
         method: 'POST',

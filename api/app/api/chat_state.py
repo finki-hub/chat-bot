@@ -17,6 +17,7 @@ from app.data.chat_state import (
     mark_active_stream_stopped_if_current,
     upsert_assistant_message_by_response_id,
 )
+from app.data.chat_users import upsert_google_chat_user
 from app.data.db import get_db
 from app.schemas.chat_persistence import (
     ChatConversation,
@@ -34,11 +35,12 @@ from app.schemas.chat_state import (
     UserMessageUpsertRequest,
     UserScopedRequest,
 )
+from app.schemas.chat_user import ChatUser, ChatUserUpsert
 from app.utils.auth import verify_api_key
 
 db_dep = Depends(get_db)
 api_key_dep = Depends(verify_api_key)
-UserIdQuery = Annotated[str, Query(min_length=1)]
+UserIdQuery = Annotated[UUID, Query()]
 
 router = APIRouter(
     prefix="/chat/state",
@@ -58,11 +60,23 @@ async def _ensure_owned(
     db: ChatPersistenceDatabase,
     *,
     conversation_id: UUID,
-    user_id: str,
+    user_id: UUID,
 ) -> None:
     owner = await get_conversation_owner(db, conversation_id)
     if owner != user_id:
         raise _not_found()
+
+
+@router.post(
+    "/users/google",
+    status_code=status.HTTP_200_OK,
+    operation_id="upsertGoogleChatUser",
+)
+async def upsert_google_user_state(
+    payload: ChatUserUpsert,
+    db: ChatPersistenceDatabase = db_dep,
+) -> ChatUser:
+    return await upsert_google_chat_user(db, payload)
 
 
 @router.post(

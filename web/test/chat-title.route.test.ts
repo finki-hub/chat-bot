@@ -58,11 +58,13 @@ describe('POST /api/chat/title', () => {
     expect(new Headers(init.headers).get('content-type')).toBe(
       'application/json',
     );
+    expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
     expect(JSON.parse(init.body as string)).toStrictEqual({
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       query_transform_model: 'claude-sonnet-4-6',
     });
+    expect(res.headers.get('x-api-key')).toBeNull();
     await expect(res.json()).resolves.toStrictEqual(upstream);
   });
 

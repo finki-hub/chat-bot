@@ -21,6 +21,9 @@ export type ChatStateClient = {
   readonly upsertConversation: (
     input: UpsertConversationInput,
   ) => Promise<void>;
+  readonly upsertGoogleUser: (
+    input: UpsertGoogleUserInput,
+  ) => Promise<ChatUser>;
   readonly upsertUserMessage: (input: UpsertUserMessageInput) => Promise<void>;
 };
 
@@ -50,6 +53,17 @@ export type ChatStateJsonValue =
   | { readonly [key: string]: ChatStateJsonValue };
 
 export type ChatStateMetadata = Readonly<Record<string, ChatStateJsonValue>>;
+
+export type ChatUser = {
+  readonly avatar_url: null | string;
+  readonly created_at?: string;
+  readonly email: null | string;
+  readonly id: string;
+  readonly name: null | string;
+  readonly provider: 'google';
+  readonly provider_subject: string;
+  readonly updated_at?: string;
+};
 
 type ClearActiveStreamInput = {
   readonly conversationId: string;
@@ -81,6 +95,13 @@ type UpsertConversationInput = {
   readonly conversationId: string;
   readonly model?: string;
   readonly userId: string;
+};
+
+type UpsertGoogleUserInput = {
+  readonly avatarUrl?: string;
+  readonly email?: string;
+  readonly name?: string;
+  readonly providerSubject: string;
 };
 
 type UpsertUserMessageInput = {
@@ -117,6 +138,23 @@ const sendStateRequest = async (
   if (!response.ok) {
     throw new ChatStateRequestError(response.status);
   }
+};
+
+const postStateJson = async <T>(path: string, body: string): Promise<T> => {
+  const response = await fetch(stateUrl(path), {
+    body,
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': CHAT_API_KEY,
+    },
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    throw new ChatStateRequestError(response.status);
+  }
+
+  return response.json() as Promise<T>;
 };
 
 const readStateJson = async <T>(path: string): Promise<T> => {
@@ -198,6 +236,16 @@ export const createChatStateClient = (): ChatStateClient => ({
       method: 'POST',
     });
   },
+  upsertGoogleUser: async ({ avatarUrl, email, name, providerSubject }) =>
+    postStateJson<ChatUser>(
+      '/users/google',
+      JSON.stringify({
+        ...(avatarUrl !== undefined && { avatar_url: avatarUrl }),
+        ...(email !== undefined && { email }),
+        ...(name !== undefined && { name }),
+        provider_subject: providerSubject,
+      }),
+    ),
   upsertUserMessage: async ({ content, conversationId, messageId, userId }) => {
     await sendStateRequest(`/conversations/${conversationId}/messages/user`, {
       body: JSON.stringify({

@@ -19,6 +19,44 @@ def _auth_headers() -> dict[str, str]:
     return {"x-api-key": "test-api-key"}
 
 
+OWNER_ID = "00000000-0000-4000-8000-000000000001"
+INTRUDER_ID = "00000000-0000-4000-8000-000000000002"
+
+
+def test_chat_state_upserts_google_user() -> None:
+    # Given: an authenticated BFF has a Google subject from Auth.js.
+    db = FakeChatDatabase()
+    client = _client(db)
+
+    # When: the same Google subject is upserted twice with a changed email.
+    first = client.post(
+        "/chat/state/users/google",
+        headers=_auth_headers(),
+        json={
+            "provider_subject": "google-sub-1",
+            "email": "old@example.com",
+            "name": "Old Name",
+            "avatar_url": "https://example.com/old.png",
+        },
+    )
+    second = client.post(
+        "/chat/state/users/google",
+        headers=_auth_headers(),
+        json={
+            "provider_subject": "google-sub-1",
+            "email": "new@example.com",
+            "name": "New Name",
+            "avatar_url": "https://example.com/new.png",
+        },
+    )
+
+    # Then: the API-owned user id remains stable across profile changes.
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["id"] == second.json()["id"]
+    assert second.json()["email"] == "new@example.com"
+
+
 def test_chat_state_requires_api_key() -> None:
     # Given: a BFF-owned chat state endpoint.
     db = FakeChatDatabase()
@@ -29,7 +67,7 @@ def test_chat_state_requires_api_key() -> None:
         "/chat/state/conversations",
         json={
             "id": str(uuid4()),
-            "user_id": "anon-user",
+            "user_id": OWNER_ID,
             "model": "claude-sonnet-5",
         },
     )
@@ -53,7 +91,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
         headers=_auth_headers(),
         json={
             "id": str(conversation_id),
-            "user_id": "anon-user",
+            "user_id": OWNER_ID,
             "model": "claude-sonnet-5",
             "title": "Enrollment",
         },
@@ -61,7 +99,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
     user_message = client.post(
         f"/chat/state/conversations/{conversation_id}/messages/user",
         headers=_auth_headers(),
-        json={"id": str(user_message_id), "user_id": "anon-user", "content": "How?"},
+        json={"id": str(user_message_id), "user_id": OWNER_ID, "content": "How?"},
     )
 
     # When: active stream state and assistant content are set, replaced, and loaded.
@@ -69,7 +107,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
         f"/chat/state/conversations/{conversation_id}/active-stream",
         headers=_auth_headers(),
         json={
-            "user_id": "anon-user",
+            "user_id": OWNER_ID,
             "active_stream_id": str(stream_id),
             "active_response_id": str(response_id),
             "active_status": "streaming",
@@ -80,7 +118,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
         headers=_auth_headers(),
         json={
             "id": str(assistant_message_id),
-            "user_id": "anon-user",
+            "user_id": OWNER_ID,
             "content": "First draft",
             "metadata": {"responseId": str(response_id)},
         },
@@ -90,7 +128,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
         headers=_auth_headers(),
         json={
             "id": str(uuid4()),
-            "user_id": "anon-user",
+            "user_id": OWNER_ID,
             "content": "Final answer",
             "metadata": {"responseId": str(response_id), "done": True},
         },
@@ -98,7 +136,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
     loaded = client.get(
         f"/chat/state/conversations/{conversation_id}",
         headers=_auth_headers(),
-        params={"user_id": "anon-user"},
+        params={"user_id": OWNER_ID},
     )
 
     # Then: the endpoint keeps public streaming untouched and owns persisted chat state.
@@ -129,19 +167,19 @@ def test_chat_state_wrong_user_cannot_load_or_mutate_state() -> None:
     create_response = client.post(
         "/chat/state/conversations",
         headers=_auth_headers(),
-        json={"id": str(conversation_id), "user_id": "owner"},
+        json={"id": str(conversation_id), "user_id": OWNER_ID},
     )
 
     # When: a different user attempts to read and mutate by conversation id.
     loaded = client.get(
         f"/chat/state/conversations/{conversation_id}",
         headers=_auth_headers(),
-        params={"user_id": "intruder"},
+        params={"user_id": INTRUDER_ID},
     )
     message = client.put(
         f"/chat/state/conversations/{conversation_id}/messages/assistant/{response_id}",
         headers=_auth_headers(),
-        json={"id": str(uuid4()), "user_id": "intruder", "content": "steal"},
+        json={"id": str(uuid4()), "user_id": INTRUDER_ID, "content": "steal"},
     )
 
     # Then: ownership failures are indistinguishable from missing state.
@@ -163,14 +201,14 @@ def test_chat_state_clear_and_stop_are_current_stream_guarded() -> None:
     client.post(
         "/chat/state/conversations",
         headers=_auth_headers(),
-        json={"id": str(conversation_id), "user_id": "owner"},
+        json={"id": str(conversation_id), "user_id": OWNER_ID},
     )
     for stream_id in (stale_stream_id, current_stream_id):
         client.put(
             f"/chat/state/conversations/{conversation_id}/active-stream",
             headers=_auth_headers(),
             json={
-                "user_id": "owner",
+                "user_id": OWNER_ID,
                 "active_stream_id": str(stream_id),
                 "active_response_id": str(current_response_id),
                 "active_status": "streaming",
@@ -181,22 +219,22 @@ def test_chat_state_clear_and_stop_are_current_stream_guarded() -> None:
     stale_clear = client.delete(
         f"/chat/state/conversations/{conversation_id}/active-stream/{stale_stream_id}",
         headers=_auth_headers(),
-        params={"user_id": "owner"},
+        params={"user_id": OWNER_ID},
     )
     stale_stop = client.post(
         f"/chat/state/conversations/{conversation_id}/active-stream/{stale_stream_id}/stop",
         headers=_auth_headers(),
-        json={"user_id": "owner"},
+        json={"user_id": OWNER_ID},
     )
     stopped = client.post(
         f"/chat/state/conversations/{conversation_id}/active-stream/{current_stream_id}/stop",
         headers=_auth_headers(),
-        json={"user_id": "owner"},
+        json={"user_id": OWNER_ID},
     )
     cleared = client.delete(
         f"/chat/state/conversations/{conversation_id}/active-stream/{current_stream_id}",
         headers=_auth_headers(),
-        params={"user_id": "owner"},
+        params={"user_id": OWNER_ID},
     )
 
     # Then: late stale operations do not erase or stop the newer active stream.
@@ -219,13 +257,13 @@ def test_chat_state_clear_stale_active_streams_uses_cutoff() -> None:
         client.post(
             "/chat/state/conversations",
             headers=_auth_headers(),
-            json={"id": str(conversation_id), "user_id": "owner"},
+            json={"id": str(conversation_id), "user_id": OWNER_ID},
         )
         client.put(
             f"/chat/state/conversations/{conversation_id}/active-stream",
             headers=_auth_headers(),
             json={
-                "user_id": "owner",
+                "user_id": OWNER_ID,
                 "active_stream_id": str(uuid4()),
                 "active_response_id": str(uuid4()),
                 "active_status": "streaming",

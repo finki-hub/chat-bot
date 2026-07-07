@@ -1,6 +1,11 @@
 import type { ModelId, MyMetadata, MyUIMessage } from '@/lib/api-types';
 import type { ChatStateJsonValue } from '@/lib/chat-state-client';
 
+import {
+  AuthenticationRequiredError,
+  getAuthenticatedChatUserId,
+} from '@/lib/authenticated-chat-user';
+
 /* eslint-disable camelcase -- Python chat state API uses snake_case fields. */
 
 export const runtime = 'nodejs';
@@ -24,12 +29,6 @@ type RouteContext = {
   readonly params: Promise<{ readonly id: string }>;
 };
 
-const clientUserId = (request: Request): null | string => {
-  const userId = request.headers.get('X-Client-User-Id');
-
-  return userId === null || userId.length === 0 ? null : userId;
-};
-
 const empty = (status: number): Response => new Response(null, { status });
 
 const isRecord = (
@@ -42,8 +41,21 @@ const metadataFrom = (
   responseId: null | string,
 ): MyMetadata => {
   const base = isRecord(metadata) ? metadata : {};
+  const feedback = base['feedback'];
+  const inferenceModel = base['inferenceModel'];
+  const persistedResponseId = base['responseId'];
+  const feedbackMetadata: Pick<MyMetadata, 'feedback'> =
+    feedback === 'dislike' || feedback === 'like' ? { feedback } : {};
 
-  return responseId === null ? base : { ...base, responseId };
+  return {
+    ...feedbackMetadata,
+    ...(typeof inferenceModel === 'string' && { inferenceModel }),
+    ...(responseId !== null && { responseId }),
+    ...(responseId === null &&
+      typeof persistedResponseId === 'string' && {
+        responseId: persistedResponseId,
+      }),
+  };
 };
 
 const messageFrom = (message: ChatStateMessage): MyUIMessage => ({
@@ -81,21 +93,16 @@ const parseMessage = (value: ChatStateJsonValue): ChatStateMessage | null => {
 };
 
 export const GET = async (
-  request: Request,
+  _request: Request,
   { params }: RouteContext,
 ): Promise<Response> => {
-  const userId = clientUserId(request);
-
-  if (userId === null) {
-    return empty(400);
-  }
-
   const { id: conversationId } = await params;
   const { ChatStateRequestError, createChatStateClient } =
     await import('@/lib/chat-state-client');
   const chatState = createChatStateClient();
 
   try {
+    const userId = await getAuthenticatedChatUserId();
     const { conversation, messages } = await chatState.loadConversation({
       conversationId,
       userId,
@@ -116,6 +123,9 @@ export const GET = async (
       messages: uiMessages,
     });
   } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return empty(401);
+    }
     if (error instanceof ChatStateRequestError) {
       return empty(error.status);
     }
