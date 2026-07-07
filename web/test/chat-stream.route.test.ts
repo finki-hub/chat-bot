@@ -93,6 +93,28 @@ describe('GET /api/chat/[id]/stream', () => {
     ).not.toHaveBeenCalled();
   });
 
+  it('allows two browser surfaces to reconnect to the same active stream', async () => {
+    // Given: two tabs for the same owner both ask for the current active stream.
+    routeMocks.resumableContext.resumeExistingStream
+      .mockResolvedValueOnce(sseBody('data: tab-one\n\n'))
+      .mockResolvedValueOnce(sseBody('data: tab-two\n\n'));
+
+    // When: both tab-level reconnect requests hit the route.
+    const get = await importGet();
+    const [first, second] = await Promise.all([
+      get(streamRequest(), routeContext()),
+      get(streamRequest(), routeContext()),
+    ]);
+
+    // Then: neither reconnect steals or clears active state from the other.
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(await first.text()).toContain('tab-one');
+    expect(await second.text()).toContain('tab-two');
+    expect(routeMocks.resumableContext.resumeExistingStream).toHaveBeenCalledTimes(2);
+    expect(routeMocks.stateClient.clearActiveStreamIfCurrent).not.toHaveBeenCalled();
+  });
+
   it('returns 204 when the owner has no active stream', async () => {
     // Given: the API state has no active stream for this owned conversation.
     routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
