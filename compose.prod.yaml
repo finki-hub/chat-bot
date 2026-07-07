@@ -64,6 +64,25 @@ services:
     volumes:
       - ./pgdata:/var/lib/postgresql/data
 
+  stream-store:
+    command: valkey-server --appendonly yes
+    healthcheck:
+      interval: 10s
+      retries: 5
+      test:
+        - CMD
+        - valkey-cli
+        - ping
+      timeout: 5s
+    image: valkey/valkey:8-alpine
+    networks:
+      - finki_stack
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    volumes:
+      - ./valkeydata:/data
+
   gpu-api:
     environment:
       HF_HOME: /huggingface_cache
@@ -101,9 +120,12 @@ services:
     depends_on:
       api:
         condition: service_started
+      stream-store:
+        condition: service_healthy
     environment:
       API_BASE_URL: ${WEB_API_BASE_URL:-http://api:8880}
       CHAT_API_KEY: ${API_KEY:?API_KEY is required}
+      RESUMABLE_STREAM_REDIS_URL: ${RESUMABLE_STREAM_REDIS_URL:-redis://stream-store:6379}
       TZ: ${TZ}
     image: ghcr.io/finki-hub/chat-bot-web:latest
     networks:
