@@ -131,7 +131,7 @@ export const startChatStreamServer = (opts: {
   head: UiChunk[];
   tail: UiChunk[];
 }): Promise<{ close: () => Promise<void>; url: string }> => {
-  const timers = new Set<NodeJS.Timeout>();
+  const timers = new Set<ReturnType<typeof setTimeout>>();
   const handle: Parameters<typeof createServer>[1] = (req, res) => {
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {

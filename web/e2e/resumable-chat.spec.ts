@@ -8,6 +8,8 @@ const FIRST_TOKEN = 'Прв дел од одговорот';
 const FINAL_TOKEN = ' и продолжение по освежување.';
 const STOP_TOKEN = 'Делумен одговор';
 const LONG_GAP_MS = 30_000;
+const CHAT_STREAM_URL_PATTERN = /\/api\/chat\/[^/]+\/stream$/u;
+const USER_ID_PATTERN = /[0-9a-f-]{36}/u;
 
 type PostRequestBody = {
   readonly id?: unknown;
@@ -16,7 +18,7 @@ type PostRequestBody = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const parseConversationId = (body: string | null): string => {
+const parseConversationId = (body: null | string): string => {
   if (body === null) {
     throw new Error('chat request did not include a body');
   }
@@ -55,6 +57,26 @@ const installModelRoute = async (page: Page): Promise<void> => {
   });
 };
 
+const clearBrowserConversationStorage = async (page: Page): Promise<void> => {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase('finkiHubChat');
+        request.addEventListener('error', () => {
+          reject(
+            new Error(request.error?.message ?? 'IndexedDB delete failed'),
+          );
+        });
+        request.addEventListener('blocked', () => {
+          reject(new Error('IndexedDB delete was blocked'));
+        });
+        request.addEventListener('success', () => {
+          resolve();
+        });
+      }),
+  );
+};
+
 test.describe('resumable chat lifecycle (mocked BFF)', () => {
   test('resumes after refresh and persists the completed assistant response', async ({
     page,
@@ -67,12 +89,17 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
       tail: [],
     });
     let conversationId: null | string = null;
+    const historyRequests: string[] = [];
     const resumeRequests: string[] = [];
     let allowResumeReplay = false;
+    let allowServerHistory = false;
 
     await page.route('**/api/chat', async (route) => {
       conversationId = parseConversationId(route.request().postData());
-      await route.fulfill({ headers: { location: firstLegServer.url }, status: 307 });
+      await route.fulfill({
+        headers: { location: firstLegServer.url },
+        status: 307,
+      });
     });
     await page.route('**/api/chat/*/stream', async (route) => {
       resumeRequests.push(route.request().headers()['x-client-user-id'] ?? '');
@@ -86,14 +113,56 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
         .join('');
       await route.fulfill({
         body: `${body}data: [DONE]\n\n`,
-        headers: { 'x-vercel-ai-ui-message-stream': 'v1' },
         contentType: 'text/event-stream',
+        headers: { 'x-vercel-ai-ui-message-stream': 'v1' },
+        status: 200,
+      });
+    });
+    await page.route('**/api/chat/*/history', async (route) => {
+      historyRequests.push(route.request().headers()['x-client-user-id'] ?? '');
+      if (!allowServerHistory) {
+        await route.fulfill({ status: 404 });
+        return;
+      }
+      await route.fulfill({
+        body: JSON.stringify({
+          conversation: {
+            id: conversationId,
+            model: INFERENCE_MODEL,
+            title: 'Резимирај ми го условот за запишување.',
+          },
+          messages: [
+            {
+              id: 'u-history',
+              metadata: {},
+              parts: [
+                {
+                  text: 'Резимирај ми го условот за запишување.',
+                  type: 'text',
+                },
+              ],
+              role: 'user',
+            },
+            {
+              id: 'a-history',
+              metadata: {
+                inferenceModel: INFERENCE_MODEL,
+                responseId: RESPONSE_ID,
+              },
+              parts: [{ text: `${FIRST_TOKEN}${FINAL_TOKEN}`, type: 'text' }],
+              role: 'assistant',
+            },
+          ],
+        }),
+        contentType: 'application/json',
         status: 200,
       });
     });
 
     await page.goto('/');
-    await page.getByTestId('composer-input').fill('Резимирај ми го условот за запишување.');
+    await page
+      .getByTestId('composer-input')
+      .fill('Резимирај ми го условот за запишување.');
     await page.getByTestId('composer-input').press('Enter');
     await expect(page.getByTestId('answer-text')).toContainText(FIRST_TOKEN);
 
@@ -101,34 +170,39 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     allowResumeReplay = true;
     const resumeResponse = page.waitForResponse(
       (response) =>
-        response.url().includes('/api/chat/') &&
-        response.url().endsWith('/stream') &&
+        CHAT_STREAM_URL_PATTERN.test(response.url()) &&
         response.status() === 200,
     );
     await page.reload();
 
     // Then: the UI consumes the resumed SSE, records user ownership on the request, and persists the final answer.
-    expect((await resumeResponse).status()).toBe(200);
+    const resumed = await resumeResponse;
+    expect(resumed.status()).toBe(200);
     await expect(page.getByTestId('answer-text').last()).toContainText(
       `${FIRST_TOKEN}${FINAL_TOKEN}`,
     );
     expect(resumeRequests.length).toBeGreaterThan(0);
-    expect(resumeRequests.at(-1)).toMatch(/[0-9a-f-]{36}/u);
+    expect(resumeRequests.at(-1)).toMatch(USER_ID_PATTERN);
     expect(conversationId).not.toBeNull();
 
     await page.unroute('**/api/chat/*/stream');
     await page.route('**/api/chat/*/stream', async (route) => {
       await route.fulfill({ status: 204 });
     });
+    allowServerHistory = true;
+    await clearBrowserConversationStorage(page);
     await page.reload();
     await expect(page.getByTestId('answer-text').last()).toContainText(
       `${FIRST_TOKEN}${FINAL_TOKEN}`,
     );
+    expect(historyRequests.at(-1)).toMatch(USER_ID_PATTERN);
 
     await firstLegServer.close();
   });
 
-  test('explicit stop prevents a later refresh from resuming the stream', async ({ page }) => {
+  test('explicit stop prevents a later refresh from resuming the stream', async ({
+    page,
+  }) => {
     // Given: an active stream has rendered a partial answer.
     await installModelRoute(page);
     const activeServer = await startChatStreamServer({
@@ -140,7 +214,10 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     const resumeStatuses: number[] = [];
 
     await page.route('**/api/chat', async (route) => {
-      await route.fulfill({ headers: { location: activeServer.url }, status: 307 });
+      await route.fulfill({
+        headers: { location: activeServer.url },
+        status: 307,
+      });
     });
     await page.route('**/api/chat/*/stop', async (route) => {
       stopRequests.push(route.request().headers()['x-client-user-id'] ?? '');
@@ -154,6 +231,9 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
       resumeStatuses.push(204);
       await route.fulfill({ status: 204 });
     });
+    await page.route('**/api/chat/*/history', async (route) => {
+      await route.fulfill({ status: 404 });
+    });
 
     await page.goto('/');
     await page.getByTestId('composer-input').fill('Започни долг одговор.');
@@ -163,16 +243,17 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     // When: the user explicitly stops and refreshes the same chat.
     await page.getByTestId('composer-submit').click();
     await expect.poll(() => stopRequests).toHaveLength(1);
-    const noActiveResponse = page.waitForResponse(
-      (response) => response.url().includes('/api/chat/') && response.url().endsWith('/stream'),
+    const noActiveResponse = page.waitForResponse((response) =>
+      CHAT_STREAM_URL_PATTERN.test(response.url()),
     );
     await page.reload();
 
     // Then: reconnect receives 204/no-active instead of replaying the stopped stream.
-    expect((await noActiveResponse).status()).toBe(204);
+    const noActive = await noActiveResponse;
+    expect(noActive.status()).toBe(204);
     expect(resumeStatuses.length).toBeGreaterThan(0);
     expect(resumeStatuses.every((status) => status === 204)).toBe(true);
-    expect(stopRequests[0]).toMatch(/[0-9a-f-]{36}/u);
+    expect(stopRequests[0]).toMatch(USER_ID_PATTERN);
 
     await activeServer.close();
   });
