@@ -1,15 +1,37 @@
-from typing import Final, Self
+from typing import Annotated, Final, Literal, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings
 
 _API_KEY_DEFAULT: Final[str] = "your_api_key_here"
 _MCP_API_KEY_DEFAULT: Final[str] = "SystemPass"
+McpTransport = Literal["streamable_http", "sse"]
+NonBlankString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 def _is_insecure_secret(value: str, default: str) -> bool:
     normalized = value.strip()
     return normalized in ("", default)
+
+
+class McpServerSettings(BaseModel):
+    """Connection and tool exposure settings for one MCP server."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: NonBlankString
+    url: NonBlankString
+    transport: McpTransport
+    api_key: str = ""
+    allowed_tools: tuple[str, ...] = ()
+    blocked_tools: tuple[str, ...] = ()
 
 
 class Settings(BaseSettings):
@@ -33,6 +55,7 @@ class Settings(BaseSettings):
     SOURCE_RERANKER_MIN_SCORE: float = 0.3
     MCP_HTTP_URLS: str = ""
     MCP_SSE_URLS: str = ""
+    MCP_SERVERS: list[McpServerSettings] = Field(default_factory=list)
     MCP_TOOLS_TTL: int = 3600
     MCP_API_KEY: str = _MCP_API_KEY_DEFAULT
 
@@ -68,6 +91,14 @@ class Settings(BaseSettings):
             raise ValueError(msg)
         return self
 
+    @model_validator(mode="after")
+    def validate_mcp_server_names(self) -> Self:
+        names = [server.name for server in self.MCP_SERVERS]
+        if len(names) != len(set(names)):
+            msg = "MCP_SERVERS entries must have unique names"
+            raise ValueError(msg)
+        return self
+
     @field_validator("MCP_HTTP_URLS", "MCP_SSE_URLS", mode="before")
     @classmethod
     def parse_comma_separated(cls, v: object) -> str:
@@ -78,8 +109,20 @@ class Settings(BaseSettings):
         insecure_names: list[str] = []
         if _is_insecure_secret(self.API_KEY, _API_KEY_DEFAULT):
             insecure_names.append("API_KEY")
-        if _is_insecure_secret(self.MCP_API_KEY, _MCP_API_KEY_DEFAULT):
+        if (self.MCP_HTTP_URLS or self.MCP_SSE_URLS) and _is_insecure_secret(
+            self.MCP_API_KEY,
+            _MCP_API_KEY_DEFAULT,
+        ):
             insecure_names.append("MCP_API_KEY")
+        insecure_names.extend(
+            f"MCP_SERVERS.{server.name}.api_key"
+            for server in self.MCP_SERVERS
+            if server.api_key
+            and _is_insecure_secret(
+                server.api_key,
+                _MCP_API_KEY_DEFAULT,
+            )
+        )
         return insecure_names
 
     def mcp_http_url_list(self) -> list[str]:
@@ -87,3 +130,28 @@ class Settings(BaseSettings):
 
     def mcp_sse_url_list(self) -> list[str]:
         return [u for u in self.MCP_SSE_URLS.split(",") if u]
+
+    def mcp_server_configs(self) -> list[McpServerSettings]:
+        if self.MCP_SERVERS:
+            return self.MCP_SERVERS
+
+        return [
+            *[
+                McpServerSettings(
+                    name=url,
+                    url=url,
+                    transport="streamable_http",
+                    api_key=self.MCP_API_KEY,
+                )
+                for url in self.mcp_http_url_list()
+            ],
+            *[
+                McpServerSettings(
+                    name=url,
+                    url=url,
+                    transport="sse",
+                    api_key=self.MCP_API_KEY,
+                )
+                for url in self.mcp_sse_url_list()
+            ],
+        ]

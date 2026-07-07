@@ -92,6 +92,19 @@ def chunk_key(c) -> tuple:
     return ("C", c.document_name, int(c.chunk_index))
 
 
+def final_context_hit(
+    ex: Example,
+    want: tuple,
+    topk: list[tuple],
+) -> tuple[bool, int | None]:
+    if ex.is_abstain:
+        return bool(topk), 1 if topk else None
+    for i, nat in enumerate(topk):
+        if nat == want:
+            return True, i + 1
+    return False, None
+
+
 @dataclass
 class Result:
     example: Example
@@ -353,11 +366,7 @@ async def evaluate_one(
             if 0 <= best_idx < len(cand_nat):
                 kept_nat = [cand_nat[best_idx]]
         topk = kept_nat[:top_k]
-        for i, nat in enumerate(topk):
-            if nat == want:
-                final_hit = True
-                rank = i + 1
-                break
+        final_hit, rank = final_context_hit(ex, want, topk)
 
     return Result(
         example=ex,

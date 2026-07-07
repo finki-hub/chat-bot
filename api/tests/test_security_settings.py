@@ -56,7 +56,16 @@ def test_production_compose_requires_auth_secrets():
 
     assert "API_KEY: ${API_KEY:?API_KEY is required}" in compose
     assert "CHAT_API_KEY: ${API_KEY:?API_KEY is required}" in compose
-    assert "MCP_API_KEY: ${MCP_API_KEY:?MCP_API_KEY is required}" in compose
+    assert "MCP_SERVERS: ${MCP_SERVERS:-[]}" in compose
+
+
+def test_compose_forwards_legacy_mcp_settings_for_compatibility():
+    for compose_file in ("compose.yaml", "compose.prod.yaml"):
+        compose = (REPO_ROOT / compose_file).read_text()
+
+        assert "MCP_API_KEY: ${MCP_API_KEY:-}" in compose
+        assert "MCP_HTTP_URLS: ${MCP_HTTP_URLS:-}" in compose
+        assert "MCP_SSE_URLS: ${MCP_SSE_URLS:-}" in compose
 
 
 @pytest.mark.anyio

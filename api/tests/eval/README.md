@@ -67,6 +67,36 @@ Useful flags: `--transform-mode raw|rewrite|hyde|rewrite_hyde`, `--no-transform`
 (legacy alias for `--transform-mode raw`), `--top-k`, `--initial-k`, `--ideal-limit`,
 `--concurrency`, `--json out.json` (per-example dump for diffing across runs).
 
+## Comparing two runs
+
+Use the committed golden set as a decision tool by saving a known-good baseline and
+comparing candidate retrieval settings against it:
+
+```bash
+docker exec -e PYTHONPATH=/app finki-hub-chat-bot-api-1 \
+    python /app/tests/eval/run_eval.py \
+    --golden /app/tests/eval/golden.jsonl \
+    --embedding-model BAAI/bge-m3 \
+    --json /app/tests/eval/baseline.json
+
+docker exec -e PYTHONPATH=/app finki-hub-chat-bot-api-1 \
+    python /app/tests/eval/run_eval.py \
+    --golden /app/tests/eval/golden.jsonl \
+    --embedding-model BAAI/bge-m3 \
+    --transform-mode raw \
+    --json /app/tests/eval/candidate.json
+
+docker exec -e PYTHONPATH=/app finki-hub-chat-bot-api-1 \
+    python -m tests.eval.compare_eval \
+    --baseline /app/tests/eval/baseline.json \
+    --current /app/tests/eval/candidate.json
+```
+
+The comparison report shows bucket deltas, fixed cases, newly broken cases, and
+unchanged misses. It exits non-zero when new regressions exceed `--max-regressions`
+(default `0`), so it can be used as a manual release gate before changing embeddings,
+thresholds, reranking, query transformation, chunking, or corpus ingestion.
+
 Run the same golden set across modes to isolate query-transformation impact:
 
 ```bash
