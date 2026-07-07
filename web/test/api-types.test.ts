@@ -83,7 +83,7 @@ describe('lib/api-types', () => {
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       response_id: '00000000-0000-4000-8000-000000000000',
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
-      user_id: 'anon-1',
+      user_id: 'api-user-1',
     } satisfies FeedbackSchema;
     const payload = {
       feedbackType: 'like',
@@ -93,7 +93,7 @@ describe('lib/api-types', () => {
     expect(wire.client).toBe('web');
     expect(wire.feedback_type).toBe('like');
     expect(wire.response_id).toBe('00000000-0000-4000-8000-000000000000');
-    expect(wire.user_id).toBe('anon-1');
+    expect(wire.user_id).toBe('api-user-1');
     expect(payload.feedbackType).toBe('like');
     expect(payload.responseId).toBe(wire.response_id);
   });
