@@ -17,4 +17,12 @@ export const API_BASE_URL = required('API_BASE_URL');
 
 export const CHAT_API_KEY = required('CHAT_API_KEY');
 
-export const env = { API_BASE_URL, CHAT_API_KEY } as const;
+export const RESUMABLE_STREAM_REDIS_URL = required(
+  'RESUMABLE_STREAM_REDIS_URL',
+);
+
+export const env = {
+  API_BASE_URL,
+  CHAT_API_KEY,
+  RESUMABLE_STREAM_REDIS_URL,
+} as const;

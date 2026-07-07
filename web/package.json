@@ -39,6 +39,8 @@
     "radix-ui": "^1.6.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "redis": "^6.1.0",
+    "resumable-stream": "^2.2.12",
     "server-only": "^0.0.1",
     "streamdown": "^2.5.0",
     "tailwind-merge": "^3.6.0",
