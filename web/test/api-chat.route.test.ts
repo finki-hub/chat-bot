@@ -1,32 +1,39 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const API_BASE_URL = 'https://api:8880';
-const JSON_CONTENT_TYPE = 'application/json';
-const MODEL = 'claude-sonnet-4-6';
+import {
+  API_BASE_URL,
+  chatRequest,
+  CONVERSATION_ID,
+  installRouteMocks,
+  JSON_CONTENT_TYPE,
+  MODEL,
+  resetRouteMocks,
+  RESPONSE_ID,
+  routeMocks,
+  sseBody,
+  USER_ID,
+} from './api-chat-route-support';
 
-vi.mock('@/lib/env', () => ({
-  API_BASE_URL: 'https://api:8880',
-  CHAT_API_KEY: 'test-key',
-  env: { API_BASE_URL: 'https://api:8880', CHAT_API_KEY: 'test-key' },
-}));
-
-const sseBody = (...frames: string[]): ReadableStream<Uint8Array> => {
-  const enc = new TextEncoder();
-
-  return new ReadableStream({
-    start(controller) {
-      for (const frame of frames) {
-        controller.enqueue(enc.encode(frame));
-      }
-
-      controller.close();
+const okStreamResponse = (...frames: string[]): Response =>
+  new Response(sseBody(...frames), {
+    headers: {
+      'content-type': 'text/event-stream',
+      'X-Response-Id': RESPONSE_ID,
     },
+    status: 200,
   });
+
+const importPost = async (): Promise<(req: Request) => Promise<Response>> => {
+  const { POST } = await import('@/app/api/chat/route');
+
+  return POST;
 };
 
 describe('POST /api/chat', () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
+    vi.resetModules();
+    resetRouteMocks();
+    installRouteMocks();
   });
 
   afterEach(() => {
@@ -34,99 +41,167 @@ describe('POST /api/chat', () => {
   });
 
   it('translates a python SSE answer into a UI message stream with metadata', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(
-        sseBody(
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        okStreamResponse(
           'event: sources\ndata: {"sources":[{"id":"c1","kind":"chunk","title":"Статут","section":"Член 12","snippet":"Правила."}]}\n\n',
           'event: token\ndata: {"text":"Здраво"}\n\n',
           'event: token\ndata: {"text":"!"}\n\n',
           'event: done\ndata: {}\n\n',
         ),
-        {
-          headers: {
-            'content-type': 'text/event-stream',
-            'X-Response-Id': 'resp-123',
-          },
-          status: 200,
-        },
-      ),
-    );
-
+      );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { POST } = await import('@/app/api/chat/route');
-    const req = new Request('http://localhost/api/chat', {
-      body: JSON.stringify({
-        messages: [
-          { id: 'u1', parts: [{ text: 'Здраво', type: 'text' }], role: 'user' },
-        ],
-        model: MODEL,
-      }),
-      headers: { 'content-type': JSON_CONTENT_TYPE },
-      method: 'POST',
-    });
-
-    const res = await POST(req);
-
-    expect(res.headers.get('content-type')).toContain('text/event-stream');
-
-    expect(fetchMock).toHaveBeenCalledOnce();
-
+    const res = await (await importPost())(chatRequest());
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-
-    expect(url).toBe(`${API_BASE_URL}/chat/`);
-
     const sentBody = JSON.parse(init.body as string) as {
       inference_model?: string;
       interface?: string;
       messages: Array<{ content: string; role: string }>;
     };
+    const out = await res.text();
 
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    expect(url).toBe(`${API_BASE_URL}/chat/`);
     expect(sentBody.messages).toStrictEqual([
       { content: 'Здраво', role: 'user' },
     ]);
     expect(sentBody.interface).toBe('web');
     expect(sentBody.inference_model).toBe(MODEL);
-
-    const out = await res.text();
-
     expect(out).toContain('Здраво');
-    expect(out).toContain('resp-123');
+    expect(out).toContain(RESPONSE_ID);
     expect(out).toContain('Статут');
     expect(out).toContain('sources');
     expect(out).toContain('text-delta');
   });
 
-  it('surfaces a pre-stream JSON error (503) as a data-error', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      Response.json(
-        {
-          detail: 'Failed to retrieve or re-rank context for the query.',
-        },
-        {
-          headers: { 'content-type': JSON_CONTENT_TYPE },
-          status: 503,
-        },
-      ),
-    );
-
+  it('creates a resumable stream with the Python response id and does not forward the browser signal', async () => {
+    const browserController = new AbortController();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        okStreamResponse(
+          'event: token\ndata: {"text":"Здраво"}\n\n',
+          'event: done\ndata: {}\n\n',
+        ),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { POST } = await import('@/app/api/chat/route');
-    const req = new Request('http://localhost/api/chat', {
-      body: JSON.stringify({
-        messages: [
-          { id: 'u1', parts: [{ text: 'hi', type: 'text' }], role: 'user' },
-        ],
-      }),
-      headers: { 'content-type': JSON_CONTENT_TYPE },
-      method: 'POST',
-    });
+    const res = await (
+      await importPost()
+    )(chatRequest({ signal: browserController.signal }));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
-    const res = await POST(req);
+    expect(init.signal).not.toBe(browserController.signal);
+    expect(routeMocks.stateClient.upsertConversation).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      model: MODEL,
+      userId: USER_ID,
+    });
+    expect(routeMocks.stateClient.upsertUserMessage).toHaveBeenCalledWith({
+      content: 'Здраво',
+      conversationId: CONVERSATION_ID,
+      messageId: 'u1',
+      userId: USER_ID,
+    });
+    expect(routeMocks.activeChatProducers.register).toHaveBeenCalledWith(
+      RESPONSE_ID,
+      expect.any(AbortController),
+    );
+    expect(routeMocks.stateClient.setActiveStream).toHaveBeenCalledWith({
+      activeResponseId: RESPONSE_ID,
+      activeStreamId: RESPONSE_ID,
+      conversationId: CONVERSATION_ID,
+      userId: USER_ID,
+    });
+    expect(
+      routeMocks.resumableContext.createNewResumableStream,
+    ).toHaveBeenCalledWith(RESPONSE_ID, expect.any(Function));
+    await expect(res.text()).resolves.toContain('Здраво');
+    expect(routeMocks.consumedResumableStreams.at(0)).toContain('Здраво');
+  });
+
+  it('persists the final assistant message and clears the active stream when streaming completes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          okStreamResponse(
+            'event: token\ndata: {"text":"Здраво"}\n\n',
+            'event: token\ndata: {"text":"!"}\n\n',
+            'event: done\ndata: {}\n\n',
+          ),
+        ),
+    );
+
+    const res = await (await importPost())(chatRequest({ text: 'Hi' }));
+    await res.text();
+
+    expect(
+      routeMocks.stateClient.upsertAssistantMessage,
+    ).toHaveBeenCalledExactlyOnceWith({
+      content: 'Здраво!',
+      conversationId: CONVERSATION_ID,
+      metadata: { inferenceModel: MODEL, responseId: RESPONSE_ID },
+      responseId: RESPONSE_ID,
+      userId: USER_ID,
+    });
+    expect(
+      routeMocks.stateClient.clearActiveStreamIfCurrent,
+    ).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      streamId: RESPONSE_ID,
+      userId: USER_ID,
+    });
+    expect(routeMocks.activeChatProducers.unregister).toHaveBeenCalledWith(
+      RESPONSE_ID,
+    );
+  });
+
+  it('surfaces a pre-stream JSON error (503) as a data-error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          Response.json(
+            { detail: 'Failed to retrieve or re-rank context for the query.' },
+            { headers: { 'content-type': JSON_CONTENT_TYPE }, status: 503 },
+          ),
+        ),
+    );
+
+    const post = await importPost();
+    const res = await post(chatRequest());
     const out = await res.text();
 
     expect(out).toContain('data-error');
     expect(out).toContain('Failed to retrieve or re-rank context');
+    expect(
+      routeMocks.stateClient.clearActiveStreamIfCurrent,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rejects missing response ids before active state or Redis stream creation', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(sseBody('event: token\ndata: {"text":"orphan"}\n\n'), {
+          headers: { 'content-type': 'text/event-stream' },
+          status: 200,
+        }),
+      ),
+    );
+
+    const post = await importPost();
+    const res = await post(chatRequest({ text: 'hi' }));
+    const out = await res.text();
+
+    expect(out).toContain('data-error');
+    expect(out).toContain('missing X-Response-Id');
+    expect(routeMocks.stateClient.setActiveStream).not.toHaveBeenCalled();
+    expect(routeMocks.activeChatProducers.register).not.toHaveBeenCalled();
   });
 });
