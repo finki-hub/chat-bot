@@ -259,9 +259,9 @@ async def get_retrieved_context_with_sources(
     """Multi-query (original + rewritten + HyDE) retrieval over FAQ and chunks, reranked by a cross-encoder with vector-order fallback."""
 
     logger.info(
-        "Retrieving context for query: '%s' with embedding model: %s",
-        query,
-        embedding_model,
+        "Retrieving context: query_len=%d embedding_model=%s",
+        len(query),
+        embedding_model.value,
     )
 
     def _stage(stage: str) -> None:
