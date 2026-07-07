@@ -99,6 +99,7 @@ export const useConversations = (
 
   const { messages, regenerate, sendMessage, setMessages, status, stop } =
     useChat<MyUIMessage>({
+      id: activeId ?? undefined,
       onData: (part) => {
         switch (part.type) {
           case 'data-error':
@@ -168,7 +169,6 @@ export const useConversations = (
           return next;
         });
       },
-      id: activeId ?? undefined,
       resume: activeId !== null,
       transport,
     });
@@ -185,6 +185,7 @@ export const useConversations = (
   useConversationHydration({
     activeId,
     convoIdRef,
+    model,
     setActiveError,
     setActiveId,
     setActiveStatus,
@@ -239,6 +240,7 @@ export const useConversations = (
         cid = convo.id;
         // eslint-disable-next-line require-atomic-updates -- fresh id, not a read-modify-write race
         convoIdRef.current = convo.id;
+        // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- conversation id must be committed before useChat resumes the new stream
         flushSync(() => {
           setActiveId(convo.id);
         });
@@ -259,12 +261,7 @@ export const useConversations = (
       }
       fireAndForget(sendMessageRef.current(userMessage));
     },
-    [
-      applyGeneratedTitle,
-      model,
-      refreshConversations,
-      setActiveId,
-    ],
+    [applyGeneratedTitle, model, refreshConversations, setActiveId],
   );
 
   const handleSelect = useCallback(
@@ -365,13 +362,13 @@ export const useConversations = (
     const stopCurrent = async (): Promise<void> => {
       const cid = convoIdRef.current;
       if (cid === null) {
-        stop();
+        await stop();
         return;
       }
       try {
         await stopChatStream(cid);
       } finally {
-        stop();
+        await stop();
       }
     };
 

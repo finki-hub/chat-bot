@@ -40,6 +40,9 @@ const RESPONSE_ID = 'resp-123';
 const FIRST_TITLE = 'Прв разговор';
 const SECOND_TITLE = 'Втор разговор';
 const REGENERATE_CONVERSATION_ID = 'c-regenerate';
+const CHAT_HISTORY_URL_PATTERN = /\/api\/chat\/[^/]+\/history$/u;
+const CHAT_STOP_URL_PATTERN = /\/api\/chat\/[^/]+\/stop$/u;
+const CHAT_STREAM_URL_PATTERN = /\/api\/chat\/[^/]+\/stream$/u;
 
 const rows: ConversationRow[] = [
   {
@@ -439,10 +442,13 @@ const respondTo = (
   if (url.endsWith('/api/chat')) {
     return Promise.resolve(sseChatResponse(chat));
   }
-  if (/\/api\/chat\/[^/]+\/stream$/u.test(url)) {
+  if (CHAT_STREAM_URL_PATTERN.test(url)) {
     return Promise.resolve(new Response(null, { status: 204 }));
   }
-  if (/\/api\/chat\/[^/]+\/stop$/u.test(url)) {
+  if (CHAT_HISTORY_URL_PATTERN.test(url)) {
+    return Promise.resolve(new Response(null, { status: 404 }));
+  }
+  if (CHAT_STOP_URL_PATTERN.test(url)) {
     return Promise.resolve(new Response(null, { status: 204 }));
   }
   if (url.endsWith('/api/chat/title')) {
@@ -817,5 +823,57 @@ describe('ChatPage persistence', () => {
     await expect(
       screen.findByText('Стар одговор'),
     ).resolves.toBeInTheDocument();
+  });
+
+  it('hydrates completed history from the server when IndexedDB was cleared', async () => {
+    useUiStore.setState({
+      activeConversationId: 'c-server',
+      model: CLAUDE,
+      sidebarOpen: true,
+    });
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = urlOf(input);
+      if (url.endsWith('/api/chat/c-server/history')) {
+        return Promise.resolve(
+          jsonOk({
+            conversation: {
+              id: 'c-server',
+              model: CLAUDE,
+              title: 'Серверски разговор',
+            },
+            messages: [
+              {
+                id: 'u-server',
+                metadata: {},
+                parts: [{ text: 'Серверско прашање', type: 'text' }],
+                role: 'user',
+              },
+              {
+                id: 'a-server',
+                metadata: { responseId: 'resp-server' },
+                parts: [{ text: 'Серверски одговор', type: 'text' }],
+                role: 'assistant',
+              },
+            ],
+          }),
+        );
+      }
+
+      return respondTo(url);
+    });
+
+    renderChatPage();
+
+    await expect(
+      screen.findByText('Серверски одговор'),
+    ).resolves.toBeInTheDocument();
+    await expect(db.conversations.get('c-server')).resolves.toMatchObject({
+      id: 'c-server',
+      model: CLAUDE,
+      title: 'Серверски разговор',
+    });
+    await expect(
+      db.messages.where('conversationId').equals('c-server').count(),
+    ).resolves.toBe(2);
   });
 });

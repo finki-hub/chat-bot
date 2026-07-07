@@ -21,9 +21,9 @@ vi.mock('@ai-sdk/react', () => ({
 
     return {
       messages: [] as MyUIMessage[],
-      regenerate: vi.fn(),
-      sendMessage: vi.fn(),
-      setMessages: vi.fn(),
+      regenerate: vi.fn<() => Promise<void>>(),
+      sendMessage: vi.fn<(message: MyUIMessage) => Promise<void>>(),
+      setMessages: vi.fn<(messages: MyUIMessage[]) => void>(),
       status: 'ready',
       stop: localStop,
     };
@@ -31,16 +31,18 @@ vi.mock('@ai-sdk/react', () => ({
 }));
 
 vi.mock('posthog-js', () => ({
-  posthog: { capture: vi.fn() },
+  posthog: { capture: vi.fn<(event: string) => void>() },
 }));
 
 vi.mock('@/lib/transport', () => ({
-  buildChatTransport: vi.fn(() => ({ kind: 'transport' })),
+  buildChatTransport: vi.fn<() => { readonly kind: 'transport' }>(() => ({
+    kind: 'transport',
+  })),
   stopChatStream: (id: string) => stopChatStream(id),
 }));
 
 vi.mock('@/lib/use-conversation-hydration', () => ({
-  useConversationHydration: vi.fn(),
+  useConversationHydration: vi.fn<() => void>(),
 }));
 
 vi.mock('@/lib/use-conversation-list', () => ({
@@ -58,9 +60,9 @@ vi.mock('@/lib/db', () => ({
   deleteConversation: vi.fn<() => Promise<void>>().mockResolvedValue(),
   loadMessages: vi.fn<() => Promise<[]>>().mockResolvedValue([]),
   renameConversation: vi.fn<() => Promise<void>>().mockResolvedValue(),
-  renameConversationIfTitle: vi.fn<() => Promise<boolean>>().mockResolvedValue(
-    true,
-  ),
+  renameConversationIfTitle: vi
+    .fn<() => Promise<boolean>>()
+    .mockResolvedValue(true),
   replaceConversationMessages: vi.fn<() => Promise<void>>().mockResolvedValue(),
   saveMessages: vi.fn<() => Promise<void>>().mockResolvedValue(),
   setMessageFeedback: vi.fn<() => Promise<void>>().mockResolvedValue(),
@@ -107,8 +109,9 @@ describe('useConversations resumable streaming', () => {
   it('calls the BFF stop endpoint before stopping the local chat on explicit stop', async () => {
     useUiStore.setState({ activeConversationId: 'conv-stop' });
     const calls: string[] = [];
-    stopChatStream.mockImplementation(async () => {
+    stopChatStream.mockImplementation(() => {
       calls.push('server');
+      return Promise.resolve();
     });
     localStop.mockImplementation(() => {
       calls.push('local');
@@ -122,6 +125,7 @@ describe('useConversations resumable streaming', () => {
     await waitFor(() => {
       expect(calls).toStrictEqual(['server', 'local']);
     });
+
     expect(stopChatStream).toHaveBeenCalledWith('conv-stop');
   });
 });

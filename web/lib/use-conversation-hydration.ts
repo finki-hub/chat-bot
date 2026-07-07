@@ -1,21 +1,31 @@
 'use client';
 
-import { type RefObject, useEffect } from 'react';
+import { type RefObject, type SetStateAction, useEffect } from 'react';
 
 import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
 
 import { fireAndForget } from '@/lib/async';
-import { getConversation, loadMessages, type MessageRow } from '@/lib/db';
+import {
+  createConversation,
+  getConversation,
+  loadMessages,
+  type MessageRow,
+  replaceConversationMessages,
+} from '@/lib/db';
+import { joinText } from '@/lib/message-parts';
+import { deriveTitle } from '@/lib/messages';
+import { getAnonUserId } from '@/lib/user';
 
 type UseConversationHydrationOptions = {
   readonly activeId: null | string;
   readonly convoIdRef: RefObject<null | string>;
+  readonly model: string;
   readonly setActiveError: (value: ErrorNotice | undefined) => void;
   readonly setActiveId: (id: null | string) => void;
   readonly setActiveStatus: (
     value: undefined | { label: string; tool?: string },
   ) => void;
-  readonly setMessages: (messages: MyUIMessage[]) => void;
+  readonly setMessages: (messages: SetStateAction<MyUIMessage[]>) => void;
 };
 
 const fromRow = (row: MessageRow): MyUIMessage => ({
@@ -25,9 +35,81 @@ const fromRow = (row: MessageRow): MyUIMessage => ({
   role: row.role,
 });
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isUiMessage = (value: unknown): value is MyUIMessage => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value['id'] === 'string' &&
+    isRecord(value['metadata']) &&
+    Array.isArray(value['parts']) &&
+    (value['role'] === 'assistant' || value['role'] === 'user')
+  );
+};
+
+type ServerHistory = {
+  readonly conversation: {
+    readonly id: string;
+    readonly model: null | string;
+    readonly title: null | string;
+  };
+  readonly messages: MyUIMessage[];
+};
+
+const isServerHistory = (value: unknown): value is ServerHistory => {
+  if (!isRecord(value) || !isRecord(value['conversation'])) {
+    return false;
+  }
+
+  const { conversation } = value;
+
+  return (
+    typeof conversation['id'] === 'string' &&
+    (conversation['model'] === null ||
+      typeof conversation['model'] === 'string') &&
+    (conversation['title'] === null ||
+      typeof conversation['title'] === 'string') &&
+    Array.isArray(value['messages']) &&
+    value['messages'].every(isUiMessage)
+  );
+};
+
+const loadServerHistory = async (id: string): Promise<null | ServerHistory> => {
+  const response = await fetch(`/api/chat/${encodeURIComponent(id)}/history`, {
+    headers: { 'X-Client-User-Id': getAnonUserId() },
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const body: unknown = await response.json();
+
+  return isServerHistory(body) ? body : null;
+};
+
+const titleFromHistory = (history: ServerHistory): string => {
+  if (history.conversation.title !== null) {
+    return history.conversation.title;
+  }
+
+  const firstUserMessage = history.messages.find(
+    (message) => message.role === 'user',
+  );
+  return deriveTitle(
+    firstUserMessage === undefined ? '' : joinText(firstUserMessage),
+  );
+};
+
 export const useConversationHydration = ({
   activeId,
   convoIdRef,
+  model,
   setActiveError,
   setActiveId,
   setActiveStatus,
@@ -41,6 +123,21 @@ export const useConversationHydration = ({
     const isCancelled = (): boolean => cancelled;
 
     const hydrate = async (id: string): Promise<void> => {
+      const serverHistory = await loadServerHistory(id);
+      if (serverHistory !== null) {
+        if (!isCancelled()) {
+          const serverMessages = serverHistory.messages;
+          setMessages(serverMessages);
+          await createConversation({
+            id,
+            model: serverHistory.conversation.model ?? model,
+            title: titleFromHistory(serverHistory),
+          });
+          await replaceConversationMessages(id, serverMessages);
+        }
+        return;
+      }
+
       const convo = await getConversation(id);
 
       if (!isCancelled() && convo === undefined) {
@@ -55,7 +152,10 @@ export const useConversationHydration = ({
 
       const loaded = await loadMessages(id);
       if (!isCancelled()) {
-        setMessages(loaded.map(fromRow));
+        const localMessages = loaded.map(fromRow);
+        setMessages((current) =>
+          current.length > localMessages.length ? current : localMessages,
+        );
       }
     };
 
@@ -71,6 +171,7 @@ export const useConversationHydration = ({
   }, [
     activeId,
     convoIdRef,
+    model,
     setActiveError,
     setActiveId,
     setActiveStatus,
