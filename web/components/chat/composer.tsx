@@ -143,7 +143,7 @@ export const Composer = ({
           <textarea
             aria-label={t('composer.message')}
             autoComplete="off"
-            className="ph-no-capture field-sizing-content max-h-48 min-h-[52px] w-full resize-none bg-transparent px-4 pt-3 pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
+            className="field-sizing-content max-h-48 min-h-[52px] w-full resize-none bg-transparent px-4 pt-3 pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
             data-testid="composer-input"
             disabled={disabled}
             name="message"

@@ -61,6 +61,8 @@ describe('POST /api/chat', () => {
           { id: 'u1', parts: [{ text: 'Здраво', type: 'text' }], role: 'user' },
         ],
         model: MODEL,
+        posthogSessionId: 'session-test-id',
+        userId: 'anon-test-id',
       }),
       headers: { 'content-type': JSON_CONTENT_TYPE },
       method: 'POST',
@@ -87,6 +89,11 @@ describe('POST /api/chat', () => {
     ]);
     expect(sentBody.interface).toBe('web');
     expect(sentBody.inference_model).toBe(MODEL);
+    expect(init.headers).toStrictEqual({
+      'content-type': JSON_CONTENT_TYPE,
+      'X-Distinct-Id': 'anon-test-id',
+      'X-PostHog-Session-Id': 'session-test-id',
+    });
 
     const out = await res.text();
 

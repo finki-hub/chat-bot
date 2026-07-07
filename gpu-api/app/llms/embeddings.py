@@ -38,10 +38,15 @@ async def generate_embeddings(
     Dispatch to the appropriate embedder, offloading blocking calls.
     Raises HTTPException(400) if the model isn't supported.
     """
+    input_chars = (
+        len(texts) if isinstance(texts, str) else sum(len(text) for text in texts)
+    )
+    input_count = 1 if isinstance(texts, str) else len(texts)
     logger.info(
-        "Generating embeddings for model %s with input: %s",
+        "Generating embeddings: model=%s input_chars=%d count=%d",
         model.value,
-        texts,
+        input_chars,
+        input_count,
     )
 
     embedder = embedders.get(model)

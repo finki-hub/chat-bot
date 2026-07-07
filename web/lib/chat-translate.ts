@@ -18,6 +18,7 @@ export type ChatClientBody = {
   messageId?: string;
   messages: MyUIMessage[];
   model?: string;
+  posthogSessionId?: string;
   queryTransformMode?: QueryTransformMode;
   queryTransformModel?: string;
   reasoning?: boolean;

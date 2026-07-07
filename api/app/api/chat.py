@@ -26,7 +26,7 @@ from app.llms.models import CHAT_MODELS
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
-from app.utils.posthog_client import capture, safe_distinct_id
+from app.utils.posthog_client import capture, safe_distinct_id, safe_session_id
 from app.utils.settings import Settings
 from app.utils.timing import (
     RequestTimings,
@@ -109,10 +109,10 @@ def _sniff_tokens(chunk: bytes | str | memoryview) -> dict[str, int] | None:
             return None
         text = bytes(chunk).decode(errors="ignore")
     for line in text.split("\n"):
-        if not line.startswith("data:"):
+        if not line.startswith(_SSE_DATA_PREFIX):
             continue
         try:
-            data = json.loads(line[len("data:") :].strip())
+            data = json.loads(line[len(_SSE_DATA_PREFIX) :].strip())
         except json.JSONDecodeError:
             return None
         tokens = data.get("tokens") if isinstance(data, dict) else None
@@ -140,6 +140,39 @@ def _query_transform_ms(timings: RequestTimings) -> float | None:
 
 
 _WEB_SEARCH_HINTS = ("web_search", "web-search", "websearch", "search_web", "tavily")
+_SSE_DATA_PREFIX = "data:"
+
+
+def _chat_request_log_fields(
+    payload: ChatSchema,
+) -> dict[str, bool | float | int | str]:
+    return {
+        "inference_model": payload.inference_model.value,
+        "embeddings_model": payload.embeddings_model.value,
+        "query_transform_model": payload.query_transform_model.value,
+        "query_transform_mode": payload.query_transform_mode.value,
+        "reasoning": payload.reasoning,
+        "interface": payload.interface,
+        "temperature": payload.temperature,
+        "max_tokens": payload.max_tokens,
+        "query_len": len(payload.query),
+        "history_turns": len(payload.history),
+    }
+
+
+def _chat_messages(payload: ChatSchema) -> list[dict[str, str]]:
+    return [{"role": turn.role, "content": turn.content} for turn in payload.messages]
+
+
+def _chat_request_posthog_fields(payload: ChatSchema) -> dict[str, object]:
+    return {
+        **_chat_request_log_fields(payload),
+        "messages": _chat_messages(payload),
+    }
+
+
+def _session_props(session_id: str | None) -> dict[str, object]:
+    return {} if session_id is None else {"$session_id": session_id}
 
 
 def _used_web_search(tool_names: set[str]) -> bool:
@@ -158,6 +191,8 @@ def _capture_chat_response(
     usage: dict[str, int] | None,
     outcome: str,
     observation: StreamObservation,
+    answer_text: str,
+    session_id: str | None,
 ) -> None:
     model = payload.inference_model
     generation_ms: float | None = None
@@ -168,6 +203,10 @@ def _capture_chat_response(
         "$ai_trace_id": str(response_id),
         "$ai_model": model.value,
         "$ai_provider": observation.provider or None,
+        "$ai_input": _chat_messages(payload),
+        "$ai_output_choices": [
+            {"role": "assistant", "content": answer_text},
+        ],
         "provider": observation.provider or None,
         "is_self_hosted": is_self_hosted(model),
         "$ai_latency": (
@@ -194,6 +233,7 @@ def _capture_chat_response(
         "answer_char_len": observation.answer_chars,
         "tool_call_count": observation.tool_call_count,
         "used_web_search": _used_web_search(observation.tool_names),
+        **_session_props(session_id),
     }
 
     if observation.finish_reason:
@@ -233,6 +273,50 @@ def _capture_chat_response(
     capture(distinct_id, "$ai_generation", props)
 
 
+def _sniff_token_text(chunk: bytes | str | memoryview) -> str | None:
+    if isinstance(chunk, str):
+        event_name = _sse_event_name(chunk)
+        text = chunk
+    else:
+        event_name = _sse_event_name(chunk)
+        text = bytes(chunk).decode(errors="ignore")
+    if event_name not in {"", "token"}:
+        return None
+
+    data_lines: list[str] = []
+    for line in text.split("\n"):
+        if not line.startswith(_SSE_DATA_PREFIX):
+            continue
+        data_lines.append(line[len(_SSE_DATA_PREFIX) :].removeprefix(" "))
+
+    if not data_lines:
+        return None
+    if event_name == "":
+        return "\n".join(data_lines).replace(r"\n", "\n")
+
+    for data_line in data_lines:
+        try:
+            data = json.loads(data_line.strip())
+        except json.JSONDecodeError:
+            return None
+        token_text = data.get("text") if isinstance(data, dict) else None
+        if isinstance(token_text, str):
+            return token_text
+    return None
+
+
+def _sse_frame_text(chunk: bytes | str | memoryview) -> str:
+    return chunk if isinstance(chunk, str) else bytes(chunk).decode(errors="ignore")
+
+
+def _complete_sse_frames(
+    buffer: str,
+    chunk: bytes | str | memoryview,
+) -> tuple[list[str], str]:
+    parts = (buffer + _sse_frame_text(chunk)).replace("\r\n", "\n").split("\n\n")
+    return parts[:-1], parts[-1]
+
+
 async def _instrument_stream(
     body: AsyncIterable[bytes | str | memoryview],
     *,
@@ -241,6 +325,7 @@ async def _instrument_stream(
     timings: RequestTimings,
     retrieval_hit: bool,
     distinct_id: str,
+    session_id: str | None,
     observation: StreamObservation,
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
@@ -256,13 +341,15 @@ async def _instrument_stream(
     outcome = "completed"
     usage: dict[str, int] | None = None
     meta_payload: dict[str, object] = {}
+    answer_parts: list[str] = []
+    answer_frame_buffer = ""
     marking = True
     answered = False
     try:
         async for chunk in body:
             timings.mark_ttft()
+            event_name = _sse_event_name(chunk)
             if marking or not answered:
-                event_name = _sse_event_name(chunk)
                 if marking:
                     if event_name == "thinking":
                         timings.mark_thinking()
@@ -271,9 +358,22 @@ async def _instrument_stream(
                         marking = False
                 if not answered and _is_answer_chunk(event_name, chunk):
                     answered = True
+            if event_name == "reset":
+                answer_parts.clear()
             sniffed = _sniff_tokens(chunk)
             if sniffed is not None:
                 usage = sniffed
+            frames, answer_frame_buffer = _complete_sse_frames(
+                answer_frame_buffer,
+                chunk,
+            )
+            for frame in frames:
+                if _sse_event_name(frame) == "reset":
+                    answer_parts.clear()
+                    continue
+                token_text = _sniff_token_text(frame)
+                if token_text is not None:
+                    answer_parts.append(token_text)
             yield chunk
     except GeneratorExit:
         outcome = "client_disconnect"
@@ -313,6 +413,8 @@ async def _instrument_stream(
             usage=effective_usage,
             outcome=outcome,
             observation=observation,
+            answer_text="".join(answer_parts),
+            session_id=session_id,
         )
         meta_payload = {"timing": record}
         if effective_usage is not None:
@@ -347,8 +449,8 @@ async def _chat_response_stream(
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Build context (streaming retrieval status), then yield the agent answer stream."""
     logger.info(
-        "Received chat request with payload: %s",
-        payload.model_dump(mode="json", exclude_defaults=True),
+        "Received chat request: %s",
+        json.dumps(_chat_request_log_fields(payload), sort_keys=True),
     )
 
     history_text = _history_for_retrieval(payload)
@@ -359,6 +461,7 @@ async def _chat_response_stream(
             request.headers.get("X-Distinct-Id"),
             str(response_id),
         )
+        session_id = safe_session_id(request.headers.get("X-PostHog-Session-Id"))
         record_distinct_id(distinct_id)
         observation = StreamObservation(
             distinct_id=distinct_id,
@@ -368,16 +471,9 @@ async def _chat_response_stream(
             distinct_id,
             "chat_request",
             {
-                "inference_model": payload.inference_model.value,
-                "embeddings_model": payload.embeddings_model.value,
-                "query_transform_model": payload.query_transform_model.value,
-                "query_transform_mode": payload.query_transform_mode.value,
-                "reasoning": payload.reasoning,
-                "interface": payload.interface,
-                "temperature": payload.temperature,
-                "max_tokens": payload.max_tokens,
-                "query_len": len(payload.query),
-                "history_turns": len(payload.history),
+                "response_id": str(response_id),
+                **_chat_request_posthog_fields(payload),
+                **_session_props(session_id),
             },
         )
         capture(
@@ -386,6 +482,7 @@ async def _chat_response_stream(
             {
                 "response_id": str(response_id),
                 "topic": classify_topic(payload.query),
+                **_session_props(session_id),
             },
         )
 
@@ -432,6 +529,7 @@ async def _chat_response_stream(
                         "candidate_count": timings.candidate_count,
                         "top_distance": timings.top_distance,
                         "query_len": len(payload.query),
+                        **_session_props(session_id),
                     },
                 )
                 context = (
@@ -453,6 +551,7 @@ async def _chat_response_stream(
                             "embeddings_model": payload.embeddings_model.value,
                             "retrieval_ids": timings.retrieval_ids,
                             "retrieval_count": len(timings.retrieval_ids),
+                            **_session_props(session_id),
                         },
                     )
 
@@ -477,6 +576,7 @@ async def _chat_response_stream(
             retrieval_hit=bool(retrieved.text),
             distinct_id=distinct_id,
             observation=observation,
+            session_id=session_id,
         )
 
         if retrieved.sources:
