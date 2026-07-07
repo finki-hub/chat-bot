@@ -3,6 +3,7 @@
 import { useChat } from '@ai-sdk/react';
 import { posthog } from 'posthog-js';
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 import type {
   ErrorNotice,
@@ -34,7 +35,7 @@ import {
 } from '@/lib/db';
 import { t } from '@/lib/i18n';
 import { deriveTitle } from '@/lib/messages';
-import { buildChatTransport } from '@/lib/transport';
+import { buildChatTransport, stopChatStream } from '@/lib/transport';
 import { useUiStore } from '@/lib/ui-store';
 import { useConversationHydration } from '@/lib/use-conversation-hydration';
 import { useConversationList } from '@/lib/use-conversation-list';
@@ -126,16 +127,21 @@ export const useConversations = (
       onFinish: ({ isAbort, isError, message }) => {
         setActiveStatus(undefined);
         const replacementId = regeneratingMessageIdRef.current;
-        regeneratingMessageIdRef.current = null;
-        setRegeneratingMessageId(null);
         // Consume on every finish so a prior turn's error can't leak onto the next.
         const error = activeErrorRef.current;
         activeErrorRef.current = undefined;
         // ai v7 also calls onFinish on abort/error; never finalize or persist a
         // partial answer (it would ghost into a switched-away conversation).
         if (isAbort || isError) {
+          regeneratingMessageIdRef.current = null;
+          setRegeneratingMessageId(null);
           return;
         }
+        if (replacementId !== null && message.id === replacementId) {
+          return;
+        }
+        regeneratingMessageIdRef.current = null;
+        setRegeneratingMessageId(null);
         const finalizedBase = finalizeMessage(
           message,
           startedAtRef.current,
@@ -162,8 +168,12 @@ export const useConversations = (
           return next;
         });
       },
+      id: activeId ?? undefined,
+      resume: activeId !== null,
       transport,
     });
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
 
   useStreamTiming({
     firstTokenAtRef,
@@ -208,13 +218,11 @@ export const useConversations = (
   );
 
   const handleNewChat = useCallback(() => {
-    // The Chat instance is shared across conversations; stop before leaving.
-    void stop();
     setActiveId(null);
     setMessages([]);
     setActiveError(undefined);
     convoIdRef.current = null;
-  }, [setActiveId, setMessages, stop]);
+  }, [setActiveId, setMessages]);
 
   const handleSubmit = useCallback(
     async (text: string) => {
@@ -231,7 +239,9 @@ export const useConversations = (
         cid = convo.id;
         // eslint-disable-next-line require-atomic-updates -- fresh id, not a read-modify-write race
         convoIdRef.current = convo.id;
-        setActiveId(convo.id);
+        flushSync(() => {
+          setActiveId(convo.id);
+        });
         await refreshConversations();
       }
       if (!cid) {
@@ -247,26 +257,21 @@ export const useConversations = (
       if (expectedTitle !== null) {
         fireAndForget(applyGeneratedTitle(cid, [userMessage], expectedTitle));
       }
-      fireAndForget(sendMessage(userMessage));
+      fireAndForget(sendMessageRef.current(userMessage));
     },
     [
       applyGeneratedTitle,
       model,
       refreshConversations,
-      sendMessage,
       setActiveId,
     ],
   );
 
   const handleSelect = useCallback(
     (id: string) => {
-      // Only tear down the stream when actually leaving the active conversation.
-      if (id !== activeId) {
-        void stop();
-      }
       setActiveId(id);
     },
-    [activeId, setActiveId, stop],
+    [setActiveId],
   );
 
   const handleDelete = useCallback(
@@ -357,7 +362,20 @@ export const useConversations = (
       inference_model: model,
     });
     /* eslint-enable camelcase -- end of PostHog snake_case properties. */
-    void stop();
+    const stopCurrent = async (): Promise<void> => {
+      const cid = convoIdRef.current;
+      if (cid === null) {
+        stop();
+        return;
+      }
+      try {
+        await stopChatStream(cid);
+      } finally {
+        stop();
+      }
+    };
+
+    fireAndForget(stopCurrent());
   }, [model, stop]);
 
   const visibleMessages = previewRegeneration(messages, regeneratingMessageId);

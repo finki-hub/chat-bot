@@ -439,6 +439,12 @@ const respondTo = (
   if (url.endsWith('/api/chat')) {
     return Promise.resolve(sseChatResponse(chat));
   }
+  if (/\/api\/chat\/[^/]+\/stream$/u.test(url)) {
+    return Promise.resolve(new Response(null, { status: 204 }));
+  }
+  if (/\/api\/chat\/[^/]+\/stop$/u.test(url)) {
+    return Promise.resolve(new Response(null, { status: 204 }));
+  }
   if (url.endsWith('/api/chat/title')) {
     return Promise.resolve(jsonOk({ title: 'Испитен рок' }));
   }
