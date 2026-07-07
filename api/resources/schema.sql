@@ -248,6 +248,33 @@ CREATE UNIQUE INDEX IF NOT EXISTS professor_group_window_idx ON professor_group 
     source, window_start, window_end, group_index
 );
 
+CREATE TABLE IF NOT EXISTS chat_conversation (
+    id UUID PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    active_stream_id UUID,
+    active_response_id UUID,
+    active_status TEXT CHECK (active_status IN ('pending', 'streaming', 'completed', 'stopped', 'error')),
+    model TEXT,
+    title TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS chat_conversation_user_updated_idx ON chat_conversation (user_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS chat_message (
+    id UUID PRIMARY KEY,
+    conversation_id UUID NOT NULL REFERENCES chat_conversation (id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+    response_id UUID,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS chat_message_conversation_created_idx ON chat_message (conversation_id, created_at);
+
 -- Response feedback (like/dislike). Consumer-agnostic, keyed by the response_id the
 -- chatbot mints per /chat and returns via the X-Response-Id header. question/answer/model
 -- columns are client-attested (the server stores what the consumer reports, unverified).
