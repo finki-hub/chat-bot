@@ -41,8 +41,8 @@ export type ModelId = string;
 
 export type QueryTransformMode = 'hyde' | 'raw' | 'rewrite' | 'rewrite_hyde';
 
-export const MAX_MESSAGES = 50;
-export const MAX_CHARS_PER_TURN = 8_000;
+export const MAX_MESSAGES = 10;
+export const MAX_CHARS_PER_TURN = 2_000;
 
 export type ChatErrorCode = 'agent_error' | 'interrupted' | 'no_answer';
 

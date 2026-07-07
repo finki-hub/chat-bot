@@ -77,12 +77,12 @@ describe('toChatRequestBody', () => {
     ]);
   });
 
-  it('truncates each turn to 8000 chars', () => {
+  it('truncates each turn to 2000 chars', () => {
     const out = toChatRequestBody({
-      messages: [msg('user', 'я'.repeat(9_000))],
+      messages: [msg('user', 'я'.repeat(3_000))],
     });
 
-    expect(out.messages[0]?.content).toHaveLength(8_000);
+    expect(out.messages[0]?.content).toHaveLength(2_000);
   });
 
   it('omits undefined sampling params', () => {
