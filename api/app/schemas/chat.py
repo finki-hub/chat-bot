@@ -19,7 +19,7 @@ class ConversationTurn(BaseModel):
         description="Who produced this turn: 'user' or 'assistant' (the bot).",
     )
     content: str = Field(
-        max_length=8000,
+        max_length=2000,
         examples=["Where is FINKI located?"],
         description="The text content of this conversation turn.",
     )
@@ -28,7 +28,7 @@ class ConversationTurn(BaseModel):
 class ChatSchema(BaseModel):
     messages: list[ConversationTurn] = Field(
         min_length=1,
-        max_length=50,
+        max_length=10,
         examples=[
             [
                 {"role": "user", "content": "Where is FINKI located?"},

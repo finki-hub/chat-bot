@@ -12,8 +12,8 @@ import {
 
 describe('lib/api-types', () => {
   it('exposes the wire caps', () => {
-    expect(MAX_MESSAGES).toBe(50);
-    expect(MAX_CHARS_PER_TURN).toBe(8_000);
+    expect(MAX_MESSAGES).toBe(10);
+    expect(MAX_CHARS_PER_TURN).toBe(2_000);
   });
 
   it('models a ChatRequestBody (oldest-first, last is user)', () => {
