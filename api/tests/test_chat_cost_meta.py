@@ -20,6 +20,18 @@ async def _body() -> AsyncIterator[str]:
     yield "event: done\ndata: {}\n\n"
 
 
+async def _gpu_body() -> AsyncIterator[str]:
+    yield "data: self-hosted answer\n\n"
+    yield "event: done\ndata: {}\n\n"
+
+
+async def _gpu_fragmented_body() -> AsyncIterator[str]:
+    yield "data: split"
+    yield " answer\n\ndata: coalesced"
+    yield " answer\n\nevent: status\ndata: {}\n\n"
+    yield "event: done\ndata: {}\n\n"
+
+
 def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
     captured: list[tuple[str, str, dict[str, object]]] = []
     monkeypatch.setattr(
@@ -63,6 +75,81 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
     ]
 
 
+def test_chat_stream_records_bare_data_token_frames(monkeypatch):
+    captured: list[tuple[str, str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        chat_api,
+        "capture",
+        lambda distinct_id, event, props: captured.append((distinct_id, event, props)),
+    )
+    payload = ChatSchema(
+        interface="web",
+        inference_model=Model.MISTRAL,
+        messages=[{"role": "user", "content": "Прашање?"}],
+    )
+    observation = StreamObservation(distinct_id="user-1", response_id="response-1")
+
+    async def collect() -> list[str]:
+        stream = chat_api._instrument_stream(  # noqa: SLF001
+            _gpu_body(),
+            payload=payload,
+            response_id=uuid4(),
+            timings=RequestTimings(),
+            retrieval_hit=True,
+            distinct_id="user-1",
+            session_id="session-1",
+            observation=observation,
+        )
+        return [str(chunk) async for chunk in stream]
+
+    chunks = anyio.run(collect)
+
+    assert chunks[0] == "data: self-hosted answer\n\n"
+    assert len(captured) == 1
+    assert captured[0][2]["$ai_output_choices"] == [
+        {"role": "assistant", "content": "self-hosted answer"},
+    ]
+
+
+def test_chat_stream_records_fragmented_bare_data_token_frames(monkeypatch):
+    captured: list[tuple[str, str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        chat_api,
+        "capture",
+        lambda distinct_id, event, props: captured.append((distinct_id, event, props)),
+    )
+    payload = ChatSchema(
+        interface="web",
+        inference_model=Model.MISTRAL,
+        messages=[{"role": "user", "content": "Прашање?"}],
+    )
+    observation = StreamObservation(distinct_id="user-1", response_id="response-1")
+
+    async def collect() -> list[str]:
+        stream = chat_api._instrument_stream(  # noqa: SLF001
+            _gpu_fragmented_body(),
+            payload=payload,
+            response_id=uuid4(),
+            timings=RequestTimings(),
+            retrieval_hit=True,
+            distinct_id="user-1",
+            session_id="session-1",
+            observation=observation,
+        )
+        return [str(chunk) async for chunk in stream]
+
+    chunks = anyio.run(collect)
+
+    assert chunks[:3] == [
+        "data: split",
+        " answer\n\ndata: coalesced",
+        " answer\n\nevent: status\ndata: {}\n\n",
+    ]
+    assert captured[0][2]["$ai_output_choices"] == [
+        {"role": "assistant", "content": "split answercoalesced answer"},
+    ]
+
+
 def test_chat_request_log_fields_do_not_include_message_content():
     payload = ChatSchema(
         interface="web",
@@ -76,6 +163,18 @@ def test_chat_request_log_fields_do_not_include_message_content():
 
     fields = chat_api._chat_request_log_fields(payload)  # noqa: SLF001
 
+    assert set(fields) == {
+        "embeddings_model",
+        "history_turns",
+        "inference_model",
+        "interface",
+        "max_tokens",
+        "query_len",
+        "query_transform_model",
+        "query_transform_mode",
+        "reasoning",
+        "temperature",
+    }
     assert "private" not in repr(fields)
     assert fields["query_len"] == len("private latest question")
     assert fields["history_turns"] == 2

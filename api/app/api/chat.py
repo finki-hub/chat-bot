@@ -272,30 +272,48 @@ def _capture_chat_response(
     capture(distinct_id, "$ai_generation", props)
 
 
-_TEXT_EVENT_PREFIX = "event: token"
-_TEXT_EVENT_PREFIX_BYTES = _TEXT_EVENT_PREFIX.encode()
-
-
 def _sniff_token_text(chunk: bytes | str | memoryview) -> str | None:
     if isinstance(chunk, str):
-        if not chunk.startswith(_TEXT_EVENT_PREFIX):
-            return None
+        event_name = _sse_event_name(chunk)
         text = chunk
     else:
-        if bytes(chunk[: len(_TEXT_EVENT_PREFIX_BYTES)]) != _TEXT_EVENT_PREFIX_BYTES:
-            return None
+        event_name = _sse_event_name(chunk)
         text = bytes(chunk).decode(errors="ignore")
+    if event_name not in {"", "token"}:
+        return None
+
+    data_lines: list[str] = []
     for line in text.split("\n"):
         if not line.startswith("data:"):
             continue
+        data_lines.append(line[len("data:") :].removeprefix(" "))
+
+    if not data_lines:
+        return None
+    if event_name == "":
+        return "\n".join(data_lines).replace(r"\n", "\n")
+
+    for data_line in data_lines:
         try:
-            data = json.loads(line[len("data:") :].strip())
+            data = json.loads(data_line.strip())
         except json.JSONDecodeError:
             return None
         token_text = data.get("text") if isinstance(data, dict) else None
         if isinstance(token_text, str):
             return token_text
     return None
+
+
+def _sse_frame_text(chunk: bytes | str | memoryview) -> str:
+    return chunk if isinstance(chunk, str) else bytes(chunk).decode(errors="ignore")
+
+
+def _complete_sse_frames(
+    buffer: str,
+    chunk: bytes | str | memoryview,
+) -> tuple[list[str], str]:
+    parts = (buffer + _sse_frame_text(chunk)).replace("\r\n", "\n").split("\n\n")
+    return parts[:-1], parts[-1]
 
 
 async def _instrument_stream(
@@ -323,6 +341,7 @@ async def _instrument_stream(
     usage: dict[str, int] | None = None
     meta_payload: dict[str, object] = {}
     answer_parts: list[str] = []
+    answer_frame_buffer = ""
     marking = True
     answered = False
     try:
@@ -343,9 +362,17 @@ async def _instrument_stream(
             sniffed = _sniff_tokens(chunk)
             if sniffed is not None:
                 usage = sniffed
-            token_text = _sniff_token_text(chunk)
-            if token_text is not None:
-                answer_parts.append(token_text)
+            frames, answer_frame_buffer = _complete_sse_frames(
+                answer_frame_buffer,
+                chunk,
+            )
+            for frame in frames:
+                if _sse_event_name(frame) == "reset":
+                    answer_parts.clear()
+                    continue
+                token_text = _sniff_token_text(frame)
+                if token_text is not None:
+                    answer_parts.append(token_text)
             yield chunk
     except GeneratorExit:
         outcome = "client_disconnect"
@@ -422,7 +449,7 @@ async def _chat_response_stream(
     """Build context (streaming retrieval status), then yield the agent answer stream."""
     logger.info(
         "Received chat request: %s",
-        _chat_request_log_fields(payload),
+        json.dumps(_chat_request_log_fields(payload), sort_keys=True),
     )
 
     history_text = _history_for_retrieval(payload)
