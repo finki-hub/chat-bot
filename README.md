@@ -22,7 +22,7 @@ It's highly recommended to do this in Docker.
 To run the chat bot:
 
 1. Download [`compose.prod.yaml`](./compose.prod.yaml)
-2. Download [`.env.sample`](.env.sample), rename it to `.env`, and set the required values. At minimum, set non-default `API_KEY` and `MCP_API_KEY` values before exposing the service.
+2. Download [`.env.sample`](.env.sample), rename it to `.env`, and set the required values. At minimum, set a non-default `API_KEY` before exposing the service. If you configure MCP servers, set non-default per-server `api_key` values in `MCP_SERVERS`.
 3. Run `docker compose -f compose.prod.yaml up -d`
 
 The API runs on port `8880`, the GPU API on `8888`, and the web front-end on `3000`. This also brings up a `pgAdmin` instance on port `5555` by default.
@@ -55,12 +55,11 @@ Standalone, it needs `web/.env.local` with `API_BASE_URL` (the chat API base, e.
 The root [`.env.sample`](.env.sample) contains the main variables used by the Docker stacks:
 
 - `API_KEY` - required for authenticated API writes, embedding fill jobs, diploma sync, and feedback submission; change the sample value before deployment
-- `MCP_API_KEY` - required by the production compose file; change the sample value before deployment
+- `MCP_SERVERS` - optional JSON array of named MCP tool servers. Each entry supports `name`, `url`, `transport` (`streamable_http` or `sse`), optional per-server `api_key`, and optional `allowed_tools` / `blocked_tools` lists for tool exposure control. Existing `MCP_HTTP_URLS`, `MCP_SSE_URLS`, and `MCP_API_KEY` values are still forwarded by the compose files for compatibility, but new deployments should use `MCP_SERVERS`
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT` - used by the database service and by the API `DATABASE_URL`
 - `DATABASE_POOL_MIN_SIZE`, `DATABASE_POOL_MAX_SIZE` - asyncpg pool sizing per API worker
 - `GPU_API_URL` - API-to-GPU-API base URL; Docker defaults to `http://gpu-api:8888`
 - `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OLLAMA_URL` and optional `*_BASE_URL` overrides - provider configuration for chat, embeddings, and query transformation models
-- `MCP_HTTP_URLS`, `MCP_SSE_URLS` - optional MCP tool server URLs for the API agent
 - `RERANKER_MIN_SCORE`, `SOURCE_RERANKER_MIN_SCORE`, `CHAT_HISTORY_MAX_TURNS` - retrieval and chat tuning
 - `PRELOAD_BGEM3` - whether the GPU API preloads the BGE-M3 embedder
 
