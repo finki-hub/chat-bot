@@ -44,8 +44,10 @@ def test_contextualize_query_logs_lengths_without_raw_text(caplog, monkeypatch):
     assert result == "rewritten private query"
     assert "original private query" not in caplog.text
     assert "rewritten private query" not in caplog.text
+    assert "private history" not in caplog.text
     assert "query_len=" in caplog.text
     assert "condensed_len=" in caplog.text
+    assert "history_char_len=" in caplog.text
 
 
 def test_retrieval_logs_lengths_without_raw_query(caplog, monkeypatch):
