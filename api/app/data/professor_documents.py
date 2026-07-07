@@ -5,10 +5,9 @@ import json
 from asyncpg import Record
 
 from app.data.connection import Database
+from app.data.embedding_sql import embedding_vector_sql
 from app.llms.models import (
-    HALFVEC_EMBEDDING_MODELS,
     MODEL_DISTANCE_THRESHOLDS,
-    MODEL_EMBEDDINGS_COLUMNS,
     Model,
 )
 from app.utils.database import embedding_to_pgvector
@@ -79,17 +78,9 @@ async def get_closest_professor_documents(
     limit: int = 50,
     threshold: float | None = None,
 ) -> list[Record]:
-    embedding_column = MODEL_EMBEDDINGS_COLUMNS[model]
+    embedding = embedding_vector_sql(model, embedded_query)
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
-
-    if model in HALFVEC_EMBEDDING_MODELS:
-        dims = len(embedded_query)
-        col_expr = f"{embedding_column}::halfvec({dims})"
-        param_expr = f"$1::halfvec({dims})"
-    else:
-        col_expr = embedding_column
-        param_expr = "$1"
 
     sql = f"""
     SELECT
@@ -97,10 +88,10 @@ async def get_closest_professor_documents(
         title,
         year,
         canonical_authors,
-        {col_expr} <=> {param_expr} AS distance
+        {embedding.distance_operand} <=> {embedding.query_operand} AS distance
     FROM professor_document
-    WHERE {embedding_column} IS NOT NULL
-        AND {col_expr} <=> {param_expr} < $3
+    WHERE {embedding.column_ref} IS NOT NULL
+        AND {embedding.distance_operand} <=> {embedding.query_operand} < $3
     ORDER BY distance
     LIMIT $2
     """  # noqa: S608

@@ -1,14 +1,35 @@
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from pathlib import Path
 
 import anyio
-from asyncpg import Pool, Record, create_pool
+from asyncpg import Pool, PostgresError, Record, create_pool
 from asyncpg.pool import PoolConnectionProxy
 
-from app.constants.db import SCHEMA_PATH
+from app.constants.db import MIGRATIONS_PATH
 
 logger = logging.getLogger(__name__)
+
+_MIGRATION_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version TEXT PRIMARY KEY,
+    applied_at TIMESTAMP NOT NULL DEFAULT NOW()
+)
+"""
+
+_APPLIED_MIGRATIONS_SQL = "SELECT version FROM schema_migrations ORDER BY version ASC"
+
+_RECORD_MIGRATION_SQL = "INSERT INTO schema_migrations (version) VALUES ($1)"
+
+
+@dataclass(frozen=True, slots=True)
+class Migration:
+    """A versioned SQL migration file ready to apply."""
+
+    version: str
+    sql: str
 
 
 class Database:
@@ -121,27 +142,62 @@ class Database:
 
     async def run_migrations(self) -> None:
         """
-        Read the SQL in SCHEMA_PATH and execute it as one big transaction.
+        Apply versioned SQL migrations that have not been recorded yet.
         """
         pool = await self._ensure_pool()
 
-        p = anyio.Path(SCHEMA_PATH)
-        if not await p.is_file():
-            msg = f"Schema file not found at {SCHEMA_PATH}"
-            logger.error(msg)
-            raise FileNotFoundError(msg)
-
-        sql = (await p.read_text()).strip()
-        if not sql:
-            logger.warning("Schema file is empty; skipping migrations")
+        migrations = await _load_migrations(MIGRATIONS_PATH)
+        if not migrations:
+            logger.warning("No database migrations found in %s", MIGRATIONS_PATH)
             return
 
-        logger.info("Running migrations from %s", SCHEMA_PATH)
+        logger.info("Running database migrations from %s", MIGRATIONS_PATH)
         async with pool.acquire() as conn:
-            try:
-                await conn.execute(sql)
-            except Exception:
-                logger.exception("Error executing migrations")
-                raise
-            else:
-                logger.info("Migrations applied successfully")
+            await conn.execute(_MIGRATION_TABLE_SQL)
+            applied = {
+                row["version"] for row in await conn.fetch(_APPLIED_MIGRATIONS_SQL)
+            }
+            pending = [m for m in migrations if m.version not in applied]
+
+            if not pending:
+                logger.info("Database schema is up to date")
+                return
+
+            for migration in pending:
+                logger.info("Applying database migration %s", migration.version)
+                try:
+                    async with conn.transaction():
+                        await conn.execute(migration.sql)
+                        await conn.execute(_RECORD_MIGRATION_SQL, migration.version)
+                except PostgresError:
+                    logger.exception(
+                        "Failed to apply database migration %s",
+                        migration.version,
+                    )
+                    raise
+
+            logger.info("Applied %d database migration(s)", len(pending))
+
+
+async def _load_migrations(path: Path) -> list[Migration]:
+    """Load non-empty .sql files from the migration directory in filename order."""
+    migration_dir = anyio.Path(path)
+    if not await migration_dir.is_dir():
+        msg = f"Migration directory not found at {path}"
+        logger.error(msg)
+        raise FileNotFoundError(msg)
+
+    migrations: list[Migration] = []
+    for migration_path in _sql_migration_paths(path):
+        sql = (await anyio.Path(migration_path).read_text()).strip()
+        if not sql:
+            logger.warning("Skipping empty migration file %s", migration_path)
+            continue
+        migrations.append(Migration(version=str(migration_path.name), sql=sql))
+
+    return migrations
+
+
+def _sql_migration_paths(path: Path) -> list[Path]:
+    """Return SQL migration paths in deterministic filename order."""
+    return sorted(path.glob("*.sql"))
