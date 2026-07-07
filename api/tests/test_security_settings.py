@@ -56,7 +56,7 @@ def test_production_compose_requires_auth_secrets():
 
     assert "API_KEY: ${API_KEY:?API_KEY is required}" in compose
     assert "CHAT_API_KEY: ${API_KEY:?API_KEY is required}" in compose
-    assert "MCP_API_KEY: ${MCP_API_KEY:?MCP_API_KEY is required}" in compose
+    assert "MCP_SERVERS: ${MCP_SERVERS:-[]}" in compose
 
 
 @pytest.mark.anyio
