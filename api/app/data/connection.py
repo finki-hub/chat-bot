@@ -188,13 +188,7 @@ async def _load_migrations(path: Path) -> list[Migration]:
         raise FileNotFoundError(msg)
 
     migrations: list[Migration] = []
-    for migration_path in sorted(
-        [
-            migration_path
-            async for migration_path in migration_dir.iterdir()
-            if migration_path.suffix == ".sql"
-        ],
-    ):
+    for migration_path in _sql_migration_paths(path):
         sql = (await anyio.Path(migration_path).read_text()).strip()
         if not sql:
             logger.warning("Skipping empty migration file %s", migration_path)
@@ -202,3 +196,8 @@ async def _load_migrations(path: Path) -> list[Migration]:
         migrations.append(Migration(version=str(migration_path.name), sql=sql))
 
     return migrations
+
+
+def _sql_migration_paths(path: Path) -> list[Path]:
+    """Return SQL migration paths in deterministic filename order."""
+    return sorted(path.glob("*.sql"))

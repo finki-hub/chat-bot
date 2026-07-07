@@ -27,12 +27,14 @@ class FakeConnection:
         self.executed: list[tuple[str, tuple[str, ...]]] = []
 
     async def execute(self, sql: str, *args: str) -> str:
+        await anyio.lowlevel.checkpoint()
         self.executed.append((sql, args))
         if sql.startswith("INSERT INTO schema_migrations"):
             self.applied.add(args[0])
         return "EXECUTE"
 
     async def fetch(self, sql: str) -> list[dict[str, str]]:
+        await anyio.lowlevel.checkpoint()
         assert "FROM schema_migrations" in sql
         return [{"version": version} for version in sorted(self.applied)]
 
