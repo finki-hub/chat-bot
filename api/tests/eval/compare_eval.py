@@ -65,21 +65,14 @@ class BucketSummary:
 
 
 @dataclass(frozen=True, slots=True)
-class BucketDelta:
-    baseline: BucketSummary
-    current: BucketSummary
-
-
-@dataclass(frozen=True, slots=True)
 class CaseDelta:
-    id: str
     baseline: EvalCase
     current: EvalCase
 
 
 @dataclass(frozen=True, slots=True)
 class EvalComparison:
-    bucket_deltas: dict[str, BucketDelta]
+    bucket_deltas: dict[str, tuple[BucketSummary, BucketSummary]]
     fixed: list[CaseDelta]
     new_regressions: list[CaseDelta]
     unchanged_misses: list[CaseDelta]
@@ -118,22 +111,22 @@ def _flag(value: JsonValue, path: str) -> bool:
 
 
 def _rank(value: JsonValue, path: str) -> int | None:
-    match value:
-        case None:
-            return None
-        case int() as parsed:
-            return parsed
-        case _:
-            raise EvalJsonError(f"{path}: expected integer or null")
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    raise EvalJsonError(f"{path}: expected integer or null")
 
 
 def _anchor_type(value: JsonValue, path: str) -> AnchorType:
     raw = _text(_mapping(value, path).get("type"), f"{path}.type")
-    match raw:
-        case "Q" | "C" | "none" as parsed:
-            return parsed
-        case _:
-            raise EvalJsonError(f"{path}.type: expected Q, C, or none")
+    if raw == "Q":
+        return "Q"
+    if raw == "C":
+        return "C"
+    if raw == "none":
+        return "none"
+    raise EvalJsonError(f"{path}.type: expected Q, C, or none")
 
 
 def _case(value: JsonValue, path: str) -> EvalCase:
@@ -165,21 +158,19 @@ def load_eval(path: Path) -> dict[str, EvalCase]:
 
 
 def _in_bucket(case: EvalCase, bucket: str) -> bool:
-    match bucket:
-        case "overall":
-            return not case.is_abstain
-        case "source=faq":
-            return case.anchor_type == "Q"
-        case "source=chunk":
-            return case.anchor_type == "C"
-        case "difficulty=easy":
-            return (not case.is_abstain) and case.difficulty == "easy"
-        case "difficulty=hard":
-            return (not case.is_abstain) and case.difficulty == "hard"
-        case "abstain":
-            return case.is_abstain
-        case _:
-            raise EvalJsonError(f"unknown bucket: {bucket}")
+    if bucket == "overall":
+        return not case.is_abstain
+    if bucket == "source=faq":
+        return case.anchor_type == "Q"
+    if bucket == "source=chunk":
+        return case.anchor_type == "C"
+    if bucket == "difficulty=easy":
+        return (not case.is_abstain) and case.difficulty == "easy"
+    if bucket == "difficulty=hard":
+        return (not case.is_abstain) and case.difficulty == "hard"
+    if bucket == "abstain":
+        return case.is_abstain
+    raise EvalJsonError(f"unknown bucket: {bucket}")
 
 
 def _summary(cases: list[EvalCase], bucket: str) -> BucketSummary:
@@ -212,25 +203,25 @@ def compare_cases(
     ]
     baseline_cases = [baseline_case for baseline_case, _current_case in pairs]
     current_cases = [current_case for _baseline_case, current_case in pairs]
-    bucket_deltas: dict[str, BucketDelta] = {
-        bucket: BucketDelta(
+    bucket_deltas: dict[str, tuple[BucketSummary, BucketSummary]] = {
+        bucket: (
             _summary(baseline_cases, bucket),
             _summary(current_cases, bucket),
         )
         for bucket in BUCKETS
     }
     fixed = [
-        CaseDelta(base.id, base, cur)
+        CaseDelta(base, cur)
         for base, cur in pairs
         if not base.succeeded and cur.succeeded
     ]
     regressions = [
-        CaseDelta(base.id, base, cur)
+        CaseDelta(base, cur)
         for base, cur in pairs
         if base.succeeded and not cur.succeeded
     ]
     unchanged = [
-        CaseDelta(base.id, base, cur)
+        CaseDelta(base, cur)
         for base, cur in pairs
         if not base.succeeded and not cur.succeeded
     ]
@@ -250,24 +241,24 @@ def _format_rate(summary: BucketSummary) -> str:
     )
 
 
-def _case_line(case: CaseDelta) -> str:
-    return (
-        f"  {case.id} ({case.current.difficulty}/{case.current.category}) "
-        f"{case.baseline.failure_reason} -> {case.current.failure_reason}"
-    )
-
-
 def _append_cases(lines: list[str], title: str, cases: list[CaseDelta]) -> None:
     lines.append(title)
-    lines.extend([_case_line(case) for case in cases] if cases else ["  none"])
+    lines.extend(
+        [
+            f"  {case.current.id} ({case.current.difficulty}/{case.current.category}) {case.baseline.failure_reason} -> {case.current.failure_reason}"
+            for case in cases
+        ]
+        if cases
+        else ["  none"],
+    )
 
 
 def render_report(comparison: EvalComparison, *, max_regressions: int = 0) -> str:
     lines = ["Retrieval eval comparison", "", "Buckets"]
-    for bucket, delta in comparison.bucket_deltas.items():
+    for bucket, (baseline, current) in comparison.bucket_deltas.items():
         lines.append(
-            f"  {bucket}: {_format_rate(delta.baseline)} -> {_format_rate(delta.current)} "
-            f"({100 * (delta.current.final_rate - delta.baseline.final_rate):+.1f} pp, MRR {delta.baseline.mrr:.3f} -> {delta.current.mrr:.3f})",
+            f"  {bucket}: {_format_rate(baseline)} -> {_format_rate(current)} "
+            f"({100 * (current.final_rate - baseline.final_rate):+.1f} pp, MRR {baseline.mrr:.3f} -> {current.mrr:.3f})",
         )
     lines.append("")
     _append_cases(lines, "Fixed cases", comparison.fixed)
@@ -287,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Compare retrieval eval JSON outputs")
     parser.add_argument("--baseline", required=True, type=Path)
     parser.add_argument("--current", required=True, type=Path)
-    parser.add_argument("--max-regressions", default=0, type=int)
+    parser.add_argument("--max-regressions", default=0, type=_non_negative_int)
     ns = parser.parse_args(argv)
     try:
         comparison = compare_cases(load_eval(ns.baseline), load_eval(ns.current))
@@ -296,6 +287,16 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     print(render_report(comparison, max_regressions=ns.max_regressions))
     return 1 if len(comparison.new_regressions) > ns.max_regressions else 0
+
+
+def _non_negative_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be greater than or equal to 0")
+    return parsed
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import json
 
 from .compare_eval import compare_runs, main, render_report
+from .run_eval import Example, final_context_hit
 
 
 def _result(
@@ -79,14 +80,14 @@ def test_compare_runs_identifies_decision_cases_by_bucket():
 
     comparison = compare_runs(baseline, current)
 
-    assert [case.id for case in comparison.fixed] == ["chunk-fixed"]
-    assert [case.id for case in comparison.new_regressions] == [
+    assert [case.current.id for case in comparison.fixed] == ["chunk-fixed"]
+    assert [case.current.id for case in comparison.new_regressions] == [
         "abstain-clean",
         "chunk-regressed",
     ]
-    assert comparison.bucket_deltas["source=chunk"].baseline.final_rate == 0.5
-    assert comparison.bucket_deltas["source=chunk"].current.final_rate == 0.5
-    assert comparison.bucket_deltas["abstain"].current.final_rate == 1.0
+    assert comparison.bucket_deltas["source=chunk"][0].final_rate == 0.5
+    assert comparison.bucket_deltas["source=chunk"][1].final_rate == 0.5
+    assert comparison.bucket_deltas["abstain"][1].final_rate == 1.0
 
 
 def test_render_report_names_fixed_and_regressed_examples():
@@ -150,6 +151,34 @@ def test_cli_rejects_current_run_that_omits_baseline_case(tmp_path, capsys):
 
     assert exit_code == 2
     assert "baseline-only=omitted" in captured.err
+
+
+def test_cli_rejects_negative_regression_budget(capsys):
+    try:
+        main(["--baseline", "a.json", "--current", "b.json", "--max-regressions", "-1"])
+    except SystemExit as exc:
+        exit_code = exc.code
+    else:
+        exit_code = None
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "greater than or equal to 0" in captured.err
+
+
+def test_final_context_hit_marks_abstain_topk_as_leak():
+    example = Example(
+        id="abstain-001",
+        query="Надвор од опсег",
+        anchor={"type": "none"},
+        difficulty="abstain",
+    )
+
+    final, rank = final_context_hit(example, ("none",), [("Q", "some-source")])
+
+    assert final is True
+    assert rank == 1
 
 
 def test_cli_reports_missing_eval_file_without_traceback(tmp_path, capsys):
