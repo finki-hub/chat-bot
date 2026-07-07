@@ -159,6 +159,17 @@ def _chat_request_log_fields(
     }
 
 
+def _chat_messages(payload: ChatSchema) -> list[dict[str, str]]:
+    return [{"role": turn.role, "content": turn.content} for turn in payload.messages]
+
+
+def _chat_request_posthog_fields(payload: ChatSchema) -> dict[str, object]:
+    return {
+        **_chat_request_log_fields(payload),
+        "messages": _chat_messages(payload),
+    }
+
+
 def _used_web_search(tool_names: set[str]) -> bool:
     return any(
         hint in name.lower() for name in tool_names for hint in _WEB_SEARCH_HINTS
@@ -175,6 +186,7 @@ def _capture_chat_response(
     usage: dict[str, int] | None,
     outcome: str,
     observation: StreamObservation,
+    answer_text: str,
 ) -> None:
     model = payload.inference_model
     generation_ms: float | None = None
@@ -185,6 +197,10 @@ def _capture_chat_response(
         "$ai_trace_id": str(response_id),
         "$ai_model": model.value,
         "$ai_provider": observation.provider or None,
+        "$ai_input": _chat_messages(payload),
+        "$ai_output_choices": [
+            {"role": "assistant", "content": answer_text},
+        ],
         "provider": observation.provider or None,
         "is_self_hosted": is_self_hosted(model),
         "$ai_latency": (
@@ -250,6 +266,32 @@ def _capture_chat_response(
     capture(distinct_id, "$ai_generation", props)
 
 
+_TEXT_EVENT_PREFIX = "event: token"
+_TEXT_EVENT_PREFIX_BYTES = _TEXT_EVENT_PREFIX.encode()
+
+
+def _sniff_token_text(chunk: bytes | str | memoryview) -> str | None:
+    if isinstance(chunk, str):
+        if not chunk.startswith(_TEXT_EVENT_PREFIX):
+            return None
+        text = chunk
+    else:
+        if bytes(chunk[: len(_TEXT_EVENT_PREFIX_BYTES)]) != _TEXT_EVENT_PREFIX_BYTES:
+            return None
+        text = bytes(chunk).decode(errors="ignore")
+    for line in text.split("\n"):
+        if not line.startswith("data:"):
+            continue
+        try:
+            data = json.loads(line[len("data:") :].strip())
+        except json.JSONDecodeError:
+            return None
+        token_text = data.get("text") if isinstance(data, dict) else None
+        if isinstance(token_text, str):
+            return token_text
+    return None
+
+
 async def _instrument_stream(
     body: AsyncIterable[bytes | str | memoryview],
     *,
@@ -273,13 +315,14 @@ async def _instrument_stream(
     outcome = "completed"
     usage: dict[str, int] | None = None
     meta_payload: dict[str, object] = {}
+    answer_parts: list[str] = []
     marking = True
     answered = False
     try:
         async for chunk in body:
             timings.mark_ttft()
+            event_name = _sse_event_name(chunk)
             if marking or not answered:
-                event_name = _sse_event_name(chunk)
                 if marking:
                     if event_name == "thinking":
                         timings.mark_thinking()
@@ -288,9 +331,14 @@ async def _instrument_stream(
                         marking = False
                 if not answered and _is_answer_chunk(event_name, chunk):
                     answered = True
+            if event_name == "reset":
+                answer_parts.clear()
             sniffed = _sniff_tokens(chunk)
             if sniffed is not None:
                 usage = sniffed
+            token_text = _sniff_token_text(chunk)
+            if token_text is not None:
+                answer_parts.append(token_text)
             yield chunk
     except GeneratorExit:
         outcome = "client_disconnect"
@@ -330,6 +378,7 @@ async def _instrument_stream(
             usage=effective_usage,
             outcome=outcome,
             observation=observation,
+            answer_text="".join(answer_parts),
         )
         meta_payload = {"timing": record}
         if effective_usage is not None:
@@ -384,18 +433,7 @@ async def _chat_response_stream(
         capture(
             distinct_id,
             "chat_request",
-            {
-                "inference_model": payload.inference_model.value,
-                "embeddings_model": payload.embeddings_model.value,
-                "query_transform_model": payload.query_transform_model.value,
-                "query_transform_mode": payload.query_transform_mode.value,
-                "reasoning": payload.reasoning,
-                "interface": payload.interface,
-                "temperature": payload.temperature,
-                "max_tokens": payload.max_tokens,
-                "query_len": len(payload.query),
-                "history_turns": len(payload.history),
-            },
+            {"response_id": str(response_id), **_chat_request_posthog_fields(payload)},
         )
         capture(
             distinct_id,

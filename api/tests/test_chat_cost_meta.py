@@ -14,6 +14,8 @@ from app.utils.timing import RequestTimings
 
 async def _body() -> AsyncIterator[str]:
     yield 'event: meta\ndata: {"tokens":{"input":1000,"output":1000,"total":2000}}\n\n'
+    yield 'event: token\ndata: {"text":"discarded preamble"}\n\n'
+    yield "event: reset\ndata: {}\n\n"
     yield 'event: token\ndata: {"text":"answer"}\n\n'
     yield "event: done\ndata: {}\n\n"
 
@@ -51,7 +53,12 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
     assert meta["cost"]["output_usd"] == pytest.approx(0.005)
     assert meta["cost"]["total_usd"] == pytest.approx(0.006)
     assert len(captured) == 1
-    assert captured[0][2]["$ai_total_cost_usd"] == pytest.approx(0.006)
+    props = captured[0][2]
+    assert props["$ai_total_cost_usd"] == pytest.approx(0.006)
+    assert props["$ai_input"] == [{"role": "user", "content": "Прашање?"}]
+    assert props["$ai_output_choices"] == [
+        {"role": "assistant", "content": "answer"},
+    ]
 
 
 def test_chat_request_log_fields_do_not_include_message_content():
@@ -68,5 +75,27 @@ def test_chat_request_log_fields_do_not_include_message_content():
     fields = chat_api._chat_request_log_fields(payload)  # noqa: SLF001
 
     assert "private" not in repr(fields)
+    assert fields["query_len"] == len("private latest question")
+    assert fields["history_turns"] == 2
+
+
+def test_chat_request_posthog_fields_include_message_content():
+    payload = ChatSchema(
+        interface="web",
+        inference_model=Model.CLAUDE_HAIKU_4_5,
+        messages=[
+            {"role": "user", "content": "private first question"},
+            {"role": "assistant", "content": "private previous answer"},
+            {"role": "user", "content": "private latest question"},
+        ],
+    )
+
+    fields = chat_api._chat_request_posthog_fields(payload)  # noqa: SLF001
+
+    assert fields["messages"] == [
+        {"role": "user", "content": "private first question"},
+        {"role": "assistant", "content": "private previous answer"},
+        {"role": "user", "content": "private latest question"},
+    ]
     assert fields["query_len"] == len("private latest question")
     assert fields["history_turns"] == 2
