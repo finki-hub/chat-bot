@@ -1,3 +1,5 @@
+import pytest
+
 from app.schemas.chat import ChatSchema
 
 
@@ -8,18 +10,10 @@ def test_chat_schema_rejects_more_than_10_messages():
     ]
     messages[-1] = {"role": "user", "content": "last"}
 
-    try:
+    with pytest.raises(ValueError, match="List should have at most 10 items"):
         ChatSchema(messages=messages)
-    except ValueError:
-        return
-
-    raise AssertionError("ChatSchema accepted more than 10 messages")
 
 
 def test_chat_schema_rejects_turns_over_2000_chars():
-    try:
+    with pytest.raises(ValueError, match="String should have at most 2000 characters"):
         ChatSchema(messages=[{"role": "user", "content": "x" * 2001}])
-    except ValueError:
-        return
-
-    raise AssertionError("ChatSchema accepted a turn over 2000 characters")
