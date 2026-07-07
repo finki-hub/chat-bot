@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { MyUIMessage } from '@/lib/api-types';
 
-import { buildChatTransport, type ChatExtras } from '@/lib/transport';
+import {
+  buildChatTransport,
+  type ChatExtras,
+  stopChatStream,
+} from '@/lib/transport';
 
 vi.mock('@/lib/user', () => ({
   ANON_USER_ID_KEY: 'finkiHub.anonUserId',
@@ -19,6 +23,10 @@ type PrepareArgs = {
 };
 
 type PrepareTransport = {
+  prepareReconnectToStreamRequest: (args: { id: string }) => {
+    api?: string;
+    headers?: HeadersInit;
+  };
   prepareSendMessagesRequest: (args: PrepareArgs) => {
     body: Record<string, unknown>;
   };
@@ -109,5 +117,32 @@ describe('buildChatTransport', () => {
     });
 
     expect((second.body as { model: string }).model).toBe('model-b');
+  });
+
+  it('prepares resume requests with the conversation stream URL and anonymous user header', () => {
+    const transport = buildChatTransport(() => ({
+      model: 'model-a',
+    })) as unknown as PrepareTransport;
+
+    const request = transport.prepareReconnectToStreamRequest({ id: 'conv-7' });
+
+    expect(request.api).toBe('/api/chat/conv-7/stream');
+    expect(request.headers).toStrictEqual({
+      'X-Client-User-Id': 'anon-test-id',
+    });
+  });
+
+  it('calls the explicit stop endpoint with the anonymous user header', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await stopChatStream('conv-7');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/chat/conv-7/stop', {
+      headers: { 'X-Client-User-Id': 'anon-test-id' },
+      method: 'POST',
+    });
   });
 });
