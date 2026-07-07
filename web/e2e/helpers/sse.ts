@@ -131,6 +131,7 @@ export const startChatStreamServer = (opts: {
   head: UiChunk[];
   tail: UiChunk[];
 }): Promise<{ close: () => Promise<void>; url: string }> => {
+  const timers = new Set<NodeJS.Timeout>();
   const handle: Parameters<typeof createServer>[1] = (req, res) => {
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
@@ -149,10 +150,12 @@ export const startChatStreamServer = (opts: {
       'x-vercel-ai-ui-message-stream': 'v1',
     });
     res.write(serialize(opts.head));
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      timers.delete(timer);
       res.write(`${serialize(opts.tail)}data: [DONE]\n\n`);
       res.end();
     }, opts.gapMs);
+    timers.add(timer);
   };
 
   return new Promise((resolve) => {
@@ -160,7 +163,13 @@ export const startChatStreamServer = (opts: {
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address() as AddressInfo;
       resolve({
-        close: () => closeServer(server),
+        close: async () => {
+          for (const timer of timers) {
+            clearTimeout(timer);
+          }
+          timers.clear();
+          await closeServer(server);
+        },
         url: `http://127.0.0.1:${port}/chat`,
       });
     });

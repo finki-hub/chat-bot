@@ -6,6 +6,7 @@ import { PostHogProvider } from 'posthog-js/react';
 import { type ReactNode, useEffect, useState } from 'react';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { fireAndForget } from '@/lib/async';
 import { useUiStore } from '@/lib/ui-store';
 
 export type ProvidersProps = {
@@ -14,15 +15,31 @@ export type ProvidersProps = {
 
 export const Providers = ({ children }: ProvidersProps) => {
   const [queryClient] = useState(() => new QueryClient());
+  const [hydrated, setHydrated] = useState(() =>
+    useUiStore.persist.hasHydrated(),
+  );
 
   useEffect(() => {
-    void useUiStore.persist.rehydrate();
+    let mounted = true;
+
+    const rehydrate = async (): Promise<void> => {
+      await useUiStore.persist.rehydrate();
+      if (mounted) {
+        setHydrated(true);
+      }
+    };
+
+    fireAndForget(rehydrate());
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return (
     <PostHogProvider client={posthog}>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider>{children}</TooltipProvider>
+        <TooltipProvider>{hydrated ? children : null}</TooltipProvider>
       </QueryClientProvider>
     </PostHogProvider>
   );

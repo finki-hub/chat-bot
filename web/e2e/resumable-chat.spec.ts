@@ -1,0 +1,179 @@
+import { expect, type Page, test } from '@playwright/test';
+
+import { startChatStreamServer, type UiChunk } from './helpers/sse';
+
+const RESPONSE_ID = '22222222-3333-4444-5555-666666666666';
+const INFERENCE_MODEL = 'claude-sonnet-4-6';
+const FIRST_TOKEN = 'Прв дел од одговорот';
+const FINAL_TOKEN = ' и продолжение по освежување.';
+const STOP_TOKEN = 'Делумен одговор';
+const LONG_GAP_MS = 30_000;
+
+type PostRequestBody = {
+  readonly id?: unknown;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const parseConversationId = (body: string | null): string => {
+  if (body === null) {
+    throw new Error('chat request did not include a body');
+  }
+
+  const parsed: unknown = JSON.parse(body);
+  const requestBody: PostRequestBody = isRecord(parsed) ? parsed : {};
+
+  if (typeof requestBody.id !== 'string' || requestBody.id.length === 0) {
+    throw new Error('chat request did not include a conversation id');
+  }
+
+  return requestBody.id;
+};
+
+const chunksForAnswer = (answer: string): UiChunk[] => [
+  {
+    messageMetadata: {
+      inferenceModel: INFERENCE_MODEL,
+      responseId: RESPONSE_ID,
+    },
+    type: 'start',
+  },
+  { id: 'txt-answer', type: 'text-start' },
+  { delta: answer, id: 'txt-answer', type: 'text-delta' },
+  { id: 'txt-answer', type: 'text-end' },
+  { type: 'finish' },
+];
+
+const installModelRoute = async (page: Page): Promise<void> => {
+  await page.route('**/api/models', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify([INFERENCE_MODEL]),
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
+};
+
+test.describe('resumable chat lifecycle (mocked BFF)', () => {
+  test('resumes after refresh and persists the completed assistant response', async ({
+    page,
+  }) => {
+    // Given: the initial POST emits one token slowly while the resume endpoint can replay the full stream.
+    await installModelRoute(page);
+    const firstLegServer = await startChatStreamServer({
+      gapMs: LONG_GAP_MS,
+      head: chunksForAnswer(FIRST_TOKEN).slice(0, 3),
+      tail: [],
+    });
+    let conversationId: null | string = null;
+    const resumeRequests: string[] = [];
+    let allowResumeReplay = false;
+
+    await page.route('**/api/chat', async (route) => {
+      conversationId = parseConversationId(route.request().postData());
+      await route.fulfill({ headers: { location: firstLegServer.url }, status: 307 });
+    });
+    await page.route('**/api/chat/*/stream', async (route) => {
+      resumeRequests.push(route.request().headers()['x-client-user-id'] ?? '');
+      if (!allowResumeReplay) {
+        await route.fulfill({ status: 204 });
+        return;
+      }
+      allowResumeReplay = false;
+      const body = chunksForAnswer(`${FIRST_TOKEN}${FINAL_TOKEN}`)
+        .map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`)
+        .join('');
+      await route.fulfill({
+        body: `${body}data: [DONE]\n\n`,
+        headers: { 'x-vercel-ai-ui-message-stream': 'v1' },
+        contentType: 'text/event-stream',
+        status: 200,
+      });
+    });
+
+    await page.goto('/');
+    await page.getByTestId('composer-input').fill('Резимирај ми го условот за запишување.');
+    await page.getByTestId('composer-input').press('Enter');
+    await expect(page.getByTestId('answer-text')).toContainText(FIRST_TOKEN);
+
+    // When: the browser refreshes mid-generation and reconnects to the same chat.
+    allowResumeReplay = true;
+    const resumeResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/chat/') &&
+        response.url().endsWith('/stream') &&
+        response.status() === 200,
+    );
+    await page.reload();
+
+    // Then: the UI consumes the resumed SSE, records user ownership on the request, and persists the final answer.
+    expect((await resumeResponse).status()).toBe(200);
+    await expect(page.getByTestId('answer-text').last()).toContainText(
+      `${FIRST_TOKEN}${FINAL_TOKEN}`,
+    );
+    expect(resumeRequests.length).toBeGreaterThan(0);
+    expect(resumeRequests.at(-1)).toMatch(/[0-9a-f-]{36}/u);
+    expect(conversationId).not.toBeNull();
+
+    await page.unroute('**/api/chat/*/stream');
+    await page.route('**/api/chat/*/stream', async (route) => {
+      await route.fulfill({ status: 204 });
+    });
+    await page.reload();
+    await expect(page.getByTestId('answer-text').last()).toContainText(
+      `${FIRST_TOKEN}${FINAL_TOKEN}`,
+    );
+
+    await firstLegServer.close();
+  });
+
+  test('explicit stop prevents a later refresh from resuming the stream', async ({ page }) => {
+    // Given: an active stream has rendered a partial answer.
+    await installModelRoute(page);
+    const activeServer = await startChatStreamServer({
+      gapMs: LONG_GAP_MS,
+      head: chunksForAnswer(STOP_TOKEN).slice(0, 3),
+      tail: [],
+    });
+    const stopRequests: string[] = [];
+    const resumeStatuses: number[] = [];
+
+    await page.route('**/api/chat', async (route) => {
+      await route.fulfill({ headers: { location: activeServer.url }, status: 307 });
+    });
+    await page.route('**/api/chat/*/stop', async (route) => {
+      stopRequests.push(route.request().headers()['x-client-user-id'] ?? '');
+      await route.fulfill({
+        body: JSON.stringify({ aborted: true, stopped: true }),
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
+    await page.route('**/api/chat/*/stream', async (route) => {
+      resumeStatuses.push(204);
+      await route.fulfill({ status: 204 });
+    });
+
+    await page.goto('/');
+    await page.getByTestId('composer-input').fill('Започни долг одговор.');
+    await page.getByTestId('composer-input').press('Enter');
+    await expect(page.getByTestId('answer-text')).toContainText(STOP_TOKEN);
+
+    // When: the user explicitly stops and refreshes the same chat.
+    await page.getByTestId('composer-submit').click();
+    await expect.poll(() => stopRequests).toHaveLength(1);
+    const noActiveResponse = page.waitForResponse(
+      (response) => response.url().includes('/api/chat/') && response.url().endsWith('/stream'),
+    );
+    await page.reload();
+
+    // Then: reconnect receives 204/no-active instead of replaying the stopped stream.
+    expect((await noActiveResponse).status()).toBe(204);
+    expect(resumeStatuses.length).toBeGreaterThan(0);
+    expect(resumeStatuses.every((status) => status === 204)).toBe(true);
+    expect(stopRequests[0]).toMatch(/[0-9a-f-]{36}/u);
+
+    await activeServer.close();
+  });
+});
