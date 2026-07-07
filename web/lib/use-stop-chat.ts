@@ -9,6 +9,8 @@ import { fireAndForget } from '@/lib/async';
 import { stopOptionsFrom } from '@/lib/stop-chat-snapshot';
 import { stopChatStream } from '@/lib/transport';
 
+type StopOrder = 'local-first' | 'server-first';
+
 type UseStopChatOptions = {
   readonly convoIdRef: RefObject<null | string>;
   readonly messages: readonly MyUIMessage[];
@@ -22,24 +24,38 @@ export const useStopChat = ({
   model,
   stop,
 }: UseStopChatOptions) =>
-  useCallback(() => {
-    /* eslint-disable camelcase -- PostHog event properties are snake_case. */
-    posthog.capture('chat_stopped', {
-      inference_model: model,
-    });
-    /* eslint-enable camelcase -- end of PostHog snake_case properties. */
-    const stopCurrent = async (): Promise<void> => {
+  useCallback(
+    (order: StopOrder = 'server-first'): Promise<void> => {
+      /* eslint-disable camelcase -- PostHog event properties are snake_case. */
+      posthog.capture('chat_stopped', {
+        inference_model: model,
+      });
+      /* eslint-enable camelcase -- end of PostHog snake_case properties. */
       const cid = convoIdRef.current;
-      if (cid === null) {
-        await stop();
-        return;
-      }
-      try {
-        await stopChatStream(cid, stopOptionsFrom(messages));
-      } finally {
-        await stop();
-      }
-    };
+      const snapshot = stopOptionsFrom(messages);
+      const stopServer = async (): Promise<void> => {
+        if (cid === null) {
+          return;
+        }
 
-    fireAndForget(stopCurrent());
-  }, [convoIdRef, messages, model, stop]);
+        await stopChatStream(cid, snapshot);
+      };
+
+      const stopCurrent = async (): Promise<void> => {
+        if (order === 'local-first') {
+          await stop();
+          fireAndForget(stopServer());
+          return;
+        }
+
+        try {
+          await stopServer();
+        } finally {
+          await stop();
+        }
+      };
+
+      return stopCurrent();
+    },
+    [convoIdRef, messages, model, stop],
+  );

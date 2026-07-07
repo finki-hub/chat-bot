@@ -64,7 +64,16 @@ export const useConversations = (
 
   const handleNewChat = useCallback(() => {
     if (status !== 'ready') {
-      handleStop();
+      fireAndForget(
+        (async () => {
+          await handleStop('local-first');
+          setActiveId(null);
+          setMessages([]);
+          setActiveError(undefined);
+          convoIdRef.current = null;
+        })(),
+      );
+      return;
     }
     setActiveId(null);
     setMessages([]);
@@ -129,7 +138,13 @@ export const useConversations = (
   const handleSelect = useCallback(
     (id: string) => {
       if (id !== convoIdRef.current && status !== 'ready') {
-        handleStop();
+        fireAndForget(
+          (async () => {
+            await handleStop('local-first');
+            setActiveId(id);
+          })(),
+        );
+        return;
       }
       setActiveId(id);
     },
@@ -227,7 +242,9 @@ export const useConversations = (
     onNewChat: handleNewChat,
     onRename: handleRename,
     onSelect: handleSelect,
-    onStop: handleStop,
+    onStop: () => {
+      fireAndForget(handleStop());
+    },
     renderActions,
     retry,
     status,

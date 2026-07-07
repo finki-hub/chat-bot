@@ -112,17 +112,16 @@ describe('resumable stream context utilities', () => {
     );
   });
 
-  it('tracks active producers for add, abort, and delete', async () => {
+  it('removes active producers when aborting them', async () => {
     // Given: an active Python producer has a registered AbortController.
     const { createActiveProducerRegistry } =
       await import('@/lib/resumable-stream-context');
     const registry = createActiveProducerRegistry();
     const controller = new AbortController();
 
-    // When: the producer is registered, explicitly aborted, then unregistered.
+    // When: the producer is registered and explicitly aborted.
     registry.register(VALID_RESPONSE_ID, controller);
     const aborted = registry.abort(VALID_RESPONSE_ID);
-    registry.unregister(VALID_RESPONSE_ID);
 
     // Then: stop cancellation is best-effort and process-local.
     expect(aborted).toBe(true);

@@ -93,6 +93,7 @@ export const createActiveProducerRegistry = (): ActiveProducerRegistry => {
       }
 
       controller.abort();
+      controllers.delete(streamId);
 
       return true;
     },

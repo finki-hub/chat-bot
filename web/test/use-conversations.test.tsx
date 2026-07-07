@@ -13,7 +13,7 @@ type UseChatOptions = {
 
 const chatState = { status: 'ready' };
 
-const localStop = vi.fn<() => void>();
+const localStop = vi.fn<() => Promise<void> | void>();
 const stopChatStream =
   vi.fn<(id: string, snapshot?: unknown) => Promise<void>>();
 const chatMessages: MyUIMessage[] = [];
@@ -104,17 +104,32 @@ describe('useConversations resumable streaming', () => {
   it('stops the active stream before selecting another conversation', async () => {
     useUiStore.setState({ activeConversationId: 'conv-a' });
     chatState.status = 'streaming';
+    const calls: string[] = [];
+    stopChatStream.mockImplementation(() => {
+      calls.push('server');
+      return Promise.resolve();
+    });
+    localStop.mockImplementation(() => {
+      calls.push('local');
+    });
     const { result } = renderHook(() => useConversations('model-a'));
 
     act(() => {
       result.current.onSelect('conv-b');
     });
 
+    expect(localStop).toHaveBeenCalledOnce();
+    expect(useUiStore.getState().activeConversationId).toBe('conv-a');
+
     await waitFor(() => {
       expect(stopChatStream).toHaveBeenCalledWith('conv-a', undefined);
     });
 
-    expect(localStop).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(useUiStore.getState().activeConversationId).toBe('conv-b');
+    });
+
+    expect(calls).toStrictEqual(['local', 'server']);
   });
 
   it('calls the BFF stop endpoint before stopping the local chat on explicit stop', async () => {
