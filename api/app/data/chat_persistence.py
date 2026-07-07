@@ -35,6 +35,10 @@ class ChatPersistenceDatabase(Protocol):
         raise NotImplementedError
 
 
+class ChatMessageConflictError(Exception):
+    pass
+
+
 async def create_conversation(
     db: ChatPersistenceDatabase,
     conversation: ChatConversationCreate,
@@ -172,6 +176,7 @@ async def upsert_message(
             response_id = EXCLUDED.response_id,
             metadata = EXCLUDED.metadata,
             updated_at = NOW()
+        WHERE chat_message.conversation_id = EXCLUDED.conversation_id
         RETURNING *
         """,
         message.id,
@@ -182,7 +187,7 @@ async def upsert_message(
         json.dumps(message.metadata),
     )
     if row is None:
-        raise RuntimeError("chat_message upsert returned no row")
+        raise ChatMessageConflictError
     return message_from_row(row)
 
 

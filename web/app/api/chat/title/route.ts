@@ -5,6 +5,10 @@ import type {
   ConversationTurn,
 } from '@/lib/api-types';
 
+import {
+  AuthenticationRequiredError,
+  getAuthenticatedChatUserId,
+} from '@/lib/authenticated-chat-user';
 import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
 
 export const runtime = 'nodejs';
@@ -100,6 +104,9 @@ const jsonError = (message: string, status: number): Response =>
     },
   );
 
+const unauthenticated = (): Response =>
+  jsonError('Authentication required', 401);
+
 const toSchema = (payload: ChatTitleClientPayload) => ({
   messages: payload.messages,
   ...(payload.queryTransformModel !== undefined && {
@@ -145,6 +152,16 @@ export const POST = async (req: Request): Promise<Response> => {
       'Invalid title payload: at least one message is required.',
       400,
     );
+  }
+
+  try {
+    await getAuthenticatedChatUserId();
+  } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return unauthenticated();
+    }
+
+    throw error;
   }
 
   const { payload } = result;

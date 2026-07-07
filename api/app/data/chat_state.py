@@ -16,24 +16,15 @@ async def upsert_assistant_message_by_response_id(
 ) -> ChatMessage:
     row = await db.fetchrow(
         """
-        WITH updated AS (
-            UPDATE chat_message
-            SET content = $4,
-                metadata = $5::jsonb,
-                updated_at = NOW()
-            WHERE conversation_id = $1
-              AND response_id = $2
-              AND role = 'assistant'
-            RETURNING *
-        ), inserted AS (
-            INSERT INTO chat_message (id, conversation_id, role, content, response_id, metadata)
-            SELECT $3, $1, 'assistant', $4, $2, $5::jsonb
-            WHERE NOT EXISTS (SELECT 1 FROM updated)
-            RETURNING *
-        )
-        SELECT * FROM updated
-        UNION ALL
-        SELECT * FROM inserted
+        INSERT INTO chat_message (id, conversation_id, role, content, response_id, metadata)
+        VALUES ($3, $1, 'assistant', $4, $2, $5::jsonb)
+        ON CONFLICT (conversation_id, response_id)
+        WHERE response_id IS NOT NULL AND role = 'assistant'
+        DO UPDATE SET
+            content = EXCLUDED.content,
+            metadata = EXCLUDED.metadata,
+            updated_at = NOW()
+        RETURNING *
         """,
         message.conversation_id,
         message.response_id,

@@ -10,8 +10,12 @@ import {
 } from '@/lib/transport';
 
 vi.mock('posthog-js', () => ({
-  // eslint-disable-next-line camelcase -- PostHog SDK method name.
-  posthog: { get_session_id: () => 'session-test-id' },
+  posthog: {
+    // eslint-disable-next-line camelcase -- PostHog SDK method name.
+    get_distinct_id: () => 'browser-distinct-id',
+    // eslint-disable-next-line camelcase -- PostHog SDK method name.
+    get_session_id: () => 'session-test-id',
+  },
 }));
 
 const SUBMIT = 'submit-message' as const;
@@ -65,6 +69,7 @@ describe('buildChatTransport', () => {
       messageId: 'm-1',
       messages: sampleMessages,
       model: 'claude-sonnet-4-6',
+      posthogDistinctId: 'browser-distinct-id',
       posthogSessionId: 'session-test-id',
       temperature: 0.3,
       trigger: SUBMIT,

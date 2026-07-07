@@ -190,6 +190,54 @@ def test_chat_state_wrong_user_cannot_load_or_mutate_state() -> None:
     assert all(row["content"] != "steal" for row in db.messages.values())
 
 
+def test_chat_state_message_id_collision_is_not_cross_tenant_write() -> None:
+    # Given: a victim conversation already has a user message id.
+    db = FakeChatDatabase()
+    client = _client(db)
+    victim_conversation_id = uuid4()
+    attacker_conversation_id = uuid4()
+    shared_message_id = uuid4()
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={"id": str(victim_conversation_id), "user_id": OWNER_ID},
+    )
+    client.post(
+        f"/chat/state/conversations/{victim_conversation_id}/messages/user",
+        headers=_auth_headers(),
+        json={
+            "content": "victim text",
+            "id": str(shared_message_id),
+            "user_id": OWNER_ID,
+        },
+    )
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={"id": str(attacker_conversation_id), "user_id": INTRUDER_ID},
+    )
+
+    # When: another owner tries to reuse that id in their own conversation.
+    overwrite = client.post(
+        f"/chat/state/conversations/{attacker_conversation_id}/messages/user",
+        headers=_auth_headers(),
+        json={
+            "content": "attacker overwrite",
+            "id": str(shared_message_id),
+            "user_id": INTRUDER_ID,
+        },
+    )
+    loaded = client.get(
+        f"/chat/state/conversations/{victim_conversation_id}",
+        headers=_auth_headers(),
+        params={"user_id": OWNER_ID},
+    )
+
+    # Then: the collision is rejected and the victim row is untouched.
+    assert overwrite.status_code == 404
+    assert loaded.json()["messages"][0]["content"] == "victim text"
+
+
 def test_chat_state_clear_and_stop_are_current_stream_guarded() -> None:
     # Given: an active stream was superseded by a newer stream for the same owner.
     db = FakeChatDatabase()

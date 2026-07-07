@@ -61,9 +61,11 @@ describe('resumable stream context utilities', () => {
 
     // When: a route asks for the resumable stream context.
     const context = createChatResumableStreamContext({ waitUntil });
+    const secondContext = createChatResumableStreamContext({ waitUntil });
 
     // Then: the library's default Redis clients will read the private URL.
     expect(context).toStrictEqual({ marker: 'fake-resumable-context' });
+    expect(secondContext).toBe(context);
     expect(process.env['REDIS_URL']).toBe(STREAM_REDIS_URL);
     expect(mocks.createResumableStreamContext).toHaveBeenCalledOnce();
     expect(getContextOptions()).toStrictEqual({

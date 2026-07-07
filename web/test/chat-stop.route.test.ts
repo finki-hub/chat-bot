@@ -109,6 +109,42 @@ describe('POST /api/chat/[id]/stop', () => {
     ).not.toHaveBeenCalled();
   });
 
+  it('does not stop an active stream when the request omits the current stream id', async () => {
+    // Given: a second tab has no response id, but this conversation has a live stream.
+    routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
+      conversation: {
+        active_response_id: RESPONSE_ID,
+        active_status: 'streaming',
+        active_stream_id: RESPONSE_ID,
+        id: CONVERSATION_ID,
+        user_id: USER_ID,
+      },
+      messages: [],
+    });
+
+    // When: the stop body has no activeStreamId guard.
+    const res = await (
+      await importPost()
+    )(
+      stopRequest({ assistantSnapshot: { content: 'stale', metadata: {} } }),
+      routeContext(),
+    );
+
+    // Then: the live stream remains untouched.
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toStrictEqual({
+      aborted: false,
+      stopped: false,
+    });
+    expect(routeMocks.activeChatProducers.abort).not.toHaveBeenCalled();
+    expect(
+      routeMocks.stateClient.upsertAssistantMessage,
+    ).not.toHaveBeenCalled();
+    expect(
+      routeMocks.stateClient.clearActiveStreamIfCurrent,
+    ).not.toHaveBeenCalled();
+  });
+
   it('persists a supplied assistant snapshot before stopping the current stream', async () => {
     // Given: an active stream has visible partial assistant content in the browser.
     const snapshot = {

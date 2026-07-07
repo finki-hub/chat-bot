@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.data.chat_persistence import (
+    ChatMessageConflictError,
     clear_active_stream_if_current,
     clear_stale_active_streams,
     create_conversation,
@@ -200,6 +201,53 @@ async def test_chat_persistence_lists_updates_owner_and_clears_stale_streams() -
     assert cleared_count == 1
     assert db.conversations[first.id]["active_stream_id"] is None
     assert [conversation.id for conversation in conversations] == [second.id, first.id]
+
+
+@pytest.mark.anyio
+async def test_chat_persistence_rejects_message_id_collision_across_conversations() -> (
+    None
+):
+    # Given: two users have separate conversations and one persisted victim message id.
+    db = FakeChatDatabase()
+    victim_conversation = await create_conversation(
+        db,
+        ChatConversationCreate(id=uuid4(), user_id=OWNER_ID, model=None, title=None),
+    )
+    attacker_conversation = await create_conversation(
+        db,
+        ChatConversationCreate(id=uuid4(), user_id=INTRUDER_ID, model=None, title=None),
+    )
+    victim_message_id = uuid4()
+    await upsert_message(
+        db,
+        ChatMessageUpsert(
+            id=victim_message_id,
+            conversation_id=victim_conversation.id,
+            role=ChatMessageRole.USER,
+            content="victim text",
+        ),
+    )
+
+    # When / Then: reusing that id in another conversation is rejected and unchanged.
+    with pytest.raises(ChatMessageConflictError):
+        await upsert_message(
+            db,
+            ChatMessageUpsert(
+                id=victim_message_id,
+                conversation_id=attacker_conversation.id,
+                role=ChatMessageRole.USER,
+                content="attacker overwrite",
+            ),
+        )
+
+    loaded = await load_conversation(
+        db,
+        conversation_id=victim_conversation.id,
+        user_id=OWNER_ID,
+    )
+
+    assert loaded is not None
+    assert loaded.messages[0].content == "victim text"
 
 
 def test_chat_persistence_rejects_malformed_role_and_status() -> None:

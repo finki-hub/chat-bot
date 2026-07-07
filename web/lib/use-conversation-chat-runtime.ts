@@ -43,12 +43,11 @@ export const useConversationChatRuntime = ({
   >(null);
 
   const persistFinished = useCallback(
-    async (allMessages: readonly MyUIMessage[]): Promise<void> => {
-      const cid = convoIdRef.current;
-      if (!cid) {
-        return;
-      }
-      await replaceConversationMessages(cid, [...allMessages]);
+    async (
+      conversationId: string,
+      allMessages: readonly MyUIMessage[],
+    ): Promise<void> => {
+      await replaceConversationMessages(conversationId, [...allMessages]);
       await refreshConversations();
     },
     [refreshConversations],
@@ -95,6 +94,7 @@ export const useConversationChatRuntime = ({
         );
       },
       onFinish: ({ isAbort, isError, message }) => {
+        const finishedConversationId = activeId;
         setActiveStatus(undefined);
         const replacementId = regeneratingMessageIdRef.current;
         const error = activeErrorRef.current;
@@ -102,6 +102,9 @@ export const useConversationChatRuntime = ({
         if (isAbort || isError) {
           regeneratingMessageIdRef.current = null;
           setRegeneratingMessageId(null);
+          return;
+        }
+        if (finishedConversationId === null) {
           return;
         }
         if (replacementId !== null && message.id === replacementId) {
@@ -131,7 +134,7 @@ export const useConversationChatRuntime = ({
             replacement: finalized,
             streamMessageId: message.id,
           })(prev);
-          fireAndForget(persistFinished(next));
+          fireAndForget(persistFinished(finishedConversationId, next));
           return next;
         });
       },

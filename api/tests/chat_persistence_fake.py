@@ -107,7 +107,7 @@ class FakeChatDatabase:
             conversation_id, user_id = args
             return self._owned_conversation(conversation_id, user_id)
 
-        if "WITH updated AS" in query:
+        if "ON CONFLICT (conversation_id, response_id)" in query:
             conversation_id, response_id, message_id, content, metadata_json = args
             for existing in self.messages.values():
                 if (
@@ -150,6 +150,8 @@ class FakeChatDatabase:
                 }
                 self.messages[message_id] = inserted_message
                 return inserted_message
+            if current_message["conversation_id"] != conversation_id:
+                return None
             current_message["role"] = role
             current_message["content"] = content
             current_message["response_id"] = response_id

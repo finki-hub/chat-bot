@@ -36,3 +36,6 @@ CREATE TABLE IF NOT EXISTS chat_message (
 );
 
 CREATE INDEX IF NOT EXISTS chat_message_conversation_created_idx ON chat_message (conversation_id, created_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS chat_message_assistant_response_idx ON chat_message (conversation_id, response_id)
+WHERE response_id IS NOT NULL AND role = 'assistant';

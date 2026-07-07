@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.data.chat_persistence import (
+    ChatMessageConflictError,
     ChatPersistenceDatabase,
     clear_active_stream_if_current,
     clear_stale_active_streams,
@@ -125,16 +126,19 @@ async def upsert_user_message_state(
     db: ChatPersistenceDatabase = db_dep,
 ) -> ChatMessage:
     await _ensure_owned(db, conversation_id=conversation_id, user_id=payload.user_id)
-    return await upsert_message(
-        db,
-        ChatMessageUpsert(
-            id=payload.id,
-            conversation_id=conversation_id,
-            role=ChatMessageRole.USER,
-            content=payload.content,
-            metadata=payload.metadata,
-        ),
-    )
+    try:
+        return await upsert_message(
+            db,
+            ChatMessageUpsert(
+                id=payload.id,
+                conversation_id=conversation_id,
+                role=ChatMessageRole.USER,
+                content=payload.content,
+                metadata=payload.metadata,
+            ),
+        )
+    except ChatMessageConflictError as error:
+        raise _not_found() from error
 
 
 @router.put(

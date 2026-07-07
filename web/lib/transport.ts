@@ -44,6 +44,7 @@ export const buildChatTransport = (
         messages,
         trigger,
         ...getExtras(),
+        posthogDistinctId: posthog.get_distinct_id(),
         posthogSessionId: posthog.get_session_id(),
       },
     }),

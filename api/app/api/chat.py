@@ -439,7 +439,7 @@ api_key_dep = Depends(verify_api_key)
 router = APIRouter(
     prefix="/chat",
     tags=["Chat"],
-    dependencies=[db_dep, api_key_dep],
+    dependencies=[db_dep],
 )
 
 

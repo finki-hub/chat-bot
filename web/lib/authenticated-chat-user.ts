@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { auth } from '@/auth';
+import { auth, isAuthConfigured } from '@/auth';
 import { createChatStateClient } from '@/lib/chat-state-client';
 
 export class AuthenticationRequiredError extends Error {
@@ -16,6 +16,10 @@ const optionalText = (value: null | string | undefined): string | undefined =>
     : value;
 
 export const getAuthenticatedChatUserId = async (): Promise<string> => {
+  if (!isAuthConfigured()) {
+    throw new AuthenticationRequiredError();
+  }
+
   const session = await auth();
   const user = session?.user;
   const providerSubject = user?.googleSubject;

@@ -1,12 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { authMock, upsertGoogleUserMock } = vi.hoisted(() => ({
-  authMock: vi.fn<() => Promise<unknown>>(),
-  upsertGoogleUserMock:
-    vi.fn<(input: unknown) => Promise<{ readonly id: string }>>(),
-}));
+const { authConfiguredMock, authMock, upsertGoogleUserMock } = vi.hoisted(
+  () => ({
+    authConfiguredMock: vi.fn<() => boolean>().mockReturnValue(true),
+    authMock: vi.fn<() => Promise<unknown>>(),
+    upsertGoogleUserMock:
+      vi.fn<(input: unknown) => Promise<{ readonly id: string }>>(),
+  }),
+);
 
-vi.mock('@/auth', () => ({ auth: authMock }));
+vi.mock('@/auth', () => ({
+  auth: authMock,
+  isAuthConfigured: authConfiguredMock,
+}));
 vi.mock('@/lib/chat-state-client', () => ({
   createChatStateClient: () => ({ upsertGoogleUser: upsertGoogleUserMock }),
 }));
@@ -14,6 +20,8 @@ vi.mock('@/lib/chat-state-client', () => ({
 describe('getAuthenticatedChatUserId', () => {
   beforeEach(() => {
     vi.resetModules();
+    authConfiguredMock.mockReset();
+    authConfiguredMock.mockReturnValue(true);
     authMock.mockReset();
     upsertGoogleUserMock.mockReset();
   });

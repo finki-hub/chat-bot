@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORIGINAL = { ...process.env };
-const AUTH_GOOGLE_ID_PATTERN = /AUTH_GOOGLE_ID/u;
-
 vi.mock('next-auth', () => ({
   default: vi.fn<
     () => {
@@ -53,9 +51,9 @@ describe('Auth.js route handler', () => {
     expect(route.POST).toBeTypeOf('function');
   });
 
-  it('fails fast when the Google client id is missing', async () => {
+  it('does not throw at module import when runtime auth env is missing', async () => {
     process.env['AUTH_GOOGLE_ID'] = '';
 
-    await expect(import('@/auth')).rejects.toThrow(AUTH_GOOGLE_ID_PATTERN);
+    await expect(import('@/auth')).resolves.toHaveProperty('auth');
   });
 });

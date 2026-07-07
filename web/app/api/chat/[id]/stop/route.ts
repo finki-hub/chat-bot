@@ -134,10 +134,11 @@ export const POST = async (
       return Response.json({ aborted: false, stopped: false });
     }
 
-    if (
-      body.activeStreamId !== null &&
-      body.activeStreamId !== currentStreamId
-    ) {
+    if (body.activeStreamId === null) {
+      return Response.json({ aborted: false, stopped: false });
+    }
+
+    if (body.activeStreamId !== currentStreamId) {
       return Response.json({ aborted: false, stopped: false });
     }
 

@@ -60,13 +60,24 @@ export const useConversations = (
   });
   const { applyGeneratedTitle, generatingTitleId, handleGenerateTitle } =
     useGeneratedTitle({ conversations, modelRef, refreshConversations });
+  const handleStop = useStopChat({ convoIdRef, messages, model, stop });
 
   const handleNewChat = useCallback(() => {
+    if (status !== 'ready') {
+      handleStop();
+    }
     setActiveId(null);
     setMessages([]);
     setActiveError(undefined);
     convoIdRef.current = null;
-  }, [convoIdRef, setActiveError, setActiveId, setMessages]);
+  }, [
+    convoIdRef,
+    handleStop,
+    setActiveError,
+    setActiveId,
+    setMessages,
+    status,
+  ]);
 
   const handleSubmit = useCallback(
     async (text: string) => {
@@ -117,9 +128,12 @@ export const useConversations = (
 
   const handleSelect = useCallback(
     (id: string) => {
+      if (id !== convoIdRef.current && status !== 'ready') {
+        handleStop();
+      }
       setActiveId(id);
     },
-    [setActiveId],
+    [convoIdRef, handleStop, setActiveId, status],
   );
 
   const handleDelete = useCallback(
@@ -190,8 +204,6 @@ export const useConversations = (
     },
     [setMessages],
   );
-
-  const handleStop = useStopChat({ convoIdRef, messages, model, stop });
 
   const visibleMessages = previewRegeneration(messages, regeneratingMessageId);
   const renderActions = renderAnswerActions({

@@ -11,6 +11,8 @@ type UseChatOptions = {
   readonly resume?: boolean;
 };
 
+const chatState = { status: 'ready' };
+
 const localStop = vi.fn<() => void>();
 const stopChatStream =
   vi.fn<(id: string, snapshot?: unknown) => Promise<void>>();
@@ -26,7 +28,7 @@ vi.mock('@ai-sdk/react', () => ({
       regenerate: vi.fn<() => Promise<void>>(),
       sendMessage: vi.fn<(message: MyUIMessage) => Promise<void>>(),
       setMessages: vi.fn<(messages: MyUIMessage[]) => void>(),
-      status: 'ready',
+      status: chatState.status,
       stop: localStop,
     };
   },
@@ -77,6 +79,7 @@ describe('useConversations resumable streaming', () => {
     chatMessages.length = 0;
     stopChatStream.mockReset();
     stopChatStream.mockResolvedValue();
+    chatState.status = 'ready';
     useChatOptions.length = 0;
     useUiStore.setState({ activeConversationId: null, model: 'model-a' });
   });
@@ -98,16 +101,20 @@ describe('useConversations resumable streaming', () => {
     });
   });
 
-  it('does not stop the server or local stream when selecting another conversation', () => {
+  it('stops the active stream before selecting another conversation', async () => {
     useUiStore.setState({ activeConversationId: 'conv-a' });
+    chatState.status = 'streaming';
     const { result } = renderHook(() => useConversations('model-a'));
 
     act(() => {
       result.current.onSelect('conv-b');
     });
 
-    expect(stopChatStream).not.toHaveBeenCalled();
-    expect(localStop).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(stopChatStream).toHaveBeenCalledWith('conv-a', undefined);
+    });
+
+    expect(localStop).toHaveBeenCalled();
   });
 
   it('calls the BFF stop endpoint before stopping the local chat on explicit stop', async () => {

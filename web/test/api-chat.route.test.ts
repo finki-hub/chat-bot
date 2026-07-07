@@ -61,6 +61,7 @@ describe('POST /api/chat', () => {
           { id: 'u1', parts: [{ text: 'Здраво', type: 'text' }], role: 'user' },
         ],
         model: MODEL,
+        posthogDistinctId: 'browser-distinct-id',
         posthogSessionId: 'session-test-id',
       }),
       headers: { 'content-type': JSON_CONTENT_TYPE },
@@ -85,6 +86,8 @@ describe('POST /api/chat', () => {
     expect(url).toBe(`${API_BASE_URL}/chat/`);
     expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
     expect(sentBody.messages).toStrictEqual([
+      { content: 'Stored question', role: 'user' },
+      { content: 'Stored answer', role: 'assistant' },
       { content: 'Здраво', role: 'user' },
     ]);
     expect(sentBody.interface).toBe('web');
@@ -92,7 +95,7 @@ describe('POST /api/chat', () => {
     expect(init.headers).toStrictEqual({
       'content-type': JSON_CONTENT_TYPE,
       'x-api-key': 'test-key',
-      'X-Distinct-Id': USER_ID,
+      'X-Distinct-Id': 'browser-distinct-id',
       'X-PostHog-Session-Id': 'session-test-id',
     });
     expect(out).toContain('Здраво');
@@ -146,6 +149,8 @@ describe('POST /api/chat', () => {
     };
 
     expect(sentBody.messages).toStrictEqual([
+      { content: 'Stored question', role: 'user' },
+      { content: 'Stored answer', role: 'assistant' },
       { content: 'Current question', role: 'user' },
     ]);
   });

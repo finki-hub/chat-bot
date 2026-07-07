@@ -6,13 +6,30 @@ import type {
   ChatTitleResponse,
 } from '@/lib/api-types';
 
-import { POST } from '@/app/api/chat/title/route';
+const { getAuthenticatedChatUserIdMock } = vi.hoisted(() => ({
+  getAuthenticatedChatUserIdMock: vi
+    .fn<() => Promise<string>>()
+    .mockResolvedValue('api-user-1'),
+}));
 
 vi.mock('@/lib/env', () => ({
   API_BASE_URL: 'https://api:8880',
   CHAT_API_KEY: 'test-key',
   env: { API_BASE_URL: 'https://api:8880', CHAT_API_KEY: 'test-key' },
 }));
+vi.mock('@/lib/authenticated-chat-user', () => {
+  class AuthenticationRequiredError extends Error {
+    constructor() {
+      super('Authentication required');
+      this.name = 'AuthenticationRequiredError';
+    }
+  }
+
+  return {
+    AuthenticationRequiredError,
+    getAuthenticatedChatUserId: getAuthenticatedChatUserIdMock,
+  };
+});
 
 const jsonRequest = (body: unknown): Request =>
   new Request('https://localhost/api/chat/title', {
@@ -27,9 +44,16 @@ const okJson = (body: unknown): Response =>
     status: 200,
   });
 
+const postTitle = async (request: Request): Promise<Response> => {
+  const { POST } = await import('@/app/api/chat/title/route');
+
+  return POST(request);
+};
+
 describe('POST /api/chat/title', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    getAuthenticatedChatUserIdMock.mockResolvedValue('api-user-1');
   });
 
   afterEach(() => {
@@ -47,7 +71,7 @@ describe('POST /api/chat/title', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await POST(jsonRequest(payload));
+    const res = await postTitle(jsonRequest(payload));
 
     expect(fetchMock).toHaveBeenCalledOnce();
 
@@ -79,7 +103,7 @@ describe('POST /api/chat/title', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await POST(jsonRequest(payload));
+    const res = await postTitle(jsonRequest(payload));
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
     expect(res.status).toBe(200);
@@ -95,9 +119,27 @@ describe('POST /api/chat/title', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await POST(jsonRequest({ messages: [] }));
+    const res = await postTitle(jsonRequest({ messages: [] }));
 
     expect(res.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 without calling the LLM service when unauthenticated', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    const { AuthenticationRequiredError } =
+      await import('@/lib/authenticated-chat-user');
+
+    vi.stubGlobal('fetch', fetchMock);
+    getAuthenticatedChatUserIdMock.mockRejectedValueOnce(
+      new AuthenticationRequiredError(),
+    );
+
+    const res = await postTitle(
+      jsonRequest({ messages: [{ content: 'Прашање?', role: 'user' }] }),
+    );
+
+    expect(res.status).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -106,7 +148,7 @@ describe('POST /api/chat/title', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await POST(
+    const res = await postTitle(
       jsonRequest({
         messages: [
           { content: '1', role: 'user' },
@@ -127,7 +169,7 @@ describe('POST /api/chat/title', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await POST(
+    const res = await postTitle(
       jsonRequest({
         messages: [{ content: 'x'.repeat(8_001), role: 'user' }],
       }),
@@ -144,7 +186,7 @@ describe('POST /api/chat/title', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await POST(
+    const res = await postTitle(
       jsonRequest({ messages: [{ content: 'Прашање?', role: 'user' }] }),
     );
 
@@ -161,7 +203,7 @@ describe('POST /api/chat/title', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await POST(
+    const res = await postTitle(
       jsonRequest({ messages: [{ content: 'Прашање?', role: 'user' }] }),
     );
 

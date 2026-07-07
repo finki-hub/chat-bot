@@ -23,6 +23,10 @@ type CreateContextOptions = {
   readonly waitUntil?: WaitUntil;
 };
 
+const resumableContextCache: { current: null | ResumableStreamContext } = {
+  current: null,
+};
+
 export class InvalidResponseIdError extends Error {
   readonly headerName = 'X-Response-Id';
 
@@ -65,12 +69,16 @@ export const normalizePythonResponseStreamId = (
 export const createChatResumableStreamContext = ({
   waitUntil,
 }: CreateContextOptions = {}): ResumableStreamContext => {
-  process.env['REDIS_URL'] = RESUMABLE_STREAM_REDIS_URL;
+  if (resumableContextCache.current === null) {
+    process.env['REDIS_URL'] = RESUMABLE_STREAM_REDIS_URL;
 
-  return createResumableStreamContext({
-    keyPrefix: STREAM_KEY_PREFIX,
-    waitUntil: waitUntil ?? null,
-  });
+    resumableContextCache.current = createResumableStreamContext({
+      keyPrefix: STREAM_KEY_PREFIX,
+      waitUntil: waitUntil ?? null,
+    });
+  }
+
+  return resumableContextCache.current;
 };
 
 export const createActiveProducerRegistry = (): ActiveProducerRegistry => {

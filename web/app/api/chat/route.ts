@@ -1,14 +1,16 @@
 import { createUIMessageStream, createUIMessageStreamResponse } from 'ai';
 import { after } from 'next/server';
 
-import type { MyUIMessage } from '@/lib/api-types';
+import type { ConversationTurn, MyUIMessage } from '@/lib/api-types';
 
 import {
   AuthenticationRequiredError,
   getAuthenticatedChatUserId,
 } from '@/lib/authenticated-chat-user';
 import {
+  type ChatStateJsonValue,
   type ChatStateMetadata,
+  ChatStateRequestError,
   createChatStateClient,
 } from '@/lib/chat-state-client';
 import {
@@ -30,6 +32,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const SSE_CONTENT_TYPE = 'text/event-stream';
+
+type PersistedTurn = ConversationTurn & {
+  readonly id: string;
+};
 
 type ResumableChatClientBody = ChatClientBody & {
   readonly id?: string;
@@ -71,6 +77,48 @@ const unauthenticated = (): Response =>
 const requiredText = (value: string | undefined): null | string =>
   value === undefined || value.length === 0 ? null : value;
 
+const isRecord = (
+  value: ChatStateJsonValue,
+): value is Record<string, ChatStateJsonValue> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isConversationRole = (
+  value: unknown,
+): value is ConversationTurn['role'] =>
+  value === 'assistant' || value === 'user';
+
+const persistedTurnFrom = (value: ChatStateJsonValue): null | PersistedTurn => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const content = value['content'];
+  const id = value['id'];
+  const role = value['role'];
+
+  if (
+    typeof content !== 'string' ||
+    typeof id !== 'string' ||
+    !isConversationRole(role)
+  ) {
+    return null;
+  }
+
+  return { content, id, role };
+};
+
+const persistedTurns = (
+  messages: readonly ChatStateJsonValue[],
+  currentMessageId: string,
+): ConversationTurn[] =>
+  messages.flatMap((message) => {
+    const turn = persistedTurnFrom(message);
+
+    return turn === null || turn.id === currentMessageId
+      ? []
+      : [{ content: turn.content, role: turn.role }];
+  });
+
 const lastUserMessageForState = (
   body: ResumableChatClientBody,
 ): null | UserMessageForState => {
@@ -93,6 +141,18 @@ const assistantMetadata = (meta: UiStreamMeta): ChatStateMetadata => ({
   }),
   ...(meta.responseId !== undefined && { responseId: meta.responseId }),
 });
+
+const ignoreMissing = async (operation: Promise<void>): Promise<void> => {
+  try {
+    await operation;
+  } catch (error) {
+    if (error instanceof ChatStateRequestError && error.status === 404) {
+      return;
+    }
+
+    throw error;
+  }
+};
 
 export const POST = async (req: Request): Promise<Response> => {
   try {
@@ -118,6 +178,14 @@ export const POST = async (req: Request): Promise<Response> => {
       ...(inferenceModel !== undefined && { model: inferenceModel }),
       userId,
     });
+    const loadedConversation = await chatState.loadConversation({
+      conversationId,
+      userId,
+    });
+    const trustedHistory = persistedTurns(
+      loadedConversation.messages,
+      userMessage.id,
+    );
     await chatState.upsertUserMessage({
       content: userMessage.content,
       conversationId,
@@ -127,11 +195,18 @@ export const POST = async (req: Request): Promise<Response> => {
     const upstreamController = new AbortController();
 
     const upstream = await fetch(`${API_BASE_URL}/chat/`, {
-      body: JSON.stringify(chatBody),
+      body: JSON.stringify({
+        ...chatBody,
+        messages: [...trustedHistory, ...chatBody.messages],
+      }),
       headers: {
         'content-type': 'application/json',
         'x-api-key': CHAT_API_KEY,
-        'X-Distinct-Id': userId,
+        'X-Distinct-Id':
+          typeof clientBody.posthogDistinctId === 'string' &&
+          clientBody.posthogDistinctId.length > 0
+            ? clientBody.posthogDistinctId
+            : userId,
         ...(typeof clientBody.posthogSessionId === 'string' &&
           clientBody.posthogSessionId.length > 0 && {
             'X-PostHog-Session-Id': clientBody.posthogSessionId,
@@ -163,12 +238,18 @@ export const POST = async (req: Request): Promise<Response> => {
 
     activeChatProducers.register(streamId, upstreamController);
 
-    await chatState.setActiveStream({
-      activeResponseId: streamId,
-      activeStreamId: streamId,
-      conversationId,
-      userId,
-    });
+    try {
+      await chatState.setActiveStream({
+        activeResponseId: streamId,
+        activeStreamId: streamId,
+        conversationId,
+        userId,
+      });
+    } catch (error) {
+      upstreamController.abort();
+      activeChatProducers.unregister(streamId);
+      throw error;
+    }
 
     const meta = { inferenceModel, responseId: streamId };
 
@@ -177,24 +258,29 @@ export const POST = async (req: Request): Promise<Response> => {
         await translateToUiStream(parseProtocolV2(upstreamBody), writer, meta);
       },
       onEnd: async ({ responseMessage }) => {
-        const content = joinText(responseMessage).trim();
+        try {
+          const content = joinText(responseMessage).trim();
 
-        if (content.length > 0) {
-          await chatState.upsertAssistantMessage({
-            content,
-            conversationId,
-            metadata: assistantMetadata(meta),
-            responseId: streamId,
-            userId,
-          });
+          if (content.length > 0) {
+            await chatState.upsertAssistantMessage({
+              content,
+              conversationId,
+              metadata: assistantMetadata(meta),
+              responseId: streamId,
+              userId,
+            });
+          }
+
+          await ignoreMissing(
+            chatState.clearActiveStreamIfCurrent({
+              conversationId,
+              streamId,
+              userId,
+            }),
+          );
+        } finally {
+          activeChatProducers.unregister(streamId);
         }
-
-        await chatState.clearActiveStreamIfCurrent({
-          conversationId,
-          streamId,
-          userId,
-        });
-        activeChatProducers.unregister(streamId);
       },
       // Generic: this string reaches the browser, so don't leak raw errors.
       onError: () => 'stream error',
