@@ -32,7 +32,11 @@ async def _gpu_fragmented_body() -> AsyncIterator[str]:
     yield "event: done\ndata: {}\n\n"
 
 
-def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
+def _run_captured_stream(
+    monkeypatch,
+    body: AsyncIterator[str],
+    model: Model,
+) -> tuple[list[str], dict[str, object]]:
     captured: list[tuple[str, str, dict[str, object]]] = []
     monkeypatch.setattr(
         chat_api,
@@ -41,14 +45,14 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
     )
     payload = ChatSchema(
         interface="web",
-        inference_model=Model.CLAUDE_HAIKU_4_5,
+        inference_model=model,
         messages=[{"role": "user", "content": "Прашање?"}],
     )
     observation = StreamObservation(distinct_id="user-1", response_id="response-1")
 
     async def collect() -> list[str]:
         stream = chat_api._instrument_stream(  # noqa: SLF001
-            _body(),
+            body,
             payload=payload,
             response_id=uuid4(),
             timings=RequestTimings(),
@@ -60,13 +64,22 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
         return [str(chunk) async for chunk in stream]
 
     chunks = anyio.run(collect)
+    assert len(captured) == 1
+    _, _, props = captured.pop()
+    return chunks, props
+
+
+def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
+    chunks, props = _run_captured_stream(
+        monkeypatch,
+        _body(),
+        Model.CLAUDE_HAIKU_4_5,
+    )
     meta = json.loads(chunks[-1].split("data:", 1)[1].strip())
 
     assert meta["cost"]["input_usd"] == pytest.approx(0.001)
     assert meta["cost"]["output_usd"] == pytest.approx(0.005)
     assert meta["cost"]["total_usd"] == pytest.approx(0.006)
-    assert len(captured) == 1
-    props = captured[0][2]
     assert props["$ai_total_cost_usd"] == pytest.approx(0.006)
     assert props["$ai_input"] == [{"role": "user", "content": "Прашање?"}]
     assert props["$session_id"] == "session-1"
@@ -76,76 +89,27 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
 
 
 def test_chat_stream_records_bare_data_token_frames(monkeypatch):
-    captured: list[tuple[str, str, dict[str, object]]] = []
-    monkeypatch.setattr(
-        chat_api,
-        "capture",
-        lambda distinct_id, event, props: captured.append((distinct_id, event, props)),
-    )
-    payload = ChatSchema(
-        interface="web",
-        inference_model=Model.MISTRAL,
-        messages=[{"role": "user", "content": "Прашање?"}],
-    )
-    observation = StreamObservation(distinct_id="user-1", response_id="response-1")
-
-    async def collect() -> list[str]:
-        stream = chat_api._instrument_stream(  # noqa: SLF001
-            _gpu_body(),
-            payload=payload,
-            response_id=uuid4(),
-            timings=RequestTimings(),
-            retrieval_hit=True,
-            distinct_id="user-1",
-            session_id="session-1",
-            observation=observation,
-        )
-        return [str(chunk) async for chunk in stream]
-
-    chunks = anyio.run(collect)
+    chunks, props = _run_captured_stream(monkeypatch, _gpu_body(), Model.MISTRAL)
 
     assert chunks[0] == "data: self-hosted answer\n\n"
-    assert len(captured) == 1
-    assert captured[0][2]["$ai_output_choices"] == [
+    assert props["$ai_output_choices"] == [
         {"role": "assistant", "content": "self-hosted answer"},
     ]
 
 
 def test_chat_stream_records_fragmented_bare_data_token_frames(monkeypatch):
-    captured: list[tuple[str, str, dict[str, object]]] = []
-    monkeypatch.setattr(
-        chat_api,
-        "capture",
-        lambda distinct_id, event, props: captured.append((distinct_id, event, props)),
+    chunks, props = _run_captured_stream(
+        monkeypatch,
+        _gpu_fragmented_body(),
+        Model.MISTRAL,
     )
-    payload = ChatSchema(
-        interface="web",
-        inference_model=Model.MISTRAL,
-        messages=[{"role": "user", "content": "Прашање?"}],
-    )
-    observation = StreamObservation(distinct_id="user-1", response_id="response-1")
-
-    async def collect() -> list[str]:
-        stream = chat_api._instrument_stream(  # noqa: SLF001
-            _gpu_fragmented_body(),
-            payload=payload,
-            response_id=uuid4(),
-            timings=RequestTimings(),
-            retrieval_hit=True,
-            distinct_id="user-1",
-            session_id="session-1",
-            observation=observation,
-        )
-        return [str(chunk) async for chunk in stream]
-
-    chunks = anyio.run(collect)
 
     assert chunks[:3] == [
         "data: split",
         " answer\n\ndata: coalesced",
         " answer\n\nevent: status\ndata: {}\n\n",
     ]
-    assert captured[0][2]["$ai_output_choices"] == [
+    assert props["$ai_output_choices"] == [
         {"role": "assistant", "content": "split answercoalesced answer"},
     ]
 

@@ -109,10 +109,10 @@ def _sniff_tokens(chunk: bytes | str | memoryview) -> dict[str, int] | None:
             return None
         text = bytes(chunk).decode(errors="ignore")
     for line in text.split("\n"):
-        if not line.startswith("data:"):
+        if not line.startswith(_SSE_DATA_PREFIX):
             continue
         try:
-            data = json.loads(line[len("data:") :].strip())
+            data = json.loads(line[len(_SSE_DATA_PREFIX) :].strip())
         except json.JSONDecodeError:
             return None
         tokens = data.get("tokens") if isinstance(data, dict) else None
@@ -140,6 +140,7 @@ def _query_transform_ms(timings: RequestTimings) -> float | None:
 
 
 _WEB_SEARCH_HINTS = ("web_search", "web-search", "websearch", "search_web", "tavily")
+_SSE_DATA_PREFIX = "data:"
 
 
 def _chat_request_log_fields(
@@ -284,9 +285,9 @@ def _sniff_token_text(chunk: bytes | str | memoryview) -> str | None:
 
     data_lines: list[str] = []
     for line in text.split("\n"):
-        if not line.startswith("data:"):
+        if not line.startswith(_SSE_DATA_PREFIX):
             continue
-        data_lines.append(line[len("data:") :].removeprefix(" "))
+        data_lines.append(line[len(_SSE_DATA_PREFIX) :].removeprefix(" "))
 
     if not data_lines:
         return None

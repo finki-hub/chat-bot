@@ -24,11 +24,13 @@ class _FakeResponse:
 
 class _FakeLlm:
     async def ainvoke(self, messages):
+        await anyio.lowlevel.checkpoint()
         return _FakeResponse()
 
 
 def test_contextualize_query_logs_lengths_without_raw_text(caplog, monkeypatch):
     async def fake_transform_query(*args, **kwargs):
+        await anyio.lowlevel.checkpoint()
         return "rewritten private query"
 
     monkeypatch.setattr(context_module, "transform_query", fake_transform_query)
@@ -52,9 +54,11 @@ def test_contextualize_query_logs_lengths_without_raw_text(caplog, monkeypatch):
 
 def test_retrieval_logs_lengths_without_raw_query(caplog, monkeypatch):
     async def fake_contextualize_query(*args, **kwargs):
+        await anyio.lowlevel.checkpoint()
         return "private retrieval query"
 
     async def fake_build_query_variants(*args, **kwargs):
+        await anyio.lowlevel.checkpoint()
         raw = QueryVariant(
             kind="raw",
             text="private retrieval query",
@@ -66,9 +70,11 @@ def test_retrieval_logs_lengths_without_raw_query(caplog, monkeypatch):
         )
 
     async def fake_embed_variant(*args, **kwargs):
+        await anyio.lowlevel.checkpoint()
         return [0.1]
 
     async def fake_search_both(*args, **kwargs):
+        await anyio.lowlevel.checkpoint()
         return [], []
 
     monkeypatch.setattr(
@@ -104,6 +110,7 @@ def test_retrieval_logs_lengths_without_raw_query(caplog, monkeypatch):
 
 def test_query_transform_logs_lengths_without_raw_query(caplog, monkeypatch):
     async def fake_transform_query_with_openai(*args, **kwargs):
+        await anyio.lowlevel.checkpoint()
         return "transformed query"
 
     monkeypatch.setattr(
