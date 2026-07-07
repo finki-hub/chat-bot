@@ -3,20 +3,12 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, Literal, assert_never
+from typing import Final, Literal
 
 AnchorType = Literal["Q", "C", "none"]
-BucketName = Literal[
-    "overall",
-    "source=faq",
-    "source=chunk",
-    "difficulty=easy",
-    "difficulty=hard",
-    "abstain",
-]
 JsonValue = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 
-BUCKETS: Final[tuple[BucketName, ...]] = (
+BUCKETS: Final[tuple[str, ...]] = (
     "overall",
     "source=faq",
     "source=chunk",
@@ -87,7 +79,7 @@ class CaseDelta:
 
 @dataclass(frozen=True, slots=True)
 class EvalComparison:
-    bucket_deltas: dict[BucketName, BucketDelta]
+    bucket_deltas: dict[str, BucketDelta]
     fixed: list[CaseDelta]
     new_regressions: list[CaseDelta]
     unchanged_misses: list[CaseDelta]
@@ -172,7 +164,7 @@ def load_eval(path: Path) -> dict[str, EvalCase]:
     return _cases(_mapping(data, str(path)), str(path))
 
 
-def _in_bucket(case: EvalCase, bucket: BucketName) -> bool:
+def _in_bucket(case: EvalCase, bucket: str) -> bool:
     match bucket:
         case "overall":
             return not case.is_abstain
@@ -186,11 +178,11 @@ def _in_bucket(case: EvalCase, bucket: BucketName) -> bool:
             return (not case.is_abstain) and case.difficulty == "hard"
         case "abstain":
             return case.is_abstain
-        case unreachable:
-            assert_never(unreachable)
+        case _:
+            raise EvalJsonError(f"unknown bucket: {bucket}")
 
 
-def _summary(cases: list[EvalCase], bucket: BucketName) -> BucketSummary:
+def _summary(cases: list[EvalCase], bucket: str) -> BucketSummary:
     bucket_cases = [case for case in cases if _in_bucket(case, bucket)]
     final_count = sum(1 for case in bucket_cases if case.final)
     reciprocal_ranks = [1 / case.rank for case in bucket_cases if case.rank is not None]
@@ -211,12 +203,16 @@ def compare_cases(
 ) -> EvalComparison:
     baseline_ids = set(baseline)
     current_ids = set(current)
+    if baseline_ids != current_ids:
+        raise EvalJsonError(
+            f"case id mismatch: baseline-only={', '.join(sorted(baseline_ids - current_ids)) or 'none'}; current-only={', '.join(sorted(current_ids - baseline_ids)) or 'none'}",
+        )
     pairs = [
         (baseline[id_], current[id_]) for id_ in sorted(baseline_ids & current_ids)
     ]
     baseline_cases = [baseline_case for baseline_case, _current_case in pairs]
     current_cases = [current_case for _baseline_case, current_case in pairs]
-    bucket_deltas: dict[BucketName, BucketDelta] = {
+    bucket_deltas: dict[str, BucketDelta] = {
         bucket: BucketDelta(
             _summary(baseline_cases, bucket),
             _summary(current_cases, bucket),

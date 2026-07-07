@@ -128,6 +128,30 @@ def test_cli_fails_when_new_regressions_exceed_budget(tmp_path):
     assert exit_code == 1
 
 
+def test_cli_rejects_current_run_that_omits_baseline_case(tmp_path, capsys):
+    baseline_path = tmp_path / "baseline.json"
+    current_path = tmp_path / "current.json"
+    baseline_path.write_text(
+        json.dumps(_run([_result("omitted", anchor_type="Q", final=True)])),
+        encoding="utf-8",
+    )
+    current_path.write_text(json.dumps(_run([])), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "--baseline",
+            str(baseline_path),
+            "--current",
+            str(current_path),
+        ],
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "baseline-only=omitted" in captured.err
+
+
 def test_cli_reports_missing_eval_file_without_traceback(tmp_path, capsys):
     missing = tmp_path / "missing.json"
 
