@@ -132,12 +132,16 @@ describe('useConversations resumable streaming', () => {
     expect(calls).toStrictEqual(['local', 'server']);
   });
 
-  it('calls the BFF stop endpoint before stopping the local chat on explicit stop', async () => {
+  it('stops the local chat before awaiting the BFF stop endpoint on explicit stop', async () => {
     useUiStore.setState({ activeConversationId: 'conv-stop' });
     const calls: string[] = [];
-    stopChatStream.mockImplementation(() => {
+    let resolveServerStop: (() => void) | undefined;
+    const serverStopReleased = new Promise<void>((resolve) => {
+      resolveServerStop = resolve;
+    });
+    stopChatStream.mockImplementation(async () => {
       calls.push('server');
-      return Promise.resolve();
+      await serverStopReleased;
     });
     localStop.mockImplementation(() => {
       calls.push('local');
@@ -148,11 +152,14 @@ describe('useConversations resumable streaming', () => {
       result.current.onStop();
     });
 
-    await waitFor(() => {
-      expect(calls).toStrictEqual(['server', 'local']);
-    });
-
+    expect(calls).toStrictEqual(['local', 'server']);
     expect(stopChatStream).toHaveBeenCalledWith('conv-stop', undefined);
+
+    if (resolveServerStop === undefined) {
+      throw new Error('Server stop resolver was not captured');
+    }
+    resolveServerStop();
+    await serverStopReleased;
   });
 
   it('sends only the active stream id when explicitly stopping a stream', async () => {

@@ -42,16 +42,21 @@ export const useStopChat = ({
       };
 
       const stopCurrent = async (): Promise<void> => {
+        const stopResult = Promise.resolve(stop());
+        const stopServerAfterLocalStop = async (): Promise<void> => {
+          await stopResult;
+          await stopServer();
+        };
+
         if (order === 'local-first') {
-          await stop();
-          fireAndForget(stopServer());
+          fireAndForget(stopServerAfterLocalStop());
           return;
         }
 
         try {
           await stopServer();
         } finally {
-          await stop();
+          await stopResult;
         }
       };
 

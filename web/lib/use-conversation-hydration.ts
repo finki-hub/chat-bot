@@ -38,7 +38,12 @@ const mergeCurrentWithLocal = (
   current: MyUIMessage[],
   localMessages: MyUIMessage[],
 ): MyUIMessage[] => {
-  if (current.length > localMessages.length) {
+  const currentIds = new Set(current.map((message) => message.id));
+  const hasSameLocalBase =
+    localMessages.length > 0 &&
+    localMessages.every((message) => currentIds.has(message.id));
+
+  if (hasSameLocalBase && current.length > localMessages.length) {
     return current;
   }
 
@@ -47,7 +52,7 @@ const mergeCurrentWithLocal = (
     (message) => !localIds.has(message.id),
   );
 
-  if (extraCurrentMessages.length === 0) {
+  if (!(hasSameLocalBase && extraCurrentMessages.length > 0)) {
     return localMessages;
   }
 

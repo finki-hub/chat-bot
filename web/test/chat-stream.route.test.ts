@@ -165,6 +165,24 @@ describe('GET /api/chat/[id]/stream', () => {
       userId: USER_ID,
     });
   });
+
+  it('returns 204 when stale active state is already gone during Redis expiry cleanup', async () => {
+    // Given: Redis no longer has the stream and another request already cleared API state.
+    const { ChatStateRequestError } = await import('@/lib/chat-state-client');
+    routeMocks.resumableContext.resumeExistingStream.mockResolvedValueOnce(
+      null,
+    );
+    routeMocks.stateClient.clearActiveStreamIfCurrent.mockRejectedValueOnce(
+      new ChatStateRequestError(404),
+    );
+
+    // When: the owner reconnects after that stop/delete vs refresh race.
+    const res = await (await importGet())(streamRequest(), routeContext());
+
+    // Then: missing stale state is treated as an idempotent no-active-stream response.
+    expect(res.status).toBe(204);
+    await expect(res.text()).resolves.toBe('');
+  });
 });
 
 /* eslint-enable camelcase -- end Python chat state API payload fixtures. */

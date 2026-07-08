@@ -44,11 +44,17 @@ export const GET = async (
     }).resumeExistingStream(activeStreamId);
 
     if (stream === null || stream === undefined) {
-      await chatState.clearActiveStreamIfCurrent({
-        conversationId,
-        streamId: activeStreamId,
-        userId,
-      });
+      try {
+        await chatState.clearActiveStreamIfCurrent({
+          conversationId,
+          streamId: activeStreamId,
+          userId,
+        });
+      } catch (error) {
+        if (!(error instanceof ChatStateRequestError && error.status === 404)) {
+          throw error;
+        }
+      }
 
       return empty(204);
     }
