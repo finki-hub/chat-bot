@@ -86,27 +86,25 @@ export const POST = async (
       return Response.json({ aborted: false, stopped: false });
     }
 
-    if (body.activeStreamId === null) {
+    const requestedStreamId = body.activeStreamId ?? currentStreamId;
+
+    if (requestedStreamId !== currentStreamId) {
       return Response.json({ aborted: false, stopped: false });
     }
 
-    if (body.activeStreamId !== currentStreamId) {
-      return Response.json({ aborted: false, stopped: false });
-    }
-
-    const aborted = activeChatProducers.abort(currentStreamId);
+    const aborted = activeChatProducers.abort(requestedStreamId);
 
     await ignoreMissing(
       chatState.stopActiveStreamIfCurrent({
         conversationId,
-        streamId: currentStreamId,
+        streamId: requestedStreamId,
         userId,
       }),
     );
     await ignoreMissing(
       chatState.clearActiveStreamIfCurrent({
         conversationId,
-        streamId: currentStreamId,
+        streamId: requestedStreamId,
         userId,
       }),
     );

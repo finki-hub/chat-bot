@@ -78,11 +78,13 @@ const messagesForRequest = (body: ChatClientBody): readonly MyUIMessage[] => {
     : body.messages.slice(0, messageIndex);
 };
 
-const currentUserMessage = (body: ChatClientBody): MyUIMessage | undefined =>
+export const currentUserMessageForRequest = (
+  body: ChatClientBody,
+): MyUIMessage | undefined =>
   messagesForRequest(body).findLast((message) => message.role === 'user');
 
 export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
-  const userMessage = currentUserMessage(body);
+  const userMessage = currentUserMessageForRequest(body);
   const trimmed = userMessage === undefined ? [] : [userMessage];
   const messages: ConversationTurn[] = trimmed.map((message) => {
     const content = joinText(message);

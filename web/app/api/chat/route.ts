@@ -1,20 +1,24 @@
 import { createUIMessageStream, createUIMessageStreamResponse } from 'ai';
 import { after } from 'next/server';
 
-import type { ConversationTurn, MyUIMessage } from '@/lib/api-types';
+import type { MyUIMessage } from '@/lib/api-types';
 
 import {
   AuthenticationRequiredError,
   getAuthenticatedChatUserId,
 } from '@/lib/authenticated-chat-user';
 import {
-  type ChatStateJsonValue,
-  type ChatStateMetadata,
+  assistantMetadata,
+  lastUserMessageForState,
+  persistedTurns,
+} from '@/lib/chat-route-state';
+import {
   ChatStateRequestError,
   createChatStateClient,
 } from '@/lib/chat-state-client';
 import {
   type ChatClientBody,
+  currentUserMessageForRequest,
   toChatRequestBody,
   translateToUiStream,
   type UiStreamMeta,
@@ -33,17 +37,8 @@ export const dynamic = 'force-dynamic';
 
 const SSE_CONTENT_TYPE = 'text/event-stream';
 
-type PersistedTurn = ConversationTurn & {
-  readonly id: string;
-};
-
 type ResumableChatClientBody = ChatClientBody & {
   readonly id?: string;
-};
-
-type UserMessageForState = {
-  readonly content: string;
-  readonly id: string;
 };
 
 const readDetail = async (response: Response): Promise<string> => {
@@ -77,71 +72,6 @@ const unauthenticated = (): Response =>
 const requiredText = (value: string | undefined): null | string =>
   value === undefined || value.length === 0 ? null : value;
 
-const isRecord = (
-  value: ChatStateJsonValue,
-): value is Record<string, ChatStateJsonValue> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const isConversationRole = (
-  value: unknown,
-): value is ConversationTurn['role'] =>
-  value === 'assistant' || value === 'user';
-
-const persistedTurnFrom = (value: ChatStateJsonValue): null | PersistedTurn => {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const content = value['content'];
-  const id = value['id'];
-  const role = value['role'];
-
-  if (
-    typeof content !== 'string' ||
-    typeof id !== 'string' ||
-    !isConversationRole(role)
-  ) {
-    return null;
-  }
-
-  return { content, id, role };
-};
-
-const persistedTurns = (
-  messages: readonly ChatStateJsonValue[],
-  currentMessageId: string,
-): ConversationTurn[] =>
-  messages.flatMap((message) => {
-    const turn = persistedTurnFrom(message);
-
-    return turn === null || turn.id === currentMessageId
-      ? []
-      : [{ content: turn.content, role: turn.role }];
-  });
-
-const lastUserMessageForState = (
-  body: ResumableChatClientBody,
-): null | UserMessageForState => {
-  const message = body.messages.findLast(
-    (candidate) => candidate.role === 'user',
-  );
-
-  if (message === undefined) {
-    return null;
-  }
-
-  const content = joinText(message).trim();
-
-  return content.length === 0 ? null : { content, id: message.id };
-};
-
-const assistantMetadata = (meta: UiStreamMeta): ChatStateMetadata => ({
-  ...(meta.inferenceModel !== undefined && {
-    inferenceModel: meta.inferenceModel,
-  }),
-  ...(meta.responseId !== undefined && { responseId: meta.responseId }),
-});
-
 const ignoreMissing = async (operation: Promise<void>): Promise<void> => {
   try {
     await operation;
@@ -161,7 +91,9 @@ export const POST = async (req: Request): Promise<Response> => {
     const inferenceModel = chatBody.inference_model;
     const conversationId = requiredText(clientBody.id);
     const userId = await getAuthenticatedChatUserId();
-    const userMessage = lastUserMessageForState(clientBody);
+    const userMessage = lastUserMessageForState(
+      currentUserMessageForRequest(clientBody),
+    );
 
     if (conversationId === null || userMessage === null) {
       return errorResponse(
@@ -185,6 +117,7 @@ export const POST = async (req: Request): Promise<Response> => {
     const trustedHistory = persistedTurns(
       loadedConversation.messages,
       userMessage.id,
+      chatBody.messages.length,
     );
     await chatState.upsertUserMessage({
       content: userMessage.content,

@@ -109,8 +109,8 @@ describe('POST /api/chat/[id]/stop', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it('does not stop an active stream when the request omits the current stream id', async () => {
-    // Given: a second tab has no response id, but this conversation has a live stream.
+  it('stops the current active stream when the request has not received its response id yet', async () => {
+    // Given: the server already recorded an active stream before the browser received its response id.
     routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
       conversation: {
         active_response_id: RESPONSE_ID,
@@ -122,7 +122,7 @@ describe('POST /api/chat/[id]/stop', () => {
       messages: [],
     });
 
-    // When: the stop body has no activeStreamId guard.
+    // When: the stop body has no activeStreamId guard yet.
     const res = await (
       await importPost()
     )(
@@ -130,19 +130,32 @@ describe('POST /api/chat/[id]/stop', () => {
       routeContext(),
     );
 
-    // Then: the live stream remains untouched.
+    // Then: the route falls back to the server-owned current stream.
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toStrictEqual({
-      aborted: false,
-      stopped: false,
+      aborted: true,
+      stopped: true,
     });
-    expect(routeMocks.activeChatProducers.abort).not.toHaveBeenCalled();
+    expect(routeMocks.activeChatProducers.abort).toHaveBeenCalledWith(
+      RESPONSE_ID,
+    );
     expect(
       routeMocks.stateClient.upsertAssistantMessage,
     ).not.toHaveBeenCalled();
     expect(
+      routeMocks.stateClient.stopActiveStreamIfCurrent,
+    ).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      streamId: RESPONSE_ID,
+      userId: USER_ID,
+    });
+    expect(
       routeMocks.stateClient.clearActiveStreamIfCurrent,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      streamId: RESPONSE_ID,
+      userId: USER_ID,
+    });
   });
 
   it('ignores a supplied assistant snapshot while stopping the current stream', async () => {
