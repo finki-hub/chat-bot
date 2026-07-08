@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.data.chat_conversation_delete import delete_conversation
 from app.data.chat_persistence import (
     ChatMessageConflictError,
     ChatPersistenceDatabase,
@@ -113,6 +114,26 @@ async def load_conversation_state(
     if loaded is None:
         raise _not_found()
     return loaded
+
+
+@router.delete(
+    "/conversations/{conversation_id}",
+    status_code=status.HTTP_200_OK,
+    operation_id="deleteChatStateConversation",
+)
+async def delete_conversation_state(
+    conversation_id: UUID,
+    user_id: UserIdQuery,
+    db: ChatPersistenceDatabase = db_dep,
+) -> ChatConversation:
+    deleted = await delete_conversation(
+        db,
+        conversation_id=conversation_id,
+        user_id=user_id,
+    )
+    if deleted is None:
+        raise _not_found()
+    return deleted
 
 
 @router.post(
