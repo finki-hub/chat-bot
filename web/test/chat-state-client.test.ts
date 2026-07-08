@@ -55,4 +55,27 @@ describe('createChatStateClient', () => {
     );
     expect(user.id).toBe('00000000-0000-4000-8000-000000000001');
   });
+
+  it('deletes a user-owned conversation with the server API key', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(null, {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createChatStateClient } = await import('@/lib/chat-state-client');
+    await createChatStateClient().deleteConversation({
+      conversationId: 'conv-delete',
+      userId: '00000000-0000-4000-8000-000000000001',
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(url).toBe(
+      'https://api:8880/chat/state/conversations/conv-delete?user_id=00000000-0000-4000-8000-000000000001',
+    );
+    expect(init.method).toBe('DELETE');
+    expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
+  });
 });
