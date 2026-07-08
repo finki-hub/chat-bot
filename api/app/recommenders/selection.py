@@ -16,17 +16,6 @@ from app.recommenders.types import (
 )
 
 
-def _committee_contains_required(
-    mentor: str | None,
-    members: Sequence[str],
-    required: frozenset[str],
-) -> bool:
-    if not required:
-        return True
-    committee = {mentor, *members}
-    return required <= {name for name in committee if name is not None}
-
-
 def _collect_supporting(
     ranked: RankedPeople,
     mentor: str | None,
@@ -46,6 +35,7 @@ def _apply_prior(
     prior_index: MentorPriorIndex | None,
     mentor: str | None,
     weight: float,
+    constraints: SelectionConstraints,
 ) -> dict[str, float]:
     if prior_index is None or mentor is None or weight <= 0.0:
         return candidates
@@ -54,7 +44,10 @@ def _apply_prior(
         return candidates
     out = dict(candidates)
     for name, score in _minmax(prior).items():
-        if name == mentor:
+        allowed = constraints.allowed
+        if name == mentor or name in constraints.exclude:
+            continue
+        if allowed is not None and name not in allowed:
             continue
         out[name] = out.get(name, 0.0) + weight * score
     return out
@@ -94,9 +87,7 @@ def _candidate_member_sets(
         key=lambda name: candidates[name],
         reverse=True,
     )
-    if len(pool) < 2:
-        return [tuple(pool)]
-    return list(itertools.combinations(pool, 2))
+    return [tuple(pool)] if len(pool) < 2 else list(itertools.combinations(pool, 2))
 
 
 def _member_alternatives(
@@ -108,7 +99,9 @@ def _member_alternatives(
 ) -> list[CommitteeAlternative]:
     alternatives: list[CommitteeAlternative] = []
     for members in _candidate_member_sets(candidates, constraints, mentor):
-        if not _committee_contains_required(mentor, members, constraints.include):
+        if constraints.include and not constraints.include <= {
+            name for name in {mentor, *members} if name is not None
+        }:
             continue
         alternatives.append(
             CommitteeAlternative(
@@ -133,19 +126,23 @@ def _candidates_for_mentor(
     candidates = {
         name: score
         for name, score in ranked.blended.items()
-        if name != mentor and name not in constraints.exclude
+        if name != mentor
+        and name not in constraints.exclude
+        and (constraints.allowed is None or name in constraints.allowed)
     }
     candidates = _apply_prior(
         candidates,
         mentor_prior,
         mentor,
         ranked.mentor_prior_weight,
+        constraints,
     )
     return _apply_prior(
         candidates,
         coauthor_prior,
         mentor,
         ranked.coauthor_prior_weight,
+        constraints,
     )
 
 
@@ -165,6 +162,7 @@ def _full_alternatives(
             reverse=True,
         )
         if name not in constraints.exclude
+        and (constraints.allowed is None or name in constraints.allowed)
     ][:mentor_topk]
     alternatives: list[CommitteeAlternative] = []
     selected_member_scores: dict[str, float] = {}

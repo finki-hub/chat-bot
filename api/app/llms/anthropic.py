@@ -15,9 +15,9 @@ from app.llms.agents import (
     stream_sync_gen_as_sse,
     thinking_budget,
 )
-from app.llms.mcp import get_mcp_tools
 from app.llms.models import ANTHROPIC_NO_SAMPLING_MODELS, Model
 from app.llms.prompts import build_agent_messages
+from app.llms.tools import get_agent_tools
 from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -198,7 +198,7 @@ async def stream_anthropic_agent_response(
             reasoning=reasoning,
         )
 
-        tools = await get_mcp_tools()
+        tools = await get_agent_tools()
 
         logger.info(
             "Available tools: %s",

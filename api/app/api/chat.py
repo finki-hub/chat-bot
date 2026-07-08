@@ -559,7 +559,7 @@ async def _chat_response_stream(
             context = f"Денешен датум: {today}.\n\n{context}"
 
             with timed("agent.setup"):
-                response = await handle_chat(payload, context, observation)
+                response = await handle_chat(payload, context, observation, db)
         except Exception:
             logger.exception("Chat context build failed before streaming")
             links_task.cancel()
