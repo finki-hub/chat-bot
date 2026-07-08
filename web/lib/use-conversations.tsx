@@ -145,11 +145,13 @@ export const useConversations = (
         fireAndForget(
           (async () => {
             await handleStop('local-first');
+            convoIdRef.current = id;
             setActiveId(id);
           })(),
         );
         return;
       }
+      convoIdRef.current = id;
       setActiveId(id);
     },
     [convoIdRef, handleStop, setActiveId, status],
@@ -173,11 +175,10 @@ export const useConversations = (
         }
       }
       await deleteConversation(id);
-      if (deletingActiveConversation) {
+      if (deletingActiveConversation && convoIdRef.current === id) {
         setActiveId(null);
         setMessages([]);
         setActiveError(undefined);
-        // eslint-disable-next-line require-atomic-updates -- the active id is intentionally cleared after the delete succeeds
         convoIdRef.current = null;
       }
       await refreshConversations();

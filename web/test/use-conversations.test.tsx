@@ -274,6 +274,47 @@ describe('useConversations resumable streaming', () => {
     ]);
   });
 
+  it('keeps a newly selected conversation when active delete finishes later', async () => {
+    const { deleteConversation } = await import('@/lib/db');
+    const activeConversationId = 'conv-active';
+    useUiStore.setState({ activeConversationId });
+    let resolveServerDelete: (() => void) | undefined;
+    const serverDeleteReleased = new Promise<void>((resolve) => {
+      resolveServerDelete = resolve;
+    });
+    deleteChatConversation.mockImplementation(async () => {
+      await serverDeleteReleased;
+    });
+    const { result } = renderHook(() => useConversations('model-a'));
+
+    act(() => {
+      result.current.onDelete(activeConversationId);
+    });
+
+    await waitFor(() => {
+      expect(deleteChatConversation).toHaveBeenCalledWith(activeConversationId);
+    });
+
+    act(() => {
+      result.current.onSelect('conv-next');
+    });
+
+    await waitFor(() => {
+      expect(useUiStore.getState().activeConversationId).toBe('conv-next');
+    });
+
+    if (resolveServerDelete === undefined) {
+      throw new Error('Server delete resolver was not captured');
+    }
+    resolveServerDelete();
+
+    await waitFor(() => {
+      expect(deleteConversation).toHaveBeenCalledWith(activeConversationId);
+    });
+
+    expect(useUiStore.getState().activeConversationId).toBe('conv-next');
+  });
+
   it('removes the local conversation when the server conversation is already gone', async () => {
     const { deleteConversation } = await import('@/lib/db');
     deleteChatConversation.mockRejectedValueOnce(
