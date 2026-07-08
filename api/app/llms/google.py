@@ -17,9 +17,9 @@ from app.llms.agents import (
     stream_sync_gen_as_sse,
     thinking_budget,
 )
-from app.llms.mcp import get_mcp_tools
 from app.llms.models import Model
 from app.llms.prompts import build_agent_messages
+from app.llms.tools import get_agent_tools
 from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -235,7 +235,7 @@ async def stream_google_agent_response(
     try:
         llm = get_google_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
 
-        tools = await get_mcp_tools()
+        tools = await get_agent_tools()
 
         logger.info(
             "Available tools: %s",

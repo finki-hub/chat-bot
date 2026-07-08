@@ -2,6 +2,7 @@ import logging
 
 from fastapi.responses import StreamingResponse
 
+from app.data.connection import Database
 from app.llms.agents import StreamObservation
 from app.llms.prompts import (
     DEFAULT_AGENT_SYSTEM_PROMPT,
@@ -9,7 +10,9 @@ from app.llms.prompts import (
     markdown_instructions,
     to_history_messages,
 )
+from app.llms.recommendation_tools import build_recommendation_tools
 from app.llms.streams import stream_response_with_agent
+from app.llms.tools import agent_request_tools
 from app.schemas.chat import ChatSchema
 from app.utils.settings import Settings
 
@@ -22,6 +25,7 @@ async def handle_chat(
     payload: ChatSchema,
     context: str,
     observation: StreamObservation | None = None,
+    db: Database | None = None,
 ) -> StreamingResponse:
     """
     Handle chat using an agent with MCP tool support.
@@ -47,14 +51,16 @@ async def handle_chat(
         ],
     )
 
-    return await stream_response_with_agent(
-        user_prompt,
-        payload.inference_model,
-        system_prompt=system_prompt,
-        history=history,
-        temperature=payload.temperature,
-        top_p=payload.top_p,
-        max_tokens=payload.max_tokens,
-        reasoning=payload.reasoning,
-        observation=observation,
-    )
+    tools = build_recommendation_tools(db) if db is not None else []
+    with agent_request_tools(tools):
+        return await stream_response_with_agent(
+            user_prompt,
+            payload.inference_model,
+            system_prompt=system_prompt,
+            history=history,
+            temperature=payload.temperature,
+            top_p=payload.top_p,
+            max_tokens=payload.max_tokens,
+            reasoning=payload.reasoning,
+            observation=observation,
+        )

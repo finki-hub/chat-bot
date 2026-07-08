@@ -14,9 +14,9 @@ from app.llms.agents import (
     create_agent_token_generator,
     stream_sync_gen_as_sse,
 )
-from app.llms.mcp import get_mcp_tools
 from app.llms.models import Model
 from app.llms.prompts import build_agent_messages, stitch_conversation
+from app.llms.tools import get_agent_tools
 from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -204,7 +204,7 @@ async def stream_ollama_agent_response(
     try:
         llm = get_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
 
-        tools = await get_mcp_tools()
+        tools = await get_agent_tools()
 
         logger.info(
             "Available tools: %s",
