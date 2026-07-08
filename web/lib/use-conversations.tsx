@@ -20,6 +20,7 @@ import {
   setMessageFeedback,
 } from '@/lib/db';
 import { deriveTitle } from '@/lib/messages';
+import { deleteChatConversation } from '@/lib/transport';
 import { useUiStore } from '@/lib/ui-store';
 import { useConversationChatRuntime } from '@/lib/use-conversation-chat-runtime';
 import { useConversationList } from '@/lib/use-conversation-list';
@@ -153,6 +154,7 @@ export const useConversations = (
 
   const handleDelete = useCallback(
     async (id: string) => {
+      await deleteChatConversation(id);
       await deleteConversation(id);
       if (convoIdRef.current === id) {
         handleNewChat();

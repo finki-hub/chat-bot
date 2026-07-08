@@ -5,6 +5,8 @@ import type { MyUIMessage } from '@/lib/api-types';
 import {
   buildChatTransport,
   type ChatExtras,
+  deleteChatConversation,
+  DeleteChatConversationError,
   stopChatStream,
   StopChatStreamError,
 } from '@/lib/transport';
@@ -171,6 +173,35 @@ describe('buildChatTransport', () => {
     );
     await expect(stopChatStream('conv-7')).rejects.toMatchObject({
       status: 500,
+    });
+  });
+
+  it('calls the conversation delete endpoint without client ownership headers', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deleteChatConversation('conv-7');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/chat/conv-7', {
+      method: 'DELETE',
+    });
+  });
+
+  it('throws when the conversation delete endpoint rejects the request', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response(null, { status: 403 })),
+    );
+
+    await expect(deleteChatConversation('conv-7')).rejects.toBeInstanceOf(
+      DeleteChatConversationError,
+    );
+    await expect(deleteChatConversation('conv-7')).rejects.toMatchObject({
+      status: 403,
     });
   });
 });

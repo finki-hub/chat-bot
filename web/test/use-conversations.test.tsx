@@ -14,6 +14,7 @@ type UseChatOptions = {
 const chatState = { status: 'ready' };
 
 const localStop = vi.fn<() => Promise<void> | void>();
+const deleteChatConversation = vi.fn<(id: string) => Promise<void>>();
 const stopChatStream =
   vi.fn<(id: string, snapshot?: unknown) => Promise<void>>();
 const chatMessages: MyUIMessage[] = [];
@@ -42,6 +43,7 @@ vi.mock('@/lib/transport', () => ({
   buildChatTransport: vi.fn<() => { readonly kind: 'transport' }>(() => ({
     kind: 'transport',
   })),
+  deleteChatConversation: (id: string) => deleteChatConversation(id),
   stopChatStream: (id: string, snapshot?: unknown) =>
     stopChatStream(id, snapshot),
 }));
@@ -75,6 +77,8 @@ vi.mock('@/lib/db', () => ({
 
 describe('useConversations resumable streaming', () => {
   beforeEach(() => {
+    deleteChatConversation.mockReset();
+    deleteChatConversation.mockResolvedValue();
     localStop.mockClear();
     chatMessages.length = 0;
     stopChatStream.mockReset();
@@ -191,5 +195,27 @@ describe('useConversations resumable streaming', () => {
         activeStreamId: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d22',
       });
     });
+  });
+
+  it('deletes server state before removing the local conversation', async () => {
+    const { deleteConversation } = await import('@/lib/db');
+    const calls: string[] = [];
+    deleteChatConversation.mockImplementation(() => {
+      calls.push('server');
+      return Promise.resolve();
+    });
+    vi.mocked(deleteConversation).mockImplementation(() => {
+      calls.push('local');
+      return Promise.resolve();
+    });
+    const { result } = renderHook(() => useConversations('model-a'));
+
+    await act(async () => {
+      await result.current.onDelete('conv-delete');
+    });
+
+    expect(deleteChatConversation).toHaveBeenCalledWith('conv-delete');
+    expect(deleteConversation).toHaveBeenCalledWith('conv-delete');
+    expect(calls).toStrictEqual(['server', 'local']);
   });
 });
