@@ -1,5 +1,4 @@
 import logging
-from typing import assert_never
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -36,8 +35,7 @@ def _inactive_staff_detail(exc: InactiveStaffRequestedError) -> str:
                 "include_professors must contain only active staff members: "
                 f"{', '.join(exc.names)}"
             )
-        case unreachable:
-            assert_never(unreachable)
+        case _:
             msg = "Unexpected inactive staff field"
             raise AssertionError(msg)
 
