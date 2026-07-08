@@ -73,3 +73,20 @@ async def test_agent_tools_include_request_scoped_recommendation_tool(
 
     assert [item.name for item in tools] == ["recommend_diploma_committee"]
     assert await get_agent_tools() == []
+
+
+@pytest.mark.anyio
+async def test_agent_tools_keep_request_scoped_tools_when_mcp_fails(
+    monkeypatch,
+) -> None:
+    async def fake_get_mcp_tools():
+        msg = "MCP server unavailable"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr("app.llms.tools.get_mcp_tools", fake_get_mcp_tools)
+    tool = build_recommendation_tools(Database("postgresql://test"))[0]
+
+    with agent_request_tools([tool]):
+        tools = await get_agent_tools()
+
+    assert [item.name for item in tools] == ["recommend_diploma_committee"]
