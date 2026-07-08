@@ -36,15 +36,6 @@ const parsePayload = (value: unknown): FeedbackClientPayload | null => {
   return {
     feedbackType,
     responseId,
-    ...(typeof candidate['answerText'] === 'string' && {
-      answerText: candidate['answerText'],
-    }),
-    ...(typeof candidate['inferenceModel'] === 'string' && {
-      inferenceModel: candidate['inferenceModel'],
-    }),
-    ...(typeof candidate['questionText'] === 'string' && {
-      questionText: candidate['questionText'],
-    }),
   };
 };
 
@@ -57,13 +48,6 @@ const toSchema = (
   feedback_type: payload.feedbackType,
   response_id: payload.responseId,
   user_id: userId,
-  ...(payload.answerText !== undefined && { answer_text: payload.answerText }),
-  ...(payload.inferenceModel !== undefined && {
-    inference_model: payload.inferenceModel,
-  }),
-  ...(payload.questionText !== undefined && {
-    question_text: payload.questionText,
-  }),
   /* eslint-enable camelcase -- snake_case mirrors the Python API wire contract */
 });
 

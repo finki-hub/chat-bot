@@ -5,12 +5,13 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ChatUserUpsert(BaseModel):
+    provider: str = Field(min_length=1)
     provider_subject: str = Field(min_length=1)
     email: str | None = None
     name: str | None = None
     avatar_url: str | None = None
 
-    @field_validator("provider_subject", "email", "name", "avatar_url")
+    @field_validator("provider", "provider_subject", "email", "name", "avatar_url")
     @classmethod
     def _strip_present_text(cls, value: str | None) -> str | None:
         if value is None:

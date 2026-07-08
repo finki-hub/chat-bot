@@ -5,6 +5,7 @@ from uuid import uuid4
 class FakeChatDatabase:
     def __init__(self) -> None:
         self.conversations: dict[object, dict[str, object]] = {}
+        self.feedback: dict[tuple[object, object, object], dict[str, object]] = {}
         self.messages: dict[object, dict[str, object]] = {}
         self.users: dict[tuple[object, object], dict[str, object]] = {}
         self.now = datetime(2026, 7, 7, tzinfo=UTC)
@@ -31,6 +32,77 @@ class FakeChatDatabase:
             current["name"] = name
             current["avatar_url"] = avatar_url
             current["updated_at"] = self.now
+            return current
+
+        if "SELECT" in query and "assistant.content AS answer_text" in query:
+            response_id, user_id = args
+            for assistant in self.messages.values():
+                conversation = self.conversations.get(assistant["conversation_id"])
+                if (
+                    assistant["response_id"] != response_id
+                    or assistant["role"] != "assistant"
+                    or conversation is None
+                    or str(conversation["user_id"]) != user_id
+                ):
+                    continue
+                prior_questions = [
+                    message
+                    for message in self.messages.values()
+                    if message["conversation_id"] == assistant["conversation_id"]
+                    and message["role"] == "user"
+                    and self._created_at(message) <= self._created_at(assistant)
+                ]
+                question = max(prior_questions, key=self._created_at, default=None)
+                metadata = assistant["metadata"]
+                inference_model = None
+                if isinstance(metadata, dict):
+                    inference_model = metadata.get("inferenceModel")
+                return {
+                    "answer_text": assistant["content"],
+                    "inference_model": inference_model,
+                    "question_text": None if question is None else question["content"],
+                }
+            return None
+
+        if "INSERT INTO feedback" in query:
+            (
+                response_id,
+                client,
+                user_id,
+                feedback_type,
+                client_ref,
+                channel_id,
+                guild_id,
+                question_text,
+                answer_text,
+                inference_model,
+                embeddings_model,
+                query_transform_model,
+            ) = args
+            key = (response_id, client, user_id)
+            current = self.feedback.get(key)
+            if current is None:
+                current = {
+                    "id": uuid4(),
+                    "response_id": response_id,
+                    "client": client,
+                    "user_id": user_id,
+                    "feedback_type": feedback_type,
+                    "client_ref": client_ref,
+                    "channel_id": channel_id,
+                    "guild_id": guild_id,
+                    "question_text": question_text,
+                    "answer_text": answer_text,
+                    "inference_model": inference_model,
+                    "embeddings_model": embeddings_model,
+                    "query_transform_model": query_transform_model,
+                    "created_at": self.now,
+                    "updated_at": self.now,
+                }
+                self.feedback[key] = current
+            else:
+                current["feedback_type"] = feedback_type
+                current["updated_at"] = self.now
             return current
 
         if "INSERT INTO chat_conversation" in query:

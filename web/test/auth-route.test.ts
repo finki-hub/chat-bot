@@ -26,6 +26,15 @@ vi.mock('next-auth/providers/google', () => ({
   >((config) => ({ config, id: 'google' })),
 }));
 
+vi.mock('next-auth/providers/microsoft-entra-id', () => ({
+  default: vi.fn<
+    (config: unknown) => {
+      readonly config: unknown;
+      readonly id: 'microsoft-entra-id';
+    }
+  >((config) => ({ config, id: 'microsoft-entra-id' })),
+}));
+
 const setAuthEnv = (): void => {
   process.env['AUTH_GOOGLE_ID'] = 'google-client-id';
   process.env['AUTH_GOOGLE_SECRET'] = 'google-client-secret';
@@ -55,5 +64,27 @@ describe('Auth.js route handler', () => {
     process.env['AUTH_GOOGLE_ID'] = '';
 
     await expect(import('@/auth')).resolves.toHaveProperty('auth');
+  });
+
+  it('is configured when only Microsoft Entra ID credentials are present', async () => {
+    process.env['AUTH_GOOGLE_ID'] = '';
+    process.env['AUTH_GOOGLE_SECRET'] = '';
+    process.env['AUTH_MICROSOFT_ENTRA_ID_ID'] = 'microsoft-client-id';
+    process.env['AUTH_MICROSOFT_ENTRA_ID_SECRET'] = 'microsoft-client-secret';
+    process.env['AUTH_MICROSOFT_ENTRA_ID_ISSUER'] =
+      'https://login.microsoftonline.com/tenant-id/v2.0/';
+
+    const { isAuthConfigured } = await import('@/auth');
+
+    expect(isAuthConfigured()).toBe(true);
+  });
+
+  it('requires Auth.js secret and at least one OAuth provider', async () => {
+    process.env['AUTH_GOOGLE_ID'] = '';
+    process.env['AUTH_GOOGLE_SECRET'] = '';
+
+    const { isAuthConfigured } = await import('@/auth');
+
+    expect(isAuthConfigured()).toBe(false);
   });
 });

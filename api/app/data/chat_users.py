@@ -3,14 +3,12 @@ from collections.abc import Mapping
 from app.data.chat_persistence import ChatPersistenceDatabase
 from app.schemas.chat_user import ChatUser, ChatUserUpsert
 
-_GOOGLE_PROVIDER = "google"
-
 
 def _chat_user_from_row(row: Mapping[str, object]) -> ChatUser:
     return ChatUser.model_validate(dict(row))
 
 
-async def upsert_google_chat_user(
+async def upsert_chat_user(
     db: ChatPersistenceDatabase,
     user: ChatUserUpsert,
 ) -> ChatUser:
@@ -25,7 +23,7 @@ async def upsert_google_chat_user(
             updated_at = NOW()
         RETURNING *
         """,
-        _GOOGLE_PROVIDER,
+        user.provider,
         user.provider_subject,
         user.email,
         user.name,

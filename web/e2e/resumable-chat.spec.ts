@@ -263,9 +263,8 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     expect(noActive.status()).toBe(204);
     expect(resumeStatuses.length).toBeGreaterThan(0);
     expect(resumeStatuses.every((status) => status === 204)).toBe(true);
-    expect(stopRequests[0]).toMatchObject({
+    expect(stopRequests[0]).toEqual({
       activeStreamId: RESPONSE_ID,
-      assistantSnapshot: { content: STOP_TOKEN },
     });
 
     await activeServer.close();

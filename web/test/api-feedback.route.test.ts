@@ -54,10 +54,7 @@ const okJson = (body: unknown): Response =>
   });
 
 const validPayload: FeedbackClientPayload = {
-  answerText: 'Испитот е на 1 јуни.',
   feedbackType: 'like',
-  inferenceModel: 'claude-sonnet-4-6',
-  questionText: 'Кога е испитот?',
   responseId: 'r-123',
 };
 
@@ -71,7 +68,7 @@ describe('POST /api/feedback', () => {
     vi.unstubAllGlobals();
   });
 
-  it('injects x-api-key and forwards a snake_case FeedbackSchema, returning the ack', async () => {
+  it('injects x-api-key and forwards only server-owned feedback identifiers, returning the ack', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson(ack));
 
     vi.stubGlobal('fetch', fetchMock);
@@ -92,11 +89,8 @@ describe('POST /api/feedback', () => {
 
     /* eslint-disable camelcase -- snake_case mirrors the Python API wire contract */
     expect(JSON.parse(init.body as string)).toStrictEqual({
-      answer_text: 'Испитот е на 1 јуни.',
       client: 'web',
       feedback_type: 'like',
-      inference_model: 'claude-sonnet-4-6',
-      question_text: 'Кога е испитот?',
       response_id: 'r-123',
       user_id: 'api-user-1',
     });
@@ -106,16 +100,19 @@ describe('POST /api/feedback', () => {
     await expect(res.json()).resolves.toStrictEqual(ack);
   });
 
-  it('omits optional fields when not provided', async () => {
+  it('ignores forged browser metadata fields', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson(ack));
 
     vi.stubGlobal('fetch', fetchMock);
 
     await POST(
       jsonRequest({
+        answerText: 'forged answer',
         feedbackType: 'dislike',
+        inferenceModel: 'forged-model',
+        questionText: 'forged question',
         responseId: 'r-123',
-      } satisfies FeedbackClientPayload),
+      }),
     );
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];

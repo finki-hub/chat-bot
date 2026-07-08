@@ -145,7 +145,7 @@ describe('POST /api/chat/[id]/stop', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it('persists a supplied assistant snapshot before stopping the current stream', async () => {
+  it('ignores a supplied assistant snapshot while stopping the current stream', async () => {
     // Given: an active stream has visible partial assistant content in the browser.
     const snapshot = {
       content: 'Partial answer',
@@ -160,23 +160,15 @@ describe('POST /api/chat/[id]/stop', () => {
       routeContext(),
     );
 
-    // Then: partial content is persisted, the producer is aborted, and active state is current-guard cleared.
+    // Then: the untrusted partial content is ignored while the producer is aborted and active state is current-guard cleared.
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toStrictEqual({
       aborted: true,
       stopped: true,
     });
-    expect(routeMocks.stateClient.upsertAssistantMessage).toHaveBeenCalledWith({
-      content: 'Partial answer',
-      conversationId: CONVERSATION_ID,
-      metadata: {
-        inferenceModel: MODEL,
-        responseId: RESPONSE_ID,
-        stopped: true,
-      },
-      responseId: RESPONSE_ID,
-      userId: USER_ID,
-    });
+    expect(
+      routeMocks.stateClient.upsertAssistantMessage,
+    ).not.toHaveBeenCalled();
     expect(routeMocks.activeChatProducers.abort).toHaveBeenCalledWith(
       RESPONSE_ID,
     );

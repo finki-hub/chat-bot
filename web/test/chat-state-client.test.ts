@@ -15,7 +15,7 @@ describe('createChatStateClient', () => {
     vi.unstubAllGlobals();
   });
 
-  it('upserts a Google user with the server API key', async () => {
+  it('upserts an Auth.js user with the server API key', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json(
         Object.fromEntries([
@@ -23,24 +23,25 @@ describe('createChatStateClient', () => {
           ['email', 'student@example.com'],
           ['id', '00000000-0000-4000-8000-000000000001'],
           ['name', 'Student'],
-          ['provider', 'google'],
-          ['provider_subject', 'google-sub-1'],
+          ['provider', 'microsoft-entra-id'],
+          ['provider_subject', 'microsoft-sub-1'],
         ]),
       ),
     );
     vi.stubGlobal('fetch', fetchMock);
 
     const { createChatStateClient } = await import('@/lib/chat-state-client');
-    const user = await createChatStateClient().upsertGoogleUser({
+    const user = await createChatStateClient().upsertChatUser({
       avatarUrl: 'https://example.com/a.png',
       email: 'student@example.com',
       name: 'Student',
-      providerSubject: 'google-sub-1',
+      provider: 'microsoft-entra-id',
+      providerSubject: 'microsoft-sub-1',
     });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
-    expect(url).toBe('https://api:8880/chat/state/users/google');
+    expect(url).toBe('https://api:8880/chat/state/users');
     expect(init.method).toBe('POST');
     expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
     expect(JSON.parse(init.body as string)).toStrictEqual(
@@ -48,7 +49,8 @@ describe('createChatStateClient', () => {
         ['avatar_url', 'https://example.com/a.png'],
         ['email', 'student@example.com'],
         ['name', 'Student'],
-        ['provider_subject', 'google-sub-1'],
+        ['provider', 'microsoft-entra-id'],
+        ['provider_subject', 'microsoft-sub-1'],
       ]),
     );
     expect(user.id).toBe('00000000-0000-4000-8000-000000000001');

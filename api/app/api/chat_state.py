@@ -18,7 +18,7 @@ from app.data.chat_state import (
     mark_active_stream_stopped_if_current,
     upsert_assistant_message_by_response_id,
 )
-from app.data.chat_users import upsert_google_chat_user
+from app.data.chat_users import upsert_chat_user
 from app.data.db import get_db
 from app.schemas.chat_persistence import (
     ChatConversation,
@@ -69,15 +69,15 @@ async def _ensure_owned(
 
 
 @router.post(
-    "/users/google",
+    "/users",
     status_code=status.HTTP_200_OK,
-    operation_id="upsertGoogleChatUser",
+    operation_id="upsertChatUser",
 )
-async def upsert_google_user_state(
+async def upsert_user_state(
     payload: ChatUserUpsert,
     db: ChatPersistenceDatabase = db_dep,
 ) -> ChatUser:
-    return await upsert_google_chat_user(db, payload)
+    return await upsert_chat_user(db, payload)
 
 
 @router.post(

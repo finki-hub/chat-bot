@@ -155,7 +155,7 @@ describe('useConversations resumable streaming', () => {
     expect(stopChatStream).toHaveBeenCalledWith('conv-stop', undefined);
   });
 
-  it('sends the active assistant snapshot when explicitly stopping a stream', async () => {
+  it('sends only the active stream id when explicitly stopping a stream', async () => {
     useUiStore.setState({ activeConversationId: 'conv-stop' });
     chatMessages.push(
       {
@@ -182,13 +182,6 @@ describe('useConversations resumable streaming', () => {
     await waitFor(() => {
       expect(stopChatStream).toHaveBeenCalledWith('conv-stop', {
         activeStreamId: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d22',
-        assistantSnapshot: {
-          content: 'Partial answer',
-          metadata: {
-            inferenceModel: 'model-a',
-            responseId: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d22',
-          },
-        },
       });
     });
   });

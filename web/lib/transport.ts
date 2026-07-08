@@ -1,17 +1,7 @@
 import { DefaultChatTransport } from 'ai';
 import { posthog } from 'posthog-js';
 
-import type {
-  ModelId,
-  MyMetadata,
-  MyUIMessage,
-  QueryTransformMode,
-} from '@/lib/api-types';
-
-export type AssistantSnapshot = {
-  readonly content: string;
-  readonly metadata: MyMetadata;
-};
+import type { ModelId, MyUIMessage, QueryTransformMode } from '@/lib/api-types';
 
 export type ChatExtras = {
   embeddingsModel?: ModelId;
@@ -26,7 +16,6 @@ export type ChatExtras = {
 
 export type StopChatStreamOptions = {
   readonly activeStreamId?: string;
-  readonly assistantSnapshot?: AssistantSnapshot;
 };
 
 export const buildChatTransport = (

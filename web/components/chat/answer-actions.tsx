@@ -13,7 +13,6 @@ export type AnswerActionsProps = {
   onRegenerate?: () => void;
   onVote?: (vote: FeedbackType) => void;
   pending?: boolean;
-  questionText?: string;
   regenerateDisabled?: boolean;
 };
 
@@ -25,7 +24,6 @@ export const AnswerActions = ({
   onRegenerate,
   onVote,
   pending = false,
-  questionText,
   regenerateDisabled = false,
 }: AnswerActionsProps) => {
   const responseId = message.metadata?.responseId;
@@ -63,10 +61,7 @@ export const AnswerActions = ({
     try {
       const res = await fetch('/api/feedback', {
         body: JSON.stringify({
-          answerText: text,
           feedbackType,
-          inferenceModel: message.metadata?.inferenceModel,
-          questionText,
           responseId,
         }),
         headers: { 'content-type': 'application/json' },

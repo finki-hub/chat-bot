@@ -23,27 +23,29 @@ OWNER_ID = "00000000-0000-4000-8000-000000000001"
 INTRUDER_ID = "00000000-0000-4000-8000-000000000002"
 
 
-def test_chat_state_upserts_google_user() -> None:
-    # Given: an authenticated BFF has a Google subject from Auth.js.
+def test_chat_state_upserts_provider_user() -> None:
+    # Given: an authenticated BFF has a provider subject from Auth.js.
     db = FakeChatDatabase()
     client = _client(db)
 
-    # When: the same Google subject is upserted twice with a changed email.
+    # When: the same provider subject is upserted twice with a changed email.
     first = client.post(
-        "/chat/state/users/google",
+        "/chat/state/users",
         headers=_auth_headers(),
         json={
-            "provider_subject": "google-sub-1",
+            "provider": "microsoft-entra-id",
+            "provider_subject": "microsoft-sub-1",
             "email": "old@example.com",
             "name": "Old Name",
             "avatar_url": "https://example.com/old.png",
         },
     )
     second = client.post(
-        "/chat/state/users/google",
+        "/chat/state/users",
         headers=_auth_headers(),
         json={
-            "provider_subject": "google-sub-1",
+            "provider": "microsoft-entra-id",
+            "provider_subject": "microsoft-sub-1",
             "email": "new@example.com",
             "name": "New Name",
             "avatar_url": "https://example.com/new.png",
@@ -54,6 +56,7 @@ def test_chat_state_upserts_google_user() -> None:
     assert first.status_code == 200
     assert second.status_code == 200
     assert first.json()["id"] == second.json()["id"]
+    assert second.json()["provider"] == "microsoft-entra-id"
     assert second.json()["email"] == "new@example.com"
 
 

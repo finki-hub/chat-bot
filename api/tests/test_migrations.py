@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import anyio
+from anyio.lowlevel import checkpoint
 
 from app.data import connection as connection_module
 from app.data.connection import Database, Migration, _load_migrations
@@ -27,14 +28,14 @@ class FakeConnection:
         self.executed: list[tuple[str, tuple[str, ...]]] = []
 
     async def execute(self, sql: str, *args: str) -> str:
-        await anyio.lowlevel.checkpoint()
+        await checkpoint()
         self.executed.append((sql, args))
         if sql.startswith("INSERT INTO schema_migrations"):
             self.applied.add(args[0])
         return "EXECUTE"
 
     async def fetch(self, sql: str) -> list[dict[str, str]]:
-        await anyio.lowlevel.checkpoint()
+        await checkpoint()
         assert "FROM schema_migrations" in sql
         return [{"version": version} for version in sorted(self.applied)]
 
@@ -70,6 +71,16 @@ def test_load_migrations_returns_non_empty_sql_files_in_filename_order(
         Migration(version="0001_first.sql", sql="SELECT 1;"),
         Migration(version="0002_second.sql", sql="SELECT 2;"),
     ]
+
+
+def test_chat_user_migration_allows_supported_auth_providers() -> None:
+    # Given: a forward migration owns the persisted provider whitelist update.
+    migration = Path(
+        "resources/migrations/0003_allow_microsoft_chat_user_provider.sql",
+    ).read_text()
+
+    # When / Then: both Auth.js providers accepted by the web BFF are allowed.
+    assert "provider IN ('google', 'microsoft-entra-id')" in migration
 
 
 def test_run_migrations_applies_only_pending_versions(

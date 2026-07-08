@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { MyMetadata, MyUIMessage } from '@/lib/api-types';
+import type { MyUIMessage } from '@/lib/api-types';
 
 import {
   buildChatTransport,
@@ -147,19 +147,11 @@ describe('buildChatTransport', () => {
 
     await stopChatStream('conv-7', {
       activeStreamId: ACTIVE_STREAM_ID,
-      assistantSnapshot: {
-        content: 'partial answer',
-        metadata: { inferenceModel: GPT_MODEL } satisfies MyMetadata,
-      },
     });
 
     expect(fetchMock).toHaveBeenCalledWith('/api/chat/conv-7/stop', {
       body: JSON.stringify({
         activeStreamId: ACTIVE_STREAM_ID,
-        assistantSnapshot: {
-          content: 'partial answer',
-          metadata: { inferenceModel: GPT_MODEL },
-        },
       }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',

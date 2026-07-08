@@ -1,20 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { authConfiguredMock, authMock, upsertGoogleUserMock } = vi.hoisted(
-  () => ({
-    authConfiguredMock: vi.fn<() => boolean>().mockReturnValue(true),
-    authMock: vi.fn<() => Promise<unknown>>(),
-    upsertGoogleUserMock:
-      vi.fn<(input: unknown) => Promise<{ readonly id: string }>>(),
-  }),
-);
+const { authConfiguredMock, authMock, upsertChatUserMock } = vi.hoisted(() => ({
+  authConfiguredMock: vi.fn<() => boolean>().mockReturnValue(true),
+  authMock: vi.fn<() => Promise<unknown>>(),
+  upsertChatUserMock:
+    vi.fn<(input: unknown) => Promise<{ readonly id: string }>>(),
+}));
 
 vi.mock('@/auth', () => ({
   auth: authMock,
   isAuthConfigured: authConfiguredMock,
 }));
 vi.mock('@/lib/chat-state-client', () => ({
-  createChatStateClient: () => ({ upsertGoogleUser: upsertGoogleUserMock }),
+  createChatStateClient: () => ({ upsertChatUser: upsertChatUserMock }),
 }));
 
 describe('getAuthenticatedChatUserId', () => {
@@ -23,23 +21,24 @@ describe('getAuthenticatedChatUserId', () => {
     authConfiguredMock.mockReset();
     authConfiguredMock.mockReturnValue(true);
     authMock.mockReset();
-    upsertGoogleUserMock.mockReset();
+    upsertChatUserMock.mockReset();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('upserts the Auth.js Google subject and returns the API user id', async () => {
+  it('upserts the Auth.js provider identity and returns the API user id', async () => {
     authMock.mockResolvedValue({
       user: {
         email: 'student@example.com',
-        googleSubject: 'google-sub-1',
         image: 'https://example.com/a.png',
         name: 'Student',
+        provider: 'microsoft-entra-id',
+        providerSubject: 'microsoft-sub-1',
       },
     });
-    upsertGoogleUserMock.mockResolvedValue({
+    upsertChatUserMock.mockResolvedValue({
       id: '00000000-0000-4000-8000-000000000001',
     });
 
@@ -49,11 +48,12 @@ describe('getAuthenticatedChatUserId', () => {
     await expect(getAuthenticatedChatUserId()).resolves.toBe(
       '00000000-0000-4000-8000-000000000001',
     );
-    expect(upsertGoogleUserMock).toHaveBeenCalledWith({
+    expect(upsertChatUserMock).toHaveBeenCalledWith({
       avatarUrl: 'https://example.com/a.png',
       email: 'student@example.com',
       name: 'Student',
-      providerSubject: 'google-sub-1',
+      provider: 'microsoft-entra-id',
+      providerSubject: 'microsoft-sub-1',
     });
   });
 
@@ -66,6 +66,6 @@ describe('getAuthenticatedChatUserId', () => {
     await expect(getAuthenticatedChatUserId()).rejects.toBeInstanceOf(
       AuthenticationRequiredError,
     );
-    expect(upsertGoogleUserMock).not.toHaveBeenCalled();
+    expect(upsertChatUserMock).not.toHaveBeenCalled();
   });
 });

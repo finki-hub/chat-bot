@@ -18,12 +18,10 @@ export type ChatStateClient = {
   readonly upsertAssistantMessage: (
     input: UpsertAssistantMessageInput,
   ) => Promise<void>;
+  readonly upsertChatUser: (input: UpsertChatUserInput) => Promise<ChatUser>;
   readonly upsertConversation: (
     input: UpsertConversationInput,
   ) => Promise<void>;
-  readonly upsertGoogleUser: (
-    input: UpsertGoogleUserInput,
-  ) => Promise<ChatUser>;
   readonly upsertUserMessage: (input: UpsertUserMessageInput) => Promise<void>;
 };
 
@@ -60,10 +58,12 @@ export type ChatUser = {
   readonly email: null | string;
   readonly id: string;
   readonly name: null | string;
-  readonly provider: 'google';
+  readonly provider: ChatUserProvider;
   readonly provider_subject: string;
   readonly updated_at?: string;
 };
+
+export type ChatUserProvider = 'google' | 'microsoft-entra-id';
 
 type ClearActiveStreamInput = {
   readonly conversationId: string;
@@ -91,17 +91,18 @@ type UpsertAssistantMessageInput = {
   readonly userId: string;
 };
 
+type UpsertChatUserInput = {
+  readonly avatarUrl?: string;
+  readonly email?: string;
+  readonly name?: string;
+  readonly provider: ChatUserProvider;
+  readonly providerSubject: string;
+};
+
 type UpsertConversationInput = {
   readonly conversationId: string;
   readonly model?: string;
   readonly userId: string;
-};
-
-type UpsertGoogleUserInput = {
-  readonly avatarUrl?: string;
-  readonly email?: string;
-  readonly name?: string;
-  readonly providerSubject: string;
 };
 
 type UpsertUserMessageInput = {
@@ -226,6 +227,23 @@ export const createChatStateClient = (): ChatStateClient => ({
       },
     );
   },
+  upsertChatUser: async ({
+    avatarUrl,
+    email,
+    name,
+    provider,
+    providerSubject,
+  }) =>
+    postStateJson<ChatUser>(
+      '/users',
+      JSON.stringify({
+        ...(avatarUrl !== undefined && { avatar_url: avatarUrl }),
+        ...(email !== undefined && { email }),
+        ...(name !== undefined && { name }),
+        provider,
+        provider_subject: providerSubject,
+      }),
+    ),
   upsertConversation: async ({ conversationId, model, userId }) => {
     await sendStateRequest('/conversations', {
       body: JSON.stringify({
@@ -236,16 +254,6 @@ export const createChatStateClient = (): ChatStateClient => ({
       method: 'POST',
     });
   },
-  upsertGoogleUser: async ({ avatarUrl, email, name, providerSubject }) =>
-    postStateJson<ChatUser>(
-      '/users/google',
-      JSON.stringify({
-        ...(avatarUrl !== undefined && { avatar_url: avatarUrl }),
-        ...(email !== undefined && { email }),
-        ...(name !== undefined && { name }),
-        provider_subject: providerSubject,
-      }),
-    ),
   upsertUserMessage: async ({ content, conversationId, messageId, userId }) => {
     await sendStateRequest(`/conversations/${conversationId}/messages/user`, {
       body: JSON.stringify({

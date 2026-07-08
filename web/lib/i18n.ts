@@ -4,7 +4,7 @@ export const messages = {
   'actions.like': 'Допаѓа',
   'actions.regenerate': 'Регенерирај',
   'app.title': 'ФИНКИ Хаб',
-  'auth.signIn': 'Најави се со Google',
+  'auth.signIn': 'Најави се',
   'auth.signOut': 'Одјави се',
   'common.cancel': 'Откажи',
   'common.save': 'Зачувај',

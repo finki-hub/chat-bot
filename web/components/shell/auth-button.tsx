@@ -36,7 +36,7 @@ export const AuthButton = () => {
       className="w-auto gap-2 px-3"
       disabled={status === 'loading'}
       onClick={() => {
-        void signIn('google');
+        void signIn();
       }}
       title={t('auth.signIn')}
     >

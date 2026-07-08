@@ -13,7 +13,7 @@ type MockSessionState =
     };
 
 const authMocks = vi.hoisted(() => ({
-  signIn: vi.fn<(provider: string) => Promise<void>>(() => Promise.resolve()),
+  signIn: vi.fn<(provider?: string) => Promise<void>>(() => Promise.resolve()),
   signOut: vi.fn<() => Promise<void>>(() => Promise.resolve()),
   useSession: vi.fn<() => MockSessionState>(),
 }));
@@ -21,18 +21,16 @@ const authMocks = vi.hoisted(() => ({
 vi.mock('next-auth/react', () => authMocks);
 
 describe('AuthButton', () => {
-  it('starts Google sign-in when the visitor is unauthenticated', () => {
+  it('opens provider-neutral sign-in when the visitor is unauthenticated', () => {
     authMocks.useSession.mockReturnValue({
       data: null,
       status: 'unauthenticated',
     });
 
     render(<AuthButton />);
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Најави се со Google' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Најави се' }));
 
-    expect(authMocks.signIn).toHaveBeenCalledWith('google');
+    expect(authMocks.signIn).toHaveBeenCalledWith();
   });
 
   it('signs the current user out when authenticated', () => {
