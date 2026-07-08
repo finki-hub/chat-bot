@@ -20,7 +20,7 @@ import {
   vi,
 } from 'vitest';
 
-import ChatPage from '@/app/page';
+import { ChatScreen } from '@/components/chat/chat-screen';
 import { ConversationList } from '@/components/shell/conversation-list';
 import { Sidebar } from '@/components/shell/sidebar';
 import { type ConversationRow, db } from '@/lib/db';
@@ -467,7 +467,7 @@ const renderChatPage = (): ReturnType<typeof rtlRender> => {
   return rtlRender(
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <ChatPage />
+        <ChatScreen />
       </QueryClientProvider>
     </SessionProvider>,
   );
