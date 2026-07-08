@@ -107,6 +107,7 @@ export const routeMocks = {
   },
   stateClient: {
     clearActiveStreamIfCurrent: vi.fn(async (_input: StateClientInput) => {}),
+    deleteConversation: vi.fn(async (_input: StateClientInput) => {}),
     loadConversation: vi.fn(
       async (_input: StateClientInput): Promise<LoadedConversation> => ({
         conversation: {
