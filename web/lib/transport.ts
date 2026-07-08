@@ -39,6 +39,16 @@ export const buildChatTransport = (
     }),
   });
 
+export class DeleteChatConversationError extends Error {
+  readonly status: number;
+
+  constructor(status: number, options?: ErrorOptions) {
+    super('Delete chat conversation failed', options);
+    this.name = 'DeleteChatConversationError';
+    this.status = status;
+  }
+}
+
 export class StopChatStreamError extends Error {
   readonly status: number;
 
@@ -48,6 +58,21 @@ export class StopChatStreamError extends Error {
     this.status = status;
   }
 }
+
+export const deleteChatConversation = async (
+  conversationId: string,
+): Promise<void> => {
+  const response = await fetch(
+    `/api/chat/${encodeURIComponent(conversationId)}`,
+    {
+      method: 'DELETE',
+    },
+  );
+
+  if (!response.ok) {
+    throw new DeleteChatConversationError(response.status);
+  }
+};
 
 export const stopChatStream = async (
   conversationId: string,

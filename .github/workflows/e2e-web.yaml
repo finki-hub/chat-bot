@@ -22,4 +22,5 @@ jobs:
         AUTH_SECRET=test-auth-secret
         AUTH_URL=http://localhost:3000
         CHAT_API_KEY=test-key
+        PLAYWRIGHT_AUTH_BYPASS=1
         RESUMABLE_STREAM_REDIS_URL=redis://localhost:6379

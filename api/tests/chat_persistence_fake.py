@@ -179,6 +179,21 @@ class FakeChatDatabase:
             conversation_id, user_id = args
             return self._owned_conversation(conversation_id, user_id)
 
+        if "DELETE FROM chat_conversation" in query:
+            conversation_id, user_id = args
+            current = self._owned_conversation(conversation_id, user_id)
+            if current is None:
+                return None
+            deleted = self.conversations.pop(conversation_id)
+            stale_message_ids = [
+                message_id
+                for message_id, message in self.messages.items()
+                if message["conversation_id"] == conversation_id
+            ]
+            for message_id in stale_message_ids:
+                del self.messages[message_id]
+            return deleted
+
         if "ON CONFLICT (conversation_id, response_id)" in query:
             conversation_id, response_id, message_id, content, metadata_json = args
             for existing in self.messages.values():

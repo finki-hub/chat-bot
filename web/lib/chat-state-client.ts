@@ -8,6 +8,7 @@ export type ChatStateClient = {
   readonly clearActiveStreamIfCurrent: (
     input: ClearActiveStreamInput,
   ) => Promise<void>;
+  readonly deleteConversation: (input: LoadConversationInput) => Promise<void>;
   readonly loadConversation: (
     input: LoadConversationInput,
   ) => Promise<ChatStateConversationWithMessages>;
@@ -175,6 +176,12 @@ export const createChatStateClient = (): ChatStateClient => ({
   clearActiveStreamIfCurrent: async ({ conversationId, streamId, userId }) => {
     await sendStateRequest(
       `/conversations/${conversationId}/active-stream/${streamId}?user_id=${encodeURIComponent(userId)}`,
+      { method: 'DELETE' },
+    );
+  },
+  deleteConversation: async ({ conversationId, userId }) => {
+    await sendStateRequest(
+      `/conversations/${conversationId}?user_id=${encodeURIComponent(userId)}`,
       { method: 'DELETE' },
     );
   },

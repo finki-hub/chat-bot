@@ -20,6 +20,10 @@ import {
   setMessageFeedback,
 } from '@/lib/db';
 import { deriveTitle } from '@/lib/messages';
+import {
+  deleteChatConversation,
+  DeleteChatConversationError,
+} from '@/lib/transport';
 import { useUiStore } from '@/lib/ui-store';
 import { useConversationChatRuntime } from '@/lib/use-conversation-chat-runtime';
 import { useConversationList } from '@/lib/use-conversation-list';
@@ -141,25 +145,60 @@ export const useConversations = (
         fireAndForget(
           (async () => {
             await handleStop('local-first');
+            convoIdRef.current = id;
             setActiveId(id);
           })(),
         );
         return;
       }
+      convoIdRef.current = id;
       setActiveId(id);
     },
     [convoIdRef, handleStop, setActiveId, status],
   );
 
-  const handleDelete = useCallback(
+  const deleteConversationEverywhere = useCallback(
     async (id: string) => {
+      const deletingActiveConversation = convoIdRef.current === id;
+      if (deletingActiveConversation && status !== 'ready') {
+        await handleStop();
+      }
+
+      try {
+        await deleteChatConversation(id);
+      } catch (error) {
+        const serverConversationAlreadyDeleted =
+          error instanceof DeleteChatConversationError && error.status === 404;
+
+        if (!serverConversationAlreadyDeleted) {
+          throw error;
+        }
+      }
       await deleteConversation(id);
-      if (convoIdRef.current === id) {
-        handleNewChat();
+      if (deletingActiveConversation && convoIdRef.current === id) {
+        setActiveId(null);
+        setMessages([]);
+        setActiveError(undefined);
+        convoIdRef.current = null;
       }
       await refreshConversations();
     },
-    [convoIdRef, handleNewChat, refreshConversations],
+    [
+      convoIdRef,
+      handleStop,
+      refreshConversations,
+      setActiveError,
+      setActiveId,
+      setMessages,
+      status,
+    ],
+  );
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      fireAndForget(deleteConversationEverywhere(id));
+    },
+    [deleteConversationEverywhere],
   );
 
   const handleClearAll = useCallback(async () => {

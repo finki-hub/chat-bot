@@ -193,6 +193,67 @@ def test_chat_state_wrong_user_cannot_load_or_mutate_state() -> None:
     assert all(row["content"] != "steal" for row in db.messages.values())
 
 
+def test_chat_state_delete_removes_owned_conversation_and_messages() -> None:
+    # Given: an authenticated owner has persisted conversation state.
+    db = FakeChatDatabase()
+    client = _client(db)
+    conversation_id = uuid4()
+    message_id = uuid4()
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={"id": str(conversation_id), "user_id": OWNER_ID},
+    )
+    client.post(
+        f"/chat/state/conversations/{conversation_id}/messages/user",
+        headers=_auth_headers(),
+        json={"content": "delete me", "id": str(message_id), "user_id": OWNER_ID},
+    )
+
+    # When: the owner deletes the conversation through the state API.
+    deleted = client.delete(
+        f"/chat/state/conversations/{conversation_id}",
+        headers=_auth_headers(),
+        params={"user_id": OWNER_ID},
+    )
+    loaded = client.get(
+        f"/chat/state/conversations/{conversation_id}",
+        headers=_auth_headers(),
+        params={"user_id": OWNER_ID},
+    )
+
+    # Then: the conversation and its messages are no longer visible.
+    assert deleted.status_code == 200
+    assert deleted.json()["id"] == str(conversation_id)
+    assert loaded.status_code == 404
+    assert conversation_id not in db.conversations
+    assert message_id not in db.messages
+
+
+def test_chat_state_wrong_user_cannot_delete_conversation() -> None:
+    # Given: a conversation owned by one user.
+    db = FakeChatDatabase()
+    client = _client(db)
+    conversation_id = uuid4()
+    create_response = client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={"id": str(conversation_id), "user_id": OWNER_ID},
+    )
+
+    # When: another user attempts to delete it.
+    deleted = client.delete(
+        f"/chat/state/conversations/{conversation_id}",
+        headers=_auth_headers(),
+        params={"user_id": INTRUDER_ID},
+    )
+
+    # Then: ownership failures look like missing state and the row remains.
+    assert create_response.status_code == 200
+    assert deleted.status_code == 404
+    assert conversation_id in db.conversations
+
+
 def test_chat_state_message_id_collision_is_not_cross_tenant_write() -> None:
     # Given: a victim conversation already has a user message id.
     db = FakeChatDatabase()
