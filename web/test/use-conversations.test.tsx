@@ -223,13 +223,55 @@ describe('useConversations resumable streaming', () => {
     });
     const { result } = renderHook(() => useConversations('model-a'));
 
-    await act(async () => {
-      await result.current.onDelete('conv-delete');
+    act(() => {
+      result.current.onDelete('conv-delete');
+    });
+
+    await waitFor(() => {
+      expect(deleteConversation).toHaveBeenCalledWith('conv-delete');
     });
 
     expect(deleteChatConversation).toHaveBeenCalledWith('conv-delete');
-    expect(deleteConversation).toHaveBeenCalledWith('conv-delete');
     expect(calls).toStrictEqual(['server', 'local']);
+  });
+
+  it('stops the active stream before deleting the active conversation', async () => {
+    const { deleteConversation } = await import('@/lib/db');
+    const activeConversationId = 'conv-active';
+    useUiStore.setState({ activeConversationId });
+    chatState.status = 'streaming';
+    const calls: string[] = [];
+    stopChatStream.mockImplementation(() => {
+      calls.push('stop-server');
+      return Promise.resolve();
+    });
+    localStop.mockImplementation(() => {
+      calls.push('stop-local');
+    });
+    deleteChatConversation.mockImplementation(() => {
+      calls.push('delete-server');
+      return Promise.resolve();
+    });
+    vi.mocked(deleteConversation).mockImplementation(() => {
+      calls.push('delete-local');
+      return Promise.resolve();
+    });
+    const { result } = renderHook(() => useConversations('model-a'));
+
+    act(() => {
+      result.current.onDelete(activeConversationId);
+    });
+
+    await waitFor(() => {
+      expect(deleteConversation).toHaveBeenCalledWith(activeConversationId);
+    });
+
+    expect(calls).toStrictEqual([
+      'stop-local',
+      'stop-server',
+      'delete-server',
+      'delete-local',
+    ]);
   });
 
   it('removes the local conversation when the server conversation is already gone', async () => {
@@ -239,10 +281,12 @@ describe('useConversations resumable streaming', () => {
     );
     const { result } = renderHook(() => useConversations('model-a'));
 
-    await act(async () => {
-      await result.current.onDelete('conv-local-only');
+    act(() => {
+      result.current.onDelete('conv-local-only');
     });
 
-    expect(deleteConversation).toHaveBeenCalledWith('conv-local-only');
+    await waitFor(() => {
+      expect(deleteConversation).toHaveBeenCalledWith('conv-local-only');
+    });
   });
 });

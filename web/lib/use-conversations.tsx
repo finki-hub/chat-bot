@@ -155,8 +155,13 @@ export const useConversations = (
     [convoIdRef, handleStop, setActiveId, status],
   );
 
-  const handleDelete = useCallback(
+  const deleteConversationEverywhere = useCallback(
     async (id: string) => {
+      const deletingActiveConversation = convoIdRef.current === id;
+      if (deletingActiveConversation && status !== 'ready') {
+        await handleStop();
+      }
+
       try {
         await deleteChatConversation(id);
       } catch (error) {
@@ -168,12 +173,31 @@ export const useConversations = (
         }
       }
       await deleteConversation(id);
-      if (convoIdRef.current === id) {
-        handleNewChat();
+      if (deletingActiveConversation) {
+        setActiveId(null);
+        setMessages([]);
+        setActiveError(undefined);
+        // eslint-disable-next-line require-atomic-updates -- the active id is intentionally cleared after the delete succeeds
+        convoIdRef.current = null;
       }
       await refreshConversations();
     },
-    [convoIdRef, handleNewChat, refreshConversations],
+    [
+      convoIdRef,
+      handleStop,
+      refreshConversations,
+      setActiveError,
+      setActiveId,
+      setMessages,
+      status,
+    ],
+  );
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      fireAndForget(deleteConversationEverywhere(id));
+    },
+    [deleteConversationEverywhere],
   );
 
   const handleClearAll = useCallback(async () => {
