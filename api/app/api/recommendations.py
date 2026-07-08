@@ -27,17 +27,19 @@ router = APIRouter(
 )
 
 
-def _inactive_staff_detail(exc: InactiveStaffRequestedError) -> str | dict[str, object]:
+def _inactive_staff_detail(exc: InactiveStaffRequestedError) -> str:
     match exc.field:
         case "mentor":
             return "mentor must be an active staff member"
         case "include_professors":
-            return {
-                "message": "include_professors must contain only active staff members",
-                "inactive_professors": list(exc.names),
-            }
+            return (
+                "include_professors must contain only active staff members: "
+                f"{', '.join(exc.names)}"
+            )
         case unreachable:
             assert_never(unreachable)
+            msg = "Unexpected inactive staff field"
+            raise AssertionError(msg)
 
 
 @router.post(

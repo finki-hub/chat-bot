@@ -60,5 +60,11 @@ async def get_active_staff_names() -> frozenset[str]:
         for member in staff
         if member.active == "1" and member.name.strip()
     )
+    if not active_names:
+        if cached is not None:
+            return cached[1]
+        msg = "Staff directory returned no active staff"
+        raise StaffDirectoryUnavailableError(msg)
+
     _active_staff_cache = (now, active_names)
     return active_names
