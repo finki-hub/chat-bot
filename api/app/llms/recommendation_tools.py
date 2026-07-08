@@ -13,11 +13,12 @@ from app.services.recommendations import (
 
 _RECOMMENDATION_TOOL_NAME = "recommend_diploma_committee"
 _RECOMMENDATION_TOOL_DESCRIPTION = (
-    "Recommend a FINKI diploma thesis committee from the internal defended-thesis "
-    "and professor-publication database. Use this when the user asks who should be "
-    "mentor or committee members for a proposed diploma topic. Provide title and any "
-    "known abstract, keywords, study program, research area, fixed mentor, included "
-    "professors, or excluded professors."
+    "Препорачај комисија за дипломска работа на ФИНКИ од интерната база со "
+    "одбранети дипломски работи и професорски публикации. Користи ја алатката "
+    "кога корисникот прашува кој треба да биде ментор или членови на комисија "
+    "за предложена дипломска тема. Испрати наслов и, ако се познати, апстракт, "
+    "клучни зборови, студиска програма, област, фиксен ментор, вклучени "
+    "професори или исклучени професори."
 )
 
 
