@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.data import get_active_staff_names
+from app.data import StaffDirectoryUnavailableError, get_active_staff_names
 from app.recommenders.selection import select_committee
 from app.recommenders.types import (
     MentorPriorIndex,
@@ -44,6 +44,28 @@ async def test_active_staff_names_include_only_active_entries(monkeypatch) -> No
     active_names = await get_active_staff_names()
 
     assert active_names == frozenset({"Active Professor", "Spaced Active"})
+
+
+@pytest.mark.anyio
+async def test_active_staff_names_reject_empty_active_directory(monkeypatch) -> None:
+    monkeypatch.setattr("app.data.staff._active_staff_cache", None)
+    monkeypatch.setattr(
+        "app.data.staff.settings.STAFF_API_URL",
+        "https://staff.example.test",
+    )
+    monkeypatch.setattr(
+        "app.data.staff.get_http_client",
+        lambda: FakeStaffClient(
+            httpx.Response(
+                200,
+                request=httpx.Request("GET", "https://staff.example.test"),
+                content=b'[{"name":"Inactive Professor","active":"0"}]',
+            ),
+        ),
+    )
+
+    with pytest.raises(StaffDirectoryUnavailableError, match="no active staff"):
+        await get_active_staff_names()
 
 
 def test_select_committee_filters_inactive_members_and_prior_candidates() -> None:

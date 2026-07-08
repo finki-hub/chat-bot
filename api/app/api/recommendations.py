@@ -127,10 +127,10 @@ async def recommend_committee(
     if inactive_includes:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "message": "include_professors must contain only active staff members",
-                "inactive_professors": inactive_includes,
-            },
+            detail=(
+                "include_professors must contain only active staff members: "
+                f"{', '.join(inactive_includes)}"
+            ),
         )
 
     text = proposal_text(payload)
