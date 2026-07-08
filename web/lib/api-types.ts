@@ -58,12 +58,8 @@ export type FeedbackAck = {
 };
 
 export type FeedbackClientPayload = {
-  answerText?: string;
-  feedbackType: FeedbackType;
-  inferenceModel?: string;
-  questionText?: string;
-  responseId: string;
-  userId: string;
+  readonly feedbackType: FeedbackType;
+  readonly responseId: string;
 };
 
 export type FeedbackSchema = {

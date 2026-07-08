@@ -5,29 +5,27 @@ import type {
   FeedbackType,
 } from '@/lib/api-types';
 
+import {
+  AuthenticationRequiredError,
+  getAuthenticatedChatUserId,
+} from '@/lib/authenticated-chat-user';
 import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-type ValidPayload = FeedbackClientPayload & { userId: string };
-
 const isFeedbackType = (value: unknown): value is FeedbackType =>
   value === 'dislike' || value === 'like';
 
-const parsePayload = (value: unknown): null | ValidPayload => {
+const parsePayload = (value: unknown): FeedbackClientPayload | null => {
   if (typeof value !== 'object' || value === null) {
     return null;
   }
 
   const candidate = value as Record<string, unknown>;
-  const { feedbackType, responseId, userId } = candidate;
+  const { feedbackType, responseId } = candidate;
 
   if (typeof responseId !== 'string' || responseId.length === 0) {
-    return null;
-  }
-
-  if (typeof userId !== 'string' || userId.length === 0) {
     return null;
   }
 
@@ -38,32 +36,18 @@ const parsePayload = (value: unknown): null | ValidPayload => {
   return {
     feedbackType,
     responseId,
-    userId,
-    ...(typeof candidate['answerText'] === 'string' && {
-      answerText: candidate['answerText'],
-    }),
-    ...(typeof candidate['inferenceModel'] === 'string' && {
-      inferenceModel: candidate['inferenceModel'],
-    }),
-    ...(typeof candidate['questionText'] === 'string' && {
-      questionText: candidate['questionText'],
-    }),
   };
 };
 
-const toSchema = (payload: ValidPayload): FeedbackSchema => ({
+const toSchema = (
+  payload: FeedbackClientPayload,
+  userId: string,
+): FeedbackSchema => ({
   client: 'web',
   /* eslint-disable camelcase -- snake_case mirrors the Python API wire contract */
   feedback_type: payload.feedbackType,
   response_id: payload.responseId,
-  user_id: payload.userId,
-  ...(payload.answerText !== undefined && { answer_text: payload.answerText }),
-  ...(payload.inferenceModel !== undefined && {
-    inference_model: payload.inferenceModel,
-  }),
-  ...(payload.questionText !== undefined && {
-    question_text: payload.questionText,
-  }),
+  user_id: userId,
   /* eslint-enable camelcase -- snake_case mirrors the Python API wire contract */
 });
 
@@ -75,6 +59,9 @@ const jsonError = (message: string, status: number): Response =>
       status,
     },
   );
+
+const unauthenticated = (): Response =>
+  jsonError('Authentication required', 401);
 
 export const POST = async (req: Request): Promise<Response> => {
   let raw: unknown;
@@ -89,12 +76,24 @@ export const POST = async (req: Request): Promise<Response> => {
 
   if (payload === null) {
     return jsonError(
-      'Invalid feedback payload: responseId, userId, and feedbackType (like|dislike) are required.',
+      'Invalid feedback payload: responseId and feedbackType (like|dislike) are required.',
       400,
     );
   }
 
-  const schema = toSchema(payload);
+  let userId: string;
+
+  try {
+    userId = await getAuthenticatedChatUserId();
+  } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return unauthenticated();
+    }
+
+    throw error;
+  }
+
+  const schema = toSchema(payload, userId);
 
   let upstream: Response;
 

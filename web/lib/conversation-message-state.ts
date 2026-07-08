@@ -31,9 +31,21 @@ export const replaceFinishedMessage =
     streamMessageId,
   }: FinishedReplacement): ((messages: MyUIMessage[]) => MyUIMessage[]) =>
   (messages) => {
-    const replacementIndex = messages.findIndex(
-      (message) => message.id === replacement.id,
-    );
+    const responseId = replacement.metadata?.responseId;
+    const canDedupeByResponseId = replacement.id === streamMessageId;
+    const replacementIndex = messages.findIndex((message) => {
+      if (message.id === replacement.id) {
+        return true;
+      }
+
+      return (
+        canDedupeByResponseId &&
+        responseId !== undefined &&
+        message.role === 'assistant' &&
+        message.id !== streamMessageId &&
+        message.metadata?.responseId === responseId
+      );
+    });
 
     if (replacementIndex === -1) {
       return [
@@ -42,13 +54,26 @@ export const replaceFinishedMessage =
       ];
     }
 
+    const existingReplacement = messages.at(replacementIndex);
+    const normalizedReplacement =
+      existingReplacement === undefined
+        ? replacement
+        : {
+            ...replacement,
+            id: existingReplacement.id,
+            metadata: {
+              ...existingReplacement.metadata,
+              ...replacement.metadata,
+            },
+          };
+
     return messages.flatMap((message, messageIndex): MyUIMessage[] => {
       if (messageIndex > replacementIndex && pruneAfterReplacement) {
         return [];
       }
 
-      if (message.id === replacement.id) {
-        return [replacement];
+      if (messageIndex === replacementIndex) {
+        return [normalizedReplacement];
       }
 
       if (message.id === streamMessageId) {

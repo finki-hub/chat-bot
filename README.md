@@ -48,24 +48,26 @@ npm install
 npm run dev   # serves http://localhost:3000
 ```
 
-Standalone, it needs `web/.env.local` with `API_BASE_URL` (the chat API base, e.g. `http://localhost:8880`) and `CHAT_API_KEY` (the master `x-api-key`, used server-side by the BFF for feedback submission).
+Standalone, it needs `web/.env.local` with `API_BASE_URL` (the chat API base, e.g. `http://localhost:8880`), `CHAT_API_KEY` (the master `x-api-key`, used server-side by the BFF), `RESUMABLE_STREAM_REDIS_URL`, `AUTH_URL`, `AUTH_SECRET`, and at least one Auth.js OAuth provider: Google (`AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`) or Microsoft Entra ID (`AUTH_MICROSOFT_ENTRA_ID_ID`, `AUTH_MICROSOFT_ENTRA_ID_SECRET`, `AUTH_MICROSOFT_ENTRA_ID_ISSUER`).
 
 ## Configuration
 
 The root [`.env.sample`](.env.sample) contains the main variables used by the Docker stacks:
 
 - `API_KEY` - required for authenticated API writes, embedding fill jobs, diploma sync, and feedback submission; change the sample value before deployment
+- `AUTH_URL`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_MICROSOFT_ENTRA_ID_ID`, `AUTH_MICROSOFT_ENTRA_ID_SECRET`, `AUTH_MICROSOFT_ENTRA_ID_ISSUER` - used by the web BFF for Auth.js login; configure Google, Microsoft Entra ID, or both. For Microsoft, use `https://login.microsoftonline.com/common/v2.0` to allow personal, work, and school accounts, or `https://login.microsoftonline.com/<tenant-id>/v2.0` to restrict logins to one tenant.
 - `MCP_SERVERS` - optional JSON array of named MCP tool servers. Each entry supports `name`, `url`, `transport` (`streamable_http` or `sse`), optional per-server `api_key`, and optional `allowed_tools` / `blocked_tools` lists for tool exposure control. Existing `MCP_HTTP_URLS`, `MCP_SSE_URLS`, and `MCP_API_KEY` values are still forwarded by the compose files for compatibility, but new deployments should use `MCP_SERVERS`
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT` - used by the database service and by the API `DATABASE_URL`
 - `DATABASE_POOL_MIN_SIZE`, `DATABASE_POOL_MAX_SIZE` - asyncpg pool sizing per API worker
 - `GPU_API_URL` - API-to-GPU-API base URL; Docker defaults to `http://gpu-api:8888`
 - `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OLLAMA_URL` and optional `*_BASE_URL` overrides - provider configuration for chat, embeddings, and query transformation models
+- `RESUMABLE_STREAM_REDIS_URL` - server-only Redis/Valkey URL used by the web BFF for resumable chat streams
 - `RERANKER_MIN_SCORE`, `SOURCE_RERANKER_MIN_SCORE`, `CHAT_HISTORY_MAX_TURNS` - retrieval and chat tuning
 - `PRELOAD_BGEM3` - whether the GPU API preloads the BGE-M3 embedder
 
 The compose files also support optional variables that are not listed in `.env.sample` because they have built-in defaults: `POSTHOG_KEY`, `POSTHOG_HOST`, `RERANKER_MODEL`, and `WEB_API_BASE_URL`.
 
-The standalone web app reads `API_BASE_URL` and `CHAT_API_KEY` from `web/.env.local`. Optional web-facing variables include `SITE_URL`, `NEXT_PUBLIC_POSTHOG_KEY`, and `NEXT_PUBLIC_POSTHOG_HOST`.
+The standalone web app reads `API_BASE_URL`, `CHAT_API_KEY`, `RESUMABLE_STREAM_REDIS_URL`, `AUTH_URL`, `AUTH_SECRET`, and any configured OAuth provider credentials from `web/.env.local`. Optional web-facing variables include `SITE_URL`, `NEXT_PUBLIC_POSTHOG_KEY`, and `NEXT_PUBLIC_POSTHOG_HOST`.
 
 ## Local Checks
 

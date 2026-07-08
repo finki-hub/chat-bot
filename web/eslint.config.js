@@ -46,6 +46,13 @@ const config = [
     },
   },
   {
+    files: ['test/**/*.{ts,tsx}'],
+    rules: {
+      'vitest/prefer-to-be-falsy': 'off',
+      'vitest/prefer-to-be-truthy': 'off',
+    },
+  },
+  {
     files: ['e2e/**/*.{ts,tsx}'],
     rules: vitestRulesOff,
   },

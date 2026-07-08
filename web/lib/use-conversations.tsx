@@ -1,51 +1,30 @@
 'use client';
 
-import { useChat } from '@ai-sdk/react';
-import { posthog } from 'posthog-js';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback } from 'react';
+import { flushSync } from 'react-dom';
 
-import type {
-  ErrorNotice,
-  FeedbackType,
-  MyUIMessage,
-  StatusPart,
-} from '@/lib/api-types';
+import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { fireAndForget } from '@/lib/async';
-import { generateChatTitle } from '@/lib/chat-title';
 import { renderAnswerActions } from '@/lib/conversation-actions';
 import {
   applyFeedback,
-  finalizeMessage,
   previewRegeneration,
-  replaceFinishedMessage,
 } from '@/lib/conversation-message-state';
 import {
   clearAllConversations,
   createConversation,
   deleteConversation,
-  loadMessages,
-  type MessageRow,
   renameConversation,
-  renameConversationIfTitle,
-  replaceConversationMessages,
   saveMessages,
   setMessageFeedback,
 } from '@/lib/db';
-import { t } from '@/lib/i18n';
 import { deriveTitle } from '@/lib/messages';
-import { buildChatTransport } from '@/lib/transport';
 import { useUiStore } from '@/lib/ui-store';
-import { useConversationHydration } from '@/lib/use-conversation-hydration';
+import { useConversationChatRuntime } from '@/lib/use-conversation-chat-runtime';
 import { useConversationList } from '@/lib/use-conversation-list';
-import { useStreamTiming } from '@/lib/use-stream-timing';
-
-const fromRow = (row: MessageRow): MyUIMessage => ({
-  id: row.id,
-  metadata: row.metadata,
-  parts: row.parts,
-  role: row.role,
-});
+import { useGeneratedTitle } from '@/lib/use-generated-title';
+import { useStopChat } from '@/lib/use-stop-chat';
 
 export const useConversations = (
   model: string,
@@ -56,165 +35,58 @@ export const useConversations = (
   const setActiveId = useUiStore((s) => s.setActiveConversationId);
 
   const { conversations, refreshConversations } = useConversationList();
-  const [activeStatus, setActiveStatus] = useState<StatusPart | undefined>();
-  const [activeError, setActiveError] = useState<ErrorNotice | undefined>();
-  const convoIdRef = useRef<null | string>(activeId);
-  const startedAtRef = useRef<null | number>(null);
-  const firstTokenAtRef = useRef<null | number>(null);
-  const activeErrorRef = useRef<ErrorNotice | undefined>(undefined);
-  const regeneratingMessageIdRef = useRef<null | string>(null);
-  const [regeneratingMessageId, setRegeneratingMessageId] = useState<
-    null | string
-  >(null);
-  const [generatingTitleId, setGeneratingTitleId] = useState<null | string>(
-    null,
-  );
-
-  const persistFinished = useCallback(
-    async (allMessages: readonly MyUIMessage[]): Promise<void> => {
-      const cid = convoIdRef.current;
-      if (!cid) {
-        return;
-      }
-      await replaceConversationMessages(cid, [...allMessages]);
-      await refreshConversations();
-    },
-    [refreshConversations],
-  );
-
-  // useChat keeps only the first transport, so read the latest values at send time.
-  const modelRef = useRef(model);
-  modelRef.current = model;
-  const reasoningRef = useRef(reasoning);
-  reasoningRef.current = reasoning;
-  const transport = useMemo(
-    () =>
-      buildChatTransport(() => ({
-        model: modelRef.current,
-        reasoning: reasoningRef.current,
-      })),
-    [],
-  );
-
-  const { messages, regenerate, sendMessage, setMessages, status, stop } =
-    useChat<MyUIMessage>({
-      onData: (part) => {
-        switch (part.type) {
-          case 'data-error':
-            setActiveError(part.data);
-            // Stamp it onto the message in onFinish so the notice persists past refresh.
-            activeErrorRef.current = part.data;
-            break;
-
-          case 'data-reset':
-            setActiveStatus(undefined);
-            break;
-
-          case 'data-status':
-            setActiveStatus(part.data);
-            break;
-        }
-      },
-      onError: () => {
-        regeneratingMessageIdRef.current = null;
-        setRegeneratingMessageId(null);
-        setActiveError(
-          (prev) =>
-            prev ?? { code: 'network', message: t('error.description') },
-        );
-      },
-      onFinish: ({ isAbort, isError, message }) => {
-        setActiveStatus(undefined);
-        const replacementId = regeneratingMessageIdRef.current;
-        regeneratingMessageIdRef.current = null;
-        setRegeneratingMessageId(null);
-        // Consume on every finish so a prior turn's error can't leak onto the next.
-        const error = activeErrorRef.current;
-        activeErrorRef.current = undefined;
-        // ai v7 also calls onFinish on abort/error; never finalize or persist a
-        // partial answer (it would ghost into a switched-away conversation).
-        if (isAbort || isError) {
-          return;
-        }
-        const finalizedBase = finalizeMessage(
-          message,
-          startedAtRef.current,
-          firstTokenAtRef.current,
-        );
-        const withError =
-          error === undefined
-            ? finalizedBase
-            : {
-                ...finalizedBase,
-                metadata: { ...finalizedBase.metadata, error },
-              };
-        const finalized =
-          replacementId === null
-            ? withError
-            : { ...withError, id: replacementId };
-        setMessages((prev) => {
-          const next = replaceFinishedMessage({
-            pruneAfterReplacement: replacementId !== null,
-            replacement: finalized,
-            streamMessageId: message.id,
-          })(prev);
-          fireAndForget(persistFinished(next));
-          return next;
-        });
-      },
-      transport,
-    });
-
-  useStreamTiming({
-    firstTokenAtRef,
-    messages,
-    startedAtRef,
-    status,
-  });
-
-  useConversationHydration({
-    activeId,
+  const {
+    activeError,
+    activeStatus,
     convoIdRef,
+    messages,
+    modelRef,
+    regenerate,
+    regeneratingMessageId,
+    regeneratingMessageIdRef,
+    sendMessageRef,
     setActiveError,
-    setActiveId,
     setActiveStatus,
     setMessages,
+    setRegeneratingMessageId,
+    status,
+    stop,
+  } = useConversationChatRuntime({
+    activeId,
+    model,
+    reasoning,
+    refreshConversations,
+    setActiveId,
   });
-
-  const applyGeneratedTitle = useCallback(
-    async (
-      id: string,
-      titleMessages: readonly MyUIMessage[],
-      expectedTitle: string,
-    ): Promise<void> => {
-      setGeneratingTitleId(id);
-      try {
-        const title = await generateChatTitle({
-          messages: titleMessages,
-          queryTransformModel: modelRef.current,
-        });
-
-        if (title === null) {
-          return;
-        }
-
-        await renameConversationIfTitle(id, expectedTitle, title);
-        await refreshConversations();
-      } finally {
-        setGeneratingTitleId((current) => (current === id ? null : current));
-      }
-    },
-    [refreshConversations],
-  );
+  const { applyGeneratedTitle, generatingTitleId, handleGenerateTitle } =
+    useGeneratedTitle({ conversations, modelRef, refreshConversations });
+  const handleStop = useStopChat({ convoIdRef, messages, model, stop });
 
   const handleNewChat = useCallback(() => {
-    // The Chat instance is shared across conversations; stop before leaving.
-    void stop();
+    if (status !== 'ready') {
+      fireAndForget(
+        (async () => {
+          await handleStop('local-first');
+          setActiveId(null);
+          setMessages([]);
+          setActiveError(undefined);
+          convoIdRef.current = null;
+        })(),
+      );
+      return;
+    }
     setActiveId(null);
     setMessages([]);
     setActiveError(undefined);
     convoIdRef.current = null;
-  }, [setActiveId, setMessages, stop]);
+  }, [
+    convoIdRef,
+    handleStop,
+    setActiveError,
+    setActiveId,
+    setMessages,
+    status,
+  ]);
 
   const handleSubmit = useCallback(
     async (text: string) => {
@@ -231,7 +103,10 @@ export const useConversations = (
         cid = convo.id;
         // eslint-disable-next-line require-atomic-updates -- fresh id, not a read-modify-write race
         convoIdRef.current = convo.id;
-        setActiveId(convo.id);
+        // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- conversation id must be committed before useChat resumes the new stream
+        flushSync(() => {
+          setActiveId(convo.id);
+        });
         await refreshConversations();
       }
       if (!cid) {
@@ -247,26 +122,33 @@ export const useConversations = (
       if (expectedTitle !== null) {
         fireAndForget(applyGeneratedTitle(cid, [userMessage], expectedTitle));
       }
-      fireAndForget(sendMessage(userMessage));
+      fireAndForget(sendMessageRef.current(userMessage));
     },
     [
       applyGeneratedTitle,
+      convoIdRef,
       model,
       refreshConversations,
-      sendMessage,
+      sendMessageRef,
+      setActiveError,
       setActiveId,
     ],
   );
 
   const handleSelect = useCallback(
     (id: string) => {
-      // Only tear down the stream when actually leaving the active conversation.
-      if (id !== activeId) {
-        void stop();
+      if (id !== convoIdRef.current && status !== 'ready') {
+        fireAndForget(
+          (async () => {
+            await handleStop('local-first');
+            setActiveId(id);
+          })(),
+        );
+        return;
       }
       setActiveId(id);
     },
-    [activeId, setActiveId, stop],
+    [convoIdRef, handleStop, setActiveId, status],
   );
 
   const handleDelete = useCallback(
@@ -277,7 +159,7 @@ export const useConversations = (
       }
       await refreshConversations();
     },
-    [handleNewChat, refreshConversations],
+    [convoIdRef, handleNewChat, refreshConversations],
   );
 
   const handleClearAll = useCallback(async () => {
@@ -299,7 +181,7 @@ export const useConversations = (
     }
     setActiveError(undefined);
     fireAndForget(regenerate());
-  }, [disabled, regenerate]);
+  }, [disabled, regenerate, setActiveError]);
 
   const regenerateMessage = useCallback(
     (options: { messageId: string }) => {
@@ -312,7 +194,14 @@ export const useConversations = (
       setActiveError(undefined);
       setActiveStatus(undefined);
     },
-    [disabled, regenerate],
+    [
+      disabled,
+      regenerate,
+      regeneratingMessageIdRef,
+      setActiveError,
+      setActiveStatus,
+      setRegeneratingMessageId,
+    ],
   );
 
   const handleRename = useCallback(
@@ -323,26 +212,6 @@ export const useConversations = (
     [refreshConversations],
   );
 
-  const handleGenerateTitle = useCallback(
-    (id: string) => {
-      const expectedTitle = conversations.find((c) => c.id === id)?.title;
-      if (expectedTitle === undefined) {
-        return;
-      }
-
-      const run = async (): Promise<void> => {
-        const rows = await loadMessages(id);
-        if (rows.length === 0) {
-          return;
-        }
-        await applyGeneratedTitle(id, rows.map(fromRow), expectedTitle);
-      };
-
-      fireAndForget(run());
-    },
-    [applyGeneratedTitle, conversations],
-  );
-
   const recordFeedback = useCallback(
     (messageId: string, vote: FeedbackType) => {
       setMessages(applyFeedback(messageId, vote));
@@ -350,15 +219,6 @@ export const useConversations = (
     },
     [setMessages],
   );
-
-  const handleStop = useCallback(() => {
-    /* eslint-disable camelcase -- PostHog event properties are snake_case. */
-    posthog.capture('chat_stopped', {
-      inference_model: model,
-    });
-    /* eslint-enable camelcase -- end of PostHog snake_case properties. */
-    void stop();
-  }, [model, stop]);
 
   const visibleMessages = previewRegeneration(messages, regeneratingMessageId);
   const renderActions = renderAnswerActions({
@@ -382,7 +242,9 @@ export const useConversations = (
     onNewChat: handleNewChat,
     onRename: handleRename,
     onSelect: handleSelect,
-    onStop: handleStop,
+    onStop: () => {
+      fireAndForget(handleStop());
+    },
     renderActions,
     retry,
     status,

@@ -1,5 +1,6 @@
 import { PanelLeft } from 'lucide-react';
 
+import { AuthButton } from '@/components/shell/auth-button';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
 import { IconButton, IconLink } from '@/components/ui/icon-controls';
 import { t } from '@/lib/i18n';
@@ -40,6 +41,7 @@ export const Header = ({ onToggleSidebar }: HeaderProps) => (
         {t('header.title')}
       </h1>
       <div className="ml-auto flex shrink-0 items-center gap-2">
+        <AuthButton />
         <IconLink
           href="https://github.com/finki-hub/chat-bot"
           rel="noopener noreferrer"

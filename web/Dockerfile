@@ -18,7 +18,17 @@ ARG NEXT_PUBLIC_POSTHOG_KEY=
 ARG NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
 ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
 ENV NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST
-RUN API_BASE_URL="http://localhost:8880" CHAT_API_KEY="build-time-placeholder" npm run build
+RUN API_BASE_URL="http://localhost:8880" \
+  AUTH_GOOGLE_ID="build-time-google-client-id" \
+  AUTH_GOOGLE_SECRET="build-time-google-client-secret" \
+  AUTH_MICROSOFT_ENTRA_ID_ID="" \
+  AUTH_MICROSOFT_ENTRA_ID_ISSUER="" \
+  AUTH_MICROSOFT_ENTRA_ID_SECRET="" \
+  AUTH_SECRET="build-time-auth-secret" \
+  AUTH_URL="http://localhost:3000" \
+  CHAT_API_KEY="build-time-placeholder" \
+  RESUMABLE_STREAM_REDIS_URL="redis://localhost:6379" \
+  npm run build
 
 FROM base AS runner
 WORKDIR /app

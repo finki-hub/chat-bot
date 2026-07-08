@@ -249,8 +249,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS professor_group_window_idx ON professor_group 
 );
 
 -- Response feedback (like/dislike). Consumer-agnostic, keyed by the response_id the
--- chatbot mints per /chat and returns via the X-Response-Id header. question/answer/model
--- columns are client-attested (the server stores what the consumer reports, unverified).
+-- chatbot mints per /chat and returns via the X-Response-Id header. Discord
+-- question/answer/model values are client-attested; web values are derived from persisted chat state.
 
 CREATE TABLE IF NOT EXISTS feedback (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),

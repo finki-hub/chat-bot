@@ -7,20 +7,7 @@ import { posthog } from 'posthog-js';
 import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { AnswerActions } from '@/components/chat/answer-actions';
-import { hasText, joinText } from '@/lib/message-parts';
-
-export type ChatStatus = 'error' | 'ready' | 'streaming' | 'submitted';
-
-const priorUserText = (
-  messages: MyUIMessage[],
-  message: MyUIMessage,
-): string | undefined => {
-  const prior = messages
-    .slice(0, messages.indexOf(message))
-    .findLast((m) => m.role === 'user');
-
-  return prior ? joinText(prior) : undefined;
-};
+import { hasText } from '@/lib/message-parts';
 
 export type AnswerActionsContext = {
   disabled: boolean;
@@ -29,6 +16,8 @@ export type AnswerActionsContext = {
   regenerate: (options: { messageId: string }) => void;
   status: ChatStatus;
 };
+
+export type ChatStatus = 'error' | 'ready' | 'streaming' | 'submitted';
 
 export const renderAnswerActions =
   ({ disabled, messages, onVote, regenerate, status }: AnswerActionsContext) =>
@@ -64,7 +53,6 @@ export const renderAnswerActions =
           onVote(message.id, vote);
         }}
         pending={streaming && messages.at(-1)?.id === message.id}
-        questionText={priorUserText(messages, message)}
         regenerateDisabled={streaming}
       />
     );

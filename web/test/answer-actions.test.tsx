@@ -60,14 +60,8 @@ describe('AnswerActions', () => {
 });
 
 describe('AnswerActions feedback', () => {
-  it('posts a like to /api/feedback with the anon user id and metadata', async () => {
-    localStorage.setItem('finkiHub.anonUserId', 'user-xyz');
-    render(
-      <AnswerActions
-        message={assistant('resp-9', 'Готов одговор')}
-        questionText="Прашање?"
-      />,
-    );
+  it('posts a like to /api/feedback with only the response id and vote', async () => {
+    render(<AnswerActions message={assistant('resp-9', 'Готов одговор')} />);
     fireEvent.click(screen.getByRole('button', { name: 'Допаѓа' }));
 
     const fetchMock = fetch as unknown as ReturnType<
@@ -81,13 +75,9 @@ describe('AnswerActions feedback', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
     expect(url).toBe('/api/feedback');
-    expect(JSON.parse(init.body as string)).toMatchObject({
-      answerText: 'Готов одговор',
+    expect(JSON.parse(init.body as string)).toStrictEqual({
       feedbackType: 'like',
-      inferenceModel: 'claude-sonnet-4-6',
-      questionText: 'Прашање?',
       responseId: 'resp-9',
-      userId: 'user-xyz',
     });
   });
 
