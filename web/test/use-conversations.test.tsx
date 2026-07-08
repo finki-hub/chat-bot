@@ -11,6 +11,18 @@ type UseChatOptions = {
   readonly resume?: boolean;
 };
 
+const { DeleteChatConversationError } = vi.hoisted(() => ({
+  DeleteChatConversationError: class MockDeleteChatConversationError extends Error {
+    readonly status: number;
+
+    constructor(status: number) {
+      super('Delete chat conversation failed');
+      this.name = 'DeleteChatConversationError';
+      this.status = status;
+    }
+  },
+}));
+
 const chatState = { status: 'ready' };
 
 const localStop = vi.fn<() => Promise<void> | void>();
@@ -44,6 +56,7 @@ vi.mock('@/lib/transport', () => ({
     kind: 'transport',
   })),
   deleteChatConversation: (id: string) => deleteChatConversation(id),
+  DeleteChatConversationError,
   stopChatStream: (id: string, snapshot?: unknown) =>
     stopChatStream(id, snapshot),
 }));
@@ -217,5 +230,19 @@ describe('useConversations resumable streaming', () => {
     expect(deleteChatConversation).toHaveBeenCalledWith('conv-delete');
     expect(deleteConversation).toHaveBeenCalledWith('conv-delete');
     expect(calls).toStrictEqual(['server', 'local']);
+  });
+
+  it('removes the local conversation when the server conversation is already gone', async () => {
+    const { deleteConversation } = await import('@/lib/db');
+    deleteChatConversation.mockRejectedValueOnce(
+      new DeleteChatConversationError(404),
+    );
+    const { result } = renderHook(() => useConversations('model-a'));
+
+    await act(async () => {
+      await result.current.onDelete('conv-local-only');
+    });
+
+    expect(deleteConversation).toHaveBeenCalledWith('conv-local-only');
   });
 });

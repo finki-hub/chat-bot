@@ -6,6 +6,10 @@ import MicrosoftEntraID from 'next-auth/providers/microsoft-entra-id';
 
 const authEnv = (name: string): string => process.env[name] ?? '';
 
+export const isPlaywrightAuthBypassEnabled = (): boolean =>
+  process.env.NODE_ENV !== 'production' &&
+  authEnv('PLAYWRIGHT_AUTH_BYPASS') === '1';
+
 const isGoogleConfigured = (): boolean =>
   authEnv('AUTH_GOOGLE_ID').length > 0 &&
   authEnv('AUTH_GOOGLE_SECRET').length > 0;
@@ -50,9 +54,11 @@ const authProviderDefinitions: readonly AuthProviderDefinition[] = [
   },
 ];
 
-export const providerMap = authProviderDefinitions
-  .filter((provider) => provider.enabled())
-  .map(({ id, name }) => ({ id, name }));
+export const providerMap = isAuthConfigured()
+  ? authProviderDefinitions
+      .filter((provider) => provider.enabled())
+      .map(({ id, name }) => ({ id, name }))
+  : [];
 
 const authProviders = authProviderDefinitions
   .filter((provider) => provider.enabled())

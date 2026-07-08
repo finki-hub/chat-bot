@@ -50,6 +50,7 @@ describe('Auth.js route handler', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     process.env = { ...ORIGINAL };
   });
 
@@ -86,5 +87,25 @@ describe('Auth.js route handler', () => {
     const { isAuthConfigured } = await import('@/auth');
 
     expect(isAuthConfigured()).toBe(false);
+  });
+
+  it('hides sign-in providers when the Auth.js secret is missing', async () => {
+    process.env['AUTH_SECRET'] = '';
+
+    const { providerMap } = await import('@/auth');
+
+    expect(providerMap).toStrictEqual([]);
+  });
+
+  it('allows the Playwright auth bypass outside production only', async () => {
+    process.env['PLAYWRIGHT_AUTH_BYPASS'] = '1';
+    vi.stubEnv('NODE_ENV', 'test');
+    const { isPlaywrightAuthBypassEnabled } = await import('@/auth');
+
+    expect(isPlaywrightAuthBypassEnabled()).toBe(true);
+
+    vi.stubEnv('NODE_ENV', 'production');
+
+    expect(isPlaywrightAuthBypassEnabled()).toBe(false);
   });
 });

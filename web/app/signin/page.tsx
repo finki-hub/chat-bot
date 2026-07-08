@@ -3,6 +3,7 @@ import { AuthError } from 'next-auth';
 import { redirect } from 'next/navigation';
 
 import { auth, isAuthConfigured, providerMap, signIn } from '@/auth';
+import { getSafeCallbackUrl } from '@/lib/callback-url';
 
 type SignInPageProps = {
   readonly searchParams: Promise<{
@@ -10,8 +11,6 @@ type SignInPageProps = {
     readonly error?: string;
   }>;
 };
-
-const fallbackCallbackUrl = '/';
 
 const featureItems = [
   'Историјата е врзана со твојата најава, не со уредот.',
@@ -24,9 +23,10 @@ const SignInPage = async ({ searchParams }: SignInPageProps) => {
     searchParams,
     isAuthConfigured() ? auth() : null,
   ]);
+  const safeCallbackUrl = getSafeCallbackUrl(callbackUrl);
 
   if (session !== null) {
-    redirect(callbackUrl ?? fallbackCallbackUrl);
+    redirect(safeCallbackUrl);
   }
 
   return (
@@ -104,7 +104,7 @@ const SignInPage = async ({ searchParams }: SignInPageProps) => {
 
                     try {
                       await signIn(provider.id, {
-                        redirectTo: callbackUrl ?? fallbackCallbackUrl,
+                        redirectTo: safeCallbackUrl,
                       });
                     } catch (signInError) {
                       if (signInError instanceof AuthError) {

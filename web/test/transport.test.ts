@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MyUIMessage } from '@/lib/api-types';
 
@@ -19,6 +19,10 @@ vi.mock('posthog-js', () => ({
     get_session_id: () => 'session-test-id',
   },
 }));
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const SUBMIT = 'submit-message' as const;
 const ACTIVE_STREAM_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d22';
