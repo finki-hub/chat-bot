@@ -71,6 +71,7 @@ class RankedPeople:
 class SelectionConstraints:
     exclude: frozenset[str] = frozenset()
     include: frozenset[str] = frozenset()
+    allowed: frozenset[str] | None = None
     alternative_count: int = 3
 
 

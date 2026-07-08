@@ -14,6 +14,7 @@ from app.api.recommendation_presenters import (
     recommendation_evidence,
 )
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
+from app.data import StaffDirectoryUnavailableError, get_active_staff_names
 from app.data.connection import Database
 from app.data.db import get_db
 from app.data.diplomas import get_defended_committees
@@ -75,6 +76,13 @@ async def _get_coauthor_prior(db: Database) -> MentorPriorIndex:
     return build_coauthor_prior(await get_all_paper_authors(db))
 
 
+def _inactive_requested_names(
+    active_staff: frozenset[str],
+    names: list[str],
+) -> list[str]:
+    return [name for name in names if name not in active_staff]
+
+
 async def _cancel_background_tasks(tasks: list[asyncio.Task]) -> None:
     for task in tasks:
         if not task.done():
@@ -98,6 +106,33 @@ async def recommend_committee(
     db: Database = db_dep,
 ) -> RecommendationResponseSchema:
     mode = Mode.MEMBERS_ONLY if payload.mentor else Mode.FULL
+    try:
+        active_staff = await get_active_staff_names()
+    except StaffDirectoryUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Active staff directory is unavailable; cannot safely recommend a committee.",
+        ) from exc
+
+    if payload.mentor is not None and payload.mentor not in active_staff:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="mentor must be an active staff member",
+        )
+
+    inactive_includes = _inactive_requested_names(
+        active_staff,
+        payload.include_professors,
+    )
+    if inactive_includes:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "include_professors must contain only active staff members",
+                "inactive_professors": inactive_includes,
+            },
+        )
+
     text = proposal_text(payload)
 
     query_embedding = await generate_embeddings(
@@ -203,6 +238,7 @@ async def recommend_committee(
         constraints=SelectionConstraints(
             exclude=frozenset(payload.exclude_professors),
             include=frozenset(payload.include_professors),
+            allowed=active_staff,
             alternative_count=payload.alternatives,
         ),
     )
