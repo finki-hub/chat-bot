@@ -1,3 +1,5 @@
+import type { Provider } from 'next-auth/providers';
+
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
 import MicrosoftEntraID from 'next-auth/providers/microsoft-entra-id';
@@ -17,25 +19,44 @@ export const isAuthConfigured = (): boolean =>
   (isGoogleConfigured() || isMicrosoftConfigured()) &&
   authEnv('AUTH_SECRET').length > 0;
 
-const authProviders = [
-  ...(isGoogleConfigured()
-    ? [
-        Google({
-          clientId: authEnv('AUTH_GOOGLE_ID'),
-          clientSecret: authEnv('AUTH_GOOGLE_SECRET'),
-        }),
-      ]
-    : []),
-  ...(isMicrosoftConfigured()
-    ? [
-        MicrosoftEntraID({
-          clientId: authEnv('AUTH_MICROSOFT_ENTRA_ID_ID'),
-          clientSecret: authEnv('AUTH_MICROSOFT_ENTRA_ID_SECRET'),
-          issuer: authEnv('AUTH_MICROSOFT_ENTRA_ID_ISSUER'),
-        }),
-      ]
-    : []),
+type AuthProviderDefinition = {
+  readonly create: () => Provider;
+  readonly enabled: () => boolean;
+  readonly id: string;
+  readonly name: string;
+};
+
+const authProviderDefinitions: readonly AuthProviderDefinition[] = [
+  {
+    create: () =>
+      Google({
+        clientId: authEnv('AUTH_GOOGLE_ID'),
+        clientSecret: authEnv('AUTH_GOOGLE_SECRET'),
+      }),
+    enabled: isGoogleConfigured,
+    id: 'google',
+    name: 'Google',
+  },
+  {
+    create: () =>
+      MicrosoftEntraID({
+        clientId: authEnv('AUTH_MICROSOFT_ENTRA_ID_ID'),
+        clientSecret: authEnv('AUTH_MICROSOFT_ENTRA_ID_SECRET'),
+        issuer: authEnv('AUTH_MICROSOFT_ENTRA_ID_ISSUER'),
+      }),
+    enabled: isMicrosoftConfigured,
+    id: 'microsoft-entra-id',
+    name: 'Microsoft Entra ID',
+  },
 ];
+
+export const providerMap = authProviderDefinitions
+  .filter((provider) => provider.enabled())
+  .map(({ id, name }) => ({ id, name }));
+
+const authProviders = authProviderDefinitions
+  .filter((provider) => provider.enabled())
+  .map((provider) => provider.create());
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
   callbacks: {
@@ -57,6 +78,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       return session;
     },
   },
+  pages: { signIn: '/signin' },
   providers: authProviders,
   secret: authEnv('AUTH_SECRET'),
   session: { maxAge: 30 * 24 * 60 * 60, strategy: 'jwt' },
