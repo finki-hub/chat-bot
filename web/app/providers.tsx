@@ -24,9 +24,12 @@ export const Providers = ({ children }: ProvidersProps) => {
     let mounted = true;
 
     const rehydrate = async (): Promise<void> => {
-      await useUiStore.persist.rehydrate();
-      if (mounted) {
-        setHydrated(true);
+      try {
+        await useUiStore.persist.rehydrate();
+      } finally {
+        if (mounted) {
+          setHydrated(true);
+        }
       }
     };
 

@@ -26,7 +26,6 @@ from app.llms.models import CHAT_MODELS
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
-from app.utils.auth import verify_api_key
 from app.utils.posthog_client import capture, safe_distinct_id, safe_session_id
 from app.utils.settings import Settings
 from app.utils.timing import (
@@ -434,7 +433,6 @@ async def _instrument_stream(
 
 
 db_dep = Depends(get_db)
-api_key_dep = Depends(verify_api_key)
 
 router = APIRouter(
     prefix="/chat",

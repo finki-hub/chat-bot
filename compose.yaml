@@ -83,8 +83,6 @@ services:
       timeout: 5s
     networks:
       - finki_stack_dev
-    ports:
-      - "6379:6379"
     restart: unless-stopped
     volumes:
       - ./valkeydata:/data
