@@ -68,4 +68,25 @@ describe('getAuthenticatedChatUserId', () => {
     );
     expect(upsertChatUserMock).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['missing provider subject', { provider: 'google', providerSubject: '' }],
+    [
+      'unsupported provider',
+      { provider: 'github', providerSubject: 'github-sub-1' },
+    ],
+  ] as const)(
+    'rejects an Auth.js identity with %s before touching the API',
+    async (_label, user) => {
+      authMock.mockResolvedValue({ user });
+
+      const { AuthenticationRequiredError, getAuthenticatedChatUserId } =
+        await import('@/lib/authenticated-chat-user');
+
+      await expect(getAuthenticatedChatUserId()).rejects.toBeInstanceOf(
+        AuthenticationRequiredError,
+      );
+      expect(upsertChatUserMock).not.toHaveBeenCalled();
+    },
+  );
 });
