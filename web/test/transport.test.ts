@@ -7,6 +7,7 @@ import {
   type ChatExtras,
   deleteChatConversation,
   DeleteChatConversationError,
+  loadChatConversationHistory,
   stopChatStream,
   StopChatStreamError,
 } from '@/lib/transport';
@@ -207,5 +208,48 @@ describe('buildChatTransport', () => {
     await expect(deleteChatConversation('conv-7')).rejects.toMatchObject({
       status: 403,
     });
+  });
+
+  it('loads valid server conversation history', async () => {
+    const messages: MyUIMessage[] = [
+      {
+        id: 'u1',
+        parts: [{ text: 'Stored question', type: 'text' }],
+        role: 'user',
+      },
+      {
+        id: 'a1',
+        parts: [{ text: 'Stored answer', type: 'text' }],
+        role: 'assistant',
+      },
+    ];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          conversation: { id: 'conv-7', model: null, title: null },
+          messages,
+        }),
+      ),
+    );
+
+    await expect(loadChatConversationHistory('conv-7')).resolves.toStrictEqual({
+      conversation: { id: 'conv-7', model: null, title: 'New conversation' },
+      messages,
+    });
+  });
+
+  it('rejects malformed server conversation history messages', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          conversation: { id: 'conv-7', model: null, title: null },
+          messages: [{ parts: [], role: 'user' }],
+        }),
+      ),
+    );
+
+    await expect(loadChatConversationHistory('conv-7')).resolves.toBeNull();
   });
 });

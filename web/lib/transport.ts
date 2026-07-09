@@ -118,6 +118,28 @@ const parseConversations = (value: unknown): ConversationRow[] => {
   });
 };
 
+const MESSAGE_ROLES = new Set(['assistant', 'system', 'user']);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isMessagePart = (value: unknown): value is Record<string, unknown> =>
+  isRecord(value) && typeof value['type'] === 'string';
+
+const isUiMessage = (value: unknown): value is MyUIMessage => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { id, parts, role } = value;
+  return (
+    typeof id === 'string' &&
+    typeof role === 'string' &&
+    MESSAGE_ROLES.has(role) &&
+    Array.isArray(parts) &&
+    parts.every(isMessagePart)
+  );
+};
+
 export const listChatConversations = async (): Promise<ConversationRow[]> => {
   const response = await fetch('/api/chat', { method: 'GET' });
 
@@ -173,7 +195,8 @@ const parseConversationHistory = (
     typeof id !== 'string' ||
     (model !== null && typeof model !== 'string') ||
     (title !== null && typeof title !== 'string') ||
-    !Array.isArray(messages)
+    !Array.isArray(messages) ||
+    !messages.every(isUiMessage)
   ) {
     return null;
   }
