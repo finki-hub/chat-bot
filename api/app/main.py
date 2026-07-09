@@ -138,7 +138,7 @@ def make_app(settings: Settings) -> FastAPI:
         # Don't echo the raw request body back (avoids reflecting arbitrary/oversized input).
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=jsonable_encoder({"detail": exc.errors()}),
+            content={"detail": jsonable_encoder(exc.errors(), exclude={"input"})},
         )
 
     @app.exception_handler(RetrievalError)
