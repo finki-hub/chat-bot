@@ -63,3 +63,31 @@ def test_chat_stream_accepts_discord_without_api_key(monkeypatch):
         )
 
     assert response.status_code == 200
+
+
+def test_validation_errors_do_not_echo_raw_invalid_payload(monkeypatch):
+    monkeypatch.setattr("app.main.Database", HealthyDatabase)
+    app = make_app(
+        Settings(
+            API_KEY="test-api-key",
+            MCP_API_KEY="test-mcp-key",
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/chat/title",
+            json={
+                "messages": [
+                    {
+                        "role": "assistant",
+                        "content": "private invalid title payload",
+                    },
+                ],
+            },
+        )
+
+    body = response.json()
+    assert response.status_code == 422
+    assert "private invalid title payload" not in response.text
+    assert "input" not in body["detail"][0]

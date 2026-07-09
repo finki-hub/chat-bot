@@ -31,9 +31,34 @@ from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
 
+type ValidationErrorDetail = dict[str, "ValidationErrorValue"]
+type ValidationErrorValue = (
+    None
+    | bool
+    | int
+    | float
+    | str
+    | list["ValidationErrorValue"]
+    | ValidationErrorDetail
+)
+
 settings = Settings()
 
 setup_logging(level=settings.LOG_LEVEL)
+
+
+def _strip_validation_inputs(value: ValidationErrorValue) -> ValidationErrorValue:
+    match value:
+        case list():
+            return [_strip_validation_inputs(item) for item in value]
+        case dict():
+            return {
+                key: _strip_validation_inputs(item)
+                for key, item in value.items()
+                if key != "input"
+            }
+        case _:
+            return value
 
 
 def _warn_on_insecure_defaults(current: Settings) -> None:
@@ -136,9 +161,10 @@ def make_app(settings: Settings) -> FastAPI:
         exc: RequestValidationError,
     ) -> JSONResponse:
         # Don't echo the raw request body back (avoids reflecting arbitrary/oversized input).
+        detail = _strip_validation_inputs(jsonable_encoder(exc.errors()))
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=jsonable_encoder({"detail": exc.errors()}),
+            content={"detail": detail},
         )
 
     @app.exception_handler(RetrievalError)
