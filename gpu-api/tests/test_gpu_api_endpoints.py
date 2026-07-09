@@ -197,3 +197,24 @@ def test_embeddings_route_returns_embedding_batch(monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"embeddings": [[0.1, 0.2], [0.3, 0.4]]}
+
+
+def test_validation_errors_do_not_echo_raw_invalid_payload():
+    client = make_test_client()
+
+    response = client.post(
+        "/stream/",
+        json={
+            "prompt": "private invalid stream prompt",
+            "inference_model": Model.QWEN2_5_7B_INSTRUCT.value,
+            "temperature": 2,
+            "top_p": 0.9,
+            "max_tokens": 64,
+        },
+    )
+
+    body = response.json()
+    assert response.status_code == 422
+    assert "private invalid stream prompt" not in response.text
+    assert "body" not in body
+    assert "input" not in body["detail"][0]
