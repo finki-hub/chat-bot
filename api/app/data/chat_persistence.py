@@ -34,6 +34,9 @@ class ChatPersistenceDatabase(Protocol):
     async def fetchval(self, query: str, *args: object, column: int = 0) -> object:
         raise NotImplementedError
 
+    async def execute(self, query: str, *args: object) -> str:
+        raise NotImplementedError
+
 
 class ChatMessageConflictError(Exception):
     pass

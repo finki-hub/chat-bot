@@ -12,6 +12,7 @@ from app.llms.models import (
 from app.llms.ollama import transform_query_with_ollama
 from app.llms.openai import transform_query_with_openai
 from app.llms.prompts import DEFAULT_QUERY_TRANSFORM_SYSTEM_PROMPT
+from app.llms.provider_credentials import LlmProviderCredentials
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ async def transform_query(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    credentials: LlmProviderCredentials | None = None,
 ) -> str:
     logger.info(
         "Transforming query with model=%s query_length=%d",
@@ -40,6 +42,7 @@ async def transform_query(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
+                credential=None if credentials is None else credentials.openai,
             )
 
         case model if model in GOOGLE_QUERY_TRANSFORM_MODELS:
@@ -50,6 +53,7 @@ async def transform_query(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
+                credential=None if credentials is None else credentials.google,
             )
 
         case model if model in ANTHROPIC_QUERY_TRANSFORM_MODELS:
@@ -60,6 +64,7 @@ async def transform_query(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
+                credential=None if credentials is None else credentials.anthropic,
             )
 
         case model if model in OLLAMA_QUERY_TRANSFORM_MODELS:

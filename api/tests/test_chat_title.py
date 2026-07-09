@@ -19,6 +19,7 @@ def test_chat_title_uses_transform_prompt_and_normalizes_quotes(monkeypatch):
         temperature: float,
         top_p: float,
         max_tokens: int,
+        credentials: object | None = None,
     ) -> str:
         seen.update(
             {
@@ -58,6 +59,7 @@ def test_chat_title_falls_back_to_first_user_message_when_model_returns_empty(
         temperature: float,
         top_p: float,
         max_tokens: int,
+        credentials: object | None = None,
     ) -> str:
         return "   "
 
@@ -85,6 +87,7 @@ def test_query_transform_logs_metadata_without_raw_query(monkeypatch, caplog):
         temperature: float,
         top_p: float,
         max_tokens: int,
+        credential: object | None = None,
     ) -> str:
         return "Испитен рок"
 

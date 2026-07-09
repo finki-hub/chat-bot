@@ -12,6 +12,7 @@ from app.llms.models import (
     REASONING_CAPABLE_MODELS,
     Model,
 )
+from app.schemas.chat_credentials import ChatCredentialSecret
 
 
 def test_claude_sonnet_5_is_a_supported_anthropic_chat_model():
@@ -36,6 +37,7 @@ def test_claude_sonnet_5_routes_to_anthropic(monkeypatch):
         max_tokens: int,
         reasoning: bool = False,
         observation: StreamObservation | None = None,
+        credential: ChatCredentialSecret | None = None,
     ) -> StreamingResponse:
         async def empty_body() -> AsyncIterator[bytes]:
             if False:

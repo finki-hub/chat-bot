@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import StreamingResponse
 
+from app.api.provider_credentials import resolve_provider_credentials
 from app.data.connection import Database
 from app.data.db import get_db
 from app.llms.agents import (
@@ -26,6 +27,7 @@ from app.llms.models import CHAT_MODELS
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
+from app.utils.auth import verify_api_key
 from app.utils.posthog_client import capture, safe_distinct_id, safe_session_id
 from app.utils.settings import Settings
 from app.utils.timing import (
@@ -433,11 +435,11 @@ async def _instrument_stream(
 
 
 db_dep = Depends(get_db)
+api_key_dep = Depends(verify_api_key)
 
 router = APIRouter(
     prefix="/chat",
     tags=["Chat"],
-    dependencies=[db_dep],
 )
 
 
@@ -454,6 +456,11 @@ async def _chat_response_stream(
     )
 
     history_text = _history_for_retrieval(payload)
+    credentials = await resolve_provider_credentials(
+        db,
+        user_id=payload.user_id,
+        settings=settings,
+    )
 
     timings, token = start_request_timings()
     try:
@@ -503,6 +510,7 @@ async def _chat_response_stream(
                     query_transform_mode=payload.query_transform_mode,
                     history_text=history_text,
                     on_stage=on_stage,
+                    credentials=credentials,
                 )
             finally:
                 stage_queue.put_nowait(None)
@@ -559,7 +567,13 @@ async def _chat_response_stream(
             context = f"Денешен датум: {today}.\n\n{context}"
 
             with timed("agent.setup"):
-                response = await handle_chat(payload, context, observation, db)
+                response = await handle_chat(
+                    payload,
+                    context,
+                    observation,
+                    db,
+                    credentials,
+                )
         except Exception:
             logger.exception("Chat context build failed before streaming")
             links_task.cancel()
@@ -612,6 +626,7 @@ async def _chat_response_stream(
         },
     },
     operation_id="chatWithModel",
+    dependencies=[api_key_dep],
 )
 async def chat(
     payload: ChatSchema,

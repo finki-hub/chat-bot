@@ -1,5 +1,22 @@
 import type { UIMessage } from 'ai';
 
+export type ChatCredentialProvider = 'anthropic' | 'google' | 'openai';
+
+export type ChatCredentialPublic = {
+  readonly base_url: null | string;
+  readonly created_at?: string;
+  readonly has_api_key: boolean;
+  readonly provider: ChatCredentialProvider;
+  readonly updated_at?: string;
+  readonly user_id: string;
+};
+
+export type ChatCredentialUpsert = {
+  readonly apiKey: string;
+  readonly baseUrl?: null | string;
+  readonly provider: ChatCredentialProvider;
+};
+
 export type ChatInterface = 'discord' | 'web';
 
 export type ChatRequestBody = {
@@ -13,6 +30,7 @@ export type ChatRequestBody = {
   reasoning?: boolean;
   temperature?: number;
   top_p?: number;
+  user_id?: string;
 };
 
 export type ChatTitleClientPayload = {
@@ -23,6 +41,7 @@ export type ChatTitleClientPayload = {
 export type ChatTitleRequestBody = {
   readonly messages: readonly ConversationTurn[];
   readonly query_transform_model?: ModelId;
+  readonly user_id?: string;
 };
 
 export type ChatTitleResponse = {

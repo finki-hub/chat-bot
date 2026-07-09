@@ -60,6 +60,76 @@ def test_chat_state_upserts_provider_user() -> None:
     assert second.json()["email"] == "new@example.com"
 
 
+def test_chat_state_manages_user_credentials_without_exposing_secret() -> None:
+    # Given: an authenticated BFF client and no stored BYOK credentials.
+    db = FakeChatDatabase()
+    client = _client(db)
+
+    # When: the user saves, lists, rejects invalid updates, and deletes a credential.
+    initial = client.get(
+        f"/chat/state/users/{OWNER_ID}/credentials",
+        headers=_auth_headers(),
+    )
+    saved = client.put(
+        f"/chat/state/users/{OWNER_ID}/credentials/openai",
+        headers=_auth_headers(),
+        json={
+            "api_key": "sk-test-secret",
+            "base_url": "https://api.openai.com/v1",
+            "provider": "openai",
+        },
+    )
+    listed = client.get(
+        f"/chat/state/users/{OWNER_ID}/credentials",
+        headers=_auth_headers(),
+    )
+    stored_after_save = dict(db.credentials)
+    mismatch = client.put(
+        f"/chat/state/users/{OWNER_ID}/credentials/google",
+        headers=_auth_headers(),
+        json={"api_key": "sk-wrong", "provider": "openai"},
+    )
+    local_url = client.put(
+        f"/chat/state/users/{OWNER_ID}/credentials/google",
+        headers=_auth_headers(),
+        json={
+            "api_key": "secret",
+            "base_url": "https://localhost:1234",
+            "provider": "google",
+        },
+    )
+    deleted = client.delete(
+        f"/chat/state/users/{OWNER_ID}/credentials/openai",
+        headers=_auth_headers(),
+    )
+    after_delete = client.get(
+        f"/chat/state/users/{OWNER_ID}/credentials",
+        headers=_auth_headers(),
+    )
+
+    # Then: only public metadata is returned and the raw secret is encrypted at rest.
+    assert initial.status_code == 200
+    assert initial.json() == []
+    assert saved.status_code == 200
+    saved_body = saved.json()
+    assert saved_body["provider"] == "openai"
+    assert saved_body["has_api_key"] is True
+    assert saved_body["base_url"] == "https://api.openai.com/v1"
+    assert "api_key" not in saved_body
+    assert listed.status_code == 200
+    listed_body = listed.json()
+    assert len(listed_body) == 1
+    assert listed_body[0]["provider"] == "openai"
+    assert "api_key" not in listed_body[0]
+    stored = stored_after_save[(UUID(OWNER_ID), "openai")]
+    assert stored["encrypted_api_key"] != "sk-test-secret"
+    assert mismatch.status_code == 422
+    assert local_url.status_code == 422
+    assert deleted.status_code == 204
+    assert after_delete.status_code == 200
+    assert after_delete.json() == []
+
+
 def test_chat_state_requires_api_key() -> None:
     # Given: a BFF-owned chat state endpoint.
     db = FakeChatDatabase()

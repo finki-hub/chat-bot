@@ -10,6 +10,7 @@ from app.llms.prompts import (
     markdown_instructions,
     to_history_messages,
 )
+from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.recommendation_tools import build_recommendation_tools
 from app.llms.streams import stream_response_with_agent
 from app.llms.tools import agent_request_tools
@@ -26,6 +27,7 @@ async def handle_chat(
     context: str,
     observation: StreamObservation | None = None,
     db: Database | None = None,
+    credentials: LlmProviderCredentials | None = None,
 ) -> StreamingResponse:
     """
     Handle chat using an agent with MCP tool support.
@@ -63,4 +65,5 @@ async def handle_chat(
             max_tokens=payload.max_tokens,
             reasoning=payload.reasoning,
             observation=observation,
+            credentials=credentials,
         )

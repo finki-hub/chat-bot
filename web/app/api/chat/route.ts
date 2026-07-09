@@ -37,6 +37,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const SSE_CONTENT_TYPE = 'text/event-stream';
+const USER_ID_FIELD = 'user_id';
 
 type ConversationSummary = {
   readonly id: string;
@@ -271,6 +272,7 @@ export const POST = async (req: Request): Promise<Response> => {
       body: JSON.stringify({
         ...chatBody,
         messages: upstreamMessages,
+        [USER_ID_FIELD]: userId,
       }),
       headers: {
         'content-type': 'application/json',

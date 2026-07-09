@@ -12,6 +12,7 @@ from pydantic_settings import BaseSettings
 
 _API_KEY_DEFAULT: Final[str] = "your_api_key_here"
 _MCP_API_KEY_DEFAULT: Final[str] = "SystemPass"
+_CREDENTIAL_ENCRYPTION_KEY_DEFAULT: Final[str] = "your_byok_encryption_key_here"
 McpTransport = Literal["streamable_http", "sse"]
 NonBlankString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
@@ -62,6 +63,7 @@ class Settings(BaseSettings):
     MCP_API_KEY: str = _MCP_API_KEY_DEFAULT
 
     API_KEY: str = _API_KEY_DEFAULT
+    CREDENTIAL_ENCRYPTION_KEY: str = _CREDENTIAL_ENCRYPTION_KEY_DEFAULT
     DATABASE_URL: str = "postgresql://user:password@host:port/db"
     DATABASE_POOL_MIN_SIZE: int = Field(default=1, ge=0)
     DATABASE_POOL_MAX_SIZE: int = Field(default=10, ge=1)
@@ -111,6 +113,11 @@ class Settings(BaseSettings):
         insecure_names: list[str] = []
         if _is_insecure_secret(self.API_KEY, _API_KEY_DEFAULT):
             insecure_names.append("API_KEY")
+        if _is_insecure_secret(
+            self.CREDENTIAL_ENCRYPTION_KEY,
+            _CREDENTIAL_ENCRYPTION_KEY_DEFAULT,
+        ):
+            insecure_names.append("CREDENTIAL_ENCRYPTION_KEY")
         if (self.MCP_HTTP_URLS or self.MCP_SSE_URLS) and _is_insecure_secret(
             self.MCP_API_KEY,
             _MCP_API_KEY_DEFAULT,

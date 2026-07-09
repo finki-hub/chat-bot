@@ -26,6 +26,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Row action button: Lucide icon, `size-3.5`, semantic aria label, focus-visible ring, muted default color, stronger hover color matching the action intent.
 - Destructive row action: use destructive hover color only for delete.
 - Auth sign-in panel: card surface using `card`, `border`, `background`, `primary`, and `muted-foreground` tokens, with provider buttons that visibly change border/background on hover and use `focus-visible:ring-ring`.
+- Credential settings dialog: modal card using existing `Dialog`, `Input`, and `Button` primitives. Provider rows use `border`, `card`, `muted`, and `muted-foreground` tokens, with saved state indicated by text and destructive delete action only when a credential exists.
 
 ## 6. Accessibility
 

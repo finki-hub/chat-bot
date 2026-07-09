@@ -1,9 +1,18 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
+from app.api.provider_credentials import resolve_provider_credentials
+from app.data.chat_credentials import ChatCredentialDatabase
+from app.data.db import get_db
 from app.llms.query_transform import transform_query
 from app.schemas.chat_title import ChatTitleResponse, ChatTitleSchema
+from app.utils.auth import verify_api_key
+from app.utils.settings import Settings
+
+db_dep = Depends(get_db)
+api_key_dep = Depends(verify_api_key)
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
+settings = Settings()
 
 _TITLE_MAX = 60
 _FALLBACK_TITLE = "Нов разговор"
@@ -34,7 +43,21 @@ def _normalize_title(raw_title: str, fallback_text: str) -> str:
     return _clip_title(title)
 
 
-async def generate_chat_title(payload: ChatTitleSchema) -> ChatTitleResponse:
+async def generate_chat_title(
+    payload: ChatTitleSchema,
+    db: ChatCredentialDatabase | None = None,
+) -> ChatTitleResponse:
+    if payload.user_id is None:
+        credentials = None
+    elif db is None:
+        msg = "db is required when user_id is present"
+        raise TypeError(msg)
+    else:
+        credentials = await resolve_provider_credentials(
+            db,
+            user_id=payload.user_id,
+            settings=settings,
+        )
     prompt = f"Conversation transcript:\n{payload.transcript}"
     raw_title = await transform_query(
         prompt,
@@ -43,6 +66,7 @@ async def generate_chat_title(payload: ChatTitleSchema) -> ChatTitleResponse:
         temperature=0.2,
         top_p=1.0,
         max_tokens=32,
+        credentials=credentials,
     )
     return ChatTitleResponse(
         title=_normalize_title(raw_title, payload.first_user_text),
@@ -55,6 +79,10 @@ async def generate_chat_title(payload: ChatTitleSchema) -> ChatTitleResponse:
     description="Generate a short title from the first conversation turns.",
     operation_id="generateChatTitle",
     status_code=status.HTTP_200_OK,
+    dependencies=[api_key_dep],
 )
-async def chat_title(payload: ChatTitleSchema) -> ChatTitleResponse:
-    return await generate_chat_title(payload)
+async def chat_title(
+    payload: ChatTitleSchema,
+    db: ChatCredentialDatabase = db_dep,
+) -> ChatTitleResponse:
+    return await generate_chat_title(payload, db)
