@@ -244,17 +244,15 @@ describe('POST /api/chat', () => {
   });
 
   it('replaces the regenerated assistant message and prunes server history', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn<typeof fetch>()
-        .mockResolvedValue(
-          okStreamResponse(
-            'event: token\ndata: {"text":"Нов одговор"}\n\n',
-            DONE_FRAME,
-          ),
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        okStreamResponse(
+          'event: token\ndata: {"text":"Нов одговор"}\n\n',
+          DONE_FRAME,
         ),
-    );
+      );
+    vi.stubGlobal('fetch', fetchMock);
 
     const post = await importPost();
     const response = await post(
@@ -284,6 +282,15 @@ describe('POST /api/chat', () => {
 
     await response.text();
 
+    const upstreamBody = fetchMock.mock.calls[0]?.[1]?.body;
+
+    if (typeof upstreamBody !== 'string') {
+      throw new TypeError('Expected upstream request body to be a string');
+    }
+
+    expect(upstreamBody.match(/Stored question/gu)).toHaveLength(1);
+    expect(upstreamBody).not.toContain('Здраво');
+    expect(upstreamBody).not.toContain('Стар одговор');
     expect(
       routeMocks.stateClient.replaceAssistantMessage,
     ).toHaveBeenCalledExactlyOnceWith({

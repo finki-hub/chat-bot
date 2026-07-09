@@ -1,7 +1,7 @@
 import { createUIMessageStream, createUIMessageStreamResponse } from 'ai';
 import { after } from 'next/server';
 
-import type { MyUIMessage } from '@/lib/api-types';
+import type { ConversationTurn, MyUIMessage } from '@/lib/api-types';
 
 import {
   AuthenticationRequiredError,
@@ -151,6 +151,15 @@ const regenerationReplacementFor = (
     ? null
     : { messageId, retainedMessageIds };
 
+const upstreamMessagesFor = (
+  trustedHistory: readonly ConversationTurn[],
+  currentMessages: readonly ConversationTurn[],
+  regenerationReplacement: null | RegenerationReplacement,
+): readonly ConversationTurn[] =>
+  regenerationReplacement === null
+    ? [...trustedHistory, ...currentMessages]
+    : trustedHistory;
+
 export const GET = async (): Promise<Response> => {
   const chatState = createChatStateClient();
 
@@ -245,6 +254,11 @@ export const POST = async (req: Request): Promise<Response> => {
       regenerationReplacement?.messageId ?? userMessage.id,
       chatBody.messages.length,
     );
+    const upstreamMessages = upstreamMessagesFor(
+      trustedHistory,
+      chatBody.messages,
+      regenerationReplacement,
+    );
     if (regenerationReplacement === null) {
       await chatState.upsertUserMessage({
         content: userMessage.content,
@@ -258,7 +272,7 @@ export const POST = async (req: Request): Promise<Response> => {
     const upstream = await fetch(`${API_BASE_URL}/chat/`, {
       body: JSON.stringify({
         ...chatBody,
-        messages: [...trustedHistory, ...chatBody.messages],
+        messages: upstreamMessages,
       }),
       headers: {
         'content-type': 'application/json',
