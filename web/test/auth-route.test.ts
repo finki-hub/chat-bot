@@ -1,9 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORIGINAL = { ...process.env };
-vi.mock('next-auth', () => ({
-  default: vi.fn<
-    () => {
+
+type AuthConfig = {
+  readonly callbacks: {
+    readonly jwt: (input: {
+      readonly account?: {
+        readonly provider: string;
+        readonly providerAccountId: string;
+      };
+      readonly token: Record<string, string>;
+    }) => Record<string, string>;
+    readonly session: (input: {
+      readonly session: { readonly user: Record<string, string> };
+      readonly token: Record<string, string>;
+    }) => { readonly user: Record<string, string> };
+  };
+};
+
+const { nextAuthMock } = vi.hoisted(() => ({
+  nextAuthMock: vi.fn<
+    (config: unknown) => {
       readonly auth: () => void;
       readonly handlers: {
         readonly GET: () => void;
@@ -18,6 +35,10 @@ vi.mock('next-auth', () => ({
     signIn: vi.fn<() => void>(),
     signOut: vi.fn<() => void>(),
   })),
+}));
+
+vi.mock('next-auth', () => ({
+  default: nextAuthMock,
 }));
 
 vi.mock('next-auth/providers/google', () => ({
@@ -45,6 +66,7 @@ const setAuthEnv = (): void => {
 describe('Auth.js route handler', () => {
   beforeEach(() => {
     vi.resetModules();
+    nextAuthMock.mockClear();
     process.env = { ...ORIGINAL };
     setAuthEnv();
   });
@@ -107,5 +129,39 @@ describe('Auth.js route handler', () => {
     vi.stubEnv('NODE_ENV', 'production');
 
     expect(isPlaywrightAuthBypassEnabled()).toBe(false);
+  });
+
+  it('exposes every configured provider on the sign-in provider map', async () => {
+    process.env['AUTH_MICROSOFT_ENTRA_ID_ID'] = 'microsoft-client-id';
+    process.env['AUTH_MICROSOFT_ENTRA_ID_SECRET'] = 'microsoft-client-secret';
+    process.env['AUTH_MICROSOFT_ENTRA_ID_ISSUER'] =
+      'https://login.microsoftonline.com/tenant-id/v2.0/';
+
+    const { providerMap } = await import('@/auth');
+
+    expect(providerMap).toStrictEqual([
+      { id: 'google', name: 'Google' },
+      { id: 'microsoft-entra-id', name: 'Microsoft Entra ID' },
+    ]);
+  });
+
+  it('copies provider account claims from JWT into the session user', async () => {
+    await import('@/auth');
+    const config = nextAuthMock.mock.calls[0]?.[0] as AuthConfig;
+
+    const token = config.callbacks.jwt({
+      account: { provider: 'google', providerAccountId: 'google-sub-1' },
+      token: {},
+    });
+    const session = config.callbacks.session({ session: { user: {} }, token });
+
+    expect(token).toStrictEqual({
+      provider: 'google',
+      providerSubject: 'google-sub-1',
+    });
+    expect(session.user).toStrictEqual({
+      provider: 'google',
+      providerSubject: 'google-sub-1',
+    });
   });
 });

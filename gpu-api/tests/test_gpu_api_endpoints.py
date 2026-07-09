@@ -129,3 +129,71 @@ def test_embeddings_logs_input_metadata_without_raw_text(caplog, monkeypatch):
     assert "private embedding text" not in caplog.text
     assert "input_chars=" in caplog.text
     assert "model=" in caplog.text
+
+
+def test_embeddings_route_returns_single_embedding_and_logs_metadata(
+    caplog,
+    monkeypatch,
+):
+    async def fake_generate_embeddings(_input, _model):
+        return [0.1, 0.2]
+
+    captured_props = []
+
+    def fake_capture_chat_inference(_request, *, stage, ms, props):
+        captured_props.append({"ms": ms, "props": props, "stage": stage})
+
+    monkeypatch.setattr(
+        "app.api.embeddings.generate_embeddings",
+        fake_generate_embeddings,
+    )
+    monkeypatch.setattr(
+        "app.api.embeddings.capture_chat_inference",
+        fake_capture_chat_inference,
+    )
+    caplog.set_level(logging.INFO, logger="app.api.embeddings")
+    client = make_test_client()
+
+    response = client.post(
+        "/embeddings/embed",
+        json={
+            "embeddings_model": Model.BGE_M3.value,
+            "input": "private embedding text",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"embeddings": [0.1, 0.2]}
+    assert captured_props[0]["stage"] == "embed"
+    assert captured_props[0]["props"]["count"] == 1
+    assert captured_props[0]["props"]["input_chars"] == len(
+        "private embedding text",
+    )
+    assert "private embedding text" not in caplog.text
+    assert "gpu.embed" in caplog.text
+
+
+def test_embeddings_route_returns_embedding_batch(monkeypatch):
+    async def fake_generate_embeddings(_input, _model):
+        return [[0.1, 0.2], [0.3, 0.4]]
+
+    monkeypatch.setattr(
+        "app.api.embeddings.generate_embeddings",
+        fake_generate_embeddings,
+    )
+    monkeypatch.setattr(
+        "app.api.embeddings.capture_chat_inference",
+        lambda *_args, **_kwargs: None,
+    )
+    client = make_test_client()
+
+    response = client.post(
+        "/embeddings/embed",
+        json={
+            "embeddings_model": Model.BGE_M3.value,
+            "input": ["first", "second"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"embeddings": [[0.1, 0.2], [0.3, 0.4]]}

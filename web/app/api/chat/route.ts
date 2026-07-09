@@ -225,14 +225,19 @@ export const POST = async (req: Request): Promise<Response> => {
           await createChatResumableStreamContext({
             waitUntil: after,
           }).createNewResumableStream(streamId, () => sseStream);
-        } catch (error) {
-          await chatState.clearActiveStreamIfCurrent({
-            conversationId,
-            streamId,
-            userId,
-          });
-          activeChatProducers.unregister(streamId);
-          throw error;
+        } catch {
+          upstreamController.abort();
+          try {
+            await ignoreMissing(
+              chatState.clearActiveStreamIfCurrent({
+                conversationId,
+                streamId,
+                userId,
+              }),
+            );
+          } finally {
+            activeChatProducers.unregister(streamId);
+          }
         }
       },
       stream,
