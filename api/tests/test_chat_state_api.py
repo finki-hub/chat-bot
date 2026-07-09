@@ -198,6 +198,7 @@ def test_chat_state_replaces_regenerated_assistant_and_prunes_later_messages() -
     db = FakeChatDatabase()
     client = _client(db)
     conversation_id = uuid4()
+    setup_message_id = uuid4()
     first_user_id = uuid4()
     first_assistant_id = uuid4()
     second_user_id = uuid4()
@@ -209,6 +210,7 @@ def test_chat_state_replaces_regenerated_assistant_and_prunes_later_messages() -
         json={"id": str(conversation_id), "user_id": OWNER_ID},
     )
     for message_id, role, content in (
+        (setup_message_id, "user", "Earlier setup"),
         (first_user_id, "user", "First question"),
         (first_assistant_id, "assistant", "Old first answer"),
         (second_user_id, "user", "Second question"),
@@ -242,17 +244,18 @@ def test_chat_state_replaces_regenerated_assistant_and_prunes_later_messages() -
         params={"user_id": OWNER_ID},
     )
 
-    # Then: the original assistant id is preserved and later turns are pruned.
+    # Then: the original assistant id is preserved, prior messages survive, and later turns are pruned.
     assert replaced.status_code == 200
     assert replaced.json()["id"] == str(first_assistant_id)
     assert loaded.status_code == 200
     messages = loaded.json()["messages"]
     assert [message["id"] for message in messages] == [
+        str(setup_message_id),
         str(first_user_id),
         str(first_assistant_id),
     ]
-    assert messages[1]["content"] == "New first answer"
-    assert messages[1]["response_id"] == str(new_response_id)
+    assert messages[2]["content"] == "New first answer"
+    assert messages[2]["response_id"] == str(new_response_id)
 
 
 def test_chat_state_rejects_replacement_when_target_is_not_retained() -> None:

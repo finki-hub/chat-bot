@@ -267,6 +267,7 @@ class FakeChatDatabase:
                 stale_id
                 for stale_id, stale in self.messages.items()
                 if stale["conversation_id"] == conversation_id
+                and self._created_at(stale) > self._created_at(target)
                 and stale_id not in retained_ids
             ]
             target["content"] = content
