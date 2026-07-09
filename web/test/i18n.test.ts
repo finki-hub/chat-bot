@@ -25,9 +25,28 @@ describe('i18n', () => {
     }
   });
 
-  it('translates known span keys and falls back to the raw key otherwise', () => {
-    expect(formatSpanLabel('retrieval.embed')).toBe('вградување');
-    expect(formatSpanLabel('agent.setup')).toBe('агент: подготовка');
+  it('translates every diagnostics span emitted by the API', () => {
+    const labels = {
+      'agent.mcp_tools': 'агент: алатки',
+      'agent.setup': 'агент: подготовка',
+      links: 'врски',
+      'links.rerank': 'рерангирање врски',
+      'retrieval.contextualize': 'контекстуализација',
+      'retrieval.embed': 'вградување',
+      'retrieval.expand': 'проширување',
+      'retrieval.hyde': 'хипотетички документ (HyDE)',
+      'retrieval.query_rewrite': 'преформулација на прашање',
+      'retrieval.query_transform': 'трансформација на прашање',
+      'retrieval.rerank': 'рерангирање',
+      'retrieval.vector_search': 'векторско пребарување',
+    } as const;
+
+    for (const [key, label] of Object.entries(labels)) {
+      expect(formatSpanLabel(key)).toBe(label);
+    }
+  });
+
+  it('falls back to the raw key for an unknown diagnostics span', () => {
     expect(formatSpanLabel('retrieval.future_stage')).toBe(
       'retrieval.future_stage',
     );

@@ -29,6 +29,7 @@ export type UiChunk =
           cost?: { inputUsd: number; outputUsd: number; totalUsd: number };
           serverTotalMs: number;
           serverTtftMs: number;
+          spans?: Record<string, number>;
           tokens: { input: number; output: number; total: number };
         };
         inferenceModel?: string;

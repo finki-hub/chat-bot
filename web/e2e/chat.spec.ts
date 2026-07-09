@@ -34,6 +34,12 @@ test.describe('chat streaming (mocked BFF)', () => {
           cost: { inputUsd: 0.00003, outputUsd: 0.00045, totalUsd: 0.00048 },
           serverTotalMs: 1_700,
           serverTtftMs: 200,
+          spans: {
+            'links.rerank': 120,
+            'retrieval.hyde': 180,
+            'retrieval.query_rewrite': 160,
+            'retrieval.query_transform': 350,
+          },
           tokens: { input: 10, output: 30, total: 40 },
         },
         inferenceModel: INFERENCE_MODEL,
@@ -105,12 +111,18 @@ test.describe('chat streaming (mocked BFF)', () => {
       name: DIAGNOSTICS_LABEL,
     });
     await expect(diagnosticsTrigger).toBeVisible();
-    await diagnosticsTrigger.hover();
+    await diagnosticsTrigger.focus();
     await expect(page.getByText('trace ID')).toBeVisible();
     await expect(page.getByText(RESPONSE_ID)).toBeVisible();
+    await expect(page.getByText('рерангирање врски')).toBeVisible();
+    await expect(page.getByText('хипотетички документ (HyDE)')).toBeVisible();
+    await expect(page.getByText('преформулација на прашање')).toBeVisible();
+    await expect(page.getByText('трансформација на прашање')).toBeVisible();
+    await expect(page.getByText('links.rerank')).toHaveCount(0);
     await expect(page.getByText('цена')).toBeVisible();
     await expect(page.getByText('$0.000480')).toBeVisible();
-    await page.mouse.move(0, 0);
+    await page.keyboard.press('Escape');
+    await expect(page.getByText('trace ID')).toHaveCount(0);
 
     await page.getByTestId('like-button').click();
     await expect.poll(() => feedbackBody).not.toBeNull();
