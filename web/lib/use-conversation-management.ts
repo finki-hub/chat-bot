@@ -9,6 +9,7 @@ import {
 import { flushSync } from 'react-dom';
 
 import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
+import type { StopOrder } from '@/lib/use-stop-chat';
 
 import { fireAndForget } from '@/lib/async';
 import { deriveTitle } from '@/lib/messages';
@@ -18,8 +19,6 @@ import {
   DeleteChatConversationError,
   saveChatConversation,
 } from '@/lib/transport';
-
-type StopOrder = 'local-first' | 'server-first';
 
 type UseConversationManagementOptions = {
   readonly applyGeneratedTitle: (
