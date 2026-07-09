@@ -127,26 +127,27 @@ async def get_mcp_tools() -> list[BaseTool]:
     with timed("agent.mcp_tools"):
         fetched: list[BaseTool] = []
         for server in servers:
+            server_label = server.name if server.name != server.url else "legacy_url"
             try:
                 server_tools = await client.get_tools(server_name=server.name)
             except get_cancelled_exc_class():
                 logger.warning(
                     "MCP server tool loading cancelled; propagating cancellation: %s",
-                    server.name,
+                    server_label,
                 )
                 raise
             except Exception as exc:
-                failed_server_names.append(server.name)
+                failed_server_names.append(server_label)
                 logger.warning(
                     "MCP server tool loading failed; skipping server: %s",
-                    server.name,
+                    server_label,
                     exc_info=True,
                 )
                 capture(
                     "server",
                     "mcp_server_tool_loading_failed",
                     {
-                        "server_name": server.name,
+                        "server_name": server_label,
                         "transport": server.transport,
                         "error_type": type(exc).__name__,
                     },

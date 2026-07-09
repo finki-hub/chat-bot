@@ -110,3 +110,53 @@ async def test_get_mcp_tools_caches_successful_empty_response(monkeypatch):
     assert tools == []
     assert mcp.mcp_tools == []
     assert mcp.mcp_tools_fetched_at > 0
+
+
+@pytest.mark.anyio
+async def test_mcp_failure_event_redacts_legacy_url_server_name(monkeypatch, caplog):
+    class FakeClient:
+        async def get_tools(self, *, server_name: str | None = None):
+            raise OSError("legacy MCP is unavailable")
+
+    def build_fake_client() -> FakeClient:
+        return FakeClient()
+
+    legacy_url = "https://user:secret@internal.example/mcp?token=sensitive"
+    captured_events = []
+    monkeypatch.setattr(mcp, "build_mcp_client", build_fake_client)
+    monkeypatch.setattr(
+        mcp,
+        "capture",
+        lambda distinct_id, event, props: captured_events.append(
+            (distinct_id, event, props),
+        ),
+    )
+    monkeypatch.setattr(
+        mcp,
+        "settings",
+        Settings(
+            MCP_SERVERS=[],
+            MCP_HTTP_URLS=legacy_url,
+            MCP_API_KEY="shared-key",
+        ),
+    )
+    monkeypatch.setattr(mcp, "mcp_tools", None)
+    monkeypatch.setattr(mcp, "mcp_tools_fetched_at", -10_000.0)
+
+    tools = await mcp.get_mcp_tools()
+
+    assert tools == []
+    assert captured_events == [
+        (
+            "server",
+            "mcp_server_tool_loading_failed",
+            {
+                "server_name": "legacy_url",
+                "transport": "streamable_http",
+                "error_type": "OSError",
+            },
+        ),
+    ]
+    assert legacy_url not in str(captured_events)
+    assert legacy_url not in caplog.text
+    assert "legacy_url" in caplog.text
