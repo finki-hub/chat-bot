@@ -188,6 +188,58 @@ async def test_get_mcp_tools_filters_each_server(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_get_mcp_tools_keeps_healthy_servers_when_one_server_fails(monkeypatch):
+    captured = []
+
+    class FakeClient:
+        async def get_tools(self, *, server_name=None):
+            if server_name == "broken":
+                raise OSError("TLS certificate verification failed")
+            return [ToolStub("lookup")]
+
+    def build_fake_client():
+        return FakeClient()
+
+    monkeypatch.setattr(mcp, "build_mcp_client", build_fake_client)
+    monkeypatch.setattr(
+        mcp,
+        "capture",
+        lambda distinct_id, event, props: captured.append((distinct_id, event, props)),
+    )
+    monkeypatch.setattr(
+        mcp,
+        "settings",
+        Settings(
+            MCP_SERVERS=[
+                {
+                    "name": "local",
+                    "url": "https://local-mcp:8808/mcp",
+                    "transport": "streamable_http",
+                },
+                {
+                    "name": "broken",
+                    "url": "https://broken-mcp:8808/sse",
+                    "transport": "sse",
+                },
+            ],
+        ),
+    )
+    monkeypatch.setattr(mcp, "mcp_tools", None)
+    monkeypatch.setattr(mcp, "mcp_tools_fetched_at", 0.0)
+
+    tools = await mcp.get_mcp_tools()
+
+    assert [tool.name for tool in tools] == ["lookup"]
+    assert captured == [
+        (
+            "server",
+            "mcp_server_tool_loading_failed",
+            {"server_name": "broken", "transport": "sse", "error_type": "OSError"},
+        ),
+    ]
+
+
+@pytest.mark.anyio
 async def test_get_mcp_tools_caches_empty_list_when_no_servers(monkeypatch):
     def fail_build_client():
         msg = "MCP client should not be built without configured servers"

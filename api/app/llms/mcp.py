@@ -11,6 +11,7 @@ from langchain_mcp_adapters.sessions import (
     StreamableHttpConnection,
 )
 
+from app.utils.posthog_client import capture
 from app.utils.settings import McpServerSettings, Settings
 from app.utils.timing import timed
 
@@ -124,7 +125,24 @@ async def get_mcp_tools() -> list[BaseTool]:
     with timed("agent.mcp_tools"):
         fetched: list[BaseTool] = []
         for server in servers:
-            server_tools = await client.get_tools(server_name=server.name)
+            try:
+                server_tools = await client.get_tools(server_name=server.name)
+            except Exception as exc:
+                logger.warning(
+                    "MCP server tool loading failed; skipping server: %s",
+                    server.name,
+                    exc_info=True,
+                )
+                capture(
+                    "server",
+                    "mcp_server_tool_loading_failed",
+                    {
+                        "server_name": server.name,
+                        "transport": server.transport,
+                        "error_type": type(exc).__name__,
+                    },
+                )
+                continue
             fetched_source_tool_count += len(server_tools)
             fetched.extend(_filter_tools(server_tools, server))
 
