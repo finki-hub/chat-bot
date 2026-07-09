@@ -3,6 +3,7 @@ import time
 from collections.abc import Sequence
 from typing import Protocol, assert_never
 
+from anyio import get_cancelled_exc_class
 from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.sessions import (
@@ -127,6 +128,8 @@ async def get_mcp_tools() -> list[BaseTool]:
         for server in servers:
             try:
                 server_tools = await client.get_tools(server_name=server.name)
+            except get_cancelled_exc_class():
+                raise
             except Exception as exc:
                 logger.warning(
                     "MCP server tool loading failed; skipping server: %s",
