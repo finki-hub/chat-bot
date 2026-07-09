@@ -48,33 +48,29 @@ def test_settings_parses_structured_mcp_servers(monkeypatch):
 
 
 def test_settings_rejects_duplicate_mcp_server_names():
+    servers = [
+        McpServerSettings(
+            name="search",
+            url="https://search-mcp:8808/mcp",
+            transport="streamable_http",
+        ),
+        McpServerSettings(
+            name="search",
+            url="https://other-mcp:8808/mcp",
+            transport="streamable_http",
+        ),
+    ]
+
     with pytest.raises(ValidationError, match="unique names"):
-        Settings(
-            MCP_SERVERS=[
-                McpServerSettings(
-                    name="search",
-                    url="https://search-mcp:8808/mcp",
-                    transport="streamable_http",
-                ),
-                McpServerSettings(
-                    name="search",
-                    url="https://other-mcp:8808/mcp",
-                    transport="streamable_http",
-                ),
-            ],
-        )
+        Settings(MCP_SERVERS=servers)
 
 
-def test_settings_rejects_blank_mcp_server_identity():
+def test_mcp_server_settings_rejects_blank_identity():
     with pytest.raises(ValidationError):
-        Settings(
-            MCP_SERVERS=[
-                McpServerSettings(
-                    name="   ",
-                    url="https://search-mcp:8808/mcp",
-                    transport="streamable_http",
-                ),
-            ],
+        McpServerSettings(
+            name="   ",
+            url="https://search-mcp:8808/mcp",
+            transport="streamable_http",
         )
 
 
