@@ -19,9 +19,27 @@ const importDelete = async (): Promise<
   return DELETE;
 };
 
+const importPatch = async (): Promise<
+  (
+    req: Request,
+    ctx: { readonly params: Promise<{ readonly id: string }> },
+  ) => Promise<Response>
+> => {
+  const { PATCH } = await import('@/app/api/chat/[id]/route');
+
+  return PATCH;
+};
+
 const deleteRequest = (): Request =>
   new Request(`http://localhost/api/chat/${CONVERSATION_ID}`, {
     method: 'DELETE',
+  });
+
+const patchRequest = (body: unknown): Request =>
+  new Request(`http://localhost/api/chat/${CONVERSATION_ID}`, {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'PATCH',
   });
 
 const routeContext = () => ({
@@ -71,5 +89,52 @@ describe('DELETE /api/chat/[id]', () => {
     const res = await (await importDelete())(deleteRequest(), routeContext());
 
     expect(res.status).toBe(404);
+  });
+
+  it('updates conversation title for the authenticated owner', async () => {
+    const res = await (
+      await importPatch()
+    )(patchRequest({ title: 'Renamed' }), routeContext());
+
+    expect(res.status).toBe(204);
+    expect(routeMocks.stateClient.updateConversation).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      title: 'Renamed',
+      userId: USER_ID,
+    });
+  });
+
+  it('creates a conversation when the browser starts a new server chat', async () => {
+    const res = await (
+      await importPatch()
+    )(
+      patchRequest({ model: 'claude-sonnet-4-6', title: 'New chat' }),
+      routeContext(),
+    );
+
+    expect(res.status).toBe(204);
+    expect(routeMocks.stateClient.upsertConversation).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      model: 'claude-sonnet-4-6',
+      title: 'New chat',
+      userId: USER_ID,
+    });
+    expect(routeMocks.stateClient.updateConversation).not.toHaveBeenCalled();
+  });
+
+  it('skips generated title updates when the current title changed', async () => {
+    const res = await (
+      await importPatch()
+    )(
+      patchRequest({ expectedTitle: 'Different', title: 'Generated' }),
+      routeContext(),
+    );
+
+    expect(res.status).toBe(204);
+    expect(routeMocks.stateClient.loadConversation).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      userId: USER_ID,
+    });
+    expect(routeMocks.stateClient.updateConversation).not.toHaveBeenCalled();
   });
 });

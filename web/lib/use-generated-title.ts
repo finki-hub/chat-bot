@@ -3,28 +3,20 @@
 import { type RefObject, useCallback, useState } from 'react';
 
 import type { MyUIMessage } from '@/lib/api-types';
+import type { ConversationRow } from '@/lib/conversation-types';
 
 import { fireAndForget } from '@/lib/async';
 import { generateChatTitle } from '@/lib/chat-title';
 import {
-  type ConversationRow,
-  loadMessages,
-  type MessageRow,
-  renameConversationIfTitle,
-} from '@/lib/db';
+  loadChatConversationHistory,
+  saveChatConversation,
+} from '@/lib/transport';
 
 type UseGeneratedTitleOptions = {
   readonly conversations: readonly ConversationRow[];
   readonly modelRef: RefObject<string>;
   readonly refreshConversations: () => Promise<void>;
 };
-
-const fromRow = (row: MessageRow): MyUIMessage => ({
-  id: row.id,
-  metadata: row.metadata,
-  parts: row.parts,
-  role: row.role,
-});
 
 export const useGeneratedTitle = ({
   conversations,
@@ -52,7 +44,7 @@ export const useGeneratedTitle = ({
           return;
         }
 
-        await renameConversationIfTitle(id, expectedTitle, title);
+        await saveChatConversation({ expectedTitle, id, title });
         await refreshConversations();
       } finally {
         setGeneratingTitleId((current) => (current === id ? null : current));
@@ -69,11 +61,11 @@ export const useGeneratedTitle = ({
       }
 
       const run = async (): Promise<void> => {
-        const rows = await loadMessages(id);
-        if (rows.length === 0) {
+        const history = await loadChatConversationHistory(id);
+        if (history === null || history.messages.length === 0) {
           return;
         }
-        await applyGeneratedTitle(id, rows.map(fromRow), expectedTitle);
+        await applyGeneratedTitle(id, history.messages, expectedTitle);
       };
 
       fireAndForget(run());

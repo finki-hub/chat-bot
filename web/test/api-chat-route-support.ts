@@ -40,6 +40,7 @@ type StateClientInput = {
   readonly metadata?: Record<string, unknown>;
   readonly model?: string;
   readonly responseId?: string;
+  readonly retainedMessageIds?: readonly string[];
   readonly streamId?: string;
   readonly userId: string;
 };
@@ -107,7 +108,21 @@ export const routeMocks = {
   },
   stateClient: {
     clearActiveStreamIfCurrent: vi.fn(async (_input: StateClientInput) => {}),
+    clearConversations: vi.fn(
+      async (_input: { readonly userId: string }) => {},
+    ),
     deleteConversation: vi.fn(async (_input: StateClientInput) => {}),
+    listConversations: vi.fn(async (_input: { readonly userId: string }) => [
+      {
+        active_response_id: null,
+        active_status: null,
+        active_stream_id: null,
+        id: CONVERSATION_ID,
+        model: MODEL,
+        title: 'Stored title',
+        user_id: USER_ID,
+      },
+    ]),
     loadConversation: vi.fn(
       async (_input: StateClientInput): Promise<LoadedConversation> => ({
         conversation: {
@@ -137,8 +152,10 @@ export const routeMocks = {
         ],
       }),
     ),
+    replaceAssistantMessage: vi.fn(async (_input: StateClientInput) => {}),
     setActiveStream: vi.fn(async (_input: StateClientInput) => {}),
     stopActiveStreamIfCurrent: vi.fn(async (_input: StateClientInput) => {}),
+    updateConversation: vi.fn(async (_input: StateClientInput) => {}),
     upsertAssistantMessage: vi.fn(async (_input: StateClientInput) => {}),
     upsertConversation: vi.fn(async (_input: StateClientInput) => {}),
     upsertUserMessage: vi.fn(async (_input: StateClientInput) => {}),

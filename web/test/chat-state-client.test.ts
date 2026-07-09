@@ -6,6 +6,8 @@ vi.mock('@/lib/env', () => ({
   env: { API_BASE_URL: 'https://api:8880', CHAT_API_KEY: 'test-key' },
 }));
 
+const USER_ID = '00000000-0000-4000-8000-000000000001';
+
 describe('createChatStateClient', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -21,7 +23,7 @@ describe('createChatStateClient', () => {
         Object.fromEntries([
           ['avatar_url', 'https://example.com/a.png'],
           ['email', 'student@example.com'],
-          ['id', '00000000-0000-4000-8000-000000000001'],
+          ['id', USER_ID],
           ['name', 'Student'],
           ['provider', 'microsoft-entra-id'],
           ['provider_subject', 'microsoft-sub-1'],
@@ -53,7 +55,7 @@ describe('createChatStateClient', () => {
         ['provider_subject', 'microsoft-sub-1'],
       ]),
     );
-    expect(user.id).toBe('00000000-0000-4000-8000-000000000001');
+    expect(user.id).toBe(USER_ID);
   });
 
   it('deletes a user-owned conversation with the server API key', async () => {
@@ -67,15 +69,102 @@ describe('createChatStateClient', () => {
     const { createChatStateClient } = await import('@/lib/chat-state-client');
     await createChatStateClient().deleteConversation({
       conversationId: 'conv-delete',
-      userId: '00000000-0000-4000-8000-000000000001',
+      userId: USER_ID,
     });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
     expect(url).toBe(
-      'https://api:8880/chat/state/conversations/conv-delete?user_id=00000000-0000-4000-8000-000000000001',
+      `https://api:8880/chat/state/conversations/conv-delete?user_id=${USER_ID}`,
     );
     expect(init.method).toBe('DELETE');
     expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
+  });
+
+  it('lists user-owned conversations with the server API key', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json([
+        Object.fromEntries([
+          ['active_response_id', null],
+          ['active_status', null],
+          ['active_stream_id', null],
+          ['id', 'conv-list'],
+          ['model', 'model-a'],
+          ['title', 'Listed'],
+          ['user_id', USER_ID],
+        ]),
+      ]),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createChatStateClient } = await import('@/lib/chat-state-client');
+    const conversations = await createChatStateClient().listConversations({
+      userId: USER_ID,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(url).toBe(
+      `https://api:8880/chat/state/conversations?user_id=${USER_ID}`,
+    );
+    expect(init.method).toBe('GET');
+    expect(conversations[0]?.id).toBe('conv-list');
+  });
+
+  it('clears user-owned conversations with the server API key', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createChatStateClient } = await import('@/lib/chat-state-client');
+    await createChatStateClient().clearConversations({
+      userId: USER_ID,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(url).toBe(
+      `https://api:8880/chat/state/conversations?user_id=${USER_ID}`,
+    );
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('sends conversation titles on upsert and update requests', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createChatStateClient } = await import('@/lib/chat-state-client');
+    const client = createChatStateClient();
+    await client.upsertConversation({
+      conversationId: 'conv-title',
+      model: 'model-a',
+      title: 'Initial title',
+      userId: USER_ID,
+    });
+    await client.updateConversation({
+      conversationId: 'conv-title',
+      title: 'Renamed title',
+      userId: USER_ID,
+    });
+
+    const [, upsertInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [updateUrl, updateInit] = fetchMock.mock.calls[1] as [
+      string,
+      RequestInit,
+    ];
+
+    expect(JSON.parse(upsertInit.body as string)).toMatchObject({
+      title: 'Initial title',
+    });
+    expect(updateUrl).toBe(
+      'https://api:8880/chat/state/conversations/conv-title',
+    );
+    expect(updateInit.method).toBe('PATCH');
+    expect(JSON.parse(updateInit.body as string)).toMatchObject({
+      title: 'Renamed title',
+    });
   });
 });

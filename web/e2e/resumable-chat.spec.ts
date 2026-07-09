@@ -66,26 +66,6 @@ const installHealthRoute = async (page: Page): Promise<void> => {
   });
 };
 
-const clearBrowserConversationStorage = async (page: Page): Promise<void> => {
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve, reject) => {
-        const request = indexedDB.deleteDatabase('finkiHubChat');
-        request.addEventListener('error', () => {
-          reject(
-            new Error(request.error?.message ?? 'IndexedDB delete failed'),
-          );
-        });
-        request.addEventListener('blocked', () => {
-          reject(new Error('IndexedDB delete was blocked'));
-        });
-        request.addEventListener('success', () => {
-          resolve();
-        });
-      }),
-  );
-};
-
 test.describe('resumable chat lifecycle (mocked BFF)', () => {
   test('resumes after refresh and persists the completed assistant response', async ({
     page,
@@ -185,7 +165,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     );
     await page.reload();
 
-    // Then: the UI consumes the resumed SSE and persists the final answer.
+    // Then: the UI consumes the resumed SSE and can reload the final answer from server history.
     const resumed = await resumeResponse;
     expect(resumed.status()).toBe(200);
     await expect(page.getByTestId('answer-text').last()).toContainText(
@@ -199,7 +179,6 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
       await route.fulfill({ status: 204 });
     });
     allowServerHistory = true;
-    await clearBrowserConversationStorage(page);
     await page.reload();
     await expect(page.getByTestId('answer-text').last()).toContainText(
       `${FIRST_TOKEN}${FINAL_TOKEN}`,

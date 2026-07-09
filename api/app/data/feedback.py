@@ -1,3 +1,6 @@
+from typing import Literal
+from uuid import UUID
+
 from app.data.connection import Database
 from app.schemas.feedback import FeedbackAckSchema, FeedbackSchema
 
@@ -87,3 +90,34 @@ async def upsert_feedback(
         response_id=result["response_id"],
         feedback_type=result["feedback_type"],
     )
+
+
+async def set_web_chat_message_feedback(
+    db: Database,
+    *,
+    feedback_type: Literal["like", "dislike"],
+    response_id: UUID,
+    user_id: str,
+) -> bool:
+    row = await db.fetchrow(
+        """
+        UPDATE chat_message AS assistant
+        SET metadata = jsonb_set(
+                COALESCE(assistant.metadata, '{}'::jsonb),
+                '{feedback}',
+                to_jsonb($3::text),
+                true
+            ),
+            updated_at = NOW()
+        FROM chat_conversation AS conversation
+        WHERE conversation.id = assistant.conversation_id
+          AND assistant.response_id = $1
+          AND assistant.role = 'assistant'
+          AND conversation.user_id::text = $2
+        RETURNING assistant.id
+        """,
+        response_id,
+        user_id,
+        feedback_type,
+    )
+    return row is not None

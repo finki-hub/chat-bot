@@ -37,6 +37,53 @@ async def upsert_assistant_message_by_response_id(
     return message_from_row(row)
 
 
+async def replace_assistant_message_and_prune_after(
+    db: ChatPersistenceDatabase,
+    message: ChatMessageUpsert,
+    *,
+    retained_message_ids: list[UUID],
+    user_id: UUID,
+) -> ChatMessage | None:
+    row = await db.fetchrow(
+        """
+        WITH target AS (
+            SELECT assistant.id, assistant.conversation_id
+            FROM chat_message assistant
+            JOIN chat_conversation conversation
+              ON conversation.id = assistant.conversation_id
+            WHERE assistant.id = $1
+              AND assistant.conversation_id = $2
+              AND assistant.role = 'assistant'
+              AND conversation.user_id = $3
+        ), updated AS (
+            UPDATE chat_message assistant
+            SET content = $4,
+                response_id = $5,
+                metadata = $6::jsonb,
+                updated_at = NOW()
+            FROM target
+            WHERE assistant.id = target.id
+            RETURNING assistant.*
+        ), deleted AS (
+            DELETE FROM chat_message stale
+            USING target
+            WHERE stale.conversation_id = target.conversation_id
+              AND NOT (stale.id = ANY($7::uuid[]))
+            RETURNING stale.id
+        )
+        SELECT * FROM updated
+        """,
+        message.id,
+        message.conversation_id,
+        user_id,
+        message.content,
+        message.response_id,
+        json.dumps(message.metadata),
+        retained_message_ids,
+    )
+    return None if row is None else message_from_row(row)
+
+
 async def mark_active_stream_stopped_if_current(
     db: ChatPersistenceDatabase,
     *,

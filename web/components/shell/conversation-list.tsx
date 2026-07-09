@@ -1,7 +1,7 @@
 import { LoaderCircle, Pencil, Trash2, WandSparkles } from 'lucide-react';
 import { useState } from 'react';
 
-import type { ConversationRow } from '@/lib/db';
+import type { ConversationRow } from '@/lib/conversation-types';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';

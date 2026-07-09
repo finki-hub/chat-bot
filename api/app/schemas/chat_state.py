@@ -16,6 +16,21 @@ class SetActiveStreamRequest(UserScopedRequest):
     active_status: ActiveStreamStatus
 
 
+class ConversationUpdateRequest(UserScopedRequest):
+    model: str | None = Field(default=None)
+    title: str | None = Field(default=None)
+
+    @field_validator("model", "title")
+    @classmethod
+    def _strip_present_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("must not be blank or whitespace-only")
+        return stripped
+
+
 class UserMessageUpsertRequest(UserScopedRequest):
     id: UUID
     content: str = Field(min_length=1)
@@ -32,6 +47,20 @@ class UserMessageUpsertRequest(UserScopedRequest):
 
 class AssistantMessageUpsertRequest(UserMessageUpsertRequest):
     pass
+
+
+class AssistantMessageReplacementRequest(UserScopedRequest):
+    content: str = Field(min_length=1)
+    metadata: dict[str, JsonValue] = Field(default_factory=dict)
+    retained_message_ids: list[UUID] = Field(min_length=1)
+
+    @field_validator("content")
+    @classmethod
+    def _strip_content(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("must not be blank or whitespace-only")
+        return stripped
 
 
 class ClearStaleActiveStreamsRequest(BaseModel):

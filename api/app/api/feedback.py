@@ -4,7 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.data.connection import Database
 from app.data.db import get_db
-from app.data.feedback import server_owned_web_feedback, upsert_feedback
+from app.data.feedback import (
+    server_owned_web_feedback,
+    set_web_chat_message_feedback,
+    upsert_feedback,
+)
 from app.schemas.feedback import FeedbackAckSchema, FeedbackSchema
 from app.utils.auth import verify_api_key
 from app.utils.posthog_client import capture
@@ -46,6 +50,17 @@ async def submit_feedback(
     if payload.client == "web":
         owned = await server_owned_web_feedback(db, payload)
         if owned is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Response not found",
+            )
+        updated = await set_web_chat_message_feedback(
+            db,
+            feedback_type=payload.feedback_type,
+            response_id=payload.response_id,
+            user_id=payload.user_id,
+        )
+        if not updated:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Response not found",
