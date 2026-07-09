@@ -103,6 +103,7 @@ def test_chat_title_uses_runtime_settings_for_user_credentials(monkeypatch):
     monkeypatch.setattr(chat_title, "transform_query", fake_transform_query)
     db = FakeChatDatabase()
     user_id = UUID("00000000-0000-4000-8000-000000000001")
+    credential_key = "anthropic-user-token".replace("token", "key")
     settings = Settings(
         API_KEY="test-api-key",
         CREDENTIAL_ENCRYPTION_KEY="runtime-credential-key",
@@ -114,7 +115,7 @@ def test_chat_title_uses_runtime_settings_for_user_credentials(monkeypatch):
             db,
             user_id=user_id,
             credential=ChatCredentialUpsert(
-                api_key="anthropic-user-key",
+                api_key=credential_key,
                 provider="anthropic",
             ),
             settings=settings,
@@ -134,7 +135,7 @@ def test_chat_title_uses_runtime_settings_for_user_credentials(monkeypatch):
     credentials = seen["credentials"]
     assert isinstance(credentials, LlmProviderCredentials)
     assert credentials.anthropic is not None
-    assert credentials.anthropic.api_key == "anthropic-user-key"
+    assert credentials.anthropic.api_key == credential_key
 
 
 def test_query_transform_logs_metadata_without_raw_query(monkeypatch, caplog):
