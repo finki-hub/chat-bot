@@ -37,7 +37,11 @@ export const useConversationHydration = ({
       const serverHistory = await loadChatConversationHistory(id);
       if (serverHistory !== null) {
         if (!isCancelled()) {
-          setMessages([...serverHistory.messages]);
+          setMessages((current) =>
+            serverHistory.messages.length === 0 && current.length > 0
+              ? current
+              : [...serverHistory.messages],
+          );
         }
         return;
       }

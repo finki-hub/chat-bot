@@ -140,15 +140,17 @@ export const useConversations = (
           (async () => {
             await handleStop('local-first');
             convoIdRef.current = id;
+            setMessages([]);
             setActiveId(id);
           })(),
         );
         return;
       }
       convoIdRef.current = id;
+      setMessages([]);
       setActiveId(id);
     },
-    [convoIdRef, handleStop, setActiveId, status],
+    [convoIdRef, handleStop, setActiveId, setMessages, status],
   );
 
   const deleteConversationEverywhere = useCallback(
