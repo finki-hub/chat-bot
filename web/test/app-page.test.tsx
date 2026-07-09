@@ -1,5 +1,5 @@
-import { isValidElement } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { authMock, isPlaywrightAuthBypassEnabledMock, redirectMock } =
   vi.hoisted(() => ({
@@ -17,7 +17,7 @@ vi.mock('@/auth', () => ({
 }));
 
 vi.mock('@/components/chat/chat-screen', () => ({
-  ChatScreen: () => 'chat-screen',
+  ChatScreen: () => <div>chat-screen</div>,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -30,6 +30,10 @@ describe('HomePage auth gate', () => {
     isPlaywrightAuthBypassEnabledMock.mockReset();
     isPlaywrightAuthBypassEnabledMock.mockReturnValue(false);
     redirectMock.mockClear();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('redirects unauthenticated users to the custom sign-in page', async () => {
@@ -45,7 +49,9 @@ describe('HomePage auth gate', () => {
     const { default: HomePage } = await import('@/app/page');
     const result = await HomePage();
 
-    expect(isValidElement(result)).toBe(true);
+    render(result);
+
+    expect(screen.getByText('chat-screen')).toBeVisible();
   });
 
   it('renders the chat screen when the Playwright auth bypass is enabled', async () => {
@@ -53,7 +59,9 @@ describe('HomePage auth gate', () => {
     const { default: HomePage } = await import('@/app/page');
     const result = await HomePage();
 
-    expect(isValidElement(result)).toBe(true);
+    render(result);
+
+    expect(screen.getByText('chat-screen')).toBeVisible();
     expect(authMock).not.toHaveBeenCalled();
   });
 });

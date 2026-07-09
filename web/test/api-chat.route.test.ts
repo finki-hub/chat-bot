@@ -24,6 +24,7 @@ const okStreamResponse = (...frames: string[]): Response =>
   });
 
 const DONE_FRAME = 'event: done\ndata: {}\n\n';
+const HELLO_TOKEN_FRAME = 'event: token\ndata: {"text":"Здраво"}\n\n';
 const SERVER_USER_MESSAGE_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d31';
 const TARGET_ASSISTANT_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d32';
 
@@ -50,7 +51,7 @@ describe('POST /api/chat', () => {
       .mockResolvedValue(
         okStreamResponse(
           'event: sources\ndata: {"sources":[{"id":"c1","kind":"chunk","title":"Статут","section":"Член 12","snippet":"Правила."}]}\n\n',
-          'event: token\ndata: {"text":"Здраво"}\n\n',
+          HELLO_TOKEN_FRAME,
           'event: token\ndata: {"text":"!"}\n\n',
           DONE_FRAME,
         ),
@@ -163,12 +164,7 @@ describe('POST /api/chat', () => {
     const browserController = new AbortController();
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValue(
-        okStreamResponse(
-          'event: token\ndata: {"text":"Здраво"}\n\n',
-          DONE_FRAME,
-        ),
-      );
+      .mockResolvedValue(okStreamResponse(HELLO_TOKEN_FRAME, DONE_FRAME));
     vi.stubGlobal('fetch', fetchMock);
 
     const res = await (
@@ -212,7 +208,7 @@ describe('POST /api/chat', () => {
         .fn<typeof fetch>()
         .mockResolvedValue(
           okStreamResponse(
-            'event: token\ndata: {"text":"Здраво"}\n\n',
+            HELLO_TOKEN_FRAME,
             'event: token\ndata: {"text":"!"}\n\n',
             DONE_FRAME,
           ),
@@ -311,6 +307,62 @@ describe('POST /api/chat', () => {
       messageId: 'u1',
       userId: USER_ID,
     });
+  });
+
+  it('aborts upstream and unregisters the producer when setting active stream state fails', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(okStreamResponse(HELLO_TOKEN_FRAME));
+    routeMocks.stateClient.setActiveStream.mockRejectedValueOnce(
+      new Error('state failed'),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await (await importPost())(chatRequest({ text: 'Hi' }));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const signal = init.signal;
+    const abortSignal = signal instanceof AbortSignal ? signal : null;
+    const out = await res.text();
+
+    expect(out).toContain('data-error');
+    expect(abortSignal?.aborted).toBe(true);
+    expect(routeMocks.activeChatProducers.unregister).toHaveBeenCalledWith(
+      RESPONSE_ID,
+    );
+    expect(
+      routeMocks.resumableContext.createNewResumableStream,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('clears active state and unregisters the producer when resumable stream creation fails', async () => {
+    const { ChatStateRequestError } = await import('@/lib/chat-state-client');
+
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(okStreamResponse(HELLO_TOKEN_FRAME)),
+    );
+    routeMocks.resumableContext.createNewResumableStream.mockRejectedValueOnce(
+      new Error('redis failed'),
+    );
+    routeMocks.stateClient.clearActiveStreamIfCurrent.mockRejectedValueOnce(
+      new ChatStateRequestError(404),
+    );
+
+    const res = await (await importPost())(chatRequest({ text: 'Hi' }));
+    await res.text();
+
+    expect(
+      routeMocks.stateClient.clearActiveStreamIfCurrent,
+    ).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      streamId: RESPONSE_ID,
+      userId: USER_ID,
+    });
+    expect(routeMocks.activeChatProducers.unregister).toHaveBeenCalledWith(
+      RESPONSE_ID,
+    );
   });
 
   it('surfaces a pre-stream JSON error (503) as a data-error', async () => {

@@ -6,7 +6,7 @@ vi.mock('@/lib/env', () => ({
   env: { API_BASE_URL: 'https://api:8880', CHAT_API_KEY: 'test-key' },
 }));
 
-const USER_ID = '00000000-0000-4000-8000-000000000001';
+const CHAT_USER_ID = '00000000-0000-4000-8000-000000000001';
 
 describe('createChatStateClient', () => {
   beforeEach(() => {
@@ -23,7 +23,7 @@ describe('createChatStateClient', () => {
         Object.fromEntries([
           ['avatar_url', 'https://example.com/a.png'],
           ['email', 'student@example.com'],
-          ['id', USER_ID],
+          ['id', CHAT_USER_ID],
           ['name', 'Student'],
           ['provider', 'microsoft-entra-id'],
           ['provider_subject', 'microsoft-sub-1'],
@@ -55,7 +55,7 @@ describe('createChatStateClient', () => {
         ['provider_subject', 'microsoft-sub-1'],
       ]),
     );
-    expect(user.id).toBe(USER_ID);
+    expect(user.id).toBe(CHAT_USER_ID);
   });
 
   it('deletes a user-owned conversation with the server API key', async () => {
@@ -69,13 +69,13 @@ describe('createChatStateClient', () => {
     const { createChatStateClient } = await import('@/lib/chat-state-client');
     await createChatStateClient().deleteConversation({
       conversationId: 'conv-delete',
-      userId: USER_ID,
+      userId: CHAT_USER_ID,
     });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
     expect(url).toBe(
-      `https://api:8880/chat/state/conversations/conv-delete?user_id=${USER_ID}`,
+      `https://api:8880/chat/state/conversations/conv-delete?user_id=${CHAT_USER_ID}`,
     );
     expect(init.method).toBe('DELETE');
     expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
@@ -91,7 +91,7 @@ describe('createChatStateClient', () => {
           ['id', 'conv-list'],
           ['model', 'model-a'],
           ['title', 'Listed'],
-          ['user_id', USER_ID],
+          ['user_id', CHAT_USER_ID],
         ]),
       ]),
     );
@@ -99,16 +99,47 @@ describe('createChatStateClient', () => {
 
     const { createChatStateClient } = await import('@/lib/chat-state-client');
     const conversations = await createChatStateClient().listConversations({
-      userId: USER_ID,
+      userId: CHAT_USER_ID,
     });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
     expect(url).toBe(
-      `https://api:8880/chat/state/conversations?user_id=${USER_ID}`,
+      `https://api:8880/chat/state/conversations?user_id=${CHAT_USER_ID}`,
     );
     expect(init.method).toBe('GET');
     expect(conversations[0]?.id).toBe('conv-list');
+  });
+
+  it('loads a user-owned conversation with the server API key', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        conversation: Object.fromEntries([
+          ['active_response_id', null],
+          ['active_status', null],
+          ['active_stream_id', null],
+          ['id', 'conv-load'],
+          ['user_id', CHAT_USER_ID],
+        ]),
+        messages: [],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createChatStateClient } = await import('@/lib/chat-state-client');
+    const loaded = await createChatStateClient().loadConversation({
+      conversationId: 'conv-load',
+      userId: CHAT_USER_ID,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(url).toBe(
+      `https://api:8880/chat/state/conversations/conv-load?user_id=${CHAT_USER_ID}`,
+    );
+    expect(init.method).toBe('GET');
+    expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
+    expect(loaded.conversation.id).toBe('conv-load');
   });
 
   it('clears user-owned conversations with the server API key', async () => {
@@ -119,13 +150,13 @@ describe('createChatStateClient', () => {
 
     const { createChatStateClient } = await import('@/lib/chat-state-client');
     await createChatStateClient().clearConversations({
-      userId: USER_ID,
+      userId: CHAT_USER_ID,
     });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
     expect(url).toBe(
-      `https://api:8880/chat/state/conversations?user_id=${USER_ID}`,
+      `https://api:8880/chat/state/conversations?user_id=${CHAT_USER_ID}`,
     );
     expect(init.method).toBe('DELETE');
   });
@@ -142,12 +173,12 @@ describe('createChatStateClient', () => {
       conversationId: 'conv-title',
       model: 'model-a',
       title: 'Initial title',
-      userId: USER_ID,
+      userId: CHAT_USER_ID,
     });
     await client.updateConversation({
       conversationId: 'conv-title',
       title: 'Renamed title',
-      userId: USER_ID,
+      userId: CHAT_USER_ID,
     });
 
     const [, upsertInit] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -166,5 +197,26 @@ describe('createChatStateClient', () => {
     expect(JSON.parse(updateInit.body as string)).toMatchObject({
       title: 'Renamed title',
     });
+  });
+
+  it('throws a typed request error when state writes fail', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response(null, { status: 404 })),
+    );
+
+    const { ChatStateRequestError, createChatStateClient } =
+      await import('@/lib/chat-state-client');
+
+    await expect(
+      createChatStateClient().setActiveStream({
+        activeResponseId: 'response-missing',
+        activeStreamId: 'stream-missing',
+        conversationId: 'conv-missing',
+        userId: CHAT_USER_ID,
+      }),
+    ).rejects.toMatchObject(new ChatStateRequestError(404));
   });
 });

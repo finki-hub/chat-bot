@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const isCI = Boolean(process.env['CI']);
+const port = process.env['PLAYWRIGHT_PORT'] ?? '3000';
+const baseURL =
+  process.env['PLAYWRIGHT_BASE_URL'] ?? `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   forbidOnly: isCI,
@@ -9,13 +12,14 @@ export default defineConfig({
   retries: isCI ? 2 : 0,
   testDir: './e2e',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL,
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'npm run dev',
-    reuseExistingServer: !isCI,
+    command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,
+    reuseExistingServer:
+      !isCI && process.env['PLAYWRIGHT_REUSE_SERVER'] === '1',
     timeout: 120_000,
-    url: 'http://localhost:3000',
+    url: baseURL,
   },
 });
