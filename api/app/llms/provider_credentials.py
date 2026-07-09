@@ -22,3 +22,4 @@ class LlmProviderCredentials:
                 return self.anthropic
             case unreachable:
                 assert_never(unreachable)
+        raise AssertionError(f"Unhandled provider: {provider}")
