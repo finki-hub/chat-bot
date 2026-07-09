@@ -9,7 +9,7 @@ import { fireAndForget } from '@/lib/async';
 import { stopOptionsFrom } from '@/lib/stop-chat-snapshot';
 import { stopChatStream } from '@/lib/transport';
 
-type StopOrder = 'local-first' | 'server-first';
+export type StopOrder = 'local-first' | 'server-first';
 
 type UseStopChatOptions = {
   readonly convoIdRef: RefObject<null | string>;

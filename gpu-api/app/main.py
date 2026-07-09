@@ -101,19 +101,9 @@ def make_app(settings: Settings) -> FastAPI:
         request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
-        raw = exc.body
-        if isinstance(raw, bytes | bytearray):
-            try:
-                body_str = raw.decode("utf-8")
-            except Exception:
-                body_str = repr(raw)
-        else:
-            body_str = raw
-
-        content = {"detail": exc.errors(), "body": body_str}
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=jsonable_encoder(content),
+            content={"detail": jsonable_encoder(exc.errors(), exclude={"input"})},
         )
 
     @app.exception_handler(ModelNotReadyError)
