@@ -40,7 +40,11 @@ def _canonical_byok_base_url(value: str) -> str | None:
     else:
         if not address.is_global:
             return None
-    port = f":{parsed.port}" if parsed.port is not None else ""
+    try:
+        parsed_port = parsed.port
+    except ValueError:
+        return None
+    port = f":{parsed_port}" if parsed_port is not None else ""
     path = parsed.path.rstrip("/")
     return f"https://{hostname}{port}{path}"
 
