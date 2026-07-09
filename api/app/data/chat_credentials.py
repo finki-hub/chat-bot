@@ -38,6 +38,10 @@ class ChatCredentialDatabase(Protocol):
 
 
 def _fernet(settings: Settings) -> Fernet:
+    if "CREDENTIAL_ENCRYPTION_KEY" in settings.insecure_secret_names():
+        raise RuntimeError(
+            "CREDENTIAL_ENCRYPTION_KEY must be set before storing credentials",
+        )
     digest = hashlib.sha256(settings.CREDENTIAL_ENCRYPTION_KEY.encode()).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
 

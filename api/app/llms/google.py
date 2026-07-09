@@ -53,7 +53,7 @@ def get_google_embedder(
             model=model.value,
             api_key=SecretStr(credential.api_key),
             task_type=task_type,
-            base_url=credential.base_url or settings.GOOGLE_BASE_URL or None,
+            base_url=credential.base_url or None,
         )
 
     key = (model.value, is_document)
@@ -98,7 +98,7 @@ def get_google_llm(
         return ChatGoogleGenerativeAI(
             model=model.value,
             google_api_key=credential.api_key,
-            base_url=credential.base_url or settings.GOOGLE_BASE_URL or None,
+            base_url=credential.base_url or None,
             temperature=temperature,
             top_p=top_p,
             max_output_tokens=max_output,

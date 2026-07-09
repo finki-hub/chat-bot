@@ -88,7 +88,7 @@ def get_anthropic_llm(
         return ChatAnthropic(
             model=model.value,  # type: ignore[call-arg]
             api_key=SecretStr(credential.api_key),
-            base_url=credential.base_url or settings.ANTHROPIC_BASE_URL or None,
+            base_url=credential.base_url or None,
             temperature=temperature_arg,
             max_tokens=effective_max,  # type: ignore[call-arg]
             thinking=thinking,  # type: ignore[call-arg]

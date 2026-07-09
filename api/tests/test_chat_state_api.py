@@ -10,7 +10,13 @@ from tests.chat_persistence_fake import FakeChatDatabase
 
 
 def _client(db: FakeChatDatabase) -> TestClient:
-    app = make_app(Settings(API_KEY="test-api-key", MCP_API_KEY="test-mcp-key"))
+    app = make_app(
+        Settings(
+            API_KEY="test-api-key",
+            CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
+            MCP_API_KEY="test-mcp-key",
+        ),
+    )
     app.dependency_overrides[get_db] = lambda: db
     return TestClient(app)
 
@@ -128,6 +134,46 @@ def test_chat_state_manages_user_credentials_without_exposing_secret() -> None:
     assert deleted.status_code == 204
     assert after_delete.status_code == 200
     assert after_delete.json() == []
+
+
+def test_chat_state_rejects_default_credential_encryption_key() -> None:
+    # Given: an authenticated BFF client running with the sample BYOK encryption secret.
+    db = FakeChatDatabase()
+    app = make_app(Settings(API_KEY="test-api-key", MCP_API_KEY="test-mcp-key"))
+    app.dependency_overrides[get_db] = lambda: db
+
+    # When: a user tries to persist a credential.
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.put(
+        f"/chat/state/users/{OWNER_ID}/credentials/openai",
+        headers=_auth_headers(),
+        json={"api_key": "sk-test-secret", "provider": "openai"},
+    )
+
+    # Then: the API fails closed instead of encrypting with a public sample value.
+    assert response.status_code == 500
+    assert db.credentials == {}
+
+
+def test_chat_state_validation_errors_do_not_echo_submitted_secret() -> None:
+    # Given: an authenticated BFF client and a malformed BYOK base URL request.
+    db = FakeChatDatabase()
+    client = _client(db)
+
+    # When: validation rejects the request body.
+    response = client.put(
+        f"/chat/state/users/{OWNER_ID}/credentials/openai",
+        headers=_auth_headers(),
+        json={
+            "api_key": "sk-super-secret-validation-value",
+            "base_url": "https://localhost:1234",
+            "provider": "openai",
+        },
+    )
+
+    # Then: FastAPI's validation payload does not reflect the submitted raw secret.
+    assert response.status_code == 422
+    assert "sk-super-secret-validation-value" not in response.text
 
 
 def test_chat_state_requires_api_key() -> None:

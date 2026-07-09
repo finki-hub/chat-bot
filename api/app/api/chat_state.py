@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.data.chat_conversation_delete import delete_conversation, delete_conversations
 from app.data.chat_credentials import (
@@ -55,7 +55,6 @@ from app.schemas.chat_state import (
 )
 from app.schemas.chat_user import ChatUser, ChatUserUpsert
 from app.utils.auth import verify_api_key
-from app.utils.settings import Settings
 
 db_dep = Depends(get_db)
 api_key_dep = Depends(verify_api_key)
@@ -67,7 +66,6 @@ router = APIRouter(
     tags=["Chat State"],
     dependencies=[db_dep, api_key_dep],
 )
-settings = Settings()
 
 
 def _not_found() -> HTTPException:
@@ -121,6 +119,7 @@ async def upsert_user_credential_state(
     user_id: UUID,
     provider: ChatCredentialProvider,
     payload: ChatCredentialUpsert,
+    request: Request,
     db: ChatPersistenceDatabase = db_dep,
 ) -> ChatCredentialPublic:
     if payload.provider != provider:
@@ -132,7 +131,7 @@ async def upsert_user_credential_state(
         db,
         user_id=user_id,
         credential=payload,
-        settings=settings,
+        settings=request.app.state.settings,
     )
 
 

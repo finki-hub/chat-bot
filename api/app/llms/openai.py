@@ -47,7 +47,7 @@ def get_openai_embedder(
         return OpenAIEmbeddings(
             model=model.value,
             api_key=SecretStr(credential.api_key),  # type: ignore[call-arg]
-            base_url=credential.base_url or settings.OPENAI_BASE_URL or None,
+            base_url=credential.base_url or None,
         )
 
     key = model.value
@@ -100,7 +100,7 @@ def get_openai_llm(
         return ChatOpenAI(
             model=model.value,
             api_key=SecretStr(credential.api_key),
-            base_url=credential.base_url or settings.OPENAI_BASE_URL or None,
+            base_url=credential.base_url or None,
             temperature=temperature,
             streaming=True,
             stream_usage=True,
