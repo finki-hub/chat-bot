@@ -305,7 +305,12 @@ describe('POST /api/chat', () => {
     expect(
       routeMocks.stateClient.upsertAssistantMessage,
     ).not.toHaveBeenCalled();
-    expect(routeMocks.stateClient.upsertUserMessage).not.toHaveBeenCalled();
+    expect(routeMocks.stateClient.upsertUserMessage).toHaveBeenCalledWith({
+      content: 'Здраво',
+      conversationId: CONVERSATION_ID,
+      messageId: 'u1',
+      userId: USER_ID,
+    });
   });
 
   it('surfaces a pre-stream JSON error (503) as a data-error', async () => {

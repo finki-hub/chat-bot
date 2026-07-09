@@ -259,14 +259,12 @@ export const POST = async (req: Request): Promise<Response> => {
       chatBody.messages,
       regenerationReplacement,
     );
-    if (regenerationReplacement === null) {
-      await chatState.upsertUserMessage({
-        content: userMessage.content,
-        conversationId,
-        messageId: userMessage.id,
-        userId,
-      });
-    }
+    await chatState.upsertUserMessage({
+      content: userMessage.content,
+      conversationId,
+      messageId: userMessage.id,
+      userId,
+    });
     const upstreamController = new AbortController();
 
     const upstream = await fetch(`${API_BASE_URL}/chat/`, {
