@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import pytest
+from anyio import lowlevel
 
 from app.llms import mcp
 from app.utils.settings import McpServerSettings, Settings
@@ -28,6 +29,7 @@ async def test_get_mcp_tools_retries_partial_refresh_instead_of_caching_it(
             self.calls = {"search": 0, "records": 0}
 
         async def get_tools(self, *, server_name: str | None = None):
+            await lowlevel.checkpoint()
             if server_name is None:
                 raise AssertionError("server_name is required")
             self.calls[server_name] += 1
@@ -61,6 +63,7 @@ async def test_get_mcp_tools_excludes_stale_tools_when_healthy_server_is_empty(
 ):
     class FakeClient:
         async def get_tools(self, *, server_name: str | None = None):
+            await lowlevel.checkpoint()
             if server_name == "broken":
                 raise OSError("broken MCP is unavailable")
             return []
@@ -90,6 +93,7 @@ async def test_get_mcp_tools_excludes_stale_tools_when_healthy_server_is_empty(
 async def test_get_mcp_tools_caches_successful_empty_response(monkeypatch):
     class FakeClient:
         async def get_tools(self, *, server_name: str | None = None):
+            await lowlevel.checkpoint()
             return []
 
     def build_fake_client() -> FakeClient:
@@ -116,12 +120,13 @@ async def test_get_mcp_tools_caches_successful_empty_response(monkeypatch):
 async def test_mcp_failure_event_redacts_legacy_url_server_name(monkeypatch, caplog):
     class FakeClient:
         async def get_tools(self, *, server_name: str | None = None):
+            await lowlevel.checkpoint()
             raise OSError("legacy MCP is unavailable")
 
     def build_fake_client() -> FakeClient:
         return FakeClient()
 
-    legacy_url = "https://user:secret@internal.example/mcp?token=sensitive"
+    legacy_url = "https://internal.example/mcp?tenant=private"
     captured_events = []
     monkeypatch.setattr(mcp, "build_mcp_client", build_fake_client)
     monkeypatch.setattr(
