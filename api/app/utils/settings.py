@@ -1,4 +1,6 @@
+from ipaddress import ip_address
 from typing import Annotated, Final, Literal, Self
+from urllib.parse import urlsplit
 
 from pydantic import (
     BaseModel,
@@ -20,6 +22,27 @@ NonBlankString = Annotated[str, StringConstraints(strip_whitespace=True, min_len
 def _is_insecure_secret(value: str, default: str) -> bool:
     normalized = value.strip()
     return normalized in ("", default)
+
+
+def _canonical_byok_base_url(value: str) -> str | None:
+    parsed = urlsplit(value.strip())
+    if parsed.scheme.lower() != "https" or parsed.hostname is None:
+        return None
+    if parsed.username or parsed.password or parsed.fragment:
+        return None
+    hostname = parsed.hostname.lower().rstrip(".")
+    if hostname == "localhost" or hostname.endswith((".localhost", ".local")):
+        return None
+    try:
+        address = ip_address(hostname)
+    except ValueError:
+        pass
+    else:
+        if not address.is_global:
+            return None
+    port = f":{parsed.port}" if parsed.port is not None else ""
+    path = parsed.path.rstrip("/")
+    return f"https://{hostname}{port}{path}"
 
 
 class McpServerSettings(BaseModel):
@@ -76,6 +99,7 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str = ""
     GOOGLE_BASE_URL: str = ""
     ANTHROPIC_BASE_URL: str = ""
+    BYOK_ALLOWED_BASE_URLS: str = ""
 
     POSTHOG_KEY: str = ""
     POSTHOG_HOST: str = "https://eu.i.posthog.com"
@@ -109,6 +133,12 @@ class Settings(BaseSettings):
         """Normalise the value to a plain string — empty or comma-separated URLs."""
         return str(v).strip() if v else ""
 
+    @field_validator("BYOK_ALLOWED_BASE_URLS", mode="before")
+    @classmethod
+    def parse_byok_base_urls(cls, v: object) -> str:
+        """Normalise the BYOK custom endpoint allowlist to comma-separated URLs."""
+        return str(v).strip() if v else ""
+
     def insecure_secret_names(self) -> list[str]:
         insecure_names: list[str] = []
         if _is_insecure_secret(self.API_KEY, _API_KEY_DEFAULT):
@@ -139,6 +169,18 @@ class Settings(BaseSettings):
 
     def mcp_sse_url_list(self) -> list[str]:
         return [u for u in self.MCP_SSE_URLS.split(",") if u]
+
+    def byok_allowed_base_url_list(self) -> list[str]:
+        urls: list[str] = []
+        for url in self.BYOK_ALLOWED_BASE_URLS.split(","):
+            canonical = _canonical_byok_base_url(url)
+            if canonical is not None:
+                urls.append(canonical)
+        return urls
+
+    def is_byok_base_url_allowed(self, value: str) -> bool:
+        canonical = _canonical_byok_base_url(value)
+        return canonical is not None and canonical in self.byok_allowed_base_url_list()
 
     def mcp_server_configs(self) -> list[McpServerSettings]:
         if self.MCP_SERVERS:

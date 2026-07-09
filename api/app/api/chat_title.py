@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
-from app.api.provider_credentials import resolve_provider_credentials
+from app.api.provider_credentials import (
+    credential_providers_for_models,
+    resolve_provider_credentials,
+)
 from app.data.chat_credentials import ChatCredentialDatabase
 from app.data.db import get_db
 from app.llms.query_transform import transform_query
@@ -12,7 +15,6 @@ db_dep = Depends(get_db)
 api_key_dep = Depends(verify_api_key)
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
-settings = Settings()
 
 _TITLE_MAX = 60
 _FALLBACK_TITLE = "Нов разговор"
@@ -46,16 +48,21 @@ def _normalize_title(raw_title: str, fallback_text: str) -> str:
 async def generate_chat_title(
     payload: ChatTitleSchema,
     db: ChatCredentialDatabase | None = None,
+    settings: Settings | None = None,
 ) -> ChatTitleResponse:
     if payload.user_id is None:
         credentials = None
     elif db is None:
         msg = "db is required when user_id is present"
         raise TypeError(msg)
+    elif settings is None:
+        msg = "settings is required when user_id is present"
+        raise TypeError(msg)
     else:
         credentials = await resolve_provider_credentials(
             db,
             user_id=payload.user_id,
+            providers=credential_providers_for_models(payload.query_transform_model),
             settings=settings,
         )
     prompt = f"Conversation transcript:\n{payload.transcript}"
@@ -83,6 +90,7 @@ async def generate_chat_title(
 )
 async def chat_title(
     payload: ChatTitleSchema,
+    request: Request,
     db: ChatCredentialDatabase = db_dep,
 ) -> ChatTitleResponse:
-    return await generate_chat_title(payload, db)
+    return await generate_chat_title(payload, db, request.app.state.settings)

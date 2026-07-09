@@ -13,6 +13,7 @@ def _client(db: FakeChatDatabase) -> TestClient:
     app = make_app(
         Settings(
             API_KEY="test-api-key",
+            BYOK_ALLOWED_BASE_URLS="https://api.openai.com/v1",
             CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
             MCP_API_KEY="test-mcp-key",
         ),
@@ -134,6 +135,35 @@ def test_chat_state_manages_user_credentials_without_exposing_secret() -> None:
     assert deleted.status_code == 204
     assert after_delete.status_code == 200
     assert after_delete.json() == []
+
+
+def test_chat_state_rejects_custom_credential_base_url_outside_allowlist() -> None:
+    # Given: an authenticated BFF client with no operator-allowed BYOK endpoints.
+    db = FakeChatDatabase()
+    app = make_app(
+        Settings(
+            API_KEY="test-api-key",
+            CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
+            MCP_API_KEY="test-mcp-key",
+        ),
+    )
+    app.dependency_overrides[get_db] = lambda: db
+    client = TestClient(app)
+
+    # When: a user attempts to save an arbitrary custom provider endpoint.
+    response = client.put(
+        f"/chat/state/users/{OWNER_ID}/credentials/openai",
+        headers=_auth_headers(),
+        json={
+            "api_key": "test-key",
+            "base_url": "https://api.openai.com/v1",
+            "provider": "openai",
+        },
+    )
+
+    # Then: the endpoint is rejected before any credential is stored.
+    assert response.status_code == 422
+    assert db.credentials == {}
 
 
 def test_chat_state_rejects_default_credential_encryption_key() -> None:

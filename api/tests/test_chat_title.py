@@ -1,11 +1,17 @@
 import logging
+from uuid import UUID
 
 import anyio
 
 from app.api import chat_title
+from app.data.chat_credentials import upsert_chat_credential
 from app.llms import query_transform
 from app.llms.models import Model
+from app.llms.provider_credentials import LlmProviderCredentials
+from app.schemas.chat_credentials import ChatCredentialUpsert
 from app.schemas.chat_title import ChatTitleSchema
+from app.utils.settings import Settings
+from tests.chat_persistence_fake import FakeChatDatabase
 
 
 def test_chat_title_uses_transform_prompt_and_normalizes_quotes(monkeypatch):
@@ -76,6 +82,59 @@ def test_chat_title_falls_back_to_first_user_message_when_model_returns_empty(
     response = anyio.run(chat_title.generate_chat_title, payload)
 
     assert response.title == "Како да пријавам испит?"
+
+
+def test_chat_title_uses_runtime_settings_for_user_credentials(monkeypatch):
+    seen: dict[str, object] = {}
+
+    async def fake_transform_query(
+        query: str,
+        model: Model,
+        *,
+        system_prompt: str,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        credentials: object | None = None,
+    ) -> str:
+        seen["credentials"] = credentials
+        return "Испитна сесија"
+
+    monkeypatch.setattr(chat_title, "transform_query", fake_transform_query)
+    db = FakeChatDatabase()
+    user_id = UUID("00000000-0000-4000-8000-000000000001")
+    settings = Settings(
+        API_KEY="test-api-key",
+        CREDENTIAL_ENCRYPTION_KEY="runtime-credential-key",
+        MCP_API_KEY="test-mcp-key",
+    )
+
+    async def run_title() -> None:
+        await upsert_chat_credential(
+            db,
+            user_id=user_id,
+            credential=ChatCredentialUpsert(
+                api_key="anthropic-user-key",
+                provider="anthropic",
+            ),
+            settings=settings,
+        )
+        await chat_title.generate_chat_title(
+            ChatTitleSchema(
+                messages=[{"role": "user", "content": "Кога е јунската сесија?"}],
+                query_transform_model=Model.CLAUDE_HAIKU_4_5,
+                user_id=user_id,
+            ),
+            db,
+            settings,
+        )
+
+    anyio.run(run_title)
+
+    credentials = seen["credentials"]
+    assert isinstance(credentials, LlmProviderCredentials)
+    assert credentials.anthropic is not None
+    assert credentials.anthropic.api_key == "anthropic-user-key"
 
 
 def test_query_transform_logs_metadata_without_raw_query(monkeypatch, caplog):

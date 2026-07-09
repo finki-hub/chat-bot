@@ -55,6 +55,7 @@ from app.schemas.chat_state import (
 )
 from app.schemas.chat_user import ChatUser, ChatUserUpsert
 from app.utils.auth import verify_api_key
+from app.utils.settings import Settings
 
 db_dep = Depends(get_db)
 api_key_dep = Depends(verify_api_key)
@@ -72,6 +73,17 @@ def _not_found() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Conversation not found",
+    )
+
+
+def _ensure_allowed_base_url(payload: ChatCredentialUpsert, settings: Settings) -> None:
+    if payload.base_url is None:
+        return
+    if settings.is_byok_base_url_allowed(payload.base_url):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail="Custom credential base_url is not allowed",
     )
 
 
@@ -127,11 +139,13 @@ async def upsert_user_credential_state(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Credential provider must match the route provider",
         )
+    settings = request.app.state.settings
+    _ensure_allowed_base_url(payload, settings)
     return await upsert_chat_credential(
         db,
         user_id=user_id,
         credential=payload,
-        settings=request.app.state.settings,
+        settings=settings,
     )
 
 

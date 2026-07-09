@@ -10,7 +10,10 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import StreamingResponse
 
-from app.api.provider_credentials import resolve_provider_credentials
+from app.api.provider_credentials import (
+    credential_providers_for_models,
+    resolve_provider_credentials,
+)
 from app.data.connection import Database
 from app.data.db import get_db
 from app.llms.agents import (
@@ -459,7 +462,12 @@ async def _chat_response_stream(
     credentials = await resolve_provider_credentials(
         db,
         user_id=payload.user_id,
-        settings=settings,
+        providers=credential_providers_for_models(
+            payload.embeddings_model,
+            payload.inference_model,
+            payload.query_transform_model,
+        ),
+        settings=request.app.state.settings,
     )
 
     timings, token = start_request_timings()
