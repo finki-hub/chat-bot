@@ -227,12 +227,17 @@ export const POST = async (req: Request): Promise<Response> => {
           }).createNewResumableStream(streamId, () => sseStream);
         } catch {
           upstreamController.abort();
-          await chatState.clearActiveStreamIfCurrent({
-            conversationId,
-            streamId,
-            userId,
-          });
-          activeChatProducers.unregister(streamId);
+          try {
+            await ignoreMissing(
+              chatState.clearActiveStreamIfCurrent({
+                conversationId,
+                streamId,
+                userId,
+              }),
+            );
+          } finally {
+            activeChatProducers.unregister(streamId);
+          }
         }
       },
       stream,

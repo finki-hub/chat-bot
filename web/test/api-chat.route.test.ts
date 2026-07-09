@@ -266,6 +266,8 @@ describe('POST /api/chat', () => {
   });
 
   it('clears active state and unregisters the producer when resumable stream creation fails', async () => {
+    const { ChatStateRequestError } = await import('@/lib/chat-state-client');
+
     vi.stubGlobal(
       'fetch',
       vi
@@ -274,6 +276,9 @@ describe('POST /api/chat', () => {
     );
     routeMocks.resumableContext.createNewResumableStream.mockRejectedValueOnce(
       new Error('redis failed'),
+    );
+    routeMocks.stateClient.clearActiveStreamIfCurrent.mockRejectedValueOnce(
+      new ChatStateRequestError(404),
     );
 
     const res = await (await importPost())(chatRequest({ text: 'Hi' }));
