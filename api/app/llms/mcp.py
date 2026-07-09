@@ -122,7 +122,8 @@ async def get_mcp_tools() -> list[BaseTool]:
     client = build_mcp_client()
     # Timed only on an actual fetch (cache hits return above), so the span's presence on
     # a request flags a refresh — and a degraded MCP server, which refetches every time.
-    fetched_source_tool_count = 0
+    failed_server_names: list[str] = []
+    successful_server_count = 0
     with timed("agent.mcp_tools"):
         fetched: list[BaseTool] = []
         for server in servers:
@@ -135,6 +136,7 @@ async def get_mcp_tools() -> list[BaseTool]:
                 )
                 raise
             except Exception as exc:
+                failed_server_names.append(server.name)
                 logger.warning(
                     "MCP server tool loading failed; skipping server: %s",
                     server.name,
@@ -150,16 +152,25 @@ async def get_mcp_tools() -> list[BaseTool]:
                     },
                 )
                 continue
-            fetched_source_tool_count += len(server_tools)
+            successful_server_count += 1
             fetched.extend(_filter_tools(server_tools, server))
 
-    if not fetched and fetched_source_tool_count == 0:
-        # Empty usually means the MCP server is unreachable/degraded. Keep the last-good
-        # tools and leave the timestamp stale so the next request retries, instead of
-        # caching a tool-less agent for the whole TTL.
+    if failed_server_names:
+        if successful_server_count > 0:
+            logger.warning(
+                "Fetched %d MCP tools from %d/%d MCP servers; failed servers (%s) "
+                "will be retried on the next request instead of caching a degraded list",
+                len(fetched),
+                successful_server_count,
+                len(servers),
+                ", ".join(failed_server_names),
+            )
+            return fetched
+
         logger.warning(
-            "MCP returned an empty tool list; keeping previously cached tools (if any) "
-            "and retrying on the next request instead of caching the empty result",
+            "All MCP servers failed (%s); keeping previously cached tools (if any) "
+            "and retrying on the next request instead of caching the failed refresh",
+            ", ".join(failed_server_names),
         )
         return mcp_tools if mcp_tools is not None else []
 
