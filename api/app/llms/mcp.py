@@ -129,6 +129,10 @@ async def get_mcp_tools() -> list[BaseTool]:
             try:
                 server_tools = await client.get_tools(server_name=server.name)
             except get_cancelled_exc_class():
+                logger.warning(
+                    "MCP server tool loading cancelled; propagating cancellation: %s",
+                    server.name,
+                )
                 raise
             except Exception as exc:
                 logger.warning(

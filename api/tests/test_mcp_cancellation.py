@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 
 from app.llms import mcp
@@ -9,7 +11,7 @@ class SimulatedCancellationError(Exception):
 
 
 @pytest.mark.anyio
-async def test_get_mcp_tools_propagates_backend_cancellation(monkeypatch):
+async def test_get_mcp_tools_propagates_backend_cancellation(monkeypatch, caplog):
     captured_events = []
 
     class FakeClient:
@@ -48,7 +50,13 @@ async def test_get_mcp_tools_propagates_backend_cancellation(monkeypatch):
     monkeypatch.setattr(mcp, "mcp_tools", None)
     monkeypatch.setattr(mcp, "mcp_tools_fetched_at", 0.0)
 
-    with pytest.raises(SimulatedCancellationError):
+    with (
+        caplog.at_level(logging.WARNING, logger=mcp.__name__),
+        pytest.raises(SimulatedCancellationError),
+    ):
         await mcp.get_mcp_tools()
 
     assert captured_events == []
+    assert caplog.messages == [
+        "MCP server tool loading cancelled; propagating cancellation: cancelled",
+    ]
