@@ -159,13 +159,14 @@ def test_chat_state_validation_errors_do_not_echo_submitted_secret() -> None:
     # Given: an authenticated BFF client and a malformed BYOK base URL request.
     db = FakeChatDatabase()
     client = _client(db)
+    submitted_key = "test-validation-value"
 
     # When: validation rejects the request body.
     response = client.put(
         f"/chat/state/users/{OWNER_ID}/credentials/openai",
         headers=_auth_headers(),
         json={
-            "api_key": "sk-super-secret-validation-value",
+            "api_key": submitted_key,
             "base_url": "https://localhost:1234",
             "provider": "openai",
         },
@@ -173,7 +174,7 @@ def test_chat_state_validation_errors_do_not_echo_submitted_secret() -> None:
 
     # Then: FastAPI's validation payload does not reflect the submitted raw secret.
     assert response.status_code == 422
-    assert "sk-super-secret-validation-value" not in response.text
+    assert submitted_key not in response.text
 
 
 def test_chat_state_requires_api_key() -> None:
