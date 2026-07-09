@@ -2,10 +2,11 @@ import json
 from dataclasses import dataclass
 
 import pytest
+from anyio import lowlevel
 from pydantic import ValidationError
 
 from app.llms import mcp
-from app.utils.settings import Settings
+from app.utils.settings import McpServerSettings, Settings
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,16 +51,16 @@ def test_settings_rejects_duplicate_mcp_server_names():
     with pytest.raises(ValidationError, match="unique names"):
         Settings(
             MCP_SERVERS=[
-                {
-                    "name": "search",
-                    "url": "https://search-mcp:8808/mcp",
-                    "transport": "streamable_http",
-                },
-                {
-                    "name": "search",
-                    "url": "https://other-mcp:8808/mcp",
-                    "transport": "streamable_http",
-                },
+                McpServerSettings(
+                    name="search",
+                    url="https://search-mcp:8808/mcp",
+                    transport="streamable_http",
+                ),
+                McpServerSettings(
+                    name="search",
+                    url="https://other-mcp:8808/mcp",
+                    transport="streamable_http",
+                ),
             ],
         )
 
@@ -68,11 +69,11 @@ def test_settings_rejects_blank_mcp_server_identity():
     with pytest.raises(ValidationError):
         Settings(
             MCP_SERVERS=[
-                {
-                    "name": "   ",
-                    "url": "https://search-mcp:8808/mcp",
-                    "transport": "streamable_http",
-                },
+                McpServerSettings(
+                    name="   ",
+                    url="https://search-mcp:8808/mcp",
+                    transport="streamable_http",
+                ),
             ],
         )
 
@@ -81,12 +82,12 @@ def test_insecure_secret_names_include_default_structured_mcp_key():
     settings = Settings(
         API_KEY="custom-api-key",
         MCP_SERVERS=[
-            {
-                "name": "local",
-                "url": "https://local-mcp:8808/mcp",
-                "transport": "streamable_http",
-                "api_key": " SystemPass ",
-            },
+            McpServerSettings(
+                name="local",
+                url="https://local-mcp:8808/mcp",
+                transport="streamable_http",
+                api_key=" SystemPass ",
+            ),
         ],
     )
 
@@ -106,17 +107,17 @@ def test_build_mcp_client_uses_per_server_headers(monkeypatch):
         "settings",
         Settings(
             MCP_SERVERS=[
-                {
-                    "name": "search",
-                    "url": "https://search-mcp:8808/mcp",
-                    "transport": "streamable_http",
-                    "api_key": "search-key",
-                },
-                {
-                    "name": "events",
-                    "url": "https://events-mcp:8808/sse",
-                    "transport": "sse",
-                },
+                McpServerSettings(
+                    name="search",
+                    url="https://search-mcp:8808/mcp",
+                    transport="streamable_http",
+                    api_key="search-key",
+                ),
+                McpServerSettings(
+                    name="events",
+                    url="https://events-mcp:8808/sse",
+                    transport="sse",
+                ),
             ],
         ),
     )
@@ -163,19 +164,19 @@ async def test_get_mcp_tools_filters_each_server(monkeypatch):
         "settings",
         Settings(
             MCP_SERVERS=[
-                {
-                    "name": "search",
-                    "url": "https://search-mcp:8808/mcp",
-                    "transport": "streamable_http",
-                    "allowed_tools": ["web_search", "web_fetch"],
-                    "blocked_tools": ["web_fetch"],
-                },
-                {
-                    "name": "records",
-                    "url": "https://records-mcp:8808/mcp",
-                    "transport": "streamable_http",
-                    "blocked_tools": ["delete_record"],
-                },
+                McpServerSettings(
+                    name="search",
+                    url="https://search-mcp:8808/mcp",
+                    transport="streamable_http",
+                    allowed_tools=("web_search", "web_fetch"),
+                    blocked_tools=("web_fetch",),
+                ),
+                McpServerSettings(
+                    name="records",
+                    url="https://records-mcp:8808/mcp",
+                    transport="streamable_http",
+                    blocked_tools=("delete_record",),
+                ),
             ],
         ),
     )
@@ -193,6 +194,7 @@ async def test_get_mcp_tools_keeps_healthy_servers_when_one_server_fails(monkeyp
 
     class FakeClient:
         async def get_tools(self, *, server_name=None):
+            await lowlevel.checkpoint()
             if server_name == "broken":
                 raise OSError("TLS certificate verification failed")
             return [ToolStub("lookup")]
@@ -211,16 +213,16 @@ async def test_get_mcp_tools_keeps_healthy_servers_when_one_server_fails(monkeyp
         "settings",
         Settings(
             MCP_SERVERS=[
-                {
-                    "name": "local",
-                    "url": "https://local-mcp:8808/mcp",
-                    "transport": "streamable_http",
-                },
-                {
-                    "name": "broken",
-                    "url": "https://broken-mcp:8808/sse",
-                    "transport": "sse",
-                },
+                McpServerSettings(
+                    name="local",
+                    url="https://local-mcp:8808/mcp",
+                    transport="streamable_http",
+                ),
+                McpServerSettings(
+                    name="broken",
+                    url="https://broken-mcp:8808/sse",
+                    transport="sse",
+                ),
             ],
         ),
     )
@@ -275,12 +277,12 @@ async def test_get_mcp_tools_caches_intentionally_empty_filter_result(monkeypatc
         "settings",
         Settings(
             MCP_SERVERS=[
-                {
-                    "name": "blocked",
-                    "url": "https://blocked-mcp:8808/mcp",
-                    "transport": "streamable_http",
-                    "blocked_tools": ["blocked_tool"],
-                },
+                McpServerSettings(
+                    name="blocked",
+                    url="https://blocked-mcp:8808/mcp",
+                    transport="streamable_http",
+                    blocked_tools=("blocked_tool",),
+                ),
             ],
         ),
     )
