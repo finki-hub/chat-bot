@@ -41,7 +41,11 @@ export const isCredential = (value: unknown): value is ChatCredentialPublic => {
     return false;
   }
   const baseUrl = value['base_url'];
-  return baseUrl === null || typeof baseUrl === 'string';
+  return (
+    (baseUrl === null || typeof baseUrl === 'string') &&
+    typeof value['has_api_key'] === 'boolean' &&
+    typeof value['user_id'] === 'string'
+  );
 };
 
 export const credentialsByProvider = (
