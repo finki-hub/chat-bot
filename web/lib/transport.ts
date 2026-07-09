@@ -119,12 +119,33 @@ const parseConversations = (value: unknown): ConversationRow[] => {
 };
 
 const MESSAGE_ROLES = new Set(['assistant', 'system', 'user']);
+const TEXT_PART_TYPES = new Set(['reasoning', 'text']);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-const isMessagePart = (value: unknown): value is Record<string, unknown> =>
-  isRecord(value) && typeof value['type'] === 'string';
+const isMessagePart = (value: unknown): value is Record<string, unknown> => {
+  if (!isRecord(value) || typeof value['type'] !== 'string') {
+    return false;
+  }
+
+  if (TEXT_PART_TYPES.has(value['type'])) {
+    return typeof value['text'] === 'string';
+  }
+
+  return true;
+};
+
+const parseJsonOrNull = async (response: Response): Promise<unknown> => {
+  try {
+    return await response.json();
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return null;
+    }
+    throw error;
+  }
+};
 
 const isUiMessage = (value: unknown): value is MyUIMessage => {
   if (!isRecord(value)) {
@@ -147,7 +168,7 @@ export const listChatConversations = async (): Promise<ConversationRow[]> => {
     throw new ChatConversationRequestError(response.status);
   }
 
-  return parseConversations(await response.json());
+  return parseConversations(await parseJsonOrNull(response));
 };
 
 export type SaveChatConversationInput = {
@@ -218,7 +239,7 @@ export const loadChatConversationHistory = async (
     return null;
   }
 
-  const body: unknown = await response.json();
+  const body = await parseJsonOrNull(response);
   return parseConversationHistory(body);
 };
 

@@ -7,6 +7,7 @@ import {
   type ChatExtras,
   deleteChatConversation,
   DeleteChatConversationError,
+  listChatConversations,
   loadChatConversationHistory,
   stopChatStream,
   StopChatStreamError,
@@ -239,6 +240,32 @@ describe('buildChatTransport', () => {
     });
   });
 
+  it('returns an empty conversation list when the server returns invalid JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response('not-json', {
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    );
+
+    await expect(listChatConversations()).resolves.toStrictEqual([]);
+  });
+
+  it('returns null when conversation history JSON cannot be parsed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response('not-json', {
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    );
+
+    await expect(loadChatConversationHistory('conv-7')).resolves.toBeNull();
+  });
+
   it('rejects malformed server conversation history messages', async () => {
     vi.stubGlobal(
       'fetch',
@@ -246,6 +273,23 @@ describe('buildChatTransport', () => {
         Response.json({
           conversation: { id: 'conv-7', model: null, title: null },
           messages: [{ parts: [], role: 'user' }],
+        }),
+      ),
+    );
+
+    await expect(loadChatConversationHistory('conv-7')).resolves.toBeNull();
+  });
+
+  it('rejects server history with text-like parts missing text', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          conversation: { id: 'conv-7', model: null, title: null },
+          messages: [
+            { id: 'u1', parts: [{ type: 'text' }], role: 'user' },
+            { id: 'a1', parts: [{ type: 'reasoning' }], role: 'assistant' },
+          ],
         }),
       ),
     );
