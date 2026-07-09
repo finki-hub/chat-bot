@@ -1,24 +1,20 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ConversationRow } from '@/lib/db';
+import type { ConversationRow } from '@/lib/conversation-types';
 
 import { ConversationList } from '@/components/shell/conversation-list';
 
 const conversations: ConversationRow[] = [
   {
-    createdAt: 1,
     id: 'c1',
     model: 'claude-sonnet-4-6',
     title: 'Прв разговор',
-    updatedAt: 2,
   },
   {
-    createdAt: 3,
     id: 'c2',
     model: 'gpt-5.4-mini',
     title: 'Втор разговор',
-    updatedAt: 4,
   },
 ];
 

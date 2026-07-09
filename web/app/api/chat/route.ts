@@ -1,7 +1,7 @@
 import { createUIMessageStream, createUIMessageStreamResponse } from 'ai';
 import { after } from 'next/server';
 
-import type { MyUIMessage } from '@/lib/api-types';
+import type { ConversationTurn, MyUIMessage } from '@/lib/api-types';
 
 import {
   AuthenticationRequiredError,
@@ -13,6 +13,7 @@ import {
   persistedTurns,
 } from '@/lib/chat-route-state';
 import {
+  type ChatStateJsonValue,
   ChatStateRequestError,
   createChatStateClient,
 } from '@/lib/chat-state-client';
@@ -36,6 +37,17 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const SSE_CONTENT_TYPE = 'text/event-stream';
+
+type ConversationSummary = {
+  readonly id: string;
+  readonly model: null | string;
+  readonly title: null | string;
+};
+
+type RegenerationReplacement = {
+  readonly messageId: string;
+  readonly retainedMessageIds: readonly string[];
+};
 
 type ResumableChatClientBody = ChatClientBody & {
   readonly id?: string;
@@ -69,6 +81,18 @@ const errorResponse = (meta: UiStreamMeta, code: string, message: string) => {
 const unauthenticated = (): Response =>
   Response.json({ error: 'Authentication required' }, { status: 401 });
 
+const empty = (status: number): Response => new Response(null, { status });
+
+const conversationSummary = (conversation: {
+  readonly id: string;
+  readonly model?: null | string;
+  readonly title?: null | string;
+}): ConversationSummary => ({
+  id: conversation.id,
+  model: conversation.model ?? null,
+  title: conversation.title ?? null,
+});
+
 const requiredText = (value: string | undefined): null | string =>
   value === undefined || value.length === 0 ? null : value;
 
@@ -84,12 +108,105 @@ const ignoreMissing = async (operation: Promise<void>): Promise<void> => {
   }
 };
 
+const regeneratedMessageId = (body: ResumableChatClientBody): null | string =>
+  body.trigger === 'regenerate-message' &&
+  typeof body.messageId === 'string' &&
+  body.messageId.length > 0
+    ? body.messageId
+    : null;
+
+const isChatStateRecord = (
+  value: ChatStateJsonValue,
+): value is Readonly<Record<string, ChatStateJsonValue>> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const idFromChatStateMessage = (value: ChatStateJsonValue): null | string => {
+  if (!isChatStateRecord(value)) {
+    return null;
+  }
+  const id = value['id'];
+  return typeof id === 'string' ? id : null;
+};
+
+const retainedServerMessageIdsForRegeneration = (
+  messages: readonly ChatStateJsonValue[],
+  messageId: string,
+): null | readonly string[] => {
+  const targetIndex = messages.findIndex(
+    (message) => idFromChatStateMessage(message) === messageId,
+  );
+  return targetIndex === -1
+    ? null
+    : messages.slice(0, targetIndex + 1).flatMap((message) => {
+        const id = idFromChatStateMessage(message);
+        return id === null ? [] : [id];
+      });
+};
+
+const regenerationReplacementFor = (
+  messageId: null | string,
+  retainedMessageIds: null | readonly string[],
+): null | RegenerationReplacement =>
+  messageId === null || retainedMessageIds === null
+    ? null
+    : { messageId, retainedMessageIds };
+
+const upstreamMessagesFor = (
+  trustedHistory: readonly ConversationTurn[],
+  currentMessages: readonly ConversationTurn[],
+  regenerationReplacement: null | RegenerationReplacement,
+): readonly ConversationTurn[] =>
+  regenerationReplacement === null
+    ? [...trustedHistory, ...currentMessages]
+    : trustedHistory;
+
+export const GET = async (): Promise<Response> => {
+  const chatState = createChatStateClient();
+
+  try {
+    const userId = await getAuthenticatedChatUserId();
+    const conversations = await chatState.listConversations({ userId });
+
+    return Response.json(conversations.map(conversationSummary));
+  } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return unauthenticated();
+    }
+    if (error instanceof ChatStateRequestError) {
+      return empty(error.status);
+    }
+
+    throw error;
+  }
+};
+
+export const DELETE = async (): Promise<Response> => {
+  const chatState = createChatStateClient();
+
+  try {
+    const userId = await getAuthenticatedChatUserId();
+    await chatState.clearConversations({ userId });
+
+    return empty(204);
+  } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return unauthenticated();
+    }
+    if (error instanceof ChatStateRequestError) {
+      return empty(error.status);
+    }
+
+    throw error;
+  }
+};
+
 export const POST = async (req: Request): Promise<Response> => {
   try {
     const clientBody = (await req.json()) as ResumableChatClientBody;
     const chatBody = toChatRequestBody(clientBody);
     const inferenceModel = chatBody.inference_model;
     const conversationId = requiredText(clientBody.id);
+    const regeneratedAssistantId = regeneratedMessageId(clientBody);
     const userId = await getAuthenticatedChatUserId();
     const userMessage = lastUserMessageForState(
       currentUserMessageForRequest(clientBody),
@@ -114,10 +231,33 @@ export const POST = async (req: Request): Promise<Response> => {
       conversationId,
       userId,
     });
+    const retainedMessageIds =
+      regeneratedAssistantId === null
+        ? null
+        : retainedServerMessageIdsForRegeneration(
+            loadedConversation.messages,
+            regeneratedAssistantId,
+          );
+    if (regeneratedAssistantId !== null && retainedMessageIds === null) {
+      return errorResponse(
+        { inferenceModel },
+        'malformed_input',
+        'Regenerated message not found',
+      );
+    }
+    const regenerationReplacement = regenerationReplacementFor(
+      regeneratedAssistantId,
+      retainedMessageIds,
+    );
     const trustedHistory = persistedTurns(
       loadedConversation.messages,
-      userMessage.id,
+      regenerationReplacement?.messageId ?? userMessage.id,
       chatBody.messages.length,
+    );
+    const upstreamMessages = upstreamMessagesFor(
+      trustedHistory,
+      chatBody.messages,
+      regenerationReplacement,
     );
     await chatState.upsertUserMessage({
       content: userMessage.content,
@@ -130,7 +270,7 @@ export const POST = async (req: Request): Promise<Response> => {
     const upstream = await fetch(`${API_BASE_URL}/chat/`, {
       body: JSON.stringify({
         ...chatBody,
-        messages: [...trustedHistory, ...chatBody.messages],
+        messages: upstreamMessages,
       }),
       headers: {
         'content-type': 'application/json',
@@ -195,13 +335,26 @@ export const POST = async (req: Request): Promise<Response> => {
           const content = joinText(responseMessage).trim();
 
           if (content.length > 0) {
-            await chatState.upsertAssistantMessage({
-              content,
-              conversationId,
-              metadata: assistantMetadata(meta),
-              responseId: streamId,
-              userId,
-            });
+            const metadata = assistantMetadata(meta);
+            if (regenerationReplacement === null) {
+              await chatState.upsertAssistantMessage({
+                content,
+                conversationId,
+                metadata,
+                responseId: streamId,
+                userId,
+              });
+            } else {
+              await chatState.replaceAssistantMessage({
+                content,
+                conversationId,
+                messageId: regenerationReplacement.messageId,
+                metadata,
+                responseId: streamId,
+                retainedMessageIds: regenerationReplacement.retainedMessageIds,
+                userId,
+              });
+            }
           }
 
           await ignoreMissing(

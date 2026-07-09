@@ -21,3 +21,19 @@ async def delete_conversation(
         user_id,
     )
     return None if row is None else conversation_from_row(row)
+
+
+async def delete_conversations(
+    db: ChatPersistenceDatabase,
+    *,
+    user_id: UUID,
+) -> list[ChatConversation]:
+    rows = await db.fetch(
+        """
+        DELETE FROM chat_conversation
+        WHERE user_id = $1
+        RETURNING *
+        """,
+        user_id,
+    )
+    return [conversation_from_row(row) for row in rows]

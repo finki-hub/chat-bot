@@ -81,6 +81,36 @@ describe('createChatStateClient', () => {
     expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
   });
 
+  it('lists user-owned conversations with the server API key', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json([
+        Object.fromEntries([
+          ['active_response_id', null],
+          ['active_status', null],
+          ['active_stream_id', null],
+          ['id', 'conv-list'],
+          ['model', 'model-a'],
+          ['title', 'Listed'],
+          ['user_id', CHAT_USER_ID],
+        ]),
+      ]),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createChatStateClient } = await import('@/lib/chat-state-client');
+    const conversations = await createChatStateClient().listConversations({
+      userId: CHAT_USER_ID,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(url).toBe(
+      `https://api:8880/chat/state/conversations?user_id=${CHAT_USER_ID}`,
+    );
+    expect(init.method).toBe('GET');
+    expect(conversations[0]?.id).toBe('conv-list');
+  });
+
   it('loads a user-owned conversation with the server API key', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({
@@ -110,6 +140,63 @@ describe('createChatStateClient', () => {
     expect(init.method).toBe('GET');
     expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
     expect(loaded.conversation.id).toBe('conv-load');
+  });
+
+  it('clears user-owned conversations with the server API key', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createChatStateClient } = await import('@/lib/chat-state-client');
+    await createChatStateClient().clearConversations({
+      userId: CHAT_USER_ID,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(url).toBe(
+      `https://api:8880/chat/state/conversations?user_id=${CHAT_USER_ID}`,
+    );
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('sends conversation titles on upsert and update requests', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createChatStateClient } = await import('@/lib/chat-state-client');
+    const client = createChatStateClient();
+    await client.upsertConversation({
+      conversationId: 'conv-title',
+      model: 'model-a',
+      title: 'Initial title',
+      userId: CHAT_USER_ID,
+    });
+    await client.updateConversation({
+      conversationId: 'conv-title',
+      title: 'Renamed title',
+      userId: CHAT_USER_ID,
+    });
+
+    const [, upsertInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [updateUrl, updateInit] = fetchMock.mock.calls[1] as [
+      string,
+      RequestInit,
+    ];
+
+    expect(JSON.parse(upsertInit.body as string)).toMatchObject({
+      title: 'Initial title',
+    });
+    expect(updateUrl).toBe(
+      'https://api:8880/chat/state/conversations/conv-title',
+    );
+    expect(updateInit.method).toBe('PATCH');
+    expect(JSON.parse(updateInit.body as string)).toMatchObject({
+      title: 'Renamed title',
+    });
   });
 
   it('throws a typed request error when state writes fail', async () => {

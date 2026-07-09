@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -104,6 +105,27 @@ class FakeChatDatabase:
                 current["feedback_type"] = feedback_type
                 current["updated_at"] = self.now
             return current
+
+        if "UPDATE chat_message AS assistant" in query:
+            response_id, user_id, feedback_type = args
+            for assistant in self.messages.values():
+                conversation = self.conversations.get(assistant["conversation_id"])
+                if (
+                    assistant["response_id"] != response_id
+                    or assistant["role"] != "assistant"
+                    or conversation is None
+                    or str(conversation["user_id"]) != user_id
+                ):
+                    continue
+                metadata = assistant["metadata"]
+                parsed = json.loads(metadata) if isinstance(metadata, str) else metadata
+                if not isinstance(parsed, dict):
+                    parsed = {}
+                parsed["feedback"] = feedback_type
+                assistant["metadata"] = parsed
+                assistant["updated_at"] = self.now
+                return {"id": assistant["id"]}
+            return None
 
         if "INSERT INTO chat_conversation" in query:
             conversation_id, user_id, model, title = args
@@ -219,6 +241,43 @@ class FakeChatDatabase:
             self.messages[message_id] = inserted_assistant
             return inserted_assistant
 
+        if "WITH target AS" in query and "DELETE FROM chat_message stale" in query:
+            (
+                message_id,
+                conversation_id,
+                user_id,
+                content,
+                response_id,
+                metadata_json,
+                retained_message_ids,
+            ) = args
+            target = self.messages.get(message_id)
+            conversation = self.conversations.get(conversation_id)
+            if (
+                target is None
+                or conversation is None
+                or conversation["user_id"] != user_id
+                or target["conversation_id"] != conversation_id
+                or target["role"] != "assistant"
+                or not isinstance(retained_message_ids, list)
+            ):
+                return None
+            retained_ids = set(retained_message_ids)
+            stale_message_ids = [
+                stale_id
+                for stale_id, stale in self.messages.items()
+                if stale["conversation_id"] == conversation_id
+                and self._created_at(stale) > self._created_at(target)
+                and stale_id not in retained_ids
+            ]
+            target["content"] = content
+            target["response_id"] = response_id
+            target["metadata"] = metadata_json
+            target["updated_at"] = self.now
+            for stale_id in stale_message_ids:
+                del self.messages[stale_id]
+            return target
+
         if "INSERT INTO chat_message" in query:
             message_id, conversation_id, role, content, response_id, metadata_json = (
                 args
@@ -250,6 +309,23 @@ class FakeChatDatabase:
         raise AssertionError(msg)
 
     async def fetch(self, query: str, *args: object) -> list[dict[str, object]]:
+        if "DELETE FROM chat_conversation" in query:
+            (user_id,) = args
+            deleted = [
+                row for row in self.conversations.values() if row["user_id"] == user_id
+            ]
+            deleted_ids = {row["id"] for row in deleted}
+            for conversation_id in deleted_ids:
+                del self.conversations[conversation_id]
+            stale_message_ids = [
+                message_id
+                for message_id, message in self.messages.items()
+                if message["conversation_id"] in deleted_ids
+            ]
+            for message_id in stale_message_ids:
+                del self.messages[message_id]
+            return deleted
+
         if "WHERE user_id = $1" in query:
             user_id = args[0]
             limit = args[1]

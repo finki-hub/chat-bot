@@ -23,7 +23,10 @@ const okStreamResponse = (...frames: string[]): Response =>
     status: 200,
   });
 
-const helloTokenFrame = 'event: token\ndata: {"text":"Здраво"}\n\n';
+const DONE_FRAME = 'event: done\ndata: {}\n\n';
+const HELLO_TOKEN_FRAME = 'event: token\ndata: {"text":"Здраво"}\n\n';
+const SERVER_USER_MESSAGE_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d31';
+const TARGET_ASSISTANT_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d32';
 
 const importPost = async (): Promise<(req: Request) => Promise<Response>> => {
   const { POST } = await import('@/app/api/chat/route');
@@ -48,9 +51,9 @@ describe('POST /api/chat', () => {
       .mockResolvedValue(
         okStreamResponse(
           'event: sources\ndata: {"sources":[{"id":"c1","kind":"chunk","title":"Статут","section":"Член 12","snippet":"Правила."}]}\n\n',
-          helloTokenFrame,
+          HELLO_TOKEN_FRAME,
           'event: token\ndata: {"text":"!"}\n\n',
-          'event: done\ndata: {}\n\n',
+          DONE_FRAME,
         ),
       );
     vi.stubGlobal('fetch', fetchMock);
@@ -110,7 +113,7 @@ describe('POST /api/chat', () => {
   it('does not forward browser-supplied assistant history to Python chat', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValue(okStreamResponse('event: done\ndata: {}\n\n'));
+      .mockResolvedValue(okStreamResponse(DONE_FRAME));
 
     vi.stubGlobal('fetch', fetchMock);
 
@@ -161,9 +164,7 @@ describe('POST /api/chat', () => {
     const browserController = new AbortController();
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValue(
-        okStreamResponse(helloTokenFrame, 'event: done\ndata: {}\n\n'),
-      );
+      .mockResolvedValue(okStreamResponse(HELLO_TOKEN_FRAME, DONE_FRAME));
     vi.stubGlobal('fetch', fetchMock);
 
     const res = await (
@@ -207,9 +208,9 @@ describe('POST /api/chat', () => {
         .fn<typeof fetch>()
         .mockResolvedValue(
           okStreamResponse(
-            helloTokenFrame,
+            HELLO_TOKEN_FRAME,
             'event: token\ndata: {"text":"!"}\n\n',
-            'event: done\ndata: {}\n\n',
+            DONE_FRAME,
           ),
         ),
     );
@@ -238,10 +239,80 @@ describe('POST /api/chat', () => {
     );
   });
 
+  it('replaces the regenerated assistant message and prunes server history', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        okStreamResponse(
+          'event: token\ndata: {"text":"Нов одговор"}\n\n',
+          DONE_FRAME,
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const post = await importPost();
+    const response = await post(
+      new Request('http://localhost/api/chat', {
+        body: JSON.stringify({
+          id: CONVERSATION_ID,
+          messageId: TARGET_ASSISTANT_ID,
+          messages: [
+            {
+              id: 'u1',
+              parts: [{ text: 'Здраво', type: 'text' }],
+              role: 'user',
+            },
+            {
+              id: TARGET_ASSISTANT_ID,
+              parts: [{ text: 'Стар одговор', type: 'text' }],
+              role: 'assistant',
+            },
+          ],
+          model: MODEL,
+          trigger: 'regenerate-message',
+        }),
+        headers: { 'content-type': JSON_CONTENT_TYPE },
+        method: 'POST',
+      }),
+    );
+
+    await response.text();
+
+    const upstreamBody = fetchMock.mock.calls[0]?.[1]?.body;
+
+    if (typeof upstreamBody !== 'string') {
+      throw new TypeError('Expected upstream request body to be a string');
+    }
+
+    expect(upstreamBody.match(/Stored question/gu)).toHaveLength(1);
+    expect(upstreamBody).not.toContain('Здраво');
+    expect(upstreamBody).not.toContain('Стар одговор');
+    expect(
+      routeMocks.stateClient.replaceAssistantMessage,
+    ).toHaveBeenCalledExactlyOnceWith({
+      content: 'Нов одговор',
+      conversationId: CONVERSATION_ID,
+      messageId: TARGET_ASSISTANT_ID,
+      metadata: { inferenceModel: MODEL, responseId: RESPONSE_ID },
+      responseId: RESPONSE_ID,
+      retainedMessageIds: [SERVER_USER_MESSAGE_ID, TARGET_ASSISTANT_ID],
+      userId: USER_ID,
+    });
+    expect(
+      routeMocks.stateClient.upsertAssistantMessage,
+    ).not.toHaveBeenCalled();
+    expect(routeMocks.stateClient.upsertUserMessage).toHaveBeenCalledWith({
+      content: 'Здраво',
+      conversationId: CONVERSATION_ID,
+      messageId: 'u1',
+      userId: USER_ID,
+    });
+  });
+
   it('aborts upstream and unregisters the producer when setting active stream state fails', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValue(okStreamResponse(helloTokenFrame));
+      .mockResolvedValue(okStreamResponse(HELLO_TOKEN_FRAME));
     routeMocks.stateClient.setActiveStream.mockRejectedValueOnce(
       new Error('state failed'),
     );
@@ -254,9 +325,7 @@ describe('POST /api/chat', () => {
     const out = await res.text();
 
     expect(out).toContain('data-error');
-
     expect(abortSignal?.aborted).toBe(true);
-
     expect(routeMocks.activeChatProducers.unregister).toHaveBeenCalledWith(
       RESPONSE_ID,
     );
@@ -272,7 +341,7 @@ describe('POST /api/chat', () => {
       'fetch',
       vi
         .fn<typeof fetch>()
-        .mockResolvedValue(okStreamResponse(helloTokenFrame)),
+        .mockResolvedValue(okStreamResponse(HELLO_TOKEN_FRAME)),
     );
     routeMocks.resumableContext.createNewResumableStream.mockRejectedValueOnce(
       new Error('redis failed'),

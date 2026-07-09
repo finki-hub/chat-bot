@@ -193,6 +193,124 @@ def test_chat_state_wrong_user_cannot_load_or_mutate_state() -> None:
     assert all(row["content"] != "steal" for row in db.messages.values())
 
 
+def test_chat_state_replaces_regenerated_assistant_and_prunes_later_messages() -> None:
+    # Given: a conversation with two completed turns.
+    db = FakeChatDatabase()
+    client = _client(db)
+    conversation_id = uuid4()
+    setup_message_id = uuid4()
+    first_user_id = uuid4()
+    first_assistant_id = uuid4()
+    second_user_id = uuid4()
+    second_assistant_id = uuid4()
+    new_response_id = uuid4()
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={"id": str(conversation_id), "user_id": OWNER_ID},
+    )
+    for message_id, role, content in (
+        (setup_message_id, "user", "Earlier setup"),
+        (first_user_id, "user", "First question"),
+        (first_assistant_id, "assistant", "Old first answer"),
+        (second_user_id, "user", "Second question"),
+        (second_assistant_id, "assistant", "Second answer"),
+    ):
+        db.messages[message_id] = {
+            "content": content,
+            "conversation_id": conversation_id,
+            "created_at": db.now + timedelta(seconds=len(db.messages)),
+            "id": message_id,
+            "metadata": {},
+            "response_id": None,
+            "role": role,
+            "updated_at": db.now,
+        }
+
+    # When: the first assistant answer is regenerated.
+    replaced = client.put(
+        f"/chat/state/conversations/{conversation_id}/messages/assistant/{first_assistant_id}/replacement/{new_response_id}",
+        headers=_auth_headers(),
+        json={
+            "content": "New first answer",
+            "metadata": {"responseId": str(new_response_id)},
+            "retained_message_ids": [str(first_user_id), str(first_assistant_id)],
+            "user_id": OWNER_ID,
+        },
+    )
+    loaded = client.get(
+        f"/chat/state/conversations/{conversation_id}",
+        headers=_auth_headers(),
+        params={"user_id": OWNER_ID},
+    )
+
+    # Then: the original assistant id is preserved, prior messages survive, and later turns are pruned.
+    assert replaced.status_code == 200
+    assert replaced.json()["id"] == str(first_assistant_id)
+    assert loaded.status_code == 200
+    messages = loaded.json()["messages"]
+    assert [message["id"] for message in messages] == [
+        str(setup_message_id),
+        str(first_user_id),
+        str(first_assistant_id),
+    ]
+    assert messages[2]["content"] == "New first answer"
+    assert messages[2]["response_id"] == str(new_response_id)
+
+
+def test_chat_state_rejects_replacement_when_target_is_not_retained() -> None:
+    # Given: a conversation with a completed assistant answer.
+    db = FakeChatDatabase()
+    client = _client(db)
+    conversation_id = uuid4()
+    user_message_id = uuid4()
+    assistant_message_id = uuid4()
+    new_response_id = uuid4()
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={"id": str(conversation_id), "user_id": OWNER_ID},
+    )
+    db.messages[user_message_id] = {
+        "content": "Question",
+        "conversation_id": conversation_id,
+        "created_at": db.now,
+        "id": user_message_id,
+        "metadata": {},
+        "response_id": None,
+        "role": "user",
+        "updated_at": db.now,
+    }
+    db.messages[assistant_message_id] = {
+        "content": "Original answer",
+        "conversation_id": conversation_id,
+        "created_at": db.now + timedelta(seconds=1),
+        "id": assistant_message_id,
+        "metadata": {},
+        "response_id": None,
+        "role": "assistant",
+        "updated_at": db.now,
+    }
+
+    # When: a direct state API caller omits the target assistant from retained ids.
+    replaced = client.put(
+        f"/chat/state/conversations/{conversation_id}/messages/assistant/{assistant_message_id}/replacement/{new_response_id}",
+        headers=_auth_headers(),
+        json={
+            "content": "Unsafe replacement",
+            "retained_message_ids": [str(user_message_id)],
+            "user_id": OWNER_ID,
+        },
+    )
+
+    # Then: replacement is rejected before any message is updated or pruned.
+    assert replaced.status_code == 422
+    assert replaced.json() == {"detail": "Replacement target must be retained"}
+    assert db.messages[assistant_message_id]["content"] == "Original answer"
+    assert user_message_id in db.messages
+    assert assistant_message_id in db.messages
+
+
 def test_chat_state_delete_removes_owned_conversation_and_messages() -> None:
     # Given: an authenticated owner has persisted conversation state.
     db = FakeChatDatabase()
@@ -228,6 +346,92 @@ def test_chat_state_delete_removes_owned_conversation_and_messages() -> None:
     assert loaded.status_code == 404
     assert conversation_id not in db.conversations
     assert message_id not in db.messages
+
+
+def test_chat_state_lists_and_updates_owned_conversations() -> None:
+    # Given: two conversations owned by the same authenticated web user.
+    db = FakeChatDatabase()
+    client = _client(db)
+    first_conversation_id = uuid4()
+    second_conversation_id = uuid4()
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={
+            "id": str(first_conversation_id),
+            "model": "model-a",
+            "title": "First",
+            "user_id": OWNER_ID,
+        },
+    )
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={
+            "id": str(second_conversation_id),
+            "model": "model-b",
+            "title": "Second",
+            "user_id": OWNER_ID,
+        },
+    )
+
+    # When: the BFF renames the older conversation and asks for the server list.
+    renamed = client.patch(
+        f"/chat/state/conversations/{first_conversation_id}",
+        headers=_auth_headers(),
+        json={"title": "Renamed", "user_id": OWNER_ID},
+    )
+    listed = client.get(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        params={"user_id": OWNER_ID},
+    )
+
+    # Then: the server-owned list reflects the rename and recency ordering.
+    assert renamed.status_code == 200
+    assert renamed.json()["title"] == "Renamed"
+    assert listed.status_code == 200
+    assert [row["id"] for row in listed.json()] == [
+        str(first_conversation_id),
+        str(second_conversation_id),
+    ]
+
+
+def test_chat_state_clear_all_removes_only_owned_conversations() -> None:
+    # Given: two owners have persisted conversations and messages.
+    db = FakeChatDatabase()
+    client = _client(db)
+    owned_conversation_id = uuid4()
+    other_conversation_id = uuid4()
+    owned_message_id = uuid4()
+    for conversation_id, user_id in (
+        (owned_conversation_id, OWNER_ID),
+        (other_conversation_id, INTRUDER_ID),
+    ):
+        client.post(
+            "/chat/state/conversations",
+            headers=_auth_headers(),
+            json={"id": str(conversation_id), "user_id": user_id},
+        )
+    client.post(
+        f"/chat/state/conversations/{owned_conversation_id}/messages/user",
+        headers=_auth_headers(),
+        json={"content": "delete me", "id": str(owned_message_id), "user_id": OWNER_ID},
+    )
+
+    # When: one owner clears all of their conversations.
+    cleared = client.delete(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        params={"user_id": OWNER_ID},
+    )
+
+    # Then: only that owner's conversations and messages are removed.
+    assert cleared.status_code == 200
+    assert [row["id"] for row in cleared.json()] == [str(owned_conversation_id)]
+    assert owned_conversation_id not in db.conversations
+    assert owned_message_id not in db.messages
+    assert other_conversation_id in db.conversations
 
 
 def test_chat_state_wrong_user_cannot_delete_conversation() -> None:

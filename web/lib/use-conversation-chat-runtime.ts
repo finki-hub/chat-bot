@@ -1,7 +1,7 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
 
@@ -10,7 +10,6 @@ import {
   finalizeMessage,
   replaceFinishedMessage,
 } from '@/lib/conversation-message-state';
-import { replaceConversationMessages } from '@/lib/db';
 import { t } from '@/lib/i18n';
 import { buildChatTransport } from '@/lib/transport';
 import { useConversationHydration } from '@/lib/use-conversation-hydration';
@@ -41,17 +40,6 @@ export const useConversationChatRuntime = ({
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<
     null | string
   >(null);
-
-  const persistFinished = useCallback(
-    async (
-      conversationId: string,
-      allMessages: readonly MyUIMessage[],
-    ): Promise<void> => {
-      await replaceConversationMessages(conversationId, [...allMessages]);
-      await refreshConversations();
-    },
-    [refreshConversations],
-  );
 
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -134,7 +122,7 @@ export const useConversationChatRuntime = ({
             replacement: finalized,
             streamMessageId: message.id,
           })(prev);
-          fireAndForget(persistFinished(finishedConversationId, next));
+          fireAndForget(refreshConversations());
           return next;
         });
       },
@@ -154,7 +142,6 @@ export const useConversationChatRuntime = ({
   useConversationHydration({
     activeId,
     convoIdRef,
-    model,
     setActiveError,
     setActiveId,
     setActiveStatus,

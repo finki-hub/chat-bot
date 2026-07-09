@@ -8,13 +8,23 @@ export type ChatStateClient = {
   readonly clearActiveStreamIfCurrent: (
     input: ClearActiveStreamInput,
   ) => Promise<void>;
+  readonly clearConversations: (input: UserScopedInput) => Promise<void>;
   readonly deleteConversation: (input: LoadConversationInput) => Promise<void>;
+  readonly listConversations: (
+    input: ListConversationsInput,
+  ) => Promise<readonly ChatStateConversation[]>;
   readonly loadConversation: (
     input: LoadConversationInput,
   ) => Promise<ChatStateConversationWithMessages>;
+  readonly replaceAssistantMessage: (
+    input: ReplaceAssistantMessageInput,
+  ) => Promise<void>;
   readonly setActiveStream: (input: SetActiveStreamInput) => Promise<void>;
   readonly stopActiveStreamIfCurrent: (
     input: ClearActiveStreamInput,
+  ) => Promise<void>;
+  readonly updateConversation: (
+    input: UpdateConversationInput,
   ) => Promise<void>;
   readonly upsertAssistantMessage: (
     input: UpsertAssistantMessageInput,
@@ -72,8 +82,23 @@ type ClearActiveStreamInput = {
   readonly userId: string;
 };
 
+type ListConversationsInput = {
+  readonly limit?: number;
+  readonly userId: string;
+};
+
 type LoadConversationInput = {
   readonly conversationId: string;
+  readonly userId: string;
+};
+
+type ReplaceAssistantMessageInput = {
+  readonly content: string;
+  readonly conversationId: string;
+  readonly messageId: string;
+  readonly metadata: Record<string, ChatStateJsonValue>;
+  readonly responseId: string;
+  readonly retainedMessageIds: readonly string[];
   readonly userId: string;
 };
 
@@ -81,6 +106,13 @@ type SetActiveStreamInput = {
   readonly activeResponseId: string;
   readonly activeStreamId: string;
   readonly conversationId: string;
+  readonly userId: string;
+};
+
+type UpdateConversationInput = {
+  readonly conversationId: string;
+  readonly model?: string;
+  readonly title?: string;
   readonly userId: string;
 };
 
@@ -103,6 +135,7 @@ type UpsertChatUserInput = {
 type UpsertConversationInput = {
   readonly conversationId: string;
   readonly model?: string;
+  readonly title?: string;
   readonly userId: string;
 };
 
@@ -110,6 +143,10 @@ type UpsertUserMessageInput = {
   readonly content: string;
   readonly conversationId: string;
   readonly messageId: string;
+  readonly userId: string;
+};
+
+type UserScopedInput = {
   readonly userId: string;
 };
 
@@ -179,16 +216,50 @@ export const createChatStateClient = (): ChatStateClient => ({
       { method: 'DELETE' },
     );
   },
+  clearConversations: async ({ userId }) => {
+    await sendStateRequest(
+      `/conversations?user_id=${encodeURIComponent(userId)}`,
+      { method: 'DELETE' },
+    );
+  },
   deleteConversation: async ({ conversationId, userId }) => {
     await sendStateRequest(
       `/conversations/${conversationId}?user_id=${encodeURIComponent(userId)}`,
       { method: 'DELETE' },
     );
   },
+  listConversations: async ({ limit, userId }) =>
+    readStateJson<readonly ChatStateConversation[]>(
+      `/conversations?user_id=${encodeURIComponent(userId)}${
+        limit === undefined ? '' : `&limit=${encodeURIComponent(String(limit))}`
+      }`,
+    ),
   loadConversation: async ({ conversationId, userId }) =>
     readStateJson<ChatStateConversationWithMessages>(
       `/conversations/${conversationId}?user_id=${encodeURIComponent(userId)}`,
     ),
+  replaceAssistantMessage: async ({
+    content,
+    conversationId,
+    messageId,
+    metadata,
+    responseId,
+    retainedMessageIds,
+    userId,
+  }) => {
+    await sendStateRequest(
+      `/conversations/${conversationId}/messages/assistant/${messageId}/replacement/${responseId}`,
+      {
+        body: JSON.stringify({
+          content,
+          metadata,
+          retained_message_ids: retainedMessageIds,
+          user_id: userId,
+        }),
+        method: 'PUT',
+      },
+    );
+  },
   setActiveStream: async ({
     activeResponseId,
     activeStreamId,
@@ -213,6 +284,16 @@ export const createChatStateClient = (): ChatStateClient => ({
         method: 'POST',
       },
     );
+  },
+  updateConversation: async ({ conversationId, model, title, userId }) => {
+    await sendStateRequest(`/conversations/${conversationId}`, {
+      body: JSON.stringify({
+        ...(model !== undefined && { model }),
+        ...(title !== undefined && { title }),
+        user_id: userId,
+      }),
+      method: 'PATCH',
+    });
   },
   upsertAssistantMessage: async ({
     content,
@@ -251,11 +332,12 @@ export const createChatStateClient = (): ChatStateClient => ({
         provider_subject: providerSubject,
       }),
     ),
-  upsertConversation: async ({ conversationId, model, userId }) => {
+  upsertConversation: async ({ conversationId, model, title, userId }) => {
     await sendStateRequest('/conversations', {
       body: JSON.stringify({
         id: conversationId,
         ...(model !== undefined && { model }),
+        ...(title !== undefined && { title }),
         user_id: userId,
       }),
       method: 'POST',

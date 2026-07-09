@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import type { ConversationRow } from '@/lib/conversation-types';
+
 import { fireAndForget } from '@/lib/async';
-import { type ConversationRow, listConversations } from '@/lib/db';
+import { listChatConversations } from '@/lib/transport';
 
 export const useConversationList = () => {
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
 
   const refreshConversations = useCallback(async () => {
-    setConversations(await listConversations());
+    setConversations(await listChatConversations());
   }, []);
 
   useEffect(() => {

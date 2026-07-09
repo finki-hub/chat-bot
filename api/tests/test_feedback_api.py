@@ -85,6 +85,13 @@ def test_web_feedback_uses_server_owned_message_context() -> None:
     assert stored["answer_text"] == "Server answer"
     assert stored["question_text"] == "Server question"
     assert stored["inference_model"] == "server-model"
+    assistant = next(
+        row for row in db.messages.values() if row["response_id"] == response_id
+    )
+    assert assistant["metadata"] == {
+        "feedback": "like",
+        "inferenceModel": "server-model",
+    }
 
 
 def test_web_feedback_rejects_unowned_response_id() -> None:

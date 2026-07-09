@@ -6,6 +6,7 @@ import {
 } from 'node:http';
 import { type AddressInfo } from 'node:net';
 
+import { installMockChatState } from './helpers/chat-state';
 import { type UiChunk } from './helpers/sse';
 
 const RESPONSE_ID = '99999999-8888-7777-6666-555555555555';
@@ -131,12 +132,7 @@ test.describe('reasoning streaming (mocked BFF)', () => {
           status: 200,
         });
       });
-      await page.route('**/api/chat', async (route) => {
-        await route.fulfill({
-          headers: { location: chatServer.url },
-          status: 307,
-        });
-      });
+      await installMockChatState(page, { streamUrl: chatServer.url });
 
       await page.goto('/');
       await page.getByTestId('composer-input').fill('Каде е ФИНКИ?');

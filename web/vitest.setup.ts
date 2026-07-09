@@ -1,5 +1,4 @@
 import '@testing-library/jest-dom/vitest';
-import 'fake-indexeddb/auto';
 import { vi } from 'vitest';
 
 import { ResizeObserverStub } from '@/test/helpers/dom-stubs';
@@ -9,6 +8,7 @@ const noop = (): void => {
 };
 
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+vi.stubGlobal('reportError', vi.fn());
 /* eslint-disable sonarjs/class-prototype -- stub prototype methods jsdom does not implement */
 Element.prototype.scrollIntoView = noop;
 Element.prototype.setPointerCapture = noop;

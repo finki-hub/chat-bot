@@ -1,7 +1,7 @@
 import { Plus, Search, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 
-import type { ConversationRow } from '@/lib/db';
+import type { ConversationRow } from '@/lib/conversation-types';
 
 import { ConversationList } from '@/components/shell/conversation-list';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';

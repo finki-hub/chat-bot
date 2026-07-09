@@ -11,18 +11,12 @@ import {
   applyFeedback,
   previewRegeneration,
 } from '@/lib/conversation-message-state';
-import {
-  clearAllConversations,
-  createConversation,
-  deleteConversation,
-  renameConversation,
-  saveMessages,
-  setMessageFeedback,
-} from '@/lib/db';
 import { deriveTitle } from '@/lib/messages';
 import {
+  clearChatConversations,
   deleteChatConversation,
   DeleteChatConversationError,
+  saveChatConversation,
 } from '@/lib/transport';
 import { useUiStore } from '@/lib/ui-store';
 import { useConversationChatRuntime } from '@/lib/use-conversation-chat-runtime';
@@ -100,16 +94,17 @@ export const useConversations = (
       let expectedTitle: null | string = null;
       if (!existing) {
         expectedTitle = deriveTitle(text);
-        const convo = await createConversation({
+        cid = crypto.randomUUID();
+        await saveChatConversation({
+          id: cid,
           model,
           title: expectedTitle,
         });
-        cid = convo.id;
         // eslint-disable-next-line require-atomic-updates -- fresh id, not a read-modify-write race
-        convoIdRef.current = convo.id;
+        convoIdRef.current = cid;
         // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- conversation id must be committed before useChat resumes the new stream
         flushSync(() => {
-          setActiveId(convo.id);
+          setActiveId(cid);
         });
         await refreshConversations();
       }
@@ -122,7 +117,6 @@ export const useConversations = (
         parts: [{ text, type: 'text' }],
         role: 'user',
       };
-      await saveMessages(cid, [userMessage]);
       if (expectedTitle !== null) {
         fireAndForget(applyGeneratedTitle(cid, [userMessage], expectedTitle));
       }
@@ -146,15 +140,17 @@ export const useConversations = (
           (async () => {
             await handleStop('local-first');
             convoIdRef.current = id;
+            setMessages([]);
             setActiveId(id);
           })(),
         );
         return;
       }
       convoIdRef.current = id;
+      setMessages([]);
       setActiveId(id);
     },
-    [convoIdRef, handleStop, setActiveId, status],
+    [convoIdRef, handleStop, setActiveId, setMessages, status],
   );
 
   const deleteConversationEverywhere = useCallback(
@@ -174,7 +170,6 @@ export const useConversations = (
           throw error;
         }
       }
-      await deleteConversation(id);
       if (deletingActiveConversation && convoIdRef.current === id) {
         setActiveId(null);
         setMessages([]);
@@ -202,10 +197,24 @@ export const useConversations = (
   );
 
   const handleClearAll = useCallback(async () => {
-    await clearAllConversations();
-    handleNewChat();
+    if (status !== 'ready') {
+      await handleStop();
+    }
+    await clearChatConversations();
+    setActiveId(null);
+    setMessages([]);
+    setActiveError(undefined);
+    convoIdRef.current = null;
     await refreshConversations();
-  }, [handleNewChat, refreshConversations]);
+  }, [
+    convoIdRef,
+    handleStop,
+    refreshConversations,
+    setActiveError,
+    setActiveId,
+    setMessages,
+    status,
+  ]);
 
   const submitMessage = useCallback(
     (text: string) => {
@@ -245,7 +254,7 @@ export const useConversations = (
 
   const handleRename = useCallback(
     async (id: string, title: string) => {
-      await renameConversation(id, title);
+      await saveChatConversation({ id, title });
       await refreshConversations();
     },
     [refreshConversations],
@@ -254,7 +263,6 @@ export const useConversations = (
   const recordFeedback = useCallback(
     (messageId: string, vote: FeedbackType) => {
       setMessages(applyFeedback(messageId, vote));
-      fireAndForget(setMessageFeedback(messageId, vote));
     },
     [setMessages],
   );
