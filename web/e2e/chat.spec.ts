@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { installMockChatState } from './helpers/chat-state';
 import {
   stagedRunChunks,
   startChatStreamServer,
@@ -60,12 +61,7 @@ test.describe('chat streaming (mocked BFF)', () => {
       });
     });
 
-    await page.route('**/api/chat', async (route) => {
-      await route.fulfill({
-        headers: { location: chatServer.url },
-        status: 307,
-      });
-    });
+    await installMockChatState(page, { streamUrl: chatServer.url });
 
     let feedbackBody: null | Record<string, unknown> = null;
     await page.route('**/api/feedback', async (route) => {
@@ -153,12 +149,7 @@ test.describe('chat streaming (mocked BFF)', () => {
       });
     });
 
-    await page.route('**/api/chat', async (route) => {
-      await route.fulfill({
-        headers: { location: chatServer.url },
-        status: 307,
-      });
-    });
+    await installMockChatState(page, { streamUrl: chatServer.url });
 
     await page.goto('/');
 

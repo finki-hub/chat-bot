@@ -10,6 +10,12 @@ const STOP_TOKEN = 'Делумен одговор';
 const LONG_GAP_MS = 30_000;
 const CHAT_STREAM_URL_PATTERN = /\/api\/chat\/[^/]+\/stream$/u;
 
+type ConversationRow = {
+  readonly id: string;
+  readonly model: string;
+  readonly title: string;
+};
+
 type PostRequestBody = {
   readonly id?: unknown;
 };
@@ -31,6 +37,21 @@ const parseConversationId = (body: null | string): string => {
 
   return requestBody.id;
 };
+
+const conversationIdFrom = (routeUrl: string): string =>
+  decodeURIComponent(
+    new URL(routeUrl).pathname.split('/', 4)[3] ?? 'conversation',
+  );
+
+const emptyHistoryBody = (id: null | string): string =>
+  JSON.stringify({
+    conversation: {
+      id: id ?? 'conversation',
+      model: INFERENCE_MODEL,
+      title: 'New conversation',
+    },
+    messages: [],
+  });
 
 const chunksForAnswer = (answer: string): UiChunk[] => [
   {
@@ -83,13 +104,41 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     let resumeRequests = 0;
     let allowResumeReplay = false;
     let allowServerHistory = false;
+    const conversations: ConversationRow[] = [];
 
     await page.route('**/api/chat', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          body: JSON.stringify(conversations),
+          contentType: 'application/json',
+          status: 200,
+        });
+        return;
+      }
       conversationId = parseConversationId(route.request().postData());
       await route.fulfill({
         headers: { location: firstLegServer.url },
         status: 307,
       });
+    });
+    await page.route('**/api/chat/*', async (route) => {
+      if (route.request().method() === 'PATCH') {
+        conversationId = conversationIdFrom(route.request().url());
+        if (
+          conversations.every(
+            (conversation) => conversation.id !== conversationId,
+          )
+        ) {
+          conversations.unshift({
+            id: conversationId,
+            model: INFERENCE_MODEL,
+            title: 'Резимирај ми го условот за запишување.',
+          });
+        }
+        await route.fulfill({ status: 204 });
+        return;
+      }
+      await route.fallback();
     });
     await page.route('**/api/chat/*/stream', async (route) => {
       resumeRequests += 1;
@@ -111,7 +160,11 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     await page.route('**/api/chat/*/history', async (route) => {
       historyRequests += 1;
       if (!allowServerHistory) {
-        await route.fulfill({ status: 404 });
+        await route.fulfill({
+          body: emptyHistoryBody(conversationId),
+          contentType: 'application/json',
+          status: 200,
+        });
         return;
       }
       await route.fulfill({
@@ -201,12 +254,41 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     });
     const stopRequests: unknown[] = [];
     const resumeStatuses: number[] = [];
+    const conversations: ConversationRow[] = [];
+    let conversationId: null | string = null;
 
     await page.route('**/api/chat', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          body: JSON.stringify(conversations),
+          contentType: 'application/json',
+          status: 200,
+        });
+        return;
+      }
       await route.fulfill({
         headers: { location: activeServer.url },
         status: 307,
       });
+    });
+    await page.route('**/api/chat/*', async (route) => {
+      if (route.request().method() === 'PATCH') {
+        conversationId = conversationIdFrom(route.request().url());
+        if (
+          conversations.every(
+            (conversation) => conversation.id !== conversationId,
+          )
+        ) {
+          conversations.unshift({
+            id: conversationId,
+            model: INFERENCE_MODEL,
+            title: 'Започни долг одговор.',
+          });
+        }
+        await route.fulfill({ status: 204 });
+        return;
+      }
+      await route.fallback();
     });
     await page.route('**/api/chat/*/stop', async (route) => {
       stopRequests.push(JSON.parse(route.request().postData() ?? '{}'));
@@ -221,7 +303,11 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
       await route.fulfill({ status: 204 });
     });
     await page.route('**/api/chat/*/history', async (route) => {
-      await route.fulfill({ status: 404 });
+      await route.fulfill({
+        body: emptyHistoryBody(conversationId),
+        contentType: 'application/json',
+        status: 200,
+      });
     });
 
     await page.goto('/');

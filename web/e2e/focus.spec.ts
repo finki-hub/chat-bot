@@ -1,5 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import { installMockChatState } from './helpers/chat-state';
 import { startChatStreamServer, type UiChunk } from './helpers/sse';
 
 const MODEL = 'claude-sonnet-4-6';
@@ -30,9 +31,7 @@ const mockBackend = async (
       status: 200,
     });
   });
-  await page.route('**/api/chat', async (route) => {
-    await route.fulfill({ headers: { location: server.url }, status: 307 });
-  });
+  await installMockChatState(page, { streamUrl: server.url });
   return server;
 };
 
