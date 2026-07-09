@@ -197,10 +197,24 @@ export const useConversations = (
   );
 
   const handleClearAll = useCallback(async () => {
+    if (status !== 'ready') {
+      await handleStop();
+    }
     await clearChatConversations();
-    handleNewChat();
+    setActiveId(null);
+    setMessages([]);
+    setActiveError(undefined);
+    convoIdRef.current = null;
     await refreshConversations();
-  }, [handleNewChat, refreshConversations]);
+  }, [
+    convoIdRef,
+    handleStop,
+    refreshConversations,
+    setActiveError,
+    setActiveId,
+    setMessages,
+    status,
+  ]);
 
   const submitMessage = useCallback(
     (text: string) => {

@@ -33,6 +33,7 @@ const saveChatConversation = vi.fn<() => Promise<void>>();
 const stopChatStream =
   vi.fn<(id: string, snapshot?: unknown) => Promise<void>>();
 const chatMessages: MyUIMessage[] = [];
+const ACTIVE_CONVERSATION_ID = 'conv-active';
 const useChatOptions: UseChatOptions[] = [];
 
 vi.mock('@ai-sdk/react', () => ({
@@ -103,12 +104,12 @@ describe('useConversations resumable streaming', () => {
     expect(useChatOptions.at(-1)?.id).toBeUndefined();
 
     act(() => {
-      useUiStore.setState({ activeConversationId: 'conv-active' });
+      useUiStore.setState({ activeConversationId: ACTIVE_CONVERSATION_ID });
     });
     rerender();
 
     expect(useChatOptions.at(-1)).toMatchObject({
-      id: 'conv-active',
+      id: ACTIVE_CONVERSATION_ID,
       resume: true,
     });
   });
@@ -226,7 +227,7 @@ describe('useConversations resumable streaming', () => {
   });
 
   it('stops the active stream before deleting the active conversation', async () => {
-    const activeConversationId = 'conv-active';
+    const activeConversationId = ACTIVE_CONVERSATION_ID;
     useUiStore.setState({ activeConversationId });
     chatState.status = 'streaming';
     const calls: string[] = [];
@@ -254,8 +255,33 @@ describe('useConversations resumable streaming', () => {
     expect(calls).toStrictEqual(['stop-local', 'stop-server', 'delete-server']);
   });
 
+  it('stops the active stream before clearing all conversations', async () => {
+    useUiStore.setState({ activeConversationId: ACTIVE_CONVERSATION_ID });
+    chatState.status = 'streaming';
+    const calls: string[] = [];
+    stopChatStream.mockImplementation(() => {
+      calls.push('stop-server');
+      return Promise.resolve();
+    });
+    localStop.mockImplementation(() => {
+      calls.push('stop-local');
+    });
+    clearChatConversations.mockImplementation(() => {
+      calls.push('clear-server');
+      return Promise.resolve();
+    });
+    const { result } = renderHook(() => useConversations('model-a'));
+
+    await act(async () => {
+      await result.current.onClearAll();
+    });
+
+    expect(calls).toStrictEqual(['stop-local', 'stop-server', 'clear-server']);
+    expect(useUiStore.getState().activeConversationId).toBeNull();
+  });
+
   it('keeps a newly selected conversation when active delete finishes later', async () => {
-    const activeConversationId = 'conv-active';
+    const activeConversationId = ACTIVE_CONVERSATION_ID;
     useUiStore.setState({ activeConversationId });
     let resolveServerDelete: (() => void) | undefined;
     const serverDeleteReleased = new Promise<void>((resolve) => {
