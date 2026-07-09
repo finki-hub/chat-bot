@@ -77,7 +77,15 @@ export const CredentialSettingsDialog = ({
           setError(credentialsError());
           return;
         }
+        const loadedForms: FormState = { ...EMPTY_FORMS };
+        for (const credential of loadedCredentials) {
+          loadedForms[credential.provider] = {
+            apiKey: '',
+            baseUrl: credential.base_url ?? '',
+          };
+        }
         setCredentials(loadedCredentials);
+        setForms(loadedForms);
       } catch (error_) {
         if (error_ instanceof DOMException && error_.name === 'AbortError') {
           return;
