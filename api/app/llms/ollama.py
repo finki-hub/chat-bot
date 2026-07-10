@@ -16,30 +16,38 @@ from app.llms.agents import (
 )
 from app.llms.models import Model
 from app.llms.prompts import build_agent_messages, stitch_conversation
+from app.llms.provider_credentials import require_provider_credential
 from app.llms.tools import get_agent_tools
-from app.utils.settings import Settings
+from app.schemas.chat_credentials import OLLAMA_DEFAULT_BASE_URL, ChatCredentialSecret
 
 logger = logging.getLogger(__name__)
 
-settings = Settings()
-
-# Model, temperature, top_p, max_tokens, reasoning -> LLM
-ollama_chat_clients: dict[tuple[str, float, float, int, bool], ChatOllama] = {}
-ollama_embedders: dict[Model, OllamaEmbeddings] = {}
+type _OllamaClientKwargs = dict[str, dict[str, str]]
 
 
-def get_embedder(model: Model) -> OllamaEmbeddings:
+def _connection(
+    credential: ChatCredentialSecret | None,
+) -> tuple[str, _OllamaClientKwargs]:
+    credential = require_provider_credential("ollama", credential)
+    return (
+        credential.base_url or OLLAMA_DEFAULT_BASE_URL,
+        {"headers": {"Authorization": f"Bearer {credential.api_key}"}},
+    )
+
+
+def get_embedder(
+    model: Model,
+    credential: ChatCredentialSecret | None = None,
+) -> OllamaEmbeddings:
     """
-    Return a singleton OllamaEmbeddings instance for the specified model.
-    If the model is not already in the cache, create a new instance.
+    Return a user-scoped OllamaEmbeddings instance for the specified model.
     """
-    if model not in ollama_embedders:
-        ollama_embedders[model] = OllamaEmbeddings(
-            model=model.value,
-            base_url=settings.OLLAMA_URL,
-        )
-
-    return ollama_embedders[model]
+    base_url, client_kwargs = _connection(credential)
+    return OllamaEmbeddings(
+        model=model.value,
+        base_url=base_url,
+        client_kwargs=client_kwargs,
+    )
 
 
 def get_llm(
@@ -49,34 +57,32 @@ def get_llm(
     max_tokens: int,
     *,
     reasoning: bool = False,
+    credential: ChatCredentialSecret | None = None,
 ) -> ChatOllama:
     """
-    Return a singleton ChatOllama instance for the specified model and parameters.
-    If the model and parameters are not already in the cache, create a new instance.
+    Return a user-scoped ChatOllama instance for the specified model and parameters.
 
     `reasoning` maps to Ollama's `think` mode: True makes reasoning-capable models (e.g.
     deepseek-r1) expose thoughts in `additional_kwargs["reasoning_content"]`; False disables
     it so a model that would otherwise emit raw inline `<think>` tags stays clean.
     """
-    key = (model.value, temperature, top_p, max_tokens, reasoning)
-
-    if key not in ollama_chat_clients:
-        ollama_chat_clients[key] = ChatOllama(
-            model=model.value,
-            base_url=settings.OLLAMA_URL,
-            temperature=temperature,
-            top_p=top_p,
-            num_predict=max_tokens,
-            reasoning=reasoning,
-        )
-
-    return ollama_chat_clients[key]
+    base_url, client_kwargs = _connection(credential)
+    return ChatOllama(
+        model=model.value,
+        base_url=base_url,
+        client_kwargs=client_kwargs,
+        temperature=temperature,
+        top_p=top_p,
+        num_predict=max_tokens,
+        reasoning=reasoning,
+    )
 
 
 @overload
 async def generate_ollama_embeddings(
     text: str,
     model: Model,
+    credential: ChatCredentialSecret | None = None,
 ) -> list[float]: ...
 
 
@@ -84,12 +90,14 @@ async def generate_ollama_embeddings(
 async def generate_ollama_embeddings(
     text: list[str],
     model: Model,
+    credential: ChatCredentialSecret | None = None,
 ) -> list[list[float]]: ...
 
 
 async def generate_ollama_embeddings(
     text: str | list[str],
     model: Model,
+    credential: ChatCredentialSecret | None = None,
 ) -> list[float] | list[list[float]]:
     """
     Generate embeddings for the given text using the specified Ollama model.
@@ -101,7 +109,7 @@ async def generate_ollama_embeddings(
         model.value,
     )
 
-    emb = get_embedder(model)
+    emb = get_embedder(model, credential)
 
     if isinstance(text, str):
         return await asyncio.to_thread(emb.embed_query, text)
@@ -119,6 +127,7 @@ def stream_ollama_response(
     top_p: float,
     max_tokens: int,
     reasoning: bool = False,
+    credential: ChatCredentialSecret | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from the specified Ollama model using the provided user prompt and system prompt.
@@ -133,7 +142,14 @@ def stream_ollama_response(
         model.value,
     )
 
-    llm = get_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
+    llm = get_llm(
+        model,
+        temperature,
+        top_p,
+        max_tokens,
+        reasoning=reasoning,
+        credential=credential,
+    )
     full_prompt = stitch_conversation(system_prompt, history or [], user_prompt)
 
     def sync_token_gen() -> Generator[str]:
@@ -151,6 +167,7 @@ async def transform_query_with_ollama(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    credential: ChatCredentialSecret | None = None,
 ) -> str:
     """
     Transform a query using the specified Ollama model and system prompt.
@@ -164,7 +181,13 @@ async def transform_query_with_ollama(
     )
 
     try:
-        llm = get_llm(model, temperature, top_p, max_tokens)
+        llm = get_llm(
+            model,
+            temperature,
+            top_p,
+            max_tokens,
+            credential=credential,
+        )
 
         messages = [
             SystemMessage(content=system_prompt),
@@ -190,6 +213,7 @@ async def stream_ollama_agent_response(
     max_tokens: int,
     reasoning: bool = False,
     observation: StreamObservation | None = None,
+    credential: ChatCredentialSecret | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from an Ollama agent with MCP tools.
@@ -202,7 +226,14 @@ async def stream_ollama_agent_response(
     )
 
     try:
-        llm = get_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
+        llm = get_llm(
+            model,
+            temperature,
+            top_p,
+            max_tokens,
+            reasoning=reasoning,
+            credential=credential,
+        )
 
         tools = await get_agent_tools()
 
@@ -239,4 +270,5 @@ async def stream_ollama_agent_response(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
+            credential=credential,
         )

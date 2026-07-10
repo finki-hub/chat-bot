@@ -48,7 +48,11 @@ async def _dispatch_embeddings(
 ) -> list[float] | list[list[float]]:
     match model:
         case Model.LLAMA_3_3_70B | Model.BGE_M3:
-            return await generate_ollama_embeddings(text, model)
+            return await generate_ollama_embeddings(
+                text,
+                model,
+                None if credentials is None else credentials.ollama,
+            )
 
         case Model.TEXT_EMBEDDING_3_LARGE:
             return await generate_openai_embeddings(
