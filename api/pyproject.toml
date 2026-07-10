@@ -23,7 +23,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "asyncpg-stubs>=0.31.2",
+    "asyncpg-stubs>=0.31.3",
     "mypy>=2.2.0",
     "pytest>=9.1.1",
     "ruff>=0.15.20",
