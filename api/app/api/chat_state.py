@@ -30,6 +30,7 @@ from app.data.chat_state import (
 from app.data.chat_users import upsert_chat_user
 from app.data.db import get_db
 from app.schemas.chat_credentials import (
+    OLLAMA_DEFAULT_BASE_URL,
     ChatCredentialProvider,
     ChatCredentialPublic,
     ChatCredentialUpsert,
@@ -74,6 +75,16 @@ def _not_found() -> HTTPException:
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Conversation not found",
     )
+
+
+def _normalize_default_base_url(payload: ChatCredentialUpsert) -> ChatCredentialUpsert:
+    if (
+        payload.provider == "ollama"
+        and payload.base_url is not None
+        and payload.base_url.rstrip("/") == OLLAMA_DEFAULT_BASE_URL
+    ):
+        return payload.model_copy(update={"base_url": None})
+    return payload
 
 
 def _ensure_allowed_base_url(payload: ChatCredentialUpsert, settings: Settings) -> None:
@@ -139,6 +150,7 @@ async def upsert_user_credential_state(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Credential provider must match the route provider",
         )
+    payload = _normalize_default_base_url(payload)
     settings = request.app.state.settings
     _ensure_allowed_base_url(payload, settings)
     return await upsert_chat_credential(

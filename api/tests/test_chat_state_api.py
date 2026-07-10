@@ -137,6 +137,25 @@ def test_chat_state_manages_user_credentials_without_exposing_secret() -> None:
     assert after_delete.json() == []
 
 
+def test_chat_state_normalizes_explicit_ollama_default_base_url() -> None:
+    db = FakeChatDatabase()
+    client = _client(db)
+
+    saved = client.put(
+        f"/chat/state/users/{OWNER_ID}/credentials/ollama",
+        headers=_auth_headers(),
+        json={
+            "api_key": "ollama-user-key",
+            "base_url": "https://ollama.com",
+            "provider": "ollama",
+        },
+    )
+
+    assert saved.status_code == 200
+    assert saved.json()["base_url"] is None
+    assert db.credentials[(UUID(OWNER_ID), "ollama")]["base_url"] is None
+
+
 def test_chat_state_rejects_custom_credential_base_url_outside_allowlist() -> None:
     # Given: an authenticated BFF client with no operator-allowed BYOK endpoints.
     db = FakeChatDatabase()
