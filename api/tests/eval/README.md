@@ -138,8 +138,7 @@ Save one result per line, then run:
 
 ```bash
 python -m tests.eval.answer_eval \
-    --cases tests/eval/answer_golden.jsonl \
-    --results tests/eval/answer_results.jsonl
+    --results answer_results.jsonl
 ```
 
 The command prints every case as `PASS` or `FAIL` with named contract failures and
@@ -149,9 +148,8 @@ Compare a candidate run with a known baseline:
 
 ```bash
 python -m tests.eval.answer_compare \
-    --cases tests/eval/answer_golden.jsonl \
-    --baseline tests/eval/answer_baseline.jsonl \
-    --current tests/eval/answer_results.jsonl
+    --baseline answer_baseline.jsonl \
+    --current answer_results.jsonl
 ```
 
 The comparison reports fixed, newly regressed, and unchanged failing cases. It exits

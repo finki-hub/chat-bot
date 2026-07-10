@@ -1,6 +1,7 @@
 import logging
 
 import anyio
+from anyio import lowlevel
 
 from app.api import chat_title
 from app.llms import query_transform
@@ -92,6 +93,7 @@ def test_chat_title_isolates_transcript_as_untrusted_data(monkeypatch):
         top_p: float,
         max_tokens: int,
     ) -> str:
+        await lowlevel.checkpoint()
         seen["query"] = query
         return "Безбеден наслов"
 

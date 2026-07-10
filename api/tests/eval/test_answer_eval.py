@@ -1,7 +1,9 @@
+import argparse
 from pathlib import Path
 
 import pytest
 
+from tests import eval as eval_support
 from tests.eval import answer_eval
 from tests.eval.answer_compare import compare_results
 from tests.eval.answer_eval import (
@@ -13,6 +15,19 @@ from tests.eval.answer_eval import (
 )
 
 _GOLDEN = Path(__file__).with_name("answer_golden.jsonl")
+
+
+def test_eval_jsonl_name_resolves_existing_file_inside_eval_directory():
+    assert eval_support.eval_jsonl_name("answer_golden.jsonl") == _GOLDEN.resolve()
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["../answer_golden.jsonl", "answer_golden.json", "missing.jsonl"],
+)
+def test_eval_jsonl_name_rejects_unsafe_or_invalid_names(value: str):
+    with pytest.raises(argparse.ArgumentTypeError):
+        eval_support.eval_jsonl_name(value)
 
 
 def test_load_answer_cases_parses_typed_expectations(tmp_path: Path):

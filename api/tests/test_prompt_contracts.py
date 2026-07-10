@@ -1,4 +1,6 @@
 import anyio
+import pytest
+from anyio import lowlevel
 
 from app.llms import query_variants
 from app.llms.models import Model
@@ -81,6 +83,7 @@ def test_hyde_uses_conservative_sampling(monkeypatch):
         top_p: float,
         max_tokens: int,
     ) -> str:
+        await lowlevel.checkpoint()
         seen.update(
             {
                 "max_tokens": max_tokens,
@@ -103,5 +106,5 @@ def test_hyde_uses_conservative_sampling(monkeypatch):
     )
 
     assert result.variants[0].text == "Пасус"
-    assert seen["temperature"] == 0.2
-    assert seen["top_p"] == 1.0
+    assert seen["temperature"] == pytest.approx(0.2)
+    assert seen["top_p"] == pytest.approx(1.0)

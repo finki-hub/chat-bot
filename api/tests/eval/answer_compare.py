@@ -3,6 +3,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import eval_jsonl_name
 from .answer_eval import (
     AnswerCase,
     AnswerEvalError,
@@ -57,13 +58,12 @@ def compare_results(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compare answer-eval result sets.")
-    parser.add_argument("--cases", type=Path, required=True)
-    parser.add_argument("--baseline", type=Path, required=True)
-    parser.add_argument("--current", type=Path, required=True)
+    parser.add_argument("--baseline", type=eval_jsonl_name, required=True)
+    parser.add_argument("--current", type=eval_jsonl_name, required=True)
     args = parser.parse_args()
     try:
         comparison = compare_results(
-            load_answer_cases(args.cases),
+            load_answer_cases(Path(__file__).with_name("answer_golden.jsonl")),
             args.baseline,
             args.current,
         )
