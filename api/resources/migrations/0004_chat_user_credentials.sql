@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS chat_user_credential (
     user_id UUID NOT NULL REFERENCES chat_user (id) ON DELETE CASCADE,
-    provider TEXT NOT NULL CHECK (provider IN ('openai', 'google', 'anthropic')),
+    provider TEXT NOT NULL CHECK (provider IN ('openai', 'google', 'anthropic', 'ollama')),
     encrypted_api_key TEXT NOT NULL,
     base_url TEXT,
     created_at TIMESTAMP DEFAULT NOW(),

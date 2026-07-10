@@ -1,11 +1,12 @@
 from datetime import datetime
-from typing import Literal
+from typing import Final, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-ChatCredentialProvider = Literal["openai", "google", "anthropic"]
+ChatCredentialProvider = Literal["openai", "google", "anthropic", "ollama"]
+OLLAMA_DEFAULT_BASE_URL: Final = "https://ollama.com"
 
 
 class ChatCredentialUpsert(BaseModel):
