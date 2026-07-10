@@ -22,44 +22,23 @@ from app.llms.models import (
     Model,
 )
 from app.llms.prompts import build_agent_messages
+from app.llms.provider_credentials import require_provider_credential
 from app.llms.tools import get_agent_tools
 from app.schemas.chat_credentials import ChatCredentialSecret
-from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
-
-settings = Settings()
-
-# Model, temperature, top_p (None when not forwarded), max_tokens, reasoning -> LLM
-openai_llm_clients: dict[tuple[str, float, float | None, int, bool], ChatOpenAI] = {}
-openai_embedders: dict[str, OpenAIEmbeddings] = {}
 
 
 def get_openai_embedder(
     model: Model,
     credential: ChatCredentialSecret | None = None,
 ) -> OpenAIEmbeddings:
-    """
-    Return a singleton OpenAIEmbeddings instance for the specified model.
-    If the model is not already in the cache, create a new instance.
-    """
-    if credential is not None:
-        return OpenAIEmbeddings(
-            model=model.value,
-            api_key=SecretStr(credential.api_key),  # type: ignore[call-arg]
-            base_url=credential.base_url or None,
-        )
-
-    key = model.value
-
-    if key not in openai_embedders:
-        openai_embedders[key] = OpenAIEmbeddings(
-            model=model.value,
-            api_key=SecretStr(settings.OPENAI_API_KEY),  # type: ignore[call-arg]
-            base_url=settings.OPENAI_BASE_URL or None,
-        )
-
-    return openai_embedders[key]
+    credential = require_provider_credential("openai", credential)
+    return OpenAIEmbeddings(
+        model=model.value,
+        api_key=SecretStr(credential.api_key),  # type: ignore[call-arg]
+        base_url=credential.base_url or None,
+    )
 
 
 def get_openai_llm(
@@ -72,7 +51,7 @@ def get_openai_llm(
     credential: ChatCredentialSecret | None = None,
 ) -> ChatOpenAI:
     """
-    Return a singleton ChatOpenAI instance for the specified model and parameters.
+    Return a user-scoped ChatOpenAI instance for the specified model and parameters.
 
     All OpenAI requests use the Responses API (`use_responses_api=True`); reasoning content
     is only surfaced there. When `reasoning` is on, a `reasoning` config requests a
@@ -96,39 +75,17 @@ def get_openai_llm(
     if forwards_top_p:
         client_kwargs["top_p"] = top_p
 
-    if credential is not None:
-        return ChatOpenAI(
-            model=model.value,
-            api_key=SecretStr(credential.api_key),
-            base_url=credential.base_url or None,
-            temperature=temperature,
-            streaming=True,
-            stream_usage=True,
-            max_tokens=max_tokens,  # type: ignore[call-arg]
-            **client_kwargs,
-        )
-
-    key = (
-        model.value,
-        temperature,
-        top_p if forwards_top_p else None,
-        max_tokens,
-        reasoning,
+    credential = require_provider_credential("openai", credential)
+    return ChatOpenAI(
+        model=model.value,
+        api_key=SecretStr(credential.api_key),
+        base_url=credential.base_url or None,
+        temperature=temperature,
+        streaming=True,
+        stream_usage=True,
+        max_tokens=max_tokens,  # type: ignore[call-arg]
+        **client_kwargs,
     )
-
-    if key not in openai_llm_clients:
-        openai_llm_clients[key] = ChatOpenAI(
-            model=model.value,
-            api_key=SecretStr(settings.OPENAI_API_KEY),
-            base_url=settings.OPENAI_BASE_URL or None,
-            temperature=temperature,
-            streaming=True,
-            stream_usage=True,
-            max_tokens=max_tokens,  # type: ignore[call-arg]
-            **client_kwargs,
-        )
-
-    return openai_llm_clients[key]
 
 
 @overload

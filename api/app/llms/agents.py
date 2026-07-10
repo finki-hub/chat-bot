@@ -45,8 +45,8 @@ def status_event(*, stage: str, tool: str | None = None) -> str:
     return _sse("status", payload)
 
 
-def error_event(code: str, message: str) -> str:
-    return _sse("error", {"code": code, "message": message})
+def error_event(code: str, message: str, **details: str) -> str:
+    return _sse("error", {"code": code, "message": message, **details})
 
 
 def meta_event(payload: dict[str, object]) -> str:

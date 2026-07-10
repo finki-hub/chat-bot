@@ -9,9 +9,12 @@ from app.llms.agents import StreamObservation
 from app.llms.models import (
     ANTHROPIC_QUERY_TRANSFORM_MODELS,
     CHAT_MODELS,
+    GPU_API_MODELS,
+    OLLAMA_QUERY_TRANSFORM_MODELS,
     REASONING_CAPABLE_MODELS,
     Model,
 )
+from app.llms.provider_credentials import provider_for_model
 from app.schemas.chat_credentials import ChatCredentialSecret
 
 
@@ -21,6 +24,16 @@ def test_claude_sonnet_5_is_a_supported_anthropic_chat_model():
     assert model in CHAT_MODELS
     assert model in ANTHROPIC_QUERY_TRANSFORM_MODELS
     assert model in REASONING_CAPABLE_MODELS
+
+
+def test_every_hosted_chat_model_requires_provider_credential() -> None:
+    self_hosted_models = {*OLLAMA_QUERY_TRANSFORM_MODELS, *GPU_API_MODELS}
+    hosted_models = CHAT_MODELS - self_hosted_models
+
+    assert hosted_models
+    assert {
+        model for model in hosted_models if provider_for_model(model) is None
+    } == set()
 
 
 def test_claude_sonnet_5_routes_to_anthropic(monkeypatch):

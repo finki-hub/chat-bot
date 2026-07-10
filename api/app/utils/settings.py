@@ -95,14 +95,7 @@ class Settings(BaseSettings):
     DATABASE_POOL_MIN_SIZE: int = Field(default=1, ge=0)
     DATABASE_POOL_MAX_SIZE: int = Field(default=10, ge=1)
 
-    OPENAI_API_KEY: str = "your_openai_api_key_here"
-    GOOGLE_API_KEY: str = "your_google_api_key_here"
-    ANTHROPIC_API_KEY: str = "your_anthropic_api_key_here"
-
     OLLAMA_URL: str = "http://ollama:11434"
-    OPENAI_BASE_URL: str = ""
-    GOOGLE_BASE_URL: str = ""
-    ANTHROPIC_BASE_URL: str = ""
     BYOK_ALLOWED_BASE_URLS: str = ""
 
     POSTHOG_KEY: str = ""

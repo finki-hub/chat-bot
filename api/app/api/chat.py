@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.provider_credentials import (
     credential_providers_for_models,
+    missing_mandatory_credential,
     resolve_provider_credentials,
 )
 from app.data.connection import Database
@@ -53,6 +54,11 @@ _HISTORY_TURN_MAX_CHARS = 600
 _PRE_STREAM_ERROR_MSG = (
     "Се случи грешка при подготовка на одговорот. Обидете се повторно."
 )
+_CREDENTIAL_PROVIDER_LABELS = {
+    "openai": "OpenAI",
+    "google": "Google",
+    "anthropic": "Anthropic",
+}
 
 
 def _clip(text: str) -> str:
@@ -469,6 +475,20 @@ async def _chat_response_stream(
         ),
         settings=request.app.state.settings,
     )
+    missing_credential = missing_mandatory_credential(
+        credentials,
+        inference_model=payload.inference_model,
+        embeddings_model=payload.embeddings_model,
+    )
+    if missing_credential is not None:
+        provider_label = _CREDENTIAL_PROVIDER_LABELS[missing_credential.provider]
+        yield error_event(
+            "credential_required",
+            f"Потребен е ваш {provider_label} API клуч. Додајте го во поставките за провајдери.",
+            provider=missing_credential.provider,
+            stage=missing_credential.stage,
+        )
+        return
 
     timings, token = start_request_timings()
     try:

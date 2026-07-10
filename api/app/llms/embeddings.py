@@ -23,7 +23,11 @@ from app.llms.models import (
 )
 from app.llms.ollama import generate_ollama_embeddings
 from app.llms.openai import generate_openai_embeddings
-from app.llms.provider_credentials import LlmProviderCredentials
+from app.llms.provider_credentials import (
+    LlmProviderCredentials,
+    ProviderCredentialRequiredError,
+    provider_for_model,
+)
 from app.llms.text_utils import _prepare_text_for_embedding
 from app.recommenders.text import build_proposal_text
 from app.utils.database import embedding_to_pgvector
@@ -117,6 +121,8 @@ async def generate_embeddings(
                 is_document=is_document,
                 credentials=credentials,
             )
+        except ProviderCredentialRequiredError:
+            raise
         except ValueError:
             raise
         except Exception:
@@ -143,15 +149,24 @@ async def generate_embeddings(
     )
 
 
-def _resolve_models(model: Model, *, all_models: bool) -> list[Model]:
-    if all_models:
-        return list(ALL_MODELS_EMBEDDINGS)
-
+def ensure_self_hosted_embedding_model(model: Model) -> None:
     if model not in MODEL_EMBEDDINGS_COLUMNS:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported embedding model: {model.value}",
         )
+    if provider_for_model(model) is not None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Hosted embeddings require a user-authenticated BYOK chat request",
+        )
+
+
+def _resolve_models(model: Model, *, all_models: bool) -> list[Model]:
+    if all_models:
+        return list(ALL_MODELS_EMBEDDINGS)
+
+    ensure_self_hosted_embedding_model(model)
     return [model]
 
 

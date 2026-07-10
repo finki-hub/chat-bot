@@ -17,16 +17,11 @@ from app.llms.agents import (
 )
 from app.llms.models import ANTHROPIC_NO_SAMPLING_MODELS, Model
 from app.llms.prompts import build_agent_messages
+from app.llms.provider_credentials import require_provider_credential
 from app.llms.tools import get_agent_tools
 from app.schemas.chat_credentials import ChatCredentialSecret
-from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
-
-settings = Settings()
-
-# Model, temperature, top_p, max_tokens, reasoning -> LLM
-anthropic_llm_clients: dict[tuple[str, float, float, int, bool], ChatAnthropic] = {}
 
 # Models that reject `budget_tokens`; they use summarized adaptive thinking instead.
 _ADAPTIVE_THINKING_MODELS: frozenset[Model] = ANTHROPIC_NO_SAMPLING_MODELS
@@ -63,7 +58,7 @@ def get_anthropic_llm(
     credential: ChatCredentialSecret | None = None,
 ) -> ChatAnthropic:
     """
-    Return a singleton ChatAnthropic instance for the specified model and parameters.
+    Return a user-scoped ChatAnthropic instance for the specified model and parameters.
 
     Anthropic's API is stricter about sampling parameters than the other providers:
     Some models reject non-default `temperature`, `top_p`, and `top_k` outright (HTTP 400),
@@ -84,29 +79,15 @@ def get_anthropic_llm(
     temperature_arg = (
         None if (reasoning or model in ANTHROPIC_NO_SAMPLING_MODELS) else temperature
     )
-    if credential is not None:
-        return ChatAnthropic(
-            model=model.value,  # type: ignore[call-arg]
-            api_key=SecretStr(credential.api_key),
-            base_url=credential.base_url or None,
-            temperature=temperature_arg,
-            max_tokens=effective_max,  # type: ignore[call-arg]
-            thinking=thinking,  # type: ignore[call-arg]
-        )
-
-    key = (model.value, temperature, top_p, max_tokens, reasoning)
-
-    if key not in anthropic_llm_clients:
-        anthropic_llm_clients[key] = ChatAnthropic(
-            model=model.value,  # type: ignore[call-arg]
-            api_key=SecretStr(settings.ANTHROPIC_API_KEY),
-            base_url=settings.ANTHROPIC_BASE_URL or None,
-            temperature=temperature_arg,
-            max_tokens=effective_max,  # type: ignore[call-arg]
-            thinking=thinking,  # type: ignore[call-arg]
-        )
-
-    return anthropic_llm_clients[key]
+    credential = require_provider_credential("anthropic", credential)
+    return ChatAnthropic(
+        model=model.value,  # type: ignore[call-arg]
+        api_key=SecretStr(credential.api_key),
+        base_url=credential.base_url or None,
+        temperature=temperature_arg,
+        max_tokens=effective_max,  # type: ignore[call-arg]
+        thinking=thinking,  # type: ignore[call-arg]
+    )
 
 
 def stream_anthropic_response(

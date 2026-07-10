@@ -1,21 +1,18 @@
+import pytest
+
 from app.llms import anthropic, google, openai
 from app.llms.models import Model
+from app.llms.provider_credentials import ProviderCredentialRequiredError
 from app.schemas.chat_credentials import ChatCredentialSecret
 
 
 def test_openai_byok_client_does_not_inherit_deployment_base_url(monkeypatch) -> None:
-    # Given: deployment OpenAI traffic is routed through an operator-configured base URL.
     captured_base_urls: list[str | None] = []
 
     class OpenAICapturingClient:
         def __init__(self, **kwargs):
             captured_base_urls.append(kwargs["base_url"])
 
-    monkeypatch.setattr(
-        openai.settings,
-        "OPENAI_BASE_URL",
-        "https://operator.example/openai",
-    )
     monkeypatch.setattr(openai, "ChatOpenAI", OpenAICapturingClient)
 
     # When: a user supplies only their own OpenAI key.
@@ -32,18 +29,12 @@ def test_openai_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
 
 
 def test_google_byok_client_does_not_inherit_deployment_base_url(monkeypatch) -> None:
-    # Given: deployment Google traffic is routed through an operator-configured base URL.
     captured_base_urls: list[str | None] = []
 
     class GoogleCapturingClient:
         def __init__(self, **kwargs):
             captured_base_urls.append(kwargs["base_url"])
 
-    monkeypatch.setattr(
-        google.settings,
-        "GOOGLE_BASE_URL",
-        "https://operator.example/google",
-    )
     monkeypatch.setattr(google, "ChatGoogleGenerativeAI", GoogleCapturingClient)
 
     # When: a user supplies only their own Google key.
@@ -62,18 +53,12 @@ def test_google_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
 def test_anthropic_byok_client_does_not_inherit_deployment_base_url(
     monkeypatch,
 ) -> None:
-    # Given: deployment Anthropic traffic is routed through an operator-configured base URL.
     captured_base_urls: list[str | None] = []
 
     class AnthropicCapturingClient:
         def __init__(self, **kwargs):
             captured_base_urls.append(kwargs["base_url"])
 
-    monkeypatch.setattr(
-        anthropic.settings,
-        "ANTHROPIC_BASE_URL",
-        "https://operator.example/anthropic",
-    )
     monkeypatch.setattr(anthropic, "ChatAnthropic", AnthropicCapturingClient)
 
     # When: a user supplies only their own Anthropic key.
@@ -87,3 +72,45 @@ def test_anthropic_byok_client_does_not_inherit_deployment_base_url(
 
     # Then: the BYOK request uses the provider default, not the deployment base URL.
     assert captured_base_urls == [None]
+
+
+@pytest.mark.parametrize(
+    ("provider", "factory", "model"),
+    [
+        ("openai", openai.get_openai_llm, Model.GPT_4O_MINI),
+        ("google", google.get_google_llm, Model.GEMINI_2_5_FLASH),
+        ("anthropic", anthropic.get_anthropic_llm, Model.CLAUDE_HAIKU_4_5),
+    ],
+)
+def test_hosted_llm_client_requires_user_credential(
+    provider,
+    factory,
+    model: Model,
+) -> None:
+    with pytest.raises(ProviderCredentialRequiredError) as error:
+        factory(
+            model,
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=128,
+        )
+
+    assert error.value.provider == provider
+
+
+@pytest.mark.parametrize(
+    ("provider", "factory", "model"),
+    [
+        ("openai", openai.get_openai_embedder, Model.TEXT_EMBEDDING_3_LARGE),
+        ("google", google.get_google_embedder, Model.GEMINI_EMBEDDING_001),
+    ],
+)
+def test_hosted_embedding_client_requires_user_credential(
+    provider,
+    factory,
+    model: Model,
+) -> None:
+    with pytest.raises(ProviderCredentialRequiredError) as error:
+        factory(model)
+
+    assert error.value.provider == provider

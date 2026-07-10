@@ -8,6 +8,7 @@ from app.data.chat_credentials import upsert_chat_credential
 from app.llms import query_transform
 from app.llms.models import Model
 from app.llms.provider_credentials import LlmProviderCredentials
+from app.schemas.chat import ConversationTurn
 from app.schemas.chat_credentials import ChatCredentialUpsert
 from app.schemas.chat_title import ChatTitleSchema
 from app.utils.settings import Settings
@@ -41,14 +42,15 @@ def test_chat_title_uses_transform_prompt_and_normalizes_quotes(monkeypatch):
 
     monkeypatch.setattr(chat_title, "transform_query", fake_transform_query)
     payload = ChatTitleSchema(
-        messages=[{"role": "user", "content": "Кога е јунската сесија?"}],
-        query_transform_model=Model.CLAUDE_HAIKU_4_5,
+        user_id=None,
+        messages=[ConversationTurn(role="user", content="Кога е јунската сесија?")],
+        query_transform_model=Model.MISTRAL,
     )
 
     response = anyio.run(chat_title.generate_chat_title, payload)
 
     assert response.title == "Испитна сесија"
-    assert seen["model"] == Model.CLAUDE_HAIKU_4_5
+    assert seen["model"] == Model.MISTRAL
     assert seen["max_tokens"] == 32
     assert "Кога е јунската сесија?" in str(seen["query"])
     assert "conversation title" in str(seen["system_prompt"])
@@ -71,12 +73,32 @@ def test_chat_title_falls_back_to_first_user_message_when_model_returns_empty(
 
     monkeypatch.setattr(chat_title, "transform_query", fake_transform_query)
     payload = ChatTitleSchema(
+        user_id=None,
         messages=[
-            {
-                "role": "user",
-                "content": "  Како да пријавам испит?\nИ кои се роковите?  ",
-            },
+            ConversationTurn(
+                role="user",
+                content="  Како да пријавам испит?\nИ кои се роковите?  ",
+            ),
         ],
+        query_transform_model=Model.MISTRAL,
+    )
+
+    response = anyio.run(chat_title.generate_chat_title, payload)
+
+    assert response.title == "Како да пријавам испит?"
+
+
+def test_chat_title_does_not_call_hosted_provider_without_user_credential(
+    monkeypatch,
+):
+    async def fail_if_transformed(*args, **kwargs):
+        raise AssertionError("title generation must not call an unavailable provider")
+
+    monkeypatch.setattr(chat_title, "transform_query", fail_if_transformed)
+    payload = ChatTitleSchema(
+        user_id=None,
+        messages=[ConversationTurn(role="user", content="Како да пријавам испит?")],
+        query_transform_model=Model.CLAUDE_HAIKU_4_5,
     )
 
     response = anyio.run(chat_title.generate_chat_title, payload)
@@ -122,7 +144,9 @@ def test_chat_title_uses_runtime_settings_for_user_credentials(monkeypatch):
         )
         await chat_title.generate_chat_title(
             ChatTitleSchema(
-                messages=[{"role": "user", "content": "Кога е јунската сесија?"}],
+                messages=[
+                    ConversationTurn(role="user", content="Кога е јунската сесија?"),
+                ],
                 query_transform_model=Model.CLAUDE_HAIKU_4_5,
                 user_id=user_id,
             ),

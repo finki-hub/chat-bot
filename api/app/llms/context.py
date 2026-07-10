@@ -11,7 +11,10 @@ from app.data.questions import get_closest_questions
 from app.llms.embeddings import generate_embeddings
 from app.llms.models import Model
 from app.llms.prompts import CONTEXTUALIZE_SYSTEM_PROMPT
-from app.llms.provider_credentials import LlmProviderCredentials
+from app.llms.provider_credentials import (
+    LlmProviderCredentials,
+    has_provider_credential,
+)
 from app.llms.query_modes import QueryTransformMode
 from app.llms.query_transform import transform_query
 from app.llms.query_variants import (
@@ -284,14 +287,22 @@ async def get_retrieved_context_with_sources(
         if on_stage is not None:
             on_stage(stage)
 
+    transform_available = has_provider_credential(credentials, query_transform_model)
+    effective_transform_mode = (
+        query_transform_mode if transform_available else QueryTransformMode.RAW
+    )
     _stage("contextualize")
 
     with timed("retrieval.contextualize"):
-        search_query = await _contextualize_query(
-            query,
-            query_transform_model,
-            history_text,
-            credentials,
+        search_query = (
+            await _contextualize_query(
+                query,
+                query_transform_model,
+                history_text,
+                credentials,
+            )
+            if transform_available
+            else query
         )
 
     original_embedding_task = asyncio.create_task(
@@ -308,7 +319,7 @@ async def get_retrieved_context_with_sources(
             variant_bundle = await build_query_variants(
                 search_query,
                 query_transform_model,
-                query_transform_mode,
+                effective_transform_mode,
                 credentials,
             )
     except asyncio.CancelledError:
@@ -322,11 +333,11 @@ async def get_retrieved_context_with_sources(
 
     logger.info(
         "Query transform mode %s produced variants: %s",
-        query_transform_mode.value,
+        effective_transform_mode.value,
         [(variant.kind, len(variant.text)) for variant in variant_bundle.variants],
     )
 
-    budget = retrieval_budget(query_transform_mode, initial_k)
+    budget = retrieval_budget(effective_transform_mode, initial_k)
 
     _stage("retrieve")
 

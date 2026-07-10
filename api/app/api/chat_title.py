@@ -6,6 +6,7 @@ from app.api.provider_credentials import (
 )
 from app.data.chat_credentials import ChatCredentialDatabase
 from app.data.db import get_db
+from app.llms.provider_credentials import has_provider_credential
 from app.llms.query_transform import transform_query
 from app.schemas.chat_title import ChatTitleResponse, ChatTitleSchema
 from app.utils.auth import verify_api_key
@@ -65,6 +66,10 @@ async def generate_chat_title(
             providers=credential_providers_for_models(payload.query_transform_model),
             settings=settings,
         )
+    if not has_provider_credential(credentials, payload.query_transform_model):
+        return ChatTitleResponse(
+            title=_normalize_title("", payload.first_user_text),
+        )
     prompt = f"Conversation transcript:\n{payload.transcript}"
     raw_title = await transform_query(
         prompt,
@@ -75,6 +80,8 @@ async def generate_chat_title(
         max_tokens=32,
         credentials=credentials,
     )
+    if raw_title == prompt:
+        raw_title = ""
     return ChatTitleResponse(
         title=_normalize_title(raw_title, payload.first_user_text),
     )
