@@ -58,6 +58,7 @@ _CREDENTIAL_PROVIDER_LABELS = {
     "openai": "OpenAI",
     "google": "Google",
     "anthropic": "Anthropic",
+    "ollama": "Ollama",
 }
 
 

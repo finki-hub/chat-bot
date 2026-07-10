@@ -42,10 +42,16 @@ def _client() -> TestClient:
             "inference",
         ),
         (
-            Model.MISTRAL,
+            Model.QWEN2_1_5_B_INSTRUCT,
             Model.TEXT_EMBEDDING_3_LARGE,
             "openai",
             "embeddings",
+        ),
+        (
+            Model.MISTRAL,
+            Model.BGE_M3_LOCAL,
+            "ollama",
+            "inference",
         ),
     ],
 )
@@ -87,7 +93,7 @@ def test_chat_requires_user_credential_before_mandatory_hosted_stage(
     assert not retrieval_started
 
 
-def test_chat_allows_local_inference_and_bge_without_provider_credentials(
+def test_chat_allows_gpu_inference_and_local_bge_without_provider_credentials(
     monkeypatch,
 ) -> None:
     retrieval_started = False
@@ -119,7 +125,7 @@ def test_chat_allows_local_inference_and_bge_without_provider_credentials(
         headers={"x-api-key": "test-api-key"},
         json={
             "messages": [{"role": "user", "content": "Прашање?"}],
-            "inference_model": Model.MISTRAL.value,
+            "inference_model": Model.QWEN2_1_5_B_INSTRUCT.value,
             "embeddings_model": Model.BGE_M3_LOCAL.value,
         },
     )

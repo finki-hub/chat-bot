@@ -69,6 +69,7 @@ async def stream_response_with_agent(
                 max_tokens=max_tokens,
                 reasoning=reasoning,
                 observation=observation,
+                credential=None if credentials is None else credentials.ollama,
             )
 
         case (
