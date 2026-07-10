@@ -32,6 +32,13 @@ const openaiCredential = (baseUrl: string): ChatCredentialPublic => ({
   [USER_ID_FIELD]: USER_ID,
 });
 
+const ollamaCredential = (baseUrl: string): ChatCredentialPublic => ({
+  [BASE_URL_FIELD]: baseUrl,
+  [HAS_API_KEY_FIELD]: true,
+  provider: 'ollama',
+  [USER_ID_FIELD]: USER_ID,
+});
+
 const { deleteCredentialMock, loadCredentialsMock, saveCredentialMock } =
   vi.hoisted(() => ({
     deleteCredentialMock:
@@ -106,6 +113,39 @@ describe('CredentialSettingsDialog', () => {
 
     await waitFor(() => {
       expect(baseUrlInput).toHaveValue('');
+    });
+  });
+
+  it('saves an Ollama key and custom endpoint', async () => {
+    saveCredentialMock.mockResolvedValueOnce(
+      ollamaCredential('https://ollama.example'),
+    );
+    render(
+      <CredentialSettingsDialog
+        onOpenChange={vi.fn<(open: boolean) => void>()}
+        open
+      />,
+    );
+
+    const keyInput = await screen.findByLabelText('Ollama API key');
+    const baseUrlInput = screen.getByLabelText('Ollama base URL');
+    const form = keyInput.closest('form');
+    if (form === null) {
+      throw new Error('Ollama credential form not found');
+    }
+
+    fireEvent.change(keyInput, { target: { value: 'ollama-user-key' } });
+    fireEvent.change(baseUrlInput, {
+      target: { value: 'https://ollama.example' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
+
+    await waitFor(() => {
+      expect(saveCredentialMock).toHaveBeenCalledWith({
+        apiKey: 'ollama-user-key',
+        baseUrl: 'https://ollama.example',
+        provider: 'ollama',
+      });
     });
   });
 });

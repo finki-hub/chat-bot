@@ -74,7 +74,7 @@ export const messages = {
     'Услугата е привремено недостапна. Чатот не е достапен во моментов.',
   'settings.baseUrl': 'Base URL (опционално)',
   'settings.credentialsDescription':
-    'Зачувај лични OpenAI, Google/Gemini или Anthropic клучеви. Тие се користат само за твоите разговори и за пребарувачките LLM чекори.',
+    'Зачувај лични OpenAI, Google/Gemini, Anthropic или Ollama клучеви. Тие се користат само за твоите разговори и за пребарувачките LLM чекори.',
   'settings.credentialsError': 'Клучевите не можеа да се вчитаат.',
   'settings.credentialsTitle': 'Лични API клучеви',
   'settings.deleteCredential': 'Избриши клуч',
@@ -82,6 +82,7 @@ export const messages = {
   'settings.noCredential': 'Не е зачуван клуч',
   'settings.provider.anthropic': 'Anthropic',
   'settings.provider.google': 'Google / Gemini',
+  'settings.provider.ollama': 'Ollama',
   'settings.provider.openai': 'OpenAI',
   'settings.savedCredential': 'Има зачуван клуч',
   'sidebar.clearSearch': 'Исчисти пребарување',
