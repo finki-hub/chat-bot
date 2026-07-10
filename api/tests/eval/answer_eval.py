@@ -1,12 +1,9 @@
-import argparse
 import json
 import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
-
-from . import eval_jsonl_name
 
 JsonValue = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 
@@ -19,6 +16,7 @@ _REFUSAL_MARKERS: Final = (
     "не можам да одговорам",
 )
 _GOLDEN_CASES: Final = Path(__file__).with_name("answer_golden.jsonl")
+_RESULTS_PATH: Final = Path(__file__).with_name("answer_results.jsonl")
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,11 +227,8 @@ def evaluate_results(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Score answer-behavior eval results.")
-    parser.add_argument("--results", type=eval_jsonl_name, required=True)
-    args = parser.parse_args()
     try:
-        scores = evaluate_results(load_answer_cases(_GOLDEN_CASES), args.results)
+        scores = evaluate_results(load_answer_cases(_GOLDEN_CASES), _RESULTS_PATH)
     except AnswerEvalError as exc:
         print(exc, file=sys.stderr)
         return 2

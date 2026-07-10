@@ -137,8 +137,7 @@ CI job.
 Save one result per line, then run:
 
 ```bash
-python -m tests.eval.answer_eval \
-    --results answer_results.jsonl
+python -m tests.eval.answer_eval
 ```
 
 The command prints every case as `PASS` or `FAIL` with named contract failures and
@@ -147,9 +146,7 @@ returns a non-zero exit code when any case fails.
 Compare a candidate run with a known baseline:
 
 ```bash
-python -m tests.eval.answer_compare \
-    --baseline answer_baseline.jsonl \
-    --current answer_results.jsonl
+python -m tests.eval.answer_compare
 ```
 
 The comparison reports fixed, newly regressed, and unchanged failing cases. It exits

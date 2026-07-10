@@ -1,9 +1,7 @@
-import argparse
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import eval_jsonl_name
 from .answer_eval import (
     AnswerCase,
     AnswerEvalError,
@@ -11,6 +9,10 @@ from .answer_eval import (
     evaluate_results,
     load_answer_cases,
 )
+
+_GOLDEN_CASES = Path(__file__).with_name("answer_golden.jsonl")
+_BASELINE_PATH = Path(__file__).with_name("answer_baseline.jsonl")
+_CURRENT_PATH = Path(__file__).with_name("answer_results.jsonl")
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,15 +59,11 @@ def compare_results(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Compare answer-eval result sets.")
-    parser.add_argument("--baseline", type=eval_jsonl_name, required=True)
-    parser.add_argument("--current", type=eval_jsonl_name, required=True)
-    args = parser.parse_args()
     try:
         comparison = compare_results(
-            load_answer_cases(Path(__file__).with_name("answer_golden.jsonl")),
-            args.baseline,
-            args.current,
+            load_answer_cases(_GOLDEN_CASES),
+            _BASELINE_PATH,
+            _CURRENT_PATH,
         )
     except AnswerEvalError as exc:
         print(exc, file=sys.stderr)
