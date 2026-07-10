@@ -55,6 +55,7 @@ vi.mock('@/components/shell/credential-settings-client', () => ({
 describe('CredentialSettingsDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    deleteCredentialMock.mockResolvedValue(true);
     loadCredentialsMock.mockResolvedValue([
       openaiCredential('https://openai-proxy.example/v1'),
     ]);
@@ -86,6 +87,25 @@ describe('CredentialSettingsDialog', () => {
         baseUrl: 'https://openai-proxy.example/v1',
         provider: 'openai',
       });
+    });
+  });
+
+  it('clears a saved custom base URL when the credential is deleted', async () => {
+    render(
+      <CredentialSettingsDialog
+        onOpenChange={vi.fn<(open: boolean) => void>()}
+        open
+      />,
+    );
+
+    const baseUrlInput = await screen.findByLabelText('OpenAI base URL');
+
+    expect(baseUrlInput).toHaveValue('https://openai-proxy.example/v1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Избриши' }));
+
+    await waitFor(() => {
+      expect(baseUrlInput).toHaveValue('');
     });
   });
 });

@@ -159,9 +159,7 @@ export const CredentialSettingsDialog = ({
     }
   };
 
-  const deleteProvider = async (
-    provider: ChatCredentialProvider,
-  ): Promise<void> => {
+  const deleteProvider = async (provider: ChatCredentialProvider) => {
     setBusyProvider(provider);
     setError(null);
     try {
@@ -173,6 +171,10 @@ export const CredentialSettingsDialog = ({
       setCredentials((current) =>
         current.filter((credential) => credential.provider !== provider),
       );
+      setForms((current) => ({
+        ...current,
+        [provider]: EMPTY_FORMS[provider],
+      }));
     } catch (error_) {
       if (!(error_ instanceof TypeError)) {
         throw error_;
