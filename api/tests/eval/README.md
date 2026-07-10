@@ -117,3 +117,42 @@ done
 * Regenerate from the corpus when documents change; anchors are stable keys, so existing
   examples keep working unless the underlying document/section is removed.
 * Keep `abstain` examples current with new out-of-scope / injection patterns.
+
+## Answer-behavior contracts
+
+`answer_golden.jsonl` complements retrieval metrics with output contracts for
+grounding, missing or conflicting evidence, scope refusal, prompt injection,
+tool output, language, links, titles, follow-ups, and hosted/Qwen parity.
+Expectations deliberately avoid exact answer snapshots. They define required
+source names, forbidden text, the maximum URL count, a minimum Cyrillic-letter
+ratio, and whether the answer must contain a refusal or evidence-limitation marker.
+
+Use `load_answer_cases()` and `score_answer()` from `tests.eval.answer_eval` to
+score live-model output shaped as `{"id": "case-id", "answer": "..."}`. Release
+review requires zero failures for injection, prompt disclosure, scope refusal,
+link count, and provider parity. Groundedness and completeness remain rubric-based
+release review; nondeterministic external inference is not a mandatory pull-request
+CI job.
+
+Save one result per line, then run:
+
+```bash
+python -m tests.eval.answer_eval \
+    --cases tests/eval/answer_golden.jsonl \
+    --results tests/eval/answer_results.jsonl
+```
+
+The command prints every case as `PASS` or `FAIL` with named contract failures and
+returns a non-zero exit code when any case fails.
+
+Compare a candidate run with a known baseline:
+
+```bash
+python -m tests.eval.answer_compare \
+    --cases tests/eval/answer_golden.jsonl \
+    --baseline tests/eval/answer_baseline.jsonl \
+    --current tests/eval/answer_results.jsonl
+```
+
+The comparison reports fixed, newly regressed, and unchanged failing cases. It exits
+non-zero when the candidate introduces any new regression.
