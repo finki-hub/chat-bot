@@ -28,7 +28,6 @@ services:
       MCP_HTTP_URLS: ${MCP_HTTP_URLS:-}
       MCP_SERVERS: ${MCP_SERVERS:-[]}
       MCP_SSE_URLS: ${MCP_SSE_URLS:-}
-      OLLAMA_URL: ${OLLAMA_URL}
       POSTHOG_HOST: ${POSTHOG_HOST:-https://eu.i.posthog.com}
       POSTHOG_KEY: ${POSTHOG_KEY:-}
       RERANKER_MIN_SCORE: ${RERANKER_MIN_SCORE:-0.1}

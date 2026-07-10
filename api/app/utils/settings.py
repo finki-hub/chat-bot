@@ -95,7 +95,6 @@ class Settings(BaseSettings):
     DATABASE_POOL_MIN_SIZE: int = Field(default=1, ge=0)
     DATABASE_POOL_MAX_SIZE: int = Field(default=10, ge=1)
 
-    OLLAMA_URL: str = "http://ollama:11434"
     BYOK_ALLOWED_BASE_URLS: str = ""
 
     POSTHOG_KEY: str = ""
