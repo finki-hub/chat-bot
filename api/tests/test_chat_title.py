@@ -16,7 +16,7 @@ from tests.chat_persistence_fake import FakeChatDatabase
 
 
 def test_chat_title_uses_transform_prompt_and_normalizes_quotes(monkeypatch):
-    seen: dict[str, str | int | float | Model] = {}
+    seen: dict[str, object] = {}
 
     async def fake_transform_query(
         query: str,
@@ -30,6 +30,7 @@ def test_chat_title_uses_transform_prompt_and_normalizes_quotes(monkeypatch):
     ) -> str:
         seen.update(
             {
+                "credentials": credentials,
                 "max_tokens": max_tokens,
                 "model": model,
                 "query": query,
@@ -41,19 +42,42 @@ def test_chat_title_uses_transform_prompt_and_normalizes_quotes(monkeypatch):
         return '"Испитна сесија"\n'
 
     monkeypatch.setattr(chat_title, "transform_query", fake_transform_query)
+    db = FakeChatDatabase()
+    user_id = UUID("00000000-0000-4000-8000-000000000001")
+    settings = Settings(
+        API_KEY="test-api-key",
+        CREDENTIAL_ENCRYPTION_KEY="runtime-credential-key",
+        MCP_API_KEY="test-mcp-key",
+    )
     payload = ChatTitleSchema(
-        user_id=None,
+        user_id=user_id,
         messages=[ConversationTurn(role="user", content="Кога е јунската сесија?")],
         query_transform_model=Model.MISTRAL,
     )
 
-    response = anyio.run(chat_title.generate_chat_title, payload)
+    async def run_title():
+        await upsert_chat_credential(
+            db,
+            user_id=user_id,
+            credential=ChatCredentialUpsert(
+                api_key="ollama-user-key",
+                provider="ollama",
+            ),
+            settings=settings,
+        )
+        return await chat_title.generate_chat_title(payload, db, settings)
+
+    response = anyio.run(run_title)
 
     assert response.title == "Испитна сесија"
     assert seen["model"] == Model.MISTRAL
     assert seen["max_tokens"] == 32
     assert "Кога е јунската сесија?" in str(seen["query"])
     assert "conversation title" in str(seen["system_prompt"])
+    credentials = seen["credentials"]
+    assert isinstance(credentials, LlmProviderCredentials)
+    assert credentials.ollama is not None
+    assert credentials.ollama.api_key == "ollama-user-key"
 
 
 def test_chat_title_falls_back_to_first_user_message_when_model_returns_empty(
@@ -72,6 +96,7 @@ def test_chat_title_falls_back_to_first_user_message_when_model_returns_empty(
         return "   "
 
     monkeypatch.setattr(chat_title, "transform_query", fake_transform_query)
+    monkeypatch.setattr(chat_title, "has_provider_credential", lambda *args: True)
     payload = ChatTitleSchema(
         user_id=None,
         messages=[

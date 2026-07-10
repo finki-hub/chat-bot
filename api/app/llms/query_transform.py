@@ -75,6 +75,7 @@ async def transform_query(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
+                credential=None if credentials is None else credentials.ollama,
             )
 
         case _:
