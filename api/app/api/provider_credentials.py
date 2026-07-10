@@ -13,7 +13,7 @@ from app.schemas.chat_credentials import ChatCredentialSecret
 from app.utils.settings import Settings
 
 CredentialStage = Literal["inference", "embeddings"]
-_PROVIDERS: tuple[ProviderName, ...] = ("openai", "google", "anthropic")
+_PROVIDERS: tuple[ProviderName, ...] = ("openai", "google", "anthropic", "ollama")
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +36,7 @@ async def resolve_provider_credentials(
         openai=await _get_secret(db, user_id, "openai", providers, settings),
         google=await _get_secret(db, user_id, "google", providers, settings),
         anthropic=await _get_secret(db, user_id, "anthropic", providers, settings),
+        ollama=await _get_secret(db, user_id, "ollama", providers, settings),
     )
 
 
@@ -58,10 +59,7 @@ async def _get_secret(
         return credential
     if settings.is_byok_base_url_allowed(credential.base_url):
         return credential
-    return ChatCredentialSecret(
-        provider=credential.provider,
-        api_key=credential.api_key,
-    )
+    return None
 
 
 def credential_providers_for_models(*models: Model) -> frozenset[ProviderName]:

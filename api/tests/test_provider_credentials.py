@@ -26,6 +26,12 @@ def test_credential_providers_for_models_includes_retrieval_time_models() -> Non
     assert providers == frozenset({"anthropic", "openai"})
 
 
+def test_credential_providers_for_models_includes_ollama_models() -> None:
+    providers = credential_providers_for_models(Model.MISTRAL, Model.BGE_M3)
+
+    assert providers == frozenset({"ollama"})
+
+
 def test_resolve_provider_credentials_skips_unrequested_corrupted_credentials() -> None:
     # Given: a user has one valid OpenAI credential and one corrupted Google credential.
     db = FakeChatDatabase()
@@ -67,7 +73,7 @@ def test_resolve_provider_credentials_skips_unrequested_corrupted_credentials() 
     anyio.run(run_resolution)
 
 
-def test_resolve_provider_credentials_drops_stored_disallowed_base_url() -> None:
+def test_resolve_provider_credentials_invalidates_stored_disallowed_base_url() -> None:
     # Given: a user has an OpenAI key with a stale base_url no longer in the allowlist.
     db = FakeChatDatabase()
     settings = Settings(
@@ -97,8 +103,6 @@ def test_resolve_provider_credentials_drops_stored_disallowed_base_url() -> None
         )
 
         assert credentials is not None
-        assert credentials.openai is not None
-        assert credentials.openai.api_key == "openai-user-key"
-        assert credentials.openai.base_url is None
+        assert credentials.openai is None
 
     anyio.run(run_resolution)
