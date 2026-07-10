@@ -16,7 +16,7 @@ type RouteContext = {
   readonly params: Promise<{ readonly provider: string }>;
 };
 
-const PROVIDERS = ['anthropic', 'google', 'openai'] as const;
+const PROVIDERS = ['anthropic', 'google', 'ollama', 'openai'] as const;
 const PROVIDER_SET: ReadonlySet<string> = new Set(PROVIDERS);
 
 const isProvider = (value: string): value is ChatCredentialProvider =>

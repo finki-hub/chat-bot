@@ -140,6 +140,33 @@ describe('/api/chat/credentials', () => {
     });
   });
 
+  it('upserts an Ollama key and endpoint for the authenticated user', async () => {
+    const credential: ChatCredentialPublic = {
+      base_url: 'https://ollama.com',
+      has_api_key: true,
+      provider: 'ollama',
+      user_id: USER_ID,
+    };
+    stateClientMock.upsertCredential.mockResolvedValueOnce(credential);
+    const { PUT } = await import('@/app/api/chat/credentials/route');
+
+    const res = await PUT(
+      jsonRequest({
+        api_key: 'ollama-user-key',
+        base_url: 'https://ollama.com',
+        provider: 'ollama',
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(stateClientMock.upsertCredential).toHaveBeenCalledWith({
+      apiKey: 'ollama-user-key',
+      baseUrl: 'https://ollama.com',
+      provider: 'ollama',
+      userId: USER_ID,
+    });
+  });
+
   it('deletes credentials for the authenticated chat user only', async () => {
     stateClientMock.deleteCredential.mockResolvedValueOnce(undefined);
     const { DELETE } =

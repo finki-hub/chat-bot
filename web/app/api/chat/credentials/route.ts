@@ -15,7 +15,7 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const PROVIDERS = ['anthropic', 'google', 'openai'] as const;
+const PROVIDERS = ['anthropic', 'google', 'ollama', 'openai'] as const;
 const PROVIDER_SET: ReadonlySet<unknown> = new Set(PROVIDERS);
 
 const isProvider = (value: unknown): value is ChatCredentialProvider =>
