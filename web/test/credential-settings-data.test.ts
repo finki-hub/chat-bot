@@ -28,4 +28,15 @@ describe('parseCredentials', () => {
     // Then: only records matching the public credential contract are kept.
     expect(parsed).toStrictEqual([credentials[0]]);
   });
+
+  it('keeps complete Ollama credential records', () => {
+    const credential = {
+      [BASE_URL_FIELD]: 'https://ollama.com',
+      [HAS_API_KEY_FIELD]: true,
+      provider: 'ollama',
+      [USER_ID_FIELD]: '00000000-0000-4000-8000-000000000001',
+    };
+
+    expect(parseCredentials([credential])).toStrictEqual([credential]);
+  });
 });

@@ -1,6 +1,10 @@
 import type { UIMessage } from 'ai';
 
-export type ChatCredentialProvider = 'anthropic' | 'google' | 'openai';
+export type ChatCredentialProvider =
+  | 'anthropic'
+  | 'google'
+  | 'ollama'
+  | 'openai';
 
 export type ChatCredentialPublic = {
   readonly base_url: null | string;

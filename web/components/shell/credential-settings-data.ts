@@ -18,11 +18,13 @@ export const PROVIDERS = [
   { labelKey: 'settings.provider.openai', provider: 'openai' },
   { labelKey: 'settings.provider.google', provider: 'google' },
   { labelKey: 'settings.provider.anthropic', provider: 'anthropic' },
+  { labelKey: 'settings.provider.ollama', provider: 'ollama' },
 ] as const satisfies readonly ProviderConfig[];
 
 export const EMPTY_FORMS = {
   anthropic: { apiKey: '', baseUrl: '' },
   google: { apiKey: '', baseUrl: '' },
+  ollama: { apiKey: '', baseUrl: '' },
   openai: { apiKey: '', baseUrl: '' },
 } satisfies Record<ChatCredentialProvider, ProviderForm>;
 
