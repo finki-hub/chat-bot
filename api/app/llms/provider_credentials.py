@@ -4,12 +4,13 @@ from typing import Literal, assert_never
 from app.llms.models import (
     ANTHROPIC_QUERY_TRANSFORM_MODELS,
     GOOGLE_QUERY_TRANSFORM_MODELS,
+    OLLAMA_QUERY_TRANSFORM_MODELS,
     OPENAI_QUERY_TRANSFORM_MODELS,
     Model,
 )
 from app.schemas.chat_credentials import ChatCredentialSecret
 
-ProviderName = Literal["openai", "google", "anthropic"]
+ProviderName = Literal["openai", "google", "anthropic", "ollama"]
 
 
 class ProviderCredentialRequiredError(RuntimeError):
@@ -34,6 +35,8 @@ def provider_for_model(model: Model) -> ProviderName | None:
         return "google"
     if model in ANTHROPIC_QUERY_TRANSFORM_MODELS:
         return "anthropic"
+    if model in OLLAMA_QUERY_TRANSFORM_MODELS or model == Model.BGE_M3:
+        return "ollama"
     return None
 
 
@@ -42,6 +45,7 @@ class LlmProviderCredentials:
     openai: ChatCredentialSecret | None = None
     google: ChatCredentialSecret | None = None
     anthropic: ChatCredentialSecret | None = None
+    ollama: ChatCredentialSecret | None = None
 
     def for_provider(self, provider: ProviderName) -> ChatCredentialSecret | None:
         match provider:
@@ -51,6 +55,8 @@ class LlmProviderCredentials:
                 return self.google
             case "anthropic":
                 return self.anthropic
+            case "ollama":
+                return self.ollama
             case unreachable:
                 assert_never(unreachable)
         raise AssertionError(f"Unhandled provider: {provider}")
