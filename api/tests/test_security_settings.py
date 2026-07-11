@@ -43,6 +43,7 @@ def test_warn_on_insecure_defaults_warns_for_whitespace_default_secrets(caplog):
 def test_warn_on_insecure_defaults_allows_custom_secrets(caplog):
     settings = Settings(
         API_KEY="custom-api-key",
+        CREDENTIAL_ENCRYPTION_KEY="custom-credential-key",
         MCP_API_KEY="custom-mcp-key",
     )
 
@@ -56,6 +57,10 @@ def test_production_compose_requires_auth_secrets():
 
     assert "API_KEY: ${API_KEY:?API_KEY is required}" in compose
     assert "CHAT_API_KEY: ${API_KEY:?API_KEY is required}" in compose
+    assert (
+        "CREDENTIAL_ENCRYPTION_KEY: "
+        "${CREDENTIAL_ENCRYPTION_KEY:?CREDENTIAL_ENCRYPTION_KEY is required}" in compose
+    )
     assert "MCP_SERVERS: ${MCP_SERVERS:-[]}" in compose
 
 
@@ -107,6 +112,7 @@ async def test_lifespan_uses_app_settings_database_config(monkeypatch):
     app = make_app(
         Settings(
             API_KEY="custom-api-key",
+            CREDENTIAL_ENCRYPTION_KEY="custom-credential-key",
             DATABASE_POOL_MAX_SIZE=12,
             DATABASE_POOL_MIN_SIZE=2,
             DATABASE_URL="postgresql://custom-user:custom-pass@custom-host/custom-db",

@@ -1,9 +1,14 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.data.chat_conversation_delete import delete_conversation, delete_conversations
+from app.data.chat_credentials import (
+    delete_chat_credential,
+    list_chat_credentials,
+    upsert_chat_credential,
+)
 from app.data.chat_persistence import (
     ChatMessageConflictError,
     ChatPersistenceDatabase,
@@ -24,6 +29,12 @@ from app.data.chat_state import (
 )
 from app.data.chat_users import upsert_chat_user
 from app.data.db import get_db
+from app.schemas.chat_credentials import (
+    OLLAMA_DEFAULT_BASE_URL,
+    ChatCredentialProvider,
+    ChatCredentialPublic,
+    ChatCredentialUpsert,
+)
 from app.schemas.chat_persistence import (
     ChatConversation,
     ChatConversationCreate,
@@ -45,6 +56,7 @@ from app.schemas.chat_state import (
 )
 from app.schemas.chat_user import ChatUser, ChatUserUpsert
 from app.utils.auth import verify_api_key
+from app.utils.settings import Settings
 
 db_dep = Depends(get_db)
 api_key_dep = Depends(verify_api_key)
@@ -62,6 +74,27 @@ def _not_found() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Conversation not found",
+    )
+
+
+def _normalize_default_base_url(payload: ChatCredentialUpsert) -> ChatCredentialUpsert:
+    if (
+        payload.provider == "ollama"
+        and payload.base_url is not None
+        and payload.base_url.rstrip("/") == OLLAMA_DEFAULT_BASE_URL
+    ):
+        return payload.model_copy(update={"base_url": None})
+    return payload
+
+
+def _ensure_allowed_base_url(payload: ChatCredentialUpsert, settings: Settings) -> None:
+    if payload.base_url is None:
+        return
+    if settings.is_byok_base_url_allowed(payload.base_url):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail="Custom credential base_url is not allowed",
     )
 
 
@@ -86,6 +119,59 @@ async def upsert_user_state(
     db: ChatPersistenceDatabase = db_dep,
 ) -> ChatUser:
     return await upsert_chat_user(db, payload)
+
+
+@router.get(
+    "/users/{user_id}/credentials",
+    status_code=status.HTTP_200_OK,
+    operation_id="listChatUserCredentials",
+)
+async def list_user_credentials_state(
+    user_id: UUID,
+    db: ChatPersistenceDatabase = db_dep,
+) -> list[ChatCredentialPublic]:
+    return await list_chat_credentials(db, user_id=user_id)
+
+
+@router.put(
+    "/users/{user_id}/credentials/{provider}",
+    status_code=status.HTTP_200_OK,
+    operation_id="upsertChatUserCredential",
+)
+async def upsert_user_credential_state(
+    user_id: UUID,
+    provider: ChatCredentialProvider,
+    payload: ChatCredentialUpsert,
+    request: Request,
+    db: ChatPersistenceDatabase = db_dep,
+) -> ChatCredentialPublic:
+    if payload.provider != provider:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Credential provider must match the route provider",
+        )
+    payload = _normalize_default_base_url(payload)
+    settings = request.app.state.settings
+    _ensure_allowed_base_url(payload, settings)
+    return await upsert_chat_credential(
+        db,
+        user_id=user_id,
+        credential=payload,
+        settings=settings,
+    )
+
+
+@router.delete(
+    "/users/{user_id}/credentials/{provider}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="deleteChatUserCredential",
+)
+async def delete_user_credential_state(
+    user_id: UUID,
+    provider: ChatCredentialProvider,
+    db: ChatPersistenceDatabase = db_dep,
+) -> None:
+    await delete_chat_credential(db, user_id=user_id, provider=provider)
 
 
 @router.post(

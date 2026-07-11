@@ -17,15 +17,11 @@ from app.llms.agents import (
 )
 from app.llms.models import ANTHROPIC_NO_SAMPLING_MODELS, Model
 from app.llms.prompts import build_agent_messages
+from app.llms.provider_credentials import require_provider_credential
 from app.llms.tools import get_agent_tools
-from app.utils.settings import Settings
+from app.schemas.chat_credentials import ChatCredentialSecret
 
 logger = logging.getLogger(__name__)
-
-settings = Settings()
-
-# Model, temperature, top_p, max_tokens, reasoning -> LLM
-anthropic_llm_clients: dict[tuple[str, float, float, int, bool], ChatAnthropic] = {}
 
 # Models that reject `budget_tokens`; they use summarized adaptive thinking instead.
 _ADAPTIVE_THINKING_MODELS: frozenset[Model] = ANTHROPIC_NO_SAMPLING_MODELS
@@ -59,9 +55,10 @@ def get_anthropic_llm(
     max_tokens: int,
     *,
     reasoning: bool = False,
+    credential: ChatCredentialSecret | None = None,
 ) -> ChatAnthropic:
     """
-    Return a singleton ChatAnthropic instance for the specified model and parameters.
+    Return a user-scoped ChatAnthropic instance for the specified model and parameters.
 
     Anthropic's API is stricter about sampling parameters than the other providers:
     Some models reject non-default `temperature`, `top_p`, and `top_k` outright (HTTP 400),
@@ -74,29 +71,23 @@ def get_anthropic_llm(
     Claude Sonnet 5 enables adaptive thinking by default, so non-reasoning requests
     explicitly disable it to preserve the UI toggle's semantics.
     """
-    key = (model.value, temperature, top_p, max_tokens, reasoning)
-
-    if key not in anthropic_llm_clients:
-        thinking, effective_max = (None, max_tokens)
-        if reasoning:
-            thinking, effective_max = _thinking_config(model, max_tokens)
-        elif model == Model.CLAUDE_SONNET_5:
-            thinking = {"type": "disabled"}
-        temperature_arg = (
-            None
-            if (reasoning or model in ANTHROPIC_NO_SAMPLING_MODELS)
-            else temperature
-        )
-        anthropic_llm_clients[key] = ChatAnthropic(
-            model=model.value,  # type: ignore[call-arg]
-            api_key=SecretStr(settings.ANTHROPIC_API_KEY),
-            base_url=settings.ANTHROPIC_BASE_URL or None,
-            temperature=temperature_arg,
-            max_tokens=effective_max,  # type: ignore[call-arg]
-            thinking=thinking,  # type: ignore[call-arg]
-        )
-
-    return anthropic_llm_clients[key]
+    thinking, effective_max = (None, max_tokens)
+    if reasoning:
+        thinking, effective_max = _thinking_config(model, max_tokens)
+    elif model == Model.CLAUDE_SONNET_5:
+        thinking = {"type": "disabled"}
+    temperature_arg = (
+        None if (reasoning or model in ANTHROPIC_NO_SAMPLING_MODELS) else temperature
+    )
+    credential = require_provider_credential("anthropic", credential)
+    return ChatAnthropic(
+        model=model.value,  # type: ignore[call-arg]
+        api_key=SecretStr(credential.api_key),
+        base_url=credential.base_url or None,
+        temperature=temperature_arg,
+        max_tokens=effective_max,  # type: ignore[call-arg]
+        thinking=thinking,  # type: ignore[call-arg]
+    )
 
 
 def stream_anthropic_response(
@@ -109,6 +100,7 @@ def stream_anthropic_response(
     top_p: float,
     max_tokens: int,
     reasoning: bool = False,
+    credential: ChatCredentialSecret | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from the specified Anthropic model using the provided prompts.
@@ -121,7 +113,14 @@ def stream_anthropic_response(
         model.value,
     )
 
-    llm = get_anthropic_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
+    llm = get_anthropic_llm(
+        model,
+        temperature,
+        top_p,
+        max_tokens,
+        reasoning=reasoning,
+        credential=credential,
+    )
     prompt_messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
     def sync_token_gen() -> Generator[str]:
@@ -139,6 +138,7 @@ async def transform_query_with_anthropic(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    credential: ChatCredentialSecret | None = None,
 ) -> str:
     """
     Transform a query using the specified Anthropic model and system prompt.
@@ -152,7 +152,13 @@ async def transform_query_with_anthropic(
     )
 
     try:
-        llm = get_anthropic_llm(model, temperature, top_p, max_tokens)
+        llm = get_anthropic_llm(
+            model,
+            temperature,
+            top_p,
+            max_tokens,
+            credential=credential,
+        )
 
         messages = [
             SystemMessage(content=system_prompt),
@@ -178,6 +184,7 @@ async def stream_anthropic_agent_response(
     max_tokens: int,
     reasoning: bool = False,
     observation: StreamObservation | None = None,
+    credential: ChatCredentialSecret | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from an Anthropic agent with MCP tools.
@@ -196,6 +203,7 @@ async def stream_anthropic_agent_response(
             top_p,
             max_tokens,
             reasoning=reasoning,
+            credential=credential,
         )
 
         tools = await get_agent_tools()
@@ -233,4 +241,5 @@ async def stream_anthropic_agent_response(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
+            credential=credential,
         )

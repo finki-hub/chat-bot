@@ -77,6 +77,7 @@ def test_mcp_server_settings_rejects_blank_identity():
 def test_insecure_secret_names_include_default_structured_mcp_key():
     settings = Settings(
         API_KEY="custom-api-key",
+        CREDENTIAL_ENCRYPTION_KEY="custom-credential-key",
         MCP_SERVERS=[
             McpServerSettings(
                 name="local",

@@ -25,6 +25,7 @@ def test_api_exposes_liveness_and_model_catalog_over_http(monkeypatch):
     app = make_app(
         Settings(
             API_KEY="test-api-key",
+            CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
             MCP_API_KEY="test-mcp-key",
         ),
     )
@@ -45,11 +46,12 @@ def test_api_exposes_liveness_and_model_catalog_over_http(monkeypatch):
     assert "claude-sonnet-5" in models_without_key.json()
 
 
-def test_chat_stream_accepts_discord_without_api_key(monkeypatch):
+def test_chat_stream_requires_api_key(monkeypatch):
     monkeypatch.setattr("app.main.Database", HealthyDatabase)
     app = make_app(
         Settings(
             API_KEY="test-api-key",
+            CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
             MCP_API_KEY="test-mcp-key",
         ),
     )
@@ -62,7 +64,7 @@ def test_chat_stream_accepts_discord_without_api_key(monkeypatch):
             },
         )
 
-    assert response.status_code == 200
+    assert response.status_code == 401
 
 
 def test_validation_errors_do_not_echo_raw_invalid_payload(monkeypatch):
@@ -70,6 +72,7 @@ def test_validation_errors_do_not_echo_raw_invalid_payload(monkeypatch):
     app = make_app(
         Settings(
             API_KEY="test-api-key",
+            CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
             MCP_API_KEY="test-mcp-key",
         ),
     )
@@ -77,6 +80,7 @@ def test_validation_errors_do_not_echo_raw_invalid_payload(monkeypatch):
     with TestClient(app) as client:
         response = client.post(
             "/chat/title",
+            headers={"x-api-key": "test-api-key"},
             json={
                 "messages": [
                     {

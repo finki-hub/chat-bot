@@ -12,6 +12,8 @@ const { getAuthenticatedChatUserIdMock } = vi.hoisted(() => ({
     .mockResolvedValue('api-user-1'),
 }));
 
+const API_USER_ID = 'api-user-1';
+
 vi.mock('@/lib/env', () => ({
   API_BASE_URL: 'https://api:8880',
   CHAT_API_KEY: 'test-key',
@@ -53,7 +55,7 @@ const postTitle = async (request: Request): Promise<Response> => {
 describe('POST /api/chat/title', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    getAuthenticatedChatUserIdMock.mockResolvedValue('api-user-1');
+    getAuthenticatedChatUserIdMock.mockResolvedValue(API_USER_ID);
   });
 
   afterEach(() => {
@@ -65,6 +67,8 @@ describe('POST /api/chat/title', () => {
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       query_transform_model: 'claude-sonnet-4-6',
+      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+      user_id: API_USER_ID,
     };
     const upstream: ChatTitleResponse = { title: 'Испитен рок' };
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson(upstream));
@@ -87,6 +91,8 @@ describe('POST /api/chat/title', () => {
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       query_transform_model: 'claude-sonnet-4-6',
+      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+      user_id: API_USER_ID,
     });
     expect(res.headers.get('x-api-key')).toBeNull();
     await expect(res.json()).resolves.toStrictEqual(upstream);
@@ -111,6 +117,8 @@ describe('POST /api/chat/title', () => {
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       query_transform_model: 'claude-sonnet-4-6',
+      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+      user_id: API_USER_ID,
     });
   });
 

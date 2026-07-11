@@ -10,6 +10,11 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import StreamingResponse
 
+from app.api.provider_credentials import (
+    credential_providers_for_models,
+    missing_mandatory_credential,
+    resolve_provider_credentials,
+)
 from app.data.connection import Database
 from app.data.db import get_db
 from app.llms.agents import (
@@ -26,6 +31,7 @@ from app.llms.models import CHAT_MODELS
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
+from app.utils.auth import verify_api_key
 from app.utils.posthog_client import capture, safe_distinct_id, safe_session_id
 from app.utils.settings import Settings
 from app.utils.timing import (
@@ -48,6 +54,12 @@ _HISTORY_TURN_MAX_CHARS = 600
 _PRE_STREAM_ERROR_MSG = (
     "Се случи грешка при подготовка на одговорот. Обидете се повторно."
 )
+_CREDENTIAL_PROVIDER_LABELS = {
+    "openai": "OpenAI",
+    "google": "Google",
+    "anthropic": "Anthropic",
+    "ollama": "Ollama",
+}
 
 
 def _clip(text: str) -> str:
@@ -433,11 +445,11 @@ async def _instrument_stream(
 
 
 db_dep = Depends(get_db)
+api_key_dep = Depends(verify_api_key)
 
 router = APIRouter(
     prefix="/chat",
     tags=["Chat"],
-    dependencies=[db_dep],
 )
 
 
@@ -454,6 +466,30 @@ async def _chat_response_stream(
     )
 
     history_text = _history_for_retrieval(payload)
+    credentials = await resolve_provider_credentials(
+        db,
+        user_id=payload.user_id,
+        providers=credential_providers_for_models(
+            payload.embeddings_model,
+            payload.inference_model,
+            payload.query_transform_model,
+        ),
+        settings=request.app.state.settings,
+    )
+    missing_credential = missing_mandatory_credential(
+        credentials,
+        inference_model=payload.inference_model,
+        embeddings_model=payload.embeddings_model,
+    )
+    if missing_credential is not None:
+        provider_label = _CREDENTIAL_PROVIDER_LABELS[missing_credential.provider]
+        yield error_event(
+            "credential_required",
+            f"Потребен е ваш {provider_label} API клуч. Додајте го во поставките за провајдери.",
+            provider=missing_credential.provider,
+            stage=missing_credential.stage,
+        )
+        return
 
     timings, token = start_request_timings()
     try:
@@ -503,6 +539,7 @@ async def _chat_response_stream(
                     query_transform_mode=payload.query_transform_mode,
                     history_text=history_text,
                     on_stage=on_stage,
+                    credentials=credentials,
                 )
             finally:
                 stage_queue.put_nowait(None)
@@ -559,7 +596,13 @@ async def _chat_response_stream(
             context = f"Денешен датум: {today}.\n\n{context}"
 
             with timed("agent.setup"):
-                response = await handle_chat(payload, context, observation, db)
+                response = await handle_chat(
+                    payload,
+                    context,
+                    observation,
+                    db,
+                    credentials,
+                )
         except Exception:
             logger.exception("Chat context build failed before streaming")
             links_task.cancel()
@@ -612,6 +655,7 @@ async def _chat_response_stream(
         },
     },
     operation_id="chatWithModel",
+    dependencies=[api_key_dep],
 )
 async def chat(
     payload: ChatSchema,
