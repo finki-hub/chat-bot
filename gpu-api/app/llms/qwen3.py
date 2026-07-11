@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator, Callable, Iterator
 from dataclasses import dataclass, field
-from threading import Lock, Thread
-from typing import Protocol, runtime_checkable
+from threading import Event, Lock, Thread
+from typing import Protocol, cast, runtime_checkable
 
 import anyio
 import torch
@@ -9,6 +9,8 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     PreTrainedTokenizerBase,
+    StoppingCriteria,
+    StoppingCriteriaList,
     TextIteratorStreamer,
 )
 
@@ -28,6 +30,28 @@ class _RuntimeCache:
 
 
 _cache = _RuntimeCache()
+_generation_limiter = anyio.Semaphore(1)
+
+
+class _CancellationStoppingCriteria(StoppingCriteria):
+    def __init__(self, cancelled: Event) -> None:
+        self.cancelled = cancelled
+
+    def __call__(
+        self,
+        input_ids: torch.LongTensor,
+        _scores: torch.FloatTensor,
+        **_kwargs: object,
+    ) -> torch.BoolTensor:
+        return cast(
+            torch.BoolTensor,
+            torch.full(
+                (input_ids.shape[0],),
+                self.cancelled.is_set(),
+                dtype=torch.bool,
+                device=input_ids.device,
+            ),
+        )
 
 
 def _get_runtime() -> tuple[_GenerativeModel, PreTrainedTokenizerBase]:
@@ -60,43 +84,58 @@ async def stream_qwen3_response(
     top_p: float,
     max_tokens: int,
 ) -> AsyncGenerator[str]:
-    model, tokenizer = await anyio.to_thread.run_sync(_get_runtime)
-    prompt = tokenizer.apply_chat_template(
-        [
-            {"content": system_prompt, "role": "system"},
-            {"content": user_prompt, "role": "user"},
-        ],
-        add_generation_prompt=True,
-        enable_thinking=False,
-        tokenize=False,
-    )
-    inputs = tokenizer([prompt], return_tensors="pt").to(model.device)
-    streamer = TextIteratorStreamer(
-        tokenizer,
-        skip_prompt=True,
-        skip_special_tokens=True,
-    )
-    errors: list[Exception] = []
+    async with _generation_limiter:
+        model, tokenizer = await anyio.to_thread.run_sync(_get_runtime)
+        prompt = tokenizer.apply_chat_template(
+            [
+                {"content": system_prompt, "role": "system"},
+                {"content": user_prompt, "role": "user"},
+            ],
+            add_generation_prompt=True,
+            enable_thinking=False,
+            tokenize=False,
+        )
+        inputs = tokenizer([prompt], return_tensors="pt").to(model.device)
+        streamer = TextIteratorStreamer(
+            tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=True,
+        )
+        cancelled = Event()
+        errors: list[Exception] = []
 
-    def generate() -> None:
+        def generate() -> None:
+            try:
+                model.generate(
+                    **inputs,
+                    do_sample=True,
+                    max_new_tokens=max_tokens,
+                    stopping_criteria=StoppingCriteriaList(
+                        [_CancellationStoppingCriteria(cancelled)],
+                    ),
+                    streamer=streamer,
+                    temperature=temperature,
+                    top_k=20,
+                    top_p=top_p,
+                )
+            except Exception as error:
+                errors.append(error)
+                streamer.on_finalized_text("", stream_end=True)
+
+        worker = Thread(target=generate, daemon=True)
+        worker.start()
         try:
-            model.generate(
-                **inputs,
-                do_sample=True,
-                max_new_tokens=max_tokens,
-                streamer=streamer,
-                temperature=temperature,
-                top_k=20,
-                top_p=top_p,
-            )
-        except Exception as error:
-            errors.append(error)
-            streamer.on_finalized_text("", stream_end=True)
-
-    worker = Thread(target=generate, daemon=True)
-    worker.start()
-    while (token := await anyio.to_thread.run_sync(_next_token, streamer)) is not None:
-        yield token
-    await anyio.to_thread.run_sync(worker.join)
-    if errors:
-        raise errors[0]
+            while (
+                token := await anyio.to_thread.run_sync(
+                    _next_token,
+                    streamer,
+                    abandon_on_cancel=True,
+                )
+            ) is not None:
+                yield token
+        finally:
+            cancelled.set()
+            with anyio.CancelScope(shield=True):
+                await anyio.to_thread.run_sync(worker.join)
+        if errors:
+            raise errors[0]

@@ -1,11 +1,15 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from threading import Event
+from typing import cast
 
+import torch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.llms import embeddings as embeddings_module
 from app.llms.models import Model
+from app.llms.qwen3 import _CancellationStoppingCriteria
 from app.main import make_app
 from app.utils.settings import Settings
 
@@ -110,6 +114,19 @@ def test_stream_endpoint_uses_qwen3_8b(monkeypatch):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
     assert "data: modern response" in response.text
+
+
+def test_qwen_generation_stops_after_stream_cancellation():
+    cancelled = Event()
+    criterion = _CancellationStoppingCriteria(cancelled)
+    input_ids = cast(torch.LongTensor, torch.ones((1, 2), dtype=torch.long))
+    scores = cast(torch.FloatTensor, torch.ones((1, 2), dtype=torch.float))
+
+    assert not criterion(input_ids, scores).item()
+
+    cancelled.set()
+
+    assert criterion(input_ids, scores).item()
 
 
 def test_model_enum_exposes_bge_and_qwen3_only():
