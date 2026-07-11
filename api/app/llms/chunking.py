@@ -1,11 +1,3 @@
-"""
-Member-aware Markdown chunking for source-of-truth documents.
-
-Sizes are in characters, calibrated for Macedonian Cyrillic and digit-dense text. The
-1650-character hard cap stays within the embedding and reranking context budget after
-the "Наслов:/Содржина:" wrapper is added.
-"""
-
 import re
 from dataclasses import dataclass
 
@@ -52,8 +44,6 @@ def _split_members(md: str) -> list[tuple[str | None, str]]:
         lines = part.splitlines()
         header = lines[0].lstrip("#").strip()
         body = "\n".join(lines[1:]).strip()
-        # No header fall-back: an empty body makes chunk_markdown skip this member
-        # instead of emitting a chunk whose only text is the label (kept in `section`).
         units.append((header, body))
     return units
 

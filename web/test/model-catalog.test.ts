@@ -38,8 +38,6 @@ const descriptor = (
   tier: CatalogTier,
 ): ModelDescriptor => ({ id, name: id, provider, tier });
 
-// A representative typed catalog. Extra API-only fields (capabilities, pricing)
-// must be tolerated and dropped by the web parser.
 const typedModels = [
   {
     capabilities: { reasoning: true },

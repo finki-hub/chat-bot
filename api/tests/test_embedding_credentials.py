@@ -1,4 +1,5 @@
 import anyio
+import anyio.lowlevel
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -16,15 +17,19 @@ def test_all_models_embedding_fill_uses_only_self_hosted_models() -> None:
     assert ALL_MODELS_EMBEDDINGS == (Model.BGE_M3_LOCAL,)
 
 
-def test_explicit_hosted_embedding_fill_is_rejected() -> None:
+@pytest.mark.parametrize(
+    "model",
+    [Model.TEXT_EMBEDDING_3_LARGE, Model.GEMINI_EMBEDDING_001],
+)
+def test_explicit_hosted_embedding_fill_is_rejected(model: Model) -> None:
     with pytest.raises(HTTPException) as error:
         embeddings._resolve_models(  # noqa: SLF001
-            Model.TEXT_EMBEDDING_3_LARGE,
+            model,
             all_models=False,
         )
 
     assert error.value.status_code == 400
-    assert "Unsupported embedding model" in str(error.value.detail)
+    assert "Hosted embeddings require" in str(error.value.detail)
 
 
 def test_legacy_embedding_model_is_rejected_before_gpu_dispatch(
@@ -33,6 +38,7 @@ def test_legacy_embedding_model_is_rejected_before_gpu_dispatch(
     dispatched = False
 
     async def fail_if_dispatched(*args, **kwargs):
+        await anyio.lowlevel.checkpoint()
         nonlocal dispatched
         dispatched = True
         raise AssertionError("legacy embedding model reached provider dispatch")
@@ -91,5 +97,5 @@ def test_closest_questions_rejects_hosted_embedding_without_credential_channel(
     )
 
     assert response.status_code == 400
-    assert "Unsupported embedding model" in response.json()["detail"]
+    assert "Hosted embeddings require" in response.json()["detail"]
     assert not embedding_called

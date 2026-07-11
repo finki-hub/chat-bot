@@ -1,9 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class Model(Enum):
-    """
-    Enum representing the available models.
-    """
-
+class Model(StrEnum):
     BGE_M3 = "BAAI/bge-m3"
+    QWEN3_8B = "Qwen/Qwen3-8B"

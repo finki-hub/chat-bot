@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from pydantic import (
@@ -12,7 +13,7 @@ from pydantic import (
 )
 from pydantic.type_adapter import TypeAdapter
 
-from app.llms.model_catalog_policy import MODEL_CATALOG
+from app.llms.model_catalog_policy import MODEL_CATALOG, CatalogPolicy
 from app.llms.model_catalog_types import (
     DisplayMetadata,
     ModelCapabilities,
@@ -120,8 +121,35 @@ def _metadata(remote: _RemoteModel) -> DisplayMetadata:
     )
 
 
+def _metadata_for_policy(
+    providers: Mapping[str, JsonValue],
+    policy: CatalogPolicy,
+) -> DisplayMetadata | None:
+    raw_provider = providers.get(policy.provider)
+    if raw_provider is None:
+        return None
+    try:
+        provider = _RemoteProvider.model_validate(raw_provider)
+    except ValidationError:
+        return None
+    if provider.id != policy.provider:
+        return None
+    raw_model = provider.models.get(policy.model.value)
+    if raw_model is None:
+        return None
+    try:
+        remote = _RemoteModel.model_validate(raw_model)
+    except ValidationError:
+        return None
+    if remote.id != policy.model.value:
+        return None
+    try:
+        return _metadata(remote)
+    except ValidationError:
+        return None
+
+
 def parse_models_dev(payload: bytes) -> dict[Model, DisplayMetadata]:
-    """Parse approved models from the provider-keyed models.dev response."""
     try:
         providers = _PAYLOAD_ADAPTER.validate_json(payload)
     except ValidationError as error:
@@ -131,26 +159,7 @@ def parse_models_dev(payload: bytes) -> dict[Model, DisplayMetadata]:
 
     result: dict[Model, DisplayMetadata] = {}
     for policy in MODEL_CATALOG:
-        raw_provider = providers.get(policy.provider)
-        if raw_provider is None:
-            continue
-        try:
-            provider = _RemoteProvider.model_validate(raw_provider)
-        except ValidationError:
-            continue
-        if provider.id != policy.provider:
-            continue
-        raw_model = provider.models.get(policy.model.value)
-        if raw_model is None:
-            continue
-        try:
-            remote = _RemoteModel.model_validate(raw_model)
-        except ValidationError:
-            continue
-        if remote.id != policy.model.value:
-            continue
-        try:
-            result[policy.model] = _metadata(remote)
-        except ValidationError:
-            continue
+        metadata = _metadata_for_policy(providers, policy)
+        if metadata is not None:
+            result[policy.model] = metadata
     return result

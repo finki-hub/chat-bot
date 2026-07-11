@@ -25,7 +25,9 @@ const CATALOG_PROVIDERS = ['anthropic', 'google', 'ollama', 'openai'] as const;
 const CATALOG_TIERS = ['cheap', 'default', 'premium'] as const;
 const TIER_ORDER = ['premium', 'default', 'cheap'] as const;
 const API_CATALOG_SOURCES = ['live', 'snapshot', 'stale'] as const;
-const LEGACY_MODEL_DESCRIPTORS: Readonly<Record<string, ModelDescriptor>> = {
+export const CURATED_MODEL_DESCRIPTORS: Readonly<
+  Record<string, ModelDescriptor>
+> = {
   'claude-haiku-4-5': {
     id: 'claude-haiku-4-5',
     name: 'Claude Haiku 4.5',
@@ -100,7 +102,6 @@ const LEGACY_MODEL_DESCRIPTORS: Readonly<Record<string, ModelDescriptor>> = {
   },
 };
 
-// Best-effort provider inference for legacy string[] responses, matched by id prefix.
 const PROVIDER_PREFIXES: ReadonlyArray<readonly [string, CatalogProvider]> = [
   ['gpt', 'openai'],
   ['text-embedding', 'openai'],
@@ -187,9 +188,6 @@ export type ModelProviderGroup = {
   readonly provider: string;
 };
 
-// Normalize an unknown `/api/models` payload into a typed catalog. Accepts both the
-// modern `{ version, source, models }` object and the legacy `string[]` of model ids,
-// returning an `error` catalog for anything else so callers never branch on the wire shape.
 export const parseModelCatalog = (value: unknown): ModelCatalog => {
   if (isRecord(value)) {
     const { models: rawModels, source: rawSource, version } = value;
@@ -208,7 +206,7 @@ export const parseModelCatalog = (value: unknown): ModelCatalog => {
 
   if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
     const models = value
-      .map((id) => LEGACY_MODEL_DESCRIPTORS[id] ?? normalizeDescriptor({ id }))
+      .map((id) => CURATED_MODEL_DESCRIPTORS[id] ?? normalizeDescriptor({ id }))
       .filter((model): model is ModelDescriptor => model !== null);
     return { models, source: 'live', version: 1 };
   }

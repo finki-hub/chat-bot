@@ -15,7 +15,6 @@ def test_openai_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
 
     monkeypatch.setattr(openai, "ChatOpenAI", OpenAICapturingClient)
 
-    # When: a user supplies only their own OpenAI key.
     openai.get_openai_llm(
         Model.GPT_5_4_MINI,
         temperature=0.0,
@@ -24,7 +23,6 @@ def test_openai_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
         credential=ChatCredentialSecret(provider="openai", api_key="sk-user-key"),
     )
 
-    # Then: the BYOK request uses the provider default, not the deployment base URL.
     assert captured_base_urls == [None]
 
 
@@ -37,7 +35,6 @@ def test_google_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
 
     monkeypatch.setattr(google, "ChatGoogleGenerativeAI", GoogleCapturingClient)
 
-    # When: a user supplies only their own Google key.
     google.get_google_llm(
         Model.GEMINI_2_5_FLASH,
         temperature=0.0,
@@ -46,7 +43,6 @@ def test_google_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
         credential=ChatCredentialSecret(provider="google", api_key="user-key"),
     )
 
-    # Then: the BYOK request uses the provider default, not the deployment base URL.
     assert captured_base_urls == [None]
 
 
@@ -61,7 +57,6 @@ def test_anthropic_byok_client_does_not_inherit_deployment_base_url(
 
     monkeypatch.setattr(anthropic, "ChatAnthropic", AnthropicCapturingClient)
 
-    # When: a user supplies only their own Anthropic key.
     anthropic.get_anthropic_llm(
         Model.CLAUDE_HAIKU_4_5,
         temperature=0.0,
@@ -70,7 +65,6 @@ def test_anthropic_byok_client_does_not_inherit_deployment_base_url(
         credential=ChatCredentialSecret(provider="anthropic", api_key="user-key"),
     )
 
-    # Then: the BYOK request uses the provider default, not the deployment base URL.
     assert captured_base_urls == [None]
 
 
@@ -91,9 +85,11 @@ def test_claude_haiku_keeps_temperature_and_omits_top_p(monkeypatch) -> None:
         credential=ChatCredentialSecret(provider="anthropic", api_key="user-key"),
     )
 
-    assert captured[0]["temperature"] == 0.2
-    assert "top_p" not in captured[0]
-    assert captured[0]["thinking"] is None
+    assert len(captured) == 1
+    request = captured[0]
+    assert request["temperature"] == pytest.approx(0.2)
+    assert "top_p" not in request
+    assert request["thinking"] is None
 
 
 def test_ollama_byok_client_uses_user_endpoint_and_bearer_key(monkeypatch) -> None:

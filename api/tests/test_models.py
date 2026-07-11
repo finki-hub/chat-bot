@@ -101,15 +101,16 @@ def test_claude_sonnet_5_is_a_supported_anthropic_chat_model():
 
 
 def test_curated_defaults_and_embedding_policy() -> None:
-    # Given the modernized runtime defaults
-    # When defaults and active embedding policy are inspected
     values = {model.value for model in ACTIVE_EMBEDDING_MODELS}
 
-    # Then chat/query/embedding defaults and active embeddings are exact
     assert DEFAULT_INFERENCE_MODEL.value == "claude-sonnet-5"
     assert DEFAULT_QUERY_TRANSFORM_MODEL.value == "gpt-5.4-mini"
     assert DEFAULT_EMBEDDINGS_MODEL.value == "BAAI/bge-m3"
-    assert values == {"BAAI/bge-m3"}
+    assert values == {
+        "BAAI/bge-m3",
+        "gemini-embedding-001",
+        "text-embedding-3-large",
+    }
     assert tuple(model.value for model in ALL_MODELS_EMBEDDINGS) == ("BAAI/bge-m3",)
 
 

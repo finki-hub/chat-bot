@@ -3,8 +3,6 @@ from typing import Final
 
 
 class Model(StrEnum):
-    """Persisted model identifiers, including legacy embedding values."""
-
     LLAMA_3_3_70B = "llama3.3:70b"
     DEEPSEEK_R1_70B = "deepseek-r1:70b"
     BGE_M3 = "bge-m3:latest"
@@ -38,7 +36,13 @@ MODEL_EMBEDDINGS_COLUMNS: Final[dict[Model, str]] = {
     Model.MULTILINGUAL_E5_LARGE: "embedding_multilingual_e5_large",
 }
 
-ACTIVE_EMBEDDING_MODELS: Final[frozenset[Model]] = frozenset({Model.BGE_M3_LOCAL})
+ACTIVE_EMBEDDING_MODELS: Final[frozenset[Model]] = frozenset(
+    {
+        Model.BGE_M3_LOCAL,
+        Model.GEMINI_EMBEDDING_001,
+        Model.TEXT_EMBEDDING_3_LARGE,
+    },
+)
 ALL_MODELS_EMBEDDINGS: Final[tuple[Model, ...]] = (Model.BGE_M3_LOCAL,)
 GPU_API_MODELS: Final[dict[Model, str]] = {Model.BGE_M3_LOCAL: "BAAI/bge-m3"}
 

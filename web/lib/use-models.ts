@@ -22,7 +22,7 @@ export const useModels = () => {
     staleTime: 5 * 60 * 1_000,
   });
   return {
-    isError: query.isError,
+    isError: query.isError || query.data?.source === 'error',
     isLoading: query.isLoading,
     models: query.data?.models ?? [],
     source: query.data?.source,

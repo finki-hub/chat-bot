@@ -1,3 +1,5 @@
+import anyio
+import anyio.lowlevel
 import pytest
 from fastapi.testclient import TestClient
 
@@ -56,6 +58,7 @@ def test_chat_requires_user_credential_before_mandatory_hosted_stage(
     retrieval_started = False
 
     async def fail_if_retrieval_starts(**kwargs) -> RetrievedContext:
+        await anyio.lowlevel.checkpoint()
         nonlocal retrieval_started
         retrieval_started = True
         raise AssertionError("retrieval must not start without required BYOK")

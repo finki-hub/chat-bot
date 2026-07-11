@@ -21,7 +21,7 @@ def make_test_client() -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-def test_openapi_exposes_only_gpu_inference_and_health_routes():
+def test_openapi_exposes_gpu_inference_and_health_routes():
     client = make_test_client()
 
     paths = set(client.get("/openapi.json").json()["paths"])
@@ -31,6 +31,7 @@ def test_openapi_exposes_only_gpu_inference_and_health_routes():
         "/health/",
         "/health/health",
         "/rerank/",
+        "/stream/",
     }
 
 
@@ -88,9 +89,28 @@ def test_embedding_endpoint_rejects_e5(monkeypatch):
     assert "intfloat/multilingual-e5-large" not in response.text
 
 
-def test_stream_endpoint_is_not_registered():
+def test_stream_endpoint_uses_qwen3_8b(monkeypatch):
+    async def fake_stream(*args, **kwargs):
+        yield "modern response"
+
+    monkeypatch.setattr("app.api.streams.stream_qwen3_response", fake_stream)
     client = make_test_client()
+    response = client.post(
+        "/stream/",
+        json={
+            "prompt": "private prompt",
+            "inference_model": Model.QWEN3_8B.value,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "max_tokens": 128,
+            "interface": "web",
+        },
+    )
 
-    response = client.post("/stream/", json={"prompt": "private prompt"})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert "data: modern response" in response.text
 
-    assert response.status_code == 404
+
+def test_model_enum_exposes_bge_and_qwen3_only():
+    assert {model.value for model in Model} == {"BAAI/bge-m3", "Qwen/Qwen3-8B"}

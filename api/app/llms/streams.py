@@ -34,14 +34,12 @@ async def stream_response_with_agent(
     interface: ChatInterface,
     credentials: LlmProviderCredentials | None = None,
 ) -> StreamingResponse:
-    """
-    Stream a response from the specified model using the provided user prompt and system prompt with agent.
-    """
     logger.info(
         "Streaming response with agent for user prompt length: '%d' "
-        "with model: %s and %d prior turn(s)",
+        "with model: %s, interface: %s, and %d prior turn(s)",
         len(user_prompt),
         model.value,
+        interface,
         len(history),
     )
 
