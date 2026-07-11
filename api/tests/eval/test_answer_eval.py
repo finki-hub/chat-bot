@@ -84,6 +84,24 @@ def test_score_answer_passes_supported_grounded_response():
     assert score.failures == ()
 
 
+def test_score_answer_counts_comma_separated_urls_individually():
+    case = AnswerCase(
+        id="links",
+        category="links",
+        expectation=AnswerExpectation(
+            required_sources=(),
+            forbidden=(),
+            max_urls=1,
+            min_cyrillic_ratio=0,
+            requires_refusal=False,
+        ),
+    )
+
+    score = score_answer(case, "https://a.example,https://b.example")
+
+    assert score.failures == ("too-many-urls:2>1",)
+
+
 def test_score_answer_reports_every_contract_failure():
     case = AnswerCase(
         id="unsafe",

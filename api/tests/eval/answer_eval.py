@@ -7,7 +7,7 @@ from typing import Final
 
 JsonValue = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 
-_URL_PATTERN: Final = re.compile(r"https?://[^\s)>\]]+")
+_URL_PATTERN: Final = re.compile(r"https?://[^\s,)>\]]+")
 _REFUSAL_MARKERS: Final = (
     "можам да помогнам само",
     "немам доволно",
