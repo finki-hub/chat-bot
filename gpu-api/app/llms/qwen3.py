@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator, Iterator
+from collections.abc import AsyncGenerator, Callable, Iterator
 from dataclasses import dataclass, field
 from threading import Lock, Thread
 from typing import Protocol, runtime_checkable
@@ -17,10 +17,8 @@ from app.llms.models import Model
 
 @runtime_checkable
 class _GenerativeModel(Protocol):
-    @property
-    def device(self) -> torch.device: ...
-
-    def generate(self, **kwargs: object) -> object: ...
+    device: torch.device
+    generate: Callable[..., object]
 
 
 @dataclass
@@ -78,7 +76,7 @@ async def stream_qwen3_response(
         skip_prompt=True,
         skip_special_tokens=True,
     )
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
 
     def generate() -> None:
         try:
@@ -91,7 +89,7 @@ async def stream_qwen3_response(
                 top_k=20,
                 top_p=top_p,
             )
-        except BaseException as error:
+        except Exception as error:
             errors.append(error)
             streamer.on_finalized_text("", stream_end=True)
 

@@ -25,82 +25,37 @@ const CATALOG_PROVIDERS = ['anthropic', 'google', 'ollama', 'openai'] as const;
 const CATALOG_TIERS = ['cheap', 'default', 'premium'] as const;
 const TIER_ORDER = ['premium', 'default', 'cheap'] as const;
 const API_CATALOG_SOURCES = ['live', 'snapshot', 'stale'] as const;
+
+const CURATED_MODEL_DATA = [
+  ['gpt-5.4', 'GPT-5.4', 'openai', 'premium'],
+  ['gpt-5.4-mini', 'GPT-5.4 Mini', 'openai', 'default'],
+  ['gpt-5.4-nano', 'GPT-5.4 Nano', 'openai', 'cheap'],
+  ['gemini-2.5-pro', 'Gemini 2.5 Pro', 'google', 'premium'],
+  ['gemini-2.5-flash', 'Gemini 2.5 Flash', 'google', 'default'],
+  ['claude-opus-4-8', 'Claude Opus 4.8', 'anthropic', 'premium'],
+  ['claude-sonnet-5', 'Claude Sonnet 5', 'anthropic', 'default'],
+  ['claude-haiku-4-5', 'Claude Haiku 4.5', 'anthropic', 'cheap'],
+  ['llama3.3:70b', 'Llama 3.3 70B', 'ollama', 'default'],
+  ['deepseek-r1:70b', 'DeepSeek R1 70B', 'ollama', 'default'],
+  [
+    'hf.co/LVSTCK/domestic-yak-8B-instruct-GGUF:Q8_0',
+    'Domestic Yak 8B Instruct',
+    'ollama',
+    'cheap',
+  ],
+  ['hf.co/mradermacher/VezilkaLLM-GGUF:Q8_0', 'VezilkaLLM', 'ollama', 'cheap'],
+] as const satisfies ReadonlyArray<
+  readonly [string, string, CatalogProvider, CatalogTier]
+>;
+
 export const CURATED_MODEL_DESCRIPTORS: Readonly<
   Record<string, ModelDescriptor>
-> = {
-  'claude-haiku-4-5': {
-    id: 'claude-haiku-4-5',
-    name: 'Claude Haiku 4.5',
-    provider: 'anthropic',
-    tier: 'cheap',
-  },
-  'claude-opus-4-8': {
-    id: 'claude-opus-4-8',
-    name: 'Claude Opus 4.8',
-    provider: 'anthropic',
-    tier: 'premium',
-  },
-  'claude-sonnet-5': {
-    id: 'claude-sonnet-5',
-    name: 'Claude Sonnet 5',
-    provider: 'anthropic',
-    tier: 'default',
-  },
-  'deepseek-r1:70b': {
-    id: 'deepseek-r1:70b',
-    name: 'DeepSeek R1 70B',
-    provider: 'ollama',
-    tier: 'default',
-  },
-  'gemini-2.5-flash': {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
-    provider: 'google',
-    tier: 'default',
-  },
-  'gemini-2.5-pro': {
-    id: 'gemini-2.5-pro',
-    name: 'Gemini 2.5 Pro',
-    provider: 'google',
-    tier: 'premium',
-  },
-  'gpt-5.4': {
-    id: 'gpt-5.4',
-    name: 'GPT-5.4',
-    provider: 'openai',
-    tier: 'premium',
-  },
-  'gpt-5.4-mini': {
-    id: 'gpt-5.4-mini',
-    name: 'GPT-5.4 Mini',
-    provider: 'openai',
-    tier: 'default',
-  },
-  'gpt-5.4-nano': {
-    id: 'gpt-5.4-nano',
-    name: 'GPT-5.4 Nano',
-    provider: 'openai',
-    tier: 'cheap',
-  },
-  'hf.co/LVSTCK/domestic-yak-8B-instruct-GGUF:Q8_0': {
-    id: 'hf.co/LVSTCK/domestic-yak-8B-instruct-GGUF:Q8_0',
-    name: 'Domestic Yak 8B Instruct',
-    provider: 'ollama',
-    tier: 'cheap',
-  },
-  'hf.co/mradermacher/VezilkaLLM-GGUF:Q8_0': {
-    id: 'hf.co/mradermacher/VezilkaLLM-GGUF:Q8_0',
-    name: 'VezilkaLLM',
-    provider: 'ollama',
-    tier: 'cheap',
-  },
-  'llama3.3:70b': {
-    id: 'llama3.3:70b',
-    name: 'Llama 3.3 70B',
-    provider: 'ollama',
-    tier: 'default',
-  },
-};
+> = Object.fromEntries(
+  CURATED_MODEL_DATA.map(([id, name, provider, tier]) => [
+    id,
+    { id, name, provider, tier },
+  ]),
+);
 
 const PROVIDER_PREFIXES: ReadonlyArray<readonly [string, CatalogProvider]> = [
   ['gpt', 'openai'],
