@@ -64,9 +64,10 @@ def test_gemini_3_reasoning_uses_thinking_level(monkeypatch) -> None:
         credential=ChatCredentialSecret(provider="google", api_key="user-key"),
     )
 
-    assert captured[0]["thinking_level"] == "medium"
-    assert captured[0]["include_thoughts"] is True
-    assert "thinking_budget" not in captured[0]
+    (request,) = captured
+    assert request["thinking_level"] == "medium"
+    assert request["include_thoughts"] is True
+    assert "thinking_budget" not in request
 
 
 def test_anthropic_byok_client_does_not_inherit_deployment_base_url(
