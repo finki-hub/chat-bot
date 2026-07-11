@@ -163,3 +163,73 @@ def test_chat_state_rejects_custom_credential_base_url_with_invalid_port() -> No
     # Then: the request is rejected as invalid input instead of crashing the API.
     assert response.status_code == 422
     assert db.credentials == {}
+
+
+def test_chat_state_rejects_custom_credential_base_url_with_query() -> None:
+    # Given: the provider origin is allowlisted without a query string.
+    db = FakeChatDatabase()
+    app = make_app(
+        Settings(
+            API_KEY="test-api-key",
+            BYOK_ALLOWED_BASE_URLS="https://api.openai.com/v1",
+            CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
+            MCP_API_KEY="test-mcp-key",
+        ),
+    )
+    app.dependency_overrides[get_db] = lambda: db
+    client = TestClient(app)
+
+    # When: a user appends a query that the provider client would retain.
+    response = client.put(
+        f"/chat/state/users/{OWNER_ID}/credentials/openai",
+        headers={"x-api-key": "test-api-key"},
+        json={
+            "api_key": "test-key",
+            "base_url": "https://api.openai.com/v1?tenant=other",
+            "provider": "openai",
+        },
+    )
+
+    # Then: the actual URL is rejected instead of matching after query removal.
+    assert response.status_code == 422
+    assert db.credentials == {}
+
+
+def test_chat_state_normalizes_uppercase_https_scheme() -> None:
+    # Given: a lowercase HTTPS provider endpoint is allowlisted.
+    db = FakeChatDatabase()
+    app = make_app(
+        Settings(
+            API_KEY="test-api-key",
+            BYOK_ALLOWED_BASE_URLS="https://api.openai.com/v1",
+            CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
+            MCP_API_KEY="test-mcp-key",
+        ),
+    )
+    app.dependency_overrides[get_db] = lambda: db
+    client = TestClient(app)
+
+    # When: a user submits the equivalent URL with an uppercase scheme.
+    response = client.put(
+        f"/chat/state/users/{OWNER_ID}/credentials/openai",
+        headers={"x-api-key": "test-api-key"},
+        json={
+            "api_key": "test-key",
+            "base_url": "HTTPS://api.openai.com/v1",
+            "provider": "openai",
+        },
+    )
+
+    # Then: the URL is accepted and stored in canonical scheme form.
+    assert response.status_code == 200
+    assert response.json()["base_url"] == "https://api.openai.com/v1"
+
+
+def test_byok_allowlist_rejects_query_strings() -> None:
+    # Given: an operator allowlists an exact provider endpoint.
+    settings = Settings(BYOK_ALLOWED_BASE_URLS="https://api.openai.com/v1")
+
+    # When/Then: adding a query does not match the allowlisted URL.
+    assert not settings.is_byok_base_url_allowed(
+        "https://api.openai.com/v1?tenant=other",
+    )

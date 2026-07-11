@@ -35,9 +35,11 @@ class ChatCredentialUpsert(BaseModel):
         parsed = urlsplit(value)
         if parsed.scheme != "https" or not parsed.hostname:
             raise ValueError("base_url must be an https URL with a host")
-        if parsed.username or parsed.password or parsed.fragment:
-            raise ValueError("base_url must not include credentials or fragments")
-        return value
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError(
+                "base_url must not include credentials, queries, or fragments",
+            )
+        return parsed._replace(scheme="https").geturl()
 
 
 class ChatCredentialPublic(BaseModel):

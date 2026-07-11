@@ -73,6 +73,39 @@ def test_resolve_provider_credentials_skips_unrequested_corrupted_credentials() 
     anyio.run(run_resolution)
 
 
+def test_resolve_provider_credentials_invalidates_requested_corrupted_credential() -> (
+    None
+):
+    # Given: the requested provider credential cannot be decrypted.
+    db = FakeChatDatabase()
+    settings = Settings(
+        API_KEY="test-api-key",
+        CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
+        MCP_API_KEY="test-mcp-key",
+    )
+    db.credentials[(USER_ID, "google")] = {
+        "base_url": None,
+        "encrypted_api_key": "not-fernet-token",
+        "provider": "google",
+        "user_id": USER_ID,
+    }
+
+    async def run_resolution() -> None:
+        # When: credential resolution loads the corrupted provider record.
+        credentials = await resolve_provider_credentials(
+            db,
+            user_id=USER_ID,
+            providers=frozenset({"google"}),
+            settings=settings,
+        )
+
+        # Then: the provider is treated as unavailable so callers can request a new key.
+        assert credentials is not None
+        assert credentials.google is None
+
+    anyio.run(run_resolution)
+
+
 def test_resolve_provider_credentials_invalidates_stored_disallowed_base_url() -> None:
     # Given: a user has an OpenAI key with a stale base_url no longer in the allowlist.
     db = FakeChatDatabase()

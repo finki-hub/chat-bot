@@ -5,7 +5,7 @@ from typing import Protocol
 from uuid import UUID
 
 from asyncpg import Record
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 from app.schemas.chat_credentials import (
     ChatCredentialProvider,
@@ -121,7 +121,10 @@ async def get_chat_credential_secret(
     if not isinstance(encrypted, str):
         msg = "encrypted API key must be stored as text"
         raise TypeError(msg)
-    api_key = _fernet(settings).decrypt(encrypted.encode()).decode()
+    try:
+        api_key = _fernet(settings).decrypt(encrypted.encode()).decode()
+    except InvalidToken:
+        return None
     return ChatCredentialSecret(
         provider=provider,
         api_key=api_key,

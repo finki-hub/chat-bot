@@ -28,7 +28,7 @@ def _canonical_byok_base_url(value: str) -> str | None:
     parsed = urlsplit(value.strip())
     if parsed.scheme.lower() != "https" or parsed.hostname is None:
         return None
-    if parsed.username or parsed.password or parsed.fragment:
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
         return None
     hostname = parsed.hostname.lower().rstrip(".")
     if hostname == "localhost" or hostname.endswith((".localhost", ".local")):
