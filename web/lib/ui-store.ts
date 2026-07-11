@@ -7,7 +7,7 @@ import {
   type StateStorage,
 } from 'zustand/middleware';
 
-export const DEFAULT_MODEL = 'claude-sonnet-4-6';
+export const DEFAULT_MODEL = 'claude-sonnet-5';
 
 const STORAGE_KEY = 'finkiHub.ui';
 

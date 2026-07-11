@@ -7,10 +7,11 @@ import {
 import { type AddressInfo } from 'node:net';
 
 import { installMockChatState } from './helpers/chat-state';
+import { mockModels } from './helpers/models';
 import { type UiChunk } from './helpers/sse';
 
 const RESPONSE_ID = '99999999-8888-7777-6666-555555555555';
-const INFERENCE_MODEL = 'claude-sonnet-4-6';
+const INFERENCE_MODEL = 'claude-sonnet-5';
 const REASON_HEAD = 'Размислувам чекор еден…';
 const REASON_TAIL = ' и чекор два.';
 const ANSWER = 'Конечниот одговор е дека ФИНКИ е во Скопје.';
@@ -125,13 +126,7 @@ test.describe('reasoning streaming (mocked BFF)', () => {
           status: 200,
         });
       });
-      await page.route('**/api/models', async (route) => {
-        await route.fulfill({
-          body: JSON.stringify([INFERENCE_MODEL, 'gpt-5.4-mini']),
-          contentType: 'application/json',
-          status: 200,
-        });
-      });
+      await mockModels(page);
       await installMockChatState(page, { streamUrl: chatServer.url });
 
       await page.goto('/');

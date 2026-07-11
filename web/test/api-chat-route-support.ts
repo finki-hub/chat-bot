@@ -9,7 +9,7 @@ import { vi } from 'vitest';
 export const API_BASE_URL = 'https://api:8880';
 export const CONVERSATION_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d21';
 export const JSON_CONTENT_TYPE = 'application/json';
-export const MODEL = 'claude-sonnet-4-6';
+export const MODEL = 'claude-sonnet-5';
 export const RESPONSE_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d22';
 export const USER_ID = 'anon-user-1';
 export const OTHER_USER_ID = 'anon-user-2';

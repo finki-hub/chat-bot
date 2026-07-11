@@ -9,23 +9,20 @@ from app.llms.models import Model
 
 # (input_usd_per_1m, output_usd_per_1m) for hosted models with a reliable published price.
 HOSTED_PRICING: dict[Model, tuple[float, float]] = {
-    Model.GPT_4O_MINI: (0.15, 0.60),
-    Model.GPT_4_1: (2.00, 8.00),
-    Model.GPT_4_1_MINI: (0.40, 1.60),
-    Model.GPT_4_1_NANO: (0.10, 0.40),
+    Model.GPT_5_4: (2.50, 15.00),
+    Model.GPT_5_4_MINI: (0.75, 4.50),
+    Model.GPT_5_4_NANO: (0.20, 1.25),
     Model.GEMINI_2_5_FLASH: (0.30, 2.50),
     Model.GEMINI_2_5_PRO: (1.25, 10.00),
+    Model.CLAUDE_OPUS_4_8: (5.00, 25.00),
+    Model.CLAUDE_SONNET_5: (3.00, 15.00),
     Model.CLAUDE_HAIKU_4_5: (1.00, 5.00),
-    Model.CLAUDE_SONNET_4_6: (3.00, 15.00),
 }
 
 # Models we run ourselves on the local GPU: zero marginal token cost.
 SELF_HOSTED_MODELS: frozenset[Model] = frozenset(
     {
-        Model.MULTILINGUAL_E5_LARGE,
         Model.BGE_M3_LOCAL,
-        Model.QWEN2_1_5_B_INSTRUCT,
-        Model.QWEN2_5_7B_INSTRUCT,
     },
 )
 

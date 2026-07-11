@@ -62,7 +62,7 @@ const sampleMessages: MyUIMessage[] = [
 describe('buildChatTransport', () => {
   it('puts messages, id, trigger, and extras into the request body', () => {
     const prepare = getPrepare({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       temperature: 0.3,
     });
     const { body } = prepare({
@@ -76,7 +76,7 @@ describe('buildChatTransport', () => {
       id: 'conv-1',
       messageId: 'm-1',
       messages: sampleMessages,
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       posthogDistinctId: 'browser-distinct-id',
       posthogSessionId: 'session-test-id',
       temperature: 0.3,

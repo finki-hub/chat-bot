@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { installMockChatState } from './helpers/chat-state';
+import { mockModels } from './helpers/models';
 import {
   stagedRunChunks,
   startChatStreamServer,
@@ -8,7 +9,7 @@ import {
 } from './helpers/sse';
 
 const RESPONSE_ID = '11111111-2222-3333-4444-555555555555';
-const INFERENCE_MODEL = 'claude-sonnet-4-6';
+const INFERENCE_MODEL = 'claude-sonnet-5';
 const PREAMBLE = 'Дозволете да проверам…';
 const STATUS_LABEL = '🔍 Пребарувам…';
 const TOOL = 'search_documents';
@@ -59,13 +60,7 @@ test.describe('chat streaming (mocked BFF)', () => {
       tail: chunks.slice(statusIndex + 1),
     });
 
-    await page.route('**/api/models', async (route) => {
-      await route.fulfill({
-        body: JSON.stringify([INFERENCE_MODEL, 'gpt-5.4-mini']),
-        contentType: 'application/json',
-        status: 200,
-      });
-    });
+    await mockModels(page);
 
     await installMockChatState(page, { streamUrl: chatServer.url });
 
@@ -153,13 +148,7 @@ test.describe('chat streaming (mocked BFF)', () => {
       tail: chunks.slice(resetIndex),
     });
 
-    await page.route('**/api/models', async (route) => {
-      await route.fulfill({
-        body: JSON.stringify([INFERENCE_MODEL, 'gpt-5.4-mini']),
-        contentType: 'application/json',
-        status: 200,
-      });
-    });
+    await mockModels(page);
 
     await installMockChatState(page, { streamUrl: chatServer.url });
 

@@ -20,6 +20,9 @@ export const messages = {
   'composer.reasoning': 'Размислување',
   'composer.send': 'Испрати',
   'composer.stop': 'Запри',
+  'composer.tier.cheap': 'Економичен',
+  'composer.tier.default': 'Стандарден',
+  'composer.tier.premium': 'Премиум',
   'conversation.delete': 'Избриши',
   'conversation.deleteAllDescription':
     'Сите разговори и историја ќе бидат трајно избришани.',

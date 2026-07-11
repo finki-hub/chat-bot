@@ -23,11 +23,6 @@ router = APIRouter(
     status_code=status.HTTP_200_OK,
     response_description="The embedding(s) as a list of floats",
     operation_id="embedText",
-    responses={
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Unsupported model or invalid input",
-        },
-    },
 )
 async def embed(payload: EmbedRequestSchema, request: Request) -> EmbedResponseSchema:
     start = perf_counter()

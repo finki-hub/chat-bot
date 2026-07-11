@@ -17,7 +17,7 @@ def test_openai_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
 
     # When: a user supplies only their own OpenAI key.
     openai.get_openai_llm(
-        Model.GPT_4O_MINI,
+        Model.GPT_5_4_MINI,
         temperature=0.0,
         top_p=1.0,
         max_tokens=128,
@@ -74,6 +74,28 @@ def test_anthropic_byok_client_does_not_inherit_deployment_base_url(
     assert captured_base_urls == [None]
 
 
+def test_claude_haiku_keeps_temperature_and_omits_top_p(monkeypatch) -> None:
+    captured: list[dict] = []
+
+    class AnthropicCapturingClient:
+        def __init__(self, **kwargs):
+            captured.append(kwargs)
+
+    monkeypatch.setattr(anthropic, "ChatAnthropic", AnthropicCapturingClient)
+
+    anthropic.get_anthropic_llm(
+        Model.CLAUDE_HAIKU_4_5,
+        temperature=0.2,
+        top_p=0.8,
+        max_tokens=128,
+        credential=ChatCredentialSecret(provider="anthropic", api_key="user-key"),
+    )
+
+    assert captured[0]["temperature"] == 0.2
+    assert "top_p" not in captured[0]
+    assert captured[0]["thinking"] is None
+
+
 def test_ollama_byok_client_uses_user_endpoint_and_bearer_key(monkeypatch) -> None:
     captured_clients: list[dict] = []
 
@@ -84,7 +106,7 @@ def test_ollama_byok_client_uses_user_endpoint_and_bearer_key(monkeypatch) -> No
     monkeypatch.setattr(ollama, "ChatOllama", OllamaCapturingClient)
 
     ollama.get_llm(
-        Model.MISTRAL,
+        Model.LLAMA_3_3_70B,
         temperature=0.0,
         top_p=1.0,
         max_tokens=128,
@@ -101,7 +123,7 @@ def test_ollama_byok_client_uses_user_endpoint_and_bearer_key(monkeypatch) -> No
             "client_kwargs": {
                 "headers": {"Authorization": "Bearer ollama-user-key"},
             },
-            "model": Model.MISTRAL.value,
+            "model": Model.LLAMA_3_3_70B.value,
             "num_predict": 128,
             "reasoning": False,
             "temperature": 0.0,
@@ -126,7 +148,7 @@ def test_ollama_byok_clients_are_not_shared_between_requests(monkeypatch) -> Non
 
     for api_key in ("first-user-key", "second-user-key"):
         ollama.get_llm(
-            Model.MISTRAL,
+            Model.LLAMA_3_3_70B,
             temperature=0.0,
             top_p=1.0,
             max_tokens=128,
@@ -142,10 +164,10 @@ def test_ollama_byok_clients_are_not_shared_between_requests(monkeypatch) -> Non
 @pytest.mark.parametrize(
     ("provider", "factory", "model"),
     [
-        ("openai", openai.get_openai_llm, Model.GPT_4O_MINI),
+        ("openai", openai.get_openai_llm, Model.GPT_5_4_MINI),
         ("google", google.get_google_llm, Model.GEMINI_2_5_FLASH),
         ("anthropic", anthropic.get_anthropic_llm, Model.CLAUDE_HAIKU_4_5),
-        ("ollama", ollama.get_llm, Model.MISTRAL),
+        ("ollama", ollama.get_llm, Model.LLAMA_3_3_70B),
     ],
 )
 def test_byok_llm_client_requires_user_credential(

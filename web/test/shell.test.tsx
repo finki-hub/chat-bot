@@ -35,7 +35,7 @@ beforeAll(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
 
-const CLAUDE = 'claude-sonnet-4-6';
+const CLAUDE = 'claude-sonnet-5';
 const GPT = 'gpt-5.4-mini';
 const RESPONSE_ID = 'resp-123';
 const FIRST_TITLE = 'Прв разговор';
@@ -834,5 +834,46 @@ describe('ChatPage persistence', () => {
     await expect(
       screen.findByText('Серверски одговор'),
     ).resolves.toBeInTheDocument();
+  });
+
+  it('recovers the selected model when the persisted id is missing from the catalog', async () => {
+    useUiStore.setState({
+      activeConversationId: null,
+      model: 'claude-sonnet-4-6',
+      sidebarOpen: true,
+    });
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init) => {
+      const url = urlOf(input);
+      if (url.endsWith('/api/models')) {
+        return Promise.resolve(
+          jsonOk({
+            models: [
+              {
+                id: 'claude-sonnet-5',
+                name: 'Claude Sonnet 5',
+                provider: 'anthropic',
+                tier: 'default',
+              },
+              {
+                id: 'gpt-5.4-mini',
+                name: 'GPT-5.4 Mini',
+                provider: 'openai',
+                tier: 'default',
+              },
+            ],
+            source: 'live',
+            version: 1,
+          }),
+        );
+      }
+
+      return respondTo(url, methodOf(input, init));
+    });
+
+    renderChatPage();
+
+    await waitFor(() => {
+      expect(useUiStore.getState().model).toBe('claude-sonnet-5');
+    });
   });
 });

@@ -89,7 +89,7 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
 
 
 def test_chat_stream_records_bare_data_token_frames(monkeypatch):
-    chunks, props = _run_captured_stream(monkeypatch, _gpu_body(), Model.MISTRAL)
+    chunks, props = _run_captured_stream(monkeypatch, _gpu_body(), Model.LLAMA_3_3_70B)
 
     assert chunks[0] == "data: self-hosted answer\n\n"
     assert props["$ai_output_choices"] == [
@@ -101,7 +101,7 @@ def test_chat_stream_records_fragmented_bare_data_token_frames(monkeypatch):
     chunks, props = _run_captured_stream(
         monkeypatch,
         _gpu_fragmented_body(),
-        Model.MISTRAL,
+        Model.LLAMA_3_3_70B,
     )
 
     assert chunks[:3] == [

@@ -1,9 +1,10 @@
 import { expect, type Page, test } from '@playwright/test';
 
 import { installMockChatState } from './helpers/chat-state';
+import { mockModels } from './helpers/models';
 import { startChatStreamServer, type UiChunk } from './helpers/sse';
 
-const MODEL = 'claude-sonnet-4-6';
+const MODEL = 'claude-sonnet-5';
 
 const answer = (text: string): UiChunk[] => [
   {
@@ -25,13 +26,7 @@ const mockBackend = async (
     head: chunks.slice(0, 1),
     tail: chunks.slice(1),
   });
-  await page.route('**/api/models', async (route) => {
-    await route.fulfill({
-      body: JSON.stringify([MODEL]),
-      contentType: 'application/json',
-      status: 200,
-    });
-  });
+  await mockModels(page);
   await installMockChatState(page, { streamUrl: server.url });
   return server;
 };

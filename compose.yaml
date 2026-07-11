@@ -90,7 +90,6 @@ services:
       LOG_LEVEL: ${LOG_LEVEL}
       POSTHOG_HOST: ${POSTHOG_HOST:-https://eu.i.posthog.com}
       POSTHOG_KEY: ${POSTHOG_KEY:-}
-      PRELOAD_BGEM3: ${PRELOAD_BGEM3}
       RERANKER_MODEL: ${RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
       TZ: ${TZ}
     gpus: all

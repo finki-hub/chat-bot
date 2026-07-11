@@ -66,7 +66,7 @@ describe('POST /api/chat/title', () => {
     const payload: ChatTitleRequestBody = {
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
-      query_transform_model: 'claude-sonnet-4-6',
+      query_transform_model: 'claude-sonnet-5',
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       user_id: API_USER_ID,
     };
@@ -90,7 +90,7 @@ describe('POST /api/chat/title', () => {
     expect(JSON.parse(init.body as string)).toStrictEqual({
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
-      query_transform_model: 'claude-sonnet-4-6',
+      query_transform_model: 'claude-sonnet-5',
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       user_id: API_USER_ID,
     });
@@ -101,7 +101,7 @@ describe('POST /api/chat/title', () => {
   it('also accepts the legacy camelCase model field', async () => {
     const payload: ChatTitleClientPayload = {
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
-      queryTransformModel: 'claude-sonnet-4-6',
+      queryTransformModel: 'claude-sonnet-5',
     };
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -116,7 +116,7 @@ describe('POST /api/chat/title', () => {
     expect(JSON.parse(init.body as string)).toStrictEqual({
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
-      query_transform_model: 'claude-sonnet-4-6',
+      query_transform_model: 'claude-sonnet-5',
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       user_id: API_USER_ID,
     });

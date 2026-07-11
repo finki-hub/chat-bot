@@ -27,7 +27,8 @@ from app.llms.agents import (
 from app.llms.chat import handle_chat
 from app.llms.context import get_retrieved_context_with_sources
 from app.llms.link_context import get_links_context
-from app.llms.models import CHAT_MODELS
+from app.llms.model_catalog import model_catalog_service
+from app.llms.model_catalog_types import ModelCatalogResponse
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
@@ -675,16 +676,6 @@ async def chat(
     summary="List available LLM models",
     description="Retrieve a list of all available LLM models for chat.",
     status_code=status.HTTP_200_OK,
-    responses={
-        status.HTTP_200_OK: {
-            "description": "List of available LLM models",
-            "content": {
-                "application/json": {
-                    "example": ["llama3.3:70b", "qwen2.5:72b"],
-                },
-            },
-        },
-    },
 )
-def list_models() -> list[str]:
-    return sorted(m.value for m in CHAT_MODELS)
+async def list_models() -> ModelCatalogResponse:
+    return await model_catalog_service.get_catalog()

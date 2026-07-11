@@ -1,10 +1,9 @@
 """
 Member-aware Markdown chunking for source-of-truth documents.
 
-Sizes are in characters, calibrated to multilingual-e5-large (~4.36 chars/token median
-on Macedonian Cyrillic, ~3.9 on digit-dense text). The 1650-char hard cap is ~415-420
-tokens worst case, leaving headroom for the "Наслов:/Содржина:" wrapper and the e5
-"passage:" prefix under e5's 512-token window (also the reranker's window).
+Sizes are in characters, calibrated for Macedonian Cyrillic and digit-dense text. The
+1650-character hard cap stays within the embedding and reranking context budget after
+the "Наслов:/Содржина:" wrapper is added.
 """
 
 import re

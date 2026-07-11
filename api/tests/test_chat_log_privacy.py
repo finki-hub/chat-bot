@@ -123,7 +123,7 @@ def test_query_transform_logs_lengths_without_raw_query(caplog, monkeypatch):
     async def collect():
         return await query_transform_module.transform_query(
             "private transform query",
-            Model.GPT_4O_MINI,
+            Model.GPT_5_4_MINI,
             temperature=0.0,
             top_p=1.0,
             max_tokens=128,
@@ -144,7 +144,7 @@ def test_query_transform_logs_lengths_without_raw_query(caplog, monkeypatch):
             openai_module,
             "transform_query_with_openai",
             "get_openai_llm",
-            Model.GPT_4O_MINI,
+            Model.GPT_5_4_MINI,
         ),
         (
             google_module,
@@ -158,7 +158,7 @@ def test_query_transform_logs_lengths_without_raw_query(caplog, monkeypatch):
             "get_anthropic_llm",
             Model.CLAUDE_HAIKU_4_5,
         ),
-        (ollama_module, "transform_query_with_ollama", "get_llm", Model.MISTRAL),
+        (ollama_module, "transform_query_with_ollama", "get_llm", Model.LLAMA_3_3_70B),
     ],
 )
 def test_provider_query_transform_logs_lengths_without_raw_query(

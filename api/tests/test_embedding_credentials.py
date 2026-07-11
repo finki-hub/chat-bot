@@ -7,17 +7,13 @@ from app.api import questions as questions_api
 from app.data.db import get_db
 from app.llms import embeddings
 from app.llms.models import ALL_MODELS_EMBEDDINGS, Model
-from app.llms.provider_credentials import ProviderCredentialRequiredError
 from app.main import make_app
 from app.utils.settings import Settings
 from tests.chat_persistence_fake import FakeChatDatabase
 
 
 def test_all_models_embedding_fill_uses_only_self_hosted_models() -> None:
-    assert ALL_MODELS_EMBEDDINGS == (
-        Model.BGE_M3_LOCAL,
-        Model.MULTILINGUAL_E5_LARGE,
-    )
+    assert ALL_MODELS_EMBEDDINGS == (Model.BGE_M3_LOCAL,)
 
 
 def test_explicit_hosted_embedding_fill_is_rejected() -> None:
@@ -28,35 +24,35 @@ def test_explicit_hosted_embedding_fill_is_rejected() -> None:
         )
 
     assert error.value.status_code == 400
-    assert "BYOK" in str(error.value.detail)
+    assert "Unsupported embedding model" in str(error.value.detail)
 
 
-def test_missing_embedding_credential_is_not_retried(
+def test_legacy_embedding_model_is_rejected_before_gpu_dispatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    attempts = 0
+    dispatched = False
 
-    async def fail_without_credential(*args, **kwargs):
-        nonlocal attempts
-        attempts += 1
-        raise ProviderCredentialRequiredError("openai")
+    async def fail_if_dispatched(*args, **kwargs):
+        nonlocal dispatched
+        dispatched = True
+        raise AssertionError("legacy embedding model reached provider dispatch")
 
     monkeypatch.setattr(
         embeddings,
-        "generate_openai_embeddings",
-        fail_without_credential,
+        "generate_gpu_api_embeddings",
+        fail_if_dispatched,
     )
 
     async def generate() -> None:
         await embeddings.generate_embeddings(
             "query",
-            Model.TEXT_EMBEDDING_3_LARGE,
+            Model.MULTILINGUAL_E5_LARGE,
         )
 
-    with pytest.raises(ProviderCredentialRequiredError):
+    with pytest.raises(ValueError, match="Unsupported model"):
         anyio.run(generate)
 
-    assert attempts == 1
+    assert dispatched is False
 
 
 def test_closest_questions_rejects_hosted_embedding_without_credential_channel(
@@ -95,5 +91,5 @@ def test_closest_questions_rejects_hosted_embedding_without_credential_channel(
     )
 
     assert response.status_code == 400
-    assert "BYOK" in response.json()["detail"]
+    assert "Unsupported embedding model" in response.json()["detail"]
     assert not embedding_called

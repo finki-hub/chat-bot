@@ -8,8 +8,9 @@ import { Thread } from '@/components/chat/thread';
 import { CredentialSettingsDialog } from '@/components/shell/credential-settings-dialog';
 import { Header } from '@/components/shell/header';
 import { Sidebar } from '@/components/shell/sidebar';
+import { recoverSelectedModel } from '@/lib/model-catalog';
 import { isReasoningCapableModel } from '@/lib/reasoning';
-import { useUiStore } from '@/lib/ui-store';
+import { DEFAULT_MODEL, useUiStore } from '@/lib/ui-store';
 import { useConversations } from '@/lib/use-conversations';
 import { useHealth } from '@/lib/use-health';
 import { useModels } from '@/lib/use-models';
@@ -62,10 +63,20 @@ export const ChatScreen = () => {
   }, [setSidebarOpen]);
 
   const {
-    data: modelList,
     isError: modelsError,
     isLoading: modelsLoading,
+    models: modelList,
   } = useModels();
+
+  useEffect(() => {
+    if (modelsLoading || modelsError || modelList.length === 0) {
+      return;
+    }
+    const recovered = recoverSelectedModel(modelList, model, DEFAULT_MODEL);
+    if (recovered !== model) {
+      setModel(recovered);
+    }
+  }, [modelList, modelsLoading, modelsError, model, setModel]);
   const {
     activeError,
     activeId,
@@ -129,7 +140,7 @@ export const ChatScreen = () => {
           <Composer
             disabled={unavailable}
             model={model}
-            models={modelList ?? []}
+            models={modelList}
             modelsError={modelsError}
             modelsLoading={modelsLoading}
             onModelChange={setModel}

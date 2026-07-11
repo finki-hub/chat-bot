@@ -7,6 +7,3 @@ class Model(Enum):
     """
 
     BGE_M3 = "BAAI/bge-m3"
-    MULTILINGUAL_E5_LARGE = "intfloat/multilingual-e5-large"
-    QWEN2_1_5_B_INSTRUCT = "Qwen/Qwen2-1.5B-Instruct"
-    QWEN2_5_7B_INSTRUCT = "Qwen/Qwen2.5-7B-Instruct"

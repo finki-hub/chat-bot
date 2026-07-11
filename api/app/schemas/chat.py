@@ -8,7 +8,12 @@ from app.constants.defaults import (
     DEFAULT_INFERENCE_MODEL,
     DEFAULT_QUERY_TRANSFORM_MODEL,
 )
-from app.llms.models import QUERY_TRANSFORM_MODELS, Model
+from app.llms.models import (
+    ACTIVE_EMBEDDING_MODELS,
+    CHAT_MODELS,
+    QUERY_TRANSFORM_MODELS,
+    Model,
+)
 from app.llms.query_modes import QueryTransformMode
 
 ChatInterface = Literal["discord", "web"]
@@ -145,6 +150,20 @@ class ChatSchema(BaseModel):
     def _must_support_query_transform(cls, value: Model) -> Model:
         if value not in QUERY_TRANSFORM_MODELS:
             raise ValueError("query_transform_model must be a chat-capable model")
+        return value
+
+    @field_validator("inference_model")
+    @classmethod
+    def _must_be_active_chat_model(cls, value: Model) -> Model:
+        if value not in CHAT_MODELS:
+            raise ValueError("inference_model must be an active chat model")
+        return value
+
+    @field_validator("embeddings_model")
+    @classmethod
+    def _must_be_active_embedding_model(cls, value: Model) -> Model:
+        if value not in ACTIVE_EMBEDDING_MODELS:
+            raise ValueError("embeddings_model must be an active embedding model")
         return value
 
     @property

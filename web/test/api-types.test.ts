@@ -101,7 +101,7 @@ describe('lib/api-types', () => {
   it('models a typed UIMessage with metadata + data-status part', () => {
     const msg: MyUIMessage = {
       id: 'm1',
-      metadata: { inferenceModel: 'claude-sonnet-4-6', responseId: 'r1' },
+      metadata: { inferenceModel: 'claude-sonnet-5', responseId: 'r1' },
       parts: [
         { text: 'одговор', type: 'text' },
         {
@@ -114,7 +114,7 @@ describe('lib/api-types', () => {
 
     expect(msg.id).toBe('m1');
     expect(msg.role).toBe('assistant');
-    expect(msg.metadata?.inferenceModel).toBe('claude-sonnet-4-6');
+    expect(msg.metadata?.inferenceModel).toBe('claude-sonnet-5');
     expect(msg.metadata?.responseId).toBe('r1');
     expect(msg.parts[0]?.type).toBe('text');
   });

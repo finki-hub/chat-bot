@@ -1,23 +1,26 @@
-import type { ModelId } from '@/lib/api-types';
+import type { ModelCatalog } from '@/lib/api-types';
 
 import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
+import { parseModelCatalog } from '@/lib/model-catalog';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=600';
 
-const isStringArray = (value: unknown): value is ModelId[] =>
-  Array.isArray(value) && value.every((item) => typeof item === 'string');
+const ERROR_CATALOG: ModelCatalog = { models: [], source: 'error', version: 1 };
 
-const fallback = (): Response =>
-  Response.json([] as ModelId[], {
+const respond = (catalog: ModelCatalog, cache: boolean): Response =>
+  Response.json(catalog, {
     headers: {
+      ...(cache && { 'cache-control': CACHE_CONTROL }),
       'content-type': 'application/json',
-      'x-models-source': 'error',
+      'x-models-source': catalog.source,
     },
     status: 200,
   });
+
+const fallback = (): Response => respond(ERROR_CATALOG, false);
 
 export const GET = async (): Promise<Response> => {
   let upstream: Response;
@@ -43,15 +46,10 @@ export const GET = async (): Promise<Response> => {
     return fallback();
   }
 
-  if (!isStringArray(body)) {
+  const catalog = parseModelCatalog(body);
+  if (catalog.source === 'error') {
     return fallback();
   }
 
-  return Response.json(body, {
-    headers: {
-      'cache-control': CACHE_CONTROL,
-      'content-type': 'application/json',
-    },
-    status: 200,
-  });
+  return respond(catalog, true);
 };

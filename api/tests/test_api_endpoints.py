@@ -43,7 +43,33 @@ def test_api_exposes_liveness_and_model_catalog_over_http(monkeypatch):
         "status": "ok",
     }
     assert models_without_key.status_code == 200
-    assert "claude-sonnet-5" in models_without_key.json()
+    body = models_without_key.json()
+    assert body["version"] == 1
+    assert body["source"] in {"live", "stale", "snapshot"}
+    assert len(body["models"]) == 12
+    assert "claude-sonnet-5" in {model["id"] for model in body["models"]}
+
+
+def test_models_endpoint_keeps_unauthenticated_access_with_typed_envelope(monkeypatch):
+    # Given the modernized unauthenticated models endpoint
+    monkeypatch.setattr("app.main.Database", HealthyDatabase)
+    app = make_app(
+        Settings(
+            API_KEY="test-api-key",
+            CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
+            MCP_API_KEY="test-mcp-key",
+        ),
+    )
+
+    # When the endpoint is requested without an API key
+    with TestClient(app) as client:
+        response = client.get("/chat/models")
+
+    # Then its contract is a typed, ordered descriptor envelope
+    assert response.status_code == 200
+    assert response.json()["version"] == 1
+    assert len(response.json()["models"]) == 12
+    assert all(isinstance(model["id"], str) for model in response.json()["models"])
 
 
 def test_chat_stream_requires_api_key(monkeypatch):

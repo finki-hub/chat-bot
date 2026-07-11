@@ -1,7 +1,5 @@
 import { ArrowUp, Brain, Loader2, Sparkles, Square } from 'lucide-react';
 
-import type { ModelGroup } from '@/lib/use-models';
-
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -13,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { t } from '@/lib/i18n';
+import { type ModelGroup, providerLabel, tierLabel } from '@/lib/model-catalog';
 import { isReasoningCapableModel } from '@/lib/reasoning';
 
 export type ComposerActionsProps = {
@@ -73,6 +72,12 @@ export const ComposerActions = ({
     );
   };
 
+  const selectedModel = groups
+    .flatMap((group) => group.providers)
+    .flatMap((provider) => provider.models)
+    .find((entry) => entry.id === model);
+  const triggerLabel = selectedModel?.name ?? modelPlaceholder;
+
   return (
     <div className="flex items-center gap-1.5 px-2 pb-2">
       <div
@@ -120,22 +125,42 @@ export const ComposerActions = ({
                 className="size-3.5"
               />
             )}
-            <SelectValue placeholder={modelPlaceholder} />
+            <SelectValue placeholder={modelPlaceholder}>
+              {triggerLabel}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent
             align="end"
             position="popper"
           >
-            {groups.map((g) => (
-              <SelectGroup key={g.provider}>
-                <SelectLabel>{g.provider}</SelectLabel>
-                {g.models.map((id) => (
-                  <SelectItem
-                    key={id}
-                    value={id}
+            {groups.map((group) => (
+              <SelectGroup key={group.tier}>
+                <SelectLabel data-testid="model-tier-label">
+                  {tierLabel(group.tier)}
+                </SelectLabel>
+                {group.providers.map((providerGroup) => (
+                  <fieldset
+                    aria-label={providerLabel(providerGroup.provider)}
+                    className="m-0 border-0 p-0"
+                    key={providerGroup.provider}
                   >
-                    {id}
-                  </SelectItem>
+                    <span
+                      aria-hidden="true"
+                      className="block px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                      data-testid="model-provider-label"
+                    >
+                      {providerLabel(providerGroup.provider)}
+                    </span>
+                    {providerGroup.models.map((entry) => (
+                      <SelectItem
+                        key={entry.id}
+                        textValue={entry.name}
+                        value={entry.id}
+                      >
+                        {entry.name}
+                      </SelectItem>
+                    ))}
+                  </fieldset>
                 ))}
               </SelectGroup>
             ))}

@@ -4,39 +4,30 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ModelDescriptor } from '@/lib/api-types';
+
 import { Composer } from '@/components/chat/composer';
-import { groupModelsByProvider } from '@/lib/use-models';
 
-const CLAUDE = 'claude-sonnet-4-6';
-const GPT = 'gpt-5.4-mini';
+const CLAUDE_ID = 'claude-sonnet-5';
+const CLAUDE_NAME = 'Claude Sonnet 5';
+const GPT_ID = 'gpt-5.4-mini';
+const GPT_NAME = 'GPT-5.4 Mini';
+const GPT_PREMIUM_ID = 'gpt-5.4';
+const GPT_PREMIUM_NAME = 'GPT-5.4';
+const GPT_CHEAP_ID = 'gpt-5.4-nano';
+const GPT_CHEAP_NAME = 'GPT-5.4 Nano';
 
-describe('groupModelsByProvider', () => {
-  it('groups by the part before "/" when present', () => {
-    const groups = groupModelsByProvider(['BAAI/bge-m3', 'BAAI/bge-large']);
-
-    expect(groups).toStrictEqual([
-      { models: ['BAAI/bge-large', 'BAAI/bge-m3'], provider: 'BAAI' },
-    ]);
-  });
-
-  it('infers the provider from the name prefix when there is no slash', () => {
-    const groups = groupModelsByProvider([CLAUDE, GPT, 'claude-opus-4-8']);
-
-    expect(groups).toStrictEqual([
-      { models: ['claude-opus-4-8', CLAUDE], provider: 'claude' },
-      { models: [GPT], provider: 'gpt' },
-    ]);
-  });
-
-  it('sorts providers and models and handles unknown ids', () => {
-    const groups = groupModelsByProvider(['zeta', 'BAAI/bge-m3']);
-
-    expect(groups).toStrictEqual([
-      { models: ['BAAI/bge-m3'], provider: 'BAAI' },
-      { models: ['zeta'], provider: 'zeta' },
-    ]);
-  });
-});
+const MODELS: ModelDescriptor[] = [
+  {
+    id: GPT_PREMIUM_ID,
+    name: GPT_PREMIUM_NAME,
+    provider: 'openai',
+    tier: 'premium',
+  },
+  { id: GPT_ID, name: GPT_NAME, provider: 'openai', tier: 'default' },
+  { id: CLAUDE_ID, name: CLAUDE_NAME, provider: 'anthropic', tier: 'default' },
+  { id: GPT_CHEAP_ID, name: GPT_CHEAP_NAME, provider: 'openai', tier: 'cheap' },
+];
 
 const setup = (overrides: Partial<ComponentProps<typeof Composer>> = {}) => {
   const onSubmit = vi.fn<(text: string) => void>();
@@ -45,8 +36,8 @@ const setup = (overrides: Partial<ComponentProps<typeof Composer>> = {}) => {
   const onReasoningChange = vi.fn<(reasoning: boolean) => void>();
   render(
     <Composer
-      model={CLAUDE}
-      models={[CLAUDE, GPT]}
+      model={CLAUDE_ID}
+      models={MODELS}
       onModelChange={onModelChange}
       onReasoningChange={onReasoningChange}
       onStop={onStop}
@@ -112,15 +103,41 @@ describe('Composer', () => {
     expect(screen.getByTestId('composer-submit')).toBeDisabled();
   });
 
-  it('renders every model id as an option', async () => {
+  it('renders every model as an option, labelled by its display name', async () => {
     setup();
     const user = userEvent.setup();
     await user.click(screen.getByTestId('composer-model'));
 
     await expect(
-      screen.findByRole('option', { name: CLAUDE }),
+      screen.findByRole('option', { name: CLAUDE_NAME }),
     ).resolves.toBeInTheDocument();
-    expect(screen.getByRole('option', { name: GPT })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: GPT_NAME })).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: GPT_PREMIUM_NAME }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders accessible tier groups before their provider subgroups', async () => {
+    setup();
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('composer-model'));
+
+    const groupLabels = await screen.findAllByTestId('model-tier-label');
+
+    expect(groupLabels.map((label) => label.textContent)).toStrictEqual([
+      'Премиум',
+      'Стандарден',
+      'Економичен',
+    ]);
+
+    const providerLabels = screen.getAllByTestId('model-provider-label');
+
+    expect(providerLabels.map((label) => label.textContent)).toStrictEqual([
+      'OpenAI',
+      'OpenAI',
+      'Anthropic',
+      'OpenAI',
+    ]);
   });
 
   it('focuses the input when typing starts elsewhere on the page', () => {
@@ -148,13 +165,13 @@ describe('Composer', () => {
     const { onModelChange } = setup();
     const user = userEvent.setup();
     await user.click(screen.getByTestId('composer-model'));
-    await user.click(await screen.findByRole('option', { name: GPT }));
+    await user.click(await screen.findByRole('option', { name: GPT_NAME }));
 
-    expect(onModelChange).toHaveBeenCalledWith(GPT);
+    expect(onModelChange).toHaveBeenCalledWith(GPT_ID);
   });
 
   it('toggles reasoning for a reasoning-capable model', () => {
-    const { onReasoningChange } = setup({ model: CLAUDE, reasoning: false });
+    const { onReasoningChange } = setup({ model: CLAUDE_ID, reasoning: false });
     const pill = screen.getByTestId('composer-reasoning');
 
     expect(pill).toHaveAttribute('aria-pressed', 'false');

@@ -54,18 +54,15 @@ def get_google_llm(
     """
     Return a user-scoped ChatGoogleGenerativeAI instance for the specified model.
 
-    When `reasoning` is on, `include_thoughts=True` returns the model's thoughts; Gemini 3
-    uses `thinking_level`, while Gemini 2.5 uses a `thinking_budget` token cap.
+    When `reasoning` is on, `include_thoughts=True` returns the model's thoughts and
+    Gemini 2.5 receives a bounded thinking budget.
     """
     client_kwargs: dict[str, object] = {}
     max_output = max_tokens
     if reasoning:
         client_kwargs["include_thoughts"] = True
         budget, max_output = thinking_budget(max_tokens)
-        if model == Model.GEMINI_3_FLASH_PREVIEW:
-            client_kwargs["thinking_level"] = "medium"
-        else:
-            client_kwargs["thinking_budget"] = budget
+        client_kwargs["thinking_budget"] = budget
     credential = require_provider_credential("google", credential)
     return ChatGoogleGenerativeAI(
         model=model.value,

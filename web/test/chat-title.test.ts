@@ -10,7 +10,7 @@ const titleInput = {
       role: 'user' as const,
     },
   ],
-  queryTransformModel: 'claude-sonnet-4-6',
+  queryTransformModel: 'claude-sonnet-5',
 };
 
 describe('generateChatTitle', () => {

@@ -1,7 +1,4 @@
-from collections.abc import AsyncIterator
-
 import pytest
-from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 
 from app.api import chat as chat_api
@@ -42,13 +39,7 @@ def _client() -> TestClient:
             "inference",
         ),
         (
-            Model.QWEN2_1_5_B_INSTRUCT,
-            Model.TEXT_EMBEDDING_3_LARGE,
-            "openai",
-            "embeddings",
-        ),
-        (
-            Model.MISTRAL,
+            Model.LLAMA_3_3_70B,
             Model.BGE_M3_LOCAL,
             "ollama",
             "inference",
@@ -93,46 +84,34 @@ def test_chat_requires_user_credential_before_mandatory_hosted_stage(
     assert not retrieval_started
 
 
-def test_chat_allows_gpu_inference_and_local_bge_without_provider_credentials(
+def test_removed_chat_model_is_rejected_before_retrieval_or_provider_dispatch(
     monkeypatch,
 ) -> None:
     retrieval_started = False
 
-    async def fake_retrieval(**kwargs) -> RetrievedContext:
+    async def fail_if_retrieval_starts(**kwargs) -> RetrievedContext:
         nonlocal retrieval_started
         retrieval_started = True
-        return RetrievedContext(text="Контекст")
-
-    async def fake_links(*args, **kwargs) -> str:
-        return ""
-
-    async def body() -> AsyncIterator[str]:
-        yield "data: local answer\n\n"
-
-    async def fake_handle_chat(*args, **kwargs) -> StreamingResponse:
-        return StreamingResponse(body(), media_type="text/event-stream")
+        raise AssertionError("removed model reached retrieval")
 
     monkeypatch.setattr(
         chat_api,
         "get_retrieved_context_with_sources",
-        fake_retrieval,
+        fail_if_retrieval_starts,
     )
-    monkeypatch.setattr(chat_api, "get_links_context", fake_links)
-    monkeypatch.setattr(chat_api, "handle_chat", fake_handle_chat)
 
     response = _client().post(
         "/chat/",
         headers={"x-api-key": "test-api-key"},
         json={
             "messages": [{"role": "user", "content": "Прашање?"}],
-            "inference_model": Model.QWEN2_1_5_B_INSTRUCT.value,
+            "inference_model": "claude-sonnet-4-6",
             "embeddings_model": Model.BGE_M3_LOCAL.value,
         },
     )
 
-    assert response.status_code == 200
-    assert retrieval_started
-    assert "local answer" in response.text
+    assert response.status_code == 422
+    assert not retrieval_started
 
 
 def test_chat_state_rejects_custom_credential_base_url_with_invalid_port() -> None:

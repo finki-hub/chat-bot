@@ -13,19 +13,16 @@ from app.data.connection import Database
 from app.data.diplomas import fetch_diploma_rows_for_fill
 from app.data.documents import fetch_chunk_rows_for_fill
 from app.data.professor_documents import fetch_professor_document_rows_for_fill
-from app.llms.google import generate_google_embeddings
 from app.llms.gpu_api import generate_gpu_api_embeddings
 from app.llms.models import (
+    ACTIVE_EMBEDDING_MODELS,
     ALL_MODELS_EMBEDDINGS,
     MODEL_EMBEDDING_DIMENSIONS,
     MODEL_EMBEDDINGS_COLUMNS,
     Model,
 )
-from app.llms.ollama import generate_ollama_embeddings
-from app.llms.openai import generate_openai_embeddings
 from app.llms.provider_credentials import (
     LlmProviderCredentials,
-    ProviderCredentialRequiredError,
     provider_for_model,
 )
 from app.llms.text_utils import _prepare_text_for_embedding
@@ -42,34 +39,9 @@ _EMBEDDING_RETRY_BASE_DELAY = 0.5
 async def _dispatch_embeddings(
     text: str | list[str],
     model: Model,
-    *,
-    is_document: bool,
-    credentials: LlmProviderCredentials | None,
 ) -> list[float] | list[list[float]]:
     match model:
-        case Model.LLAMA_3_3_70B | Model.BGE_M3:
-            return await generate_ollama_embeddings(
-                text,
-                model,
-                None if credentials is None else credentials.ollama,
-            )
-
-        case Model.TEXT_EMBEDDING_3_LARGE:
-            return await generate_openai_embeddings(
-                text,
-                model,
-                None if credentials is None else credentials.openai,
-            )
-
-        case Model.GEMINI_EMBEDDING_001:
-            return await generate_google_embeddings(
-                text,
-                model,
-                is_document=is_document,
-                credential=None if credentials is None else credentials.google,
-            )
-
-        case Model.MULTILINGUAL_E5_LARGE | Model.BGE_M3_LOCAL:
+        case Model.BGE_M3_LOCAL:
             return await generate_gpu_api_embeddings(text, model)
 
         case _:
@@ -122,11 +94,7 @@ async def generate_embeddings(
             return await _dispatch_embeddings(
                 text,
                 model,
-                is_document=is_document,
-                credentials=credentials,
             )
-        except ProviderCredentialRequiredError:
-            raise
         except ValueError:
             raise
         except Exception:
@@ -154,7 +122,7 @@ async def generate_embeddings(
 
 
 def ensure_self_hosted_embedding_model(model: Model) -> None:
-    if model not in MODEL_EMBEDDINGS_COLUMNS:
+    if model not in ACTIVE_EMBEDDING_MODELS:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported embedding model: {model.value}",

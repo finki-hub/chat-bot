@@ -8,9 +8,7 @@ import { createMemoryStorage } from '@/test/helpers/dom-stubs';
 
 const assistant = (responseId?: string, text = 'Одговор'): MyUIMessage => ({
   id: 'a1',
-  metadata: responseId
-    ? { inferenceModel: 'claude-sonnet-4-6', responseId }
-    : {},
+  metadata: responseId ? { inferenceModel: 'claude-sonnet-5', responseId } : {},
   parts: [{ text, type: 'text' }],
   role: 'assistant',
 });

@@ -7,17 +7,19 @@ import {
   useState,
 } from 'react';
 
+import type { ModelDescriptor } from '@/lib/api-types';
+
 import {
   ComposerActions,
   type ComposerStatus,
 } from '@/components/chat/composer-actions';
 import { t } from '@/lib/i18n';
-import { groupModelsByProvider } from '@/lib/use-models';
+import { groupModelsByProviderTier } from '@/lib/model-catalog';
 
 export type ComposerProps = {
   disabled?: boolean;
   model: string;
-  models: string[];
+  models: readonly ModelDescriptor[];
   modelsError?: boolean;
   modelsLoading?: boolean;
   onModelChange: (model: string) => void;
@@ -44,7 +46,7 @@ export const Composer = ({
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isBusy = status === 'streaming' || status === 'submitted';
-  const groups = useMemo(() => groupModelsByProvider(models), [models]);
+  const groups = useMemo(() => groupModelsByProviderTier(models), [models]);
   const noModels = models.length === 0;
   const modelSelectDisabled =
     (disabled ?? false) || modelsLoading === true || noModels;
