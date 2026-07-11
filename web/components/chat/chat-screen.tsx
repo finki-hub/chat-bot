@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useState } from 'react';
 import { Composer } from '@/components/chat/composer';
 import { ServiceBanner } from '@/components/chat/service-banner';
 import { Thread } from '@/components/chat/thread';
+import { CredentialSettingsDialog } from '@/components/shell/credential-settings-dialog';
 import { Header } from '@/components/shell/header';
 import { Sidebar } from '@/components/shell/sidebar';
 import { isReasoningCapableModel } from '@/lib/reasoning';
@@ -40,6 +41,7 @@ export const ChatScreen = () => {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const [sidebarSynced, setSidebarSynced] = useState(false);
+  const [credentialSettingsOpen, setCredentialSettingsOpen] = useState(false);
 
   const { unavailable } = useHealth();
 
@@ -86,7 +88,16 @@ export const ChatScreen = () => {
 
   return (
     <div className="flex h-dvh w-full flex-col">
-      <Header onToggleSidebar={toggleSidebar} />
+      <Header
+        onOpenCredentials={() => {
+          setCredentialSettingsOpen(true);
+        }}
+        onToggleSidebar={toggleSidebar}
+      />
+      <CredentialSettingsDialog
+        onOpenChange={setCredentialSettingsOpen}
+        open={credentialSettingsOpen}
+      />
       {unavailable ? <ServiceBanner /> : null}
       <div className="flex min-h-0 flex-1">
         <Sidebar

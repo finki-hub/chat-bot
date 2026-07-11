@@ -1,4 +1,6 @@
+from ipaddress import ip_address
 from typing import Annotated, Final, Literal, Self
+from urllib.parse import urlsplit
 
 from pydantic import (
     BaseModel,
@@ -12,6 +14,7 @@ from pydantic_settings import BaseSettings
 
 _API_KEY_DEFAULT: Final[str] = "your_api_key_here"
 _MCP_API_KEY_DEFAULT: Final[str] = "SystemPass"
+_CREDENTIAL_ENCRYPTION_KEY_DEFAULT: Final[str] = "your_byok_encryption_key_here"
 McpTransport = Literal["streamable_http", "sse"]
 NonBlankString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
@@ -19,6 +22,31 @@ NonBlankString = Annotated[str, StringConstraints(strip_whitespace=True, min_len
 def _is_insecure_secret(value: str, default: str) -> bool:
     normalized = value.strip()
     return normalized in ("", default)
+
+
+def _canonical_byok_base_url(value: str) -> str | None:
+    parsed = urlsplit(value.strip())
+    if parsed.scheme.lower() != "https" or parsed.hostname is None:
+        return None
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        return None
+    hostname = parsed.hostname.lower().rstrip(".")
+    if hostname == "localhost" or hostname.endswith((".localhost", ".local")):
+        return None
+    try:
+        address = ip_address(hostname)
+    except ValueError:
+        pass
+    else:
+        if not address.is_global:
+            return None
+    try:
+        parsed_port = parsed.port
+    except ValueError:
+        return None
+    port = f":{parsed_port}" if parsed_port is not None else ""
+    path = parsed.path.rstrip("/")
+    return f"https://{hostname}{port}{path}"
 
 
 class McpServerSettings(BaseModel):
@@ -62,18 +90,12 @@ class Settings(BaseSettings):
     MCP_API_KEY: str = _MCP_API_KEY_DEFAULT
 
     API_KEY: str = _API_KEY_DEFAULT
+    CREDENTIAL_ENCRYPTION_KEY: str = _CREDENTIAL_ENCRYPTION_KEY_DEFAULT
     DATABASE_URL: str = "postgresql://user:password@host:port/db"
     DATABASE_POOL_MIN_SIZE: int = Field(default=1, ge=0)
     DATABASE_POOL_MAX_SIZE: int = Field(default=10, ge=1)
 
-    OPENAI_API_KEY: str = "your_openai_api_key_here"
-    GOOGLE_API_KEY: str = "your_google_api_key_here"
-    ANTHROPIC_API_KEY: str = "your_anthropic_api_key_here"
-
-    OLLAMA_URL: str = "http://ollama:11434"
-    OPENAI_BASE_URL: str = ""
-    GOOGLE_BASE_URL: str = ""
-    ANTHROPIC_BASE_URL: str = ""
+    BYOK_ALLOWED_BASE_URLS: str = ""
 
     POSTHOG_KEY: str = ""
     POSTHOG_HOST: str = "https://eu.i.posthog.com"
@@ -107,10 +129,21 @@ class Settings(BaseSettings):
         """Normalise the value to a plain string — empty or comma-separated URLs."""
         return str(v).strip() if v else ""
 
+    @field_validator("BYOK_ALLOWED_BASE_URLS", mode="before")
+    @classmethod
+    def parse_byok_base_urls(cls, v: object) -> str:
+        """Normalise the BYOK custom endpoint allowlist to comma-separated URLs."""
+        return str(v).strip() if v else ""
+
     def insecure_secret_names(self) -> list[str]:
         insecure_names: list[str] = []
         if _is_insecure_secret(self.API_KEY, _API_KEY_DEFAULT):
             insecure_names.append("API_KEY")
+        if _is_insecure_secret(
+            self.CREDENTIAL_ENCRYPTION_KEY,
+            _CREDENTIAL_ENCRYPTION_KEY_DEFAULT,
+        ):
+            insecure_names.append("CREDENTIAL_ENCRYPTION_KEY")
         if (self.MCP_HTTP_URLS or self.MCP_SSE_URLS) and _is_insecure_secret(
             self.MCP_API_KEY,
             _MCP_API_KEY_DEFAULT,
@@ -132,6 +165,18 @@ class Settings(BaseSettings):
 
     def mcp_sse_url_list(self) -> list[str]:
         return [u for u in self.MCP_SSE_URLS.split(",") if u]
+
+    def byok_allowed_base_url_list(self) -> list[str]:
+        urls: list[str] = []
+        for url in self.BYOK_ALLOWED_BASE_URLS.split(","):
+            canonical = _canonical_byok_base_url(url)
+            if canonical is not None:
+                urls.append(canonical)
+        return urls
+
+    def is_byok_base_url_allowed(self, value: str) -> bool:
+        canonical = _canonical_byok_base_url(value)
+        return canonical is not None and canonical in self.byok_allowed_base_url_list()
 
     def mcp_server_configs(self) -> list[McpServerSettings]:
         if self.MCP_SERVERS:

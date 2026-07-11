@@ -19,44 +19,27 @@ from app.llms.agents import (
 )
 from app.llms.models import Model
 from app.llms.prompts import build_agent_messages
+from app.llms.provider_credentials import require_provider_credential
 from app.llms.tools import get_agent_tools
-from app.utils.settings import Settings
+from app.schemas.chat_credentials import ChatCredentialSecret
 
 logger = logging.getLogger(__name__)
-
-settings = Settings()
-
-# Model, temperature, top_p, max_tokens, reasoning -> LLM
-google_llm_clients: dict[
-    tuple[str, float, float, int, bool],
-    ChatGoogleGenerativeAI,
-] = {}
-# Model, is_document -> Embedder
-google_embedders: dict[tuple[str, bool], GoogleGenerativeAIEmbeddings] = {}
 
 
 def get_google_embedder(
     model: Model,
     *,
     is_document: bool = False,
+    credential: ChatCredentialSecret | None = None,
 ) -> GoogleGenerativeAIEmbeddings:
-    """
-    Return a singleton GoogleGenerativeAIEmbeddings instance for the specified model.
-    If the model is not already in the cache, create a new instance.
-    Uses task_type='RETRIEVAL_DOCUMENT' when indexing, 'RETRIEVAL_QUERY' when searching.
-    """
-    key = (model.value, is_document)
-
-    if key not in google_embedders:
-        task_type = "RETRIEVAL_DOCUMENT" if is_document else "RETRIEVAL_QUERY"
-        google_embedders[key] = GoogleGenerativeAIEmbeddings(
-            model=model.value,
-            api_key=SecretStr(settings.GOOGLE_API_KEY),
-            task_type=task_type,
-            base_url=settings.GOOGLE_BASE_URL or None,
-        )
-
-    return google_embedders[key]
+    task_type = "RETRIEVAL_DOCUMENT" if is_document else "RETRIEVAL_QUERY"
+    credential = require_provider_credential("google", credential)
+    return GoogleGenerativeAIEmbeddings(
+        model=model.value,
+        api_key=SecretStr(credential.api_key),
+        task_type=task_type,
+        base_url=credential.base_url or None,
+    )
 
 
 def get_google_llm(
@@ -66,37 +49,33 @@ def get_google_llm(
     max_tokens: int,
     *,
     reasoning: bool = False,
+    credential: ChatCredentialSecret | None = None,
 ) -> ChatGoogleGenerativeAI:
     """
-    Return a singleton ChatGoogleGenerativeAI instance for the specified model.
-    If the model and parameters are not already in the cache, create a new instance.
+    Return a user-scoped ChatGoogleGenerativeAI instance for the specified model.
 
     When `reasoning` is on, `include_thoughts=True` returns the model's thoughts; Gemini 3
     uses `thinking_level`, while Gemini 2.5 uses a `thinking_budget` token cap.
     """
-    key = (model.value, temperature, top_p, max_tokens, reasoning)
-
-    if key not in google_llm_clients:
-        client_kwargs: dict[str, object] = {}
-        max_output = max_tokens
-        if reasoning:
-            client_kwargs["include_thoughts"] = True
-            budget, max_output = thinking_budget(max_tokens)
-            if model == Model.GEMINI_3_FLASH_PREVIEW:
-                client_kwargs["thinking_level"] = "medium"
-            else:
-                client_kwargs["thinking_budget"] = budget
-        google_llm_clients[key] = ChatGoogleGenerativeAI(
-            model=model.value,
-            google_api_key=settings.GOOGLE_API_KEY,
-            base_url=settings.GOOGLE_BASE_URL or None,
-            temperature=temperature,
-            top_p=top_p,
-            max_output_tokens=max_output,
-            **client_kwargs,
-        )
-
-    return google_llm_clients[key]
+    client_kwargs: dict[str, object] = {}
+    max_output = max_tokens
+    if reasoning:
+        client_kwargs["include_thoughts"] = True
+        budget, max_output = thinking_budget(max_tokens)
+        if model == Model.GEMINI_3_FLASH_PREVIEW:
+            client_kwargs["thinking_level"] = "medium"
+        else:
+            client_kwargs["thinking_budget"] = budget
+    credential = require_provider_credential("google", credential)
+    return ChatGoogleGenerativeAI(
+        model=model.value,
+        google_api_key=credential.api_key,
+        base_url=credential.base_url or None,
+        temperature=temperature,
+        top_p=top_p,
+        max_output_tokens=max_output,
+        **client_kwargs,
+    )
 
 
 @overload
@@ -105,6 +84,7 @@ async def generate_google_embeddings(
     model: Model,
     *,
     is_document: bool = ...,
+    credential: ChatCredentialSecret | None = None,
 ) -> list[float]: ...
 
 
@@ -114,6 +94,7 @@ async def generate_google_embeddings(
     model: Model,
     *,
     is_document: bool = ...,
+    credential: ChatCredentialSecret | None = None,
 ) -> list[list[float]]: ...
 
 
@@ -122,6 +103,7 @@ async def generate_google_embeddings(
     model: Model,
     *,
     is_document: bool = False,
+    credential: ChatCredentialSecret | None = None,
 ) -> list[float] | list[list[float]]:
     """
     Generate embeddings for the given text using the specified Google model.
@@ -134,7 +116,7 @@ async def generate_google_embeddings(
         model.value,
     )
 
-    emb = get_google_embedder(model, is_document=is_document)
+    emb = get_google_embedder(model, is_document=is_document, credential=credential)
 
     if isinstance(text, str):
         return await asyncio.to_thread(emb.embed_query, text)
@@ -152,6 +134,7 @@ def stream_google_response(
     top_p: float,
     max_tokens: int,
     reasoning: bool = False,
+    credential: ChatCredentialSecret | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from the specified Google model using the provided prompts.
@@ -164,7 +147,14 @@ def stream_google_response(
         model.value,
     )
 
-    llm = get_google_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
+    llm = get_google_llm(
+        model,
+        temperature,
+        top_p,
+        max_tokens,
+        reasoning=reasoning,
+        credential=credential,
+    )
     prompt_messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
     def sync_token_gen() -> Generator[str]:
@@ -182,6 +172,7 @@ async def transform_query_with_google(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    credential: ChatCredentialSecret | None = None,
 ) -> str:
     """
     Transform a query using the specified Google model and system prompt.
@@ -195,7 +186,13 @@ async def transform_query_with_google(
     )
 
     try:
-        llm = get_google_llm(model, temperature, top_p, max_tokens)
+        llm = get_google_llm(
+            model,
+            temperature,
+            top_p,
+            max_tokens,
+            credential=credential,
+        )
 
         messages = [
             SystemMessage(content=system_prompt),
@@ -221,6 +218,7 @@ async def stream_google_agent_response(
     max_tokens: int,
     reasoning: bool = False,
     observation: StreamObservation | None = None,
+    credential: ChatCredentialSecret | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from a Google agent with MCP tools.
@@ -233,7 +231,14 @@ async def stream_google_agent_response(
     )
 
     try:
-        llm = get_google_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
+        llm = get_google_llm(
+            model,
+            temperature,
+            top_p,
+            max_tokens,
+            reasoning=reasoning,
+            credential=credential,
+        )
 
         tools = await get_agent_tools()
 
@@ -270,4 +275,5 @@ async def stream_google_agent_response(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
+            credential=credential,
         )

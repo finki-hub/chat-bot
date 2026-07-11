@@ -10,6 +10,7 @@ from app.llms.gpu_api import stream_gpu_api_response
 from app.llms.models import REASONING_CAPABLE_MODELS, Model
 from app.llms.ollama import stream_ollama_agent_response
 from app.llms.openai import stream_openai_agent_response
+from app.llms.provider_credentials import LlmProviderCredentials
 from app.schemas.chat import ChatInterface
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ async def stream_response_with_agent(
     reasoning: bool = False,
     observation: StreamObservation | None = None,
     interface: ChatInterface = "web",
+    credentials: LlmProviderCredentials | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from the specified model using the provided user prompt and system prompt with agent.
@@ -69,6 +71,7 @@ async def stream_response_with_agent(
                 max_tokens=max_tokens,
                 reasoning=reasoning,
                 observation=observation,
+                credential=None if credentials is None else credentials.ollama,
             )
 
         case (
@@ -93,6 +96,7 @@ async def stream_response_with_agent(
                 max_tokens=max_tokens,
                 reasoning=reasoning,
                 observation=observation,
+                credential=None if credentials is None else credentials.openai,
             )
 
         case (
@@ -109,6 +113,7 @@ async def stream_response_with_agent(
                 max_tokens=max_tokens,
                 reasoning=reasoning,
                 observation=observation,
+                credential=None if credentials is None else credentials.google,
             )
 
         case (
@@ -129,6 +134,7 @@ async def stream_response_with_agent(
                 max_tokens=max_tokens,
                 reasoning=reasoning,
                 observation=observation,
+                credential=None if credentials is None else credentials.anthropic,
             )
 
         case Model.QWEN2_1_5_B_INSTRUCT | Model.QWEN2_5_7B_INSTRUCT:

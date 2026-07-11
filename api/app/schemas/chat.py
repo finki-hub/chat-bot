@@ -1,4 +1,5 @@
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -26,6 +27,10 @@ class ConversationTurn(BaseModel):
 
 
 class ChatSchema(BaseModel):
+    user_id: UUID | None = Field(
+        None,
+        description="Authenticated chat user id used to resolve per-user provider credentials.",
+    )
     messages: list[ConversationTurn] = Field(
         min_length=1,
         max_length=10,

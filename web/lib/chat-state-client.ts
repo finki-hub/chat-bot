@@ -1,5 +1,11 @@
 import 'server-only';
 
+import type {
+  ChatCredentialProvider,
+  ChatCredentialPublic,
+  ChatCredentialUpsert,
+} from '@/lib/api-types';
+
 import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
 
 /* eslint-disable camelcase -- Python chat state API uses snake_case fields. */
@@ -10,9 +16,13 @@ export type ChatStateClient = {
   ) => Promise<void>;
   readonly clearConversations: (input: UserScopedInput) => Promise<void>;
   readonly deleteConversation: (input: LoadConversationInput) => Promise<void>;
+  readonly deleteCredential: (input: DeleteCredentialInput) => Promise<void>;
   readonly listConversations: (
     input: ListConversationsInput,
   ) => Promise<readonly ChatStateConversation[]>;
+  readonly listCredentials: (
+    input: UserScopedInput,
+  ) => Promise<readonly ChatCredentialPublic[]>;
   readonly loadConversation: (
     input: LoadConversationInput,
   ) => Promise<ChatStateConversationWithMessages>;
@@ -33,6 +43,9 @@ export type ChatStateClient = {
   readonly upsertConversation: (
     input: UpsertConversationInput,
   ) => Promise<void>;
+  readonly upsertCredential: (
+    input: UpsertCredentialInput,
+  ) => Promise<ChatCredentialPublic>;
   readonly upsertUserMessage: (input: UpsertUserMessageInput) => Promise<void>;
 };
 
@@ -80,6 +93,10 @@ type ClearActiveStreamInput = {
   readonly conversationId: string;
   readonly streamId: string;
   readonly userId: string;
+};
+
+type DeleteCredentialInput = UserScopedInput & {
+  readonly provider: ChatCredentialProvider;
 };
 
 type ListConversationsInput = {
@@ -139,6 +156,8 @@ type UpsertConversationInput = {
   readonly userId: string;
 };
 
+type UpsertCredentialInput = ChatCredentialUpsert & UserScopedInput;
+
 type UpsertUserMessageInput = {
   readonly content: string;
   readonly conversationId: string;
@@ -179,14 +198,18 @@ const sendStateRequest = async (
   }
 };
 
-const postStateJson = async <T>(path: string, body: string): Promise<T> => {
+const writeStateJson = async <T>(
+  path: string,
+  body: string,
+  method: 'POST' | 'PUT',
+): Promise<T> => {
   const response = await fetch(stateUrl(path), {
     body,
     headers: {
       'content-type': 'application/json',
       'x-api-key': CHAT_API_KEY,
     },
-    method: 'POST',
+    method,
   });
 
   if (!response.ok) {
@@ -195,6 +218,12 @@ const postStateJson = async <T>(path: string, body: string): Promise<T> => {
 
   return response.json() as Promise<T>;
 };
+
+const postStateJson = async <T>(path: string, body: string): Promise<T> =>
+  writeStateJson(path, body, 'POST');
+
+const putStateJson = async <T>(path: string, body: string): Promise<T> =>
+  writeStateJson(path, body, 'PUT');
 
 const readStateJson = async <T>(path: string): Promise<T> => {
   const response = await fetch(stateUrl(path), {
@@ -228,11 +257,21 @@ export const createChatStateClient = (): ChatStateClient => ({
       { method: 'DELETE' },
     );
   },
+  deleteCredential: async ({ provider, userId }) => {
+    await sendStateRequest(
+      `/users/${encodeURIComponent(userId)}/credentials/${provider}`,
+      { method: 'DELETE' },
+    );
+  },
   listConversations: async ({ limit, userId }) =>
     readStateJson<readonly ChatStateConversation[]>(
       `/conversations?user_id=${encodeURIComponent(userId)}${
         limit === undefined ? '' : `&limit=${encodeURIComponent(String(limit))}`
       }`,
+    ),
+  listCredentials: async ({ userId }) =>
+    readStateJson<readonly ChatCredentialPublic[]>(
+      `/users/${encodeURIComponent(userId)}/credentials`,
     ),
   loadConversation: async ({ conversationId, userId }) =>
     readStateJson<ChatStateConversationWithMessages>(
@@ -343,6 +382,15 @@ export const createChatStateClient = (): ChatStateClient => ({
       method: 'POST',
     });
   },
+  upsertCredential: async ({ apiKey, baseUrl, provider, userId }) =>
+    putStateJson<ChatCredentialPublic>(
+      `/users/${encodeURIComponent(userId)}/credentials/${provider}`,
+      JSON.stringify({
+        api_key: apiKey,
+        ...(baseUrl !== undefined && { base_url: baseUrl }),
+        provider,
+      }),
+    ),
   upsertUserMessage: async ({ content, conversationId, messageId, userId }) => {
     await sendStateRequest(`/conversations/${conversationId}/messages/user`, {
       body: JSON.stringify({

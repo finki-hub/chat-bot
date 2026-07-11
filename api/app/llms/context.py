@@ -11,6 +11,10 @@ from app.data.questions import get_closest_questions
 from app.llms.embeddings import generate_embeddings
 from app.llms.models import Model
 from app.llms.prompts import CONTEXTUALIZE_SYSTEM_PROMPT
+from app.llms.provider_credentials import (
+    LlmProviderCredentials,
+    has_provider_credential,
+)
 from app.llms.query_modes import QueryTransformMode
 from app.llms.query_transform import transform_query
 from app.llms.query_variants import (
@@ -66,13 +70,19 @@ async def _embed_variant(
     embedding_model: Model,
     *,
     is_document: bool,
+    credentials: LlmProviderCredentials | None = None,
 ) -> list[float]:
     prepared = _prepare_text_for_embedding(
         text,
         embedding_model,
         is_document=is_document,
     )
-    return await generate_embeddings(prepared, embedding_model, is_document=is_document)
+    return await generate_embeddings(
+        prepared,
+        embedding_model,
+        is_document=is_document,
+        credentials=credentials,
+    )
 
 
 async def _search_both(
@@ -95,12 +105,18 @@ def _embedding_for_variant(
     *,
     is_document: bool,
     original_embedding_task: asyncio.Task[list[float]],
+    credentials: LlmProviderCredentials | None,
 ) -> Awaitable[list[float]]:
     match kind:
         case "raw":
             return original_embedding_task
         case "rewrite" | "hyde":
-            return _embed_variant(text, embedding_model, is_document=is_document)
+            return _embed_variant(
+                text,
+                embedding_model,
+                is_document=is_document,
+                credentials=credentials,
+            )
         case unreachable:
             assert_never(unreachable)
     raise AssertionError(f"Unhandled query variant kind: {kind}")
@@ -229,6 +245,7 @@ async def get_retrieved_context(
     initial_k: int = 30,
     top_k: int = 10,
     on_stage: Callable[[str], None] | None = None,
+    credentials: LlmProviderCredentials | None = None,
 ) -> str:
     result = await get_retrieved_context_with_sources(
         db=db,
@@ -240,6 +257,7 @@ async def get_retrieved_context(
         initial_k=initial_k,
         top_k=top_k,
         on_stage=on_stage,
+        credentials=credentials,
     )
     return result.text
 
@@ -255,6 +273,7 @@ async def get_retrieved_context_with_sources(
     initial_k: int = 30,
     top_k: int = 10,
     on_stage: Callable[[str], None] | None = None,
+    credentials: LlmProviderCredentials | None = None,
 ) -> RetrievedContext:
     """Multi-query (original + rewritten + HyDE) retrieval over FAQ and chunks, reranked by a cross-encoder with vector-order fallback."""
 
@@ -268,17 +287,31 @@ async def get_retrieved_context_with_sources(
         if on_stage is not None:
             on_stage(stage)
 
+    transform_available = has_provider_credential(credentials, query_transform_model)
+    effective_transform_mode = (
+        query_transform_mode if transform_available else QueryTransformMode.RAW
+    )
     _stage("contextualize")
 
     with timed("retrieval.contextualize"):
-        search_query = await _contextualize_query(
-            query,
-            query_transform_model,
-            history_text,
+        search_query = (
+            await _contextualize_query(
+                query,
+                query_transform_model,
+                history_text,
+                credentials,
+            )
+            if transform_available
+            else query
         )
 
     original_embedding_task = asyncio.create_task(
-        _embed_variant(search_query, embedding_model, is_document=False),
+        _embed_variant(
+            search_query,
+            embedding_model,
+            is_document=False,
+            credentials=credentials,
+        ),
     )
 
     try:
@@ -286,7 +319,8 @@ async def get_retrieved_context_with_sources(
             variant_bundle = await build_query_variants(
                 search_query,
                 query_transform_model,
-                query_transform_mode,
+                effective_transform_mode,
+                credentials,
             )
     except asyncio.CancelledError:
         original_embedding_task.cancel()
@@ -299,11 +333,11 @@ async def get_retrieved_context_with_sources(
 
     logger.info(
         "Query transform mode %s produced variants: %s",
-        query_transform_mode.value,
+        effective_transform_mode.value,
         [(variant.kind, len(variant.text)) for variant in variant_bundle.variants],
     )
 
-    budget = retrieval_budget(query_transform_mode, initial_k)
+    budget = retrieval_budget(effective_transform_mode, initial_k)
 
     _stage("retrieve")
 
@@ -317,6 +351,7 @@ async def get_retrieved_context_with_sources(
                         embedding_model,
                         is_document=variant.is_document,
                         original_embedding_task=original_embedding_task,
+                        credentials=credentials,
                     )
                     for variant in variant_bundle.variants
                 ),
@@ -476,6 +511,7 @@ async def _contextualize_query(
     query: str,
     query_transform_model: Model,
     history_text: str | None,
+    credentials: LlmProviderCredentials | None = None,
 ) -> str:
     """Fold prior turns into a standalone retrieval query, so a follow-up like
     'колку чини тоа?' retrieves on the full question rather than a context-free fragment.
@@ -491,6 +527,7 @@ async def _contextualize_query(
             temperature=0.0,
             top_p=1.0,
             max_tokens=128,
+            credentials=credentials,
         )
     except Exception:
         logger.exception("Query contextualization failed; using the raw query")

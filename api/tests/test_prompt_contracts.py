@@ -82,6 +82,7 @@ def test_hyde_uses_conservative_sampling(monkeypatch):
         temperature: float,
         top_p: float,
         max_tokens: int,
+        credentials: object | None = None,
     ) -> str:
         await lowlevel.checkpoint()
         seen.update(

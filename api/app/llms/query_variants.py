@@ -4,6 +4,7 @@ from typing import Literal, assert_never
 
 from app.llms.models import Model
 from app.llms.prompts import HYDE_SYSTEM_PROMPT
+from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.query_modes import QueryTransformMode
 from app.llms.query_transform import transform_query
 from app.utils.timing import timed
@@ -41,6 +42,7 @@ async def build_query_variants(
     search_query: str,
     query_transform_model: Model,
     mode: QueryTransformMode,
+    credentials: LlmProviderCredentials | None = None,
 ) -> QueryVariantBundle:
     raw = QueryVariant(kind="raw", text=search_query, is_document=False)
 
@@ -48,7 +50,11 @@ async def build_query_variants(
         case QueryTransformMode.RAW:
             return QueryVariantBundle(variants=(raw,), rerank_query=search_query)
         case QueryTransformMode.REWRITE:
-            rewritten = await _rewrite_query(search_query, query_transform_model)
+            rewritten = await _rewrite_query(
+                search_query,
+                query_transform_model,
+                credentials,
+            )
             return QueryVariantBundle(
                 variants=(
                     QueryVariant(kind="rewrite", text=rewritten, is_document=False),
@@ -57,15 +63,19 @@ async def build_query_variants(
                 rerank_query=rewritten,
             )
         case QueryTransformMode.HYDE:
-            hyde = await _hyde_passage(search_query, query_transform_model)
+            hyde = await _hyde_passage(
+                search_query,
+                query_transform_model,
+                credentials,
+            )
             return QueryVariantBundle(
                 variants=(QueryVariant(kind="hyde", text=hyde, is_document=True), raw),
                 rerank_query=search_query,
             )
         case QueryTransformMode.REWRITE_HYDE:
             rewritten, hyde = await asyncio.gather(
-                _rewrite_query(search_query, query_transform_model),
-                _hyde_passage(search_query, query_transform_model),
+                _rewrite_query(search_query, query_transform_model, credentials),
+                _hyde_passage(search_query, query_transform_model, credentials),
             )
             return QueryVariantBundle(
                 variants=(
@@ -80,7 +90,11 @@ async def build_query_variants(
     raise AssertionError(f"Unhandled query transform mode: {mode}")
 
 
-async def _rewrite_query(search_query: str, query_transform_model: Model) -> str:
+async def _rewrite_query(
+    search_query: str,
+    query_transform_model: Model,
+    credentials: LlmProviderCredentials | None = None,
+) -> str:
     with timed("retrieval.query_rewrite"):
         rewritten = await transform_query(
             search_query,
@@ -88,11 +102,16 @@ async def _rewrite_query(search_query: str, query_transform_model: Model) -> str
             temperature=0.0,
             top_p=1.0,
             max_tokens=128,
+            credentials=credentials,
         )
     return rewritten.strip() or search_query
 
 
-async def _hyde_passage(search_query: str, query_transform_model: Model) -> str:
+async def _hyde_passage(
+    search_query: str,
+    query_transform_model: Model,
+    credentials: LlmProviderCredentials | None = None,
+) -> str:
     with timed("retrieval.hyde"):
         hyde = await transform_query(
             search_query,
@@ -101,5 +120,6 @@ async def _hyde_passage(search_query: str, query_transform_model: Model) -> str:
             temperature=0.2,
             top_p=1.0,
             max_tokens=200,
+            credentials=credentials,
         )
     return hyde.strip() or search_query

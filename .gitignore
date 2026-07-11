@@ -24,6 +24,7 @@ __pycache__/
 
 # OMC
 .omc/
+docs/superpowers/
 
 # Local git worktrees
 .worktrees/
