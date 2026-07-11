@@ -1,6 +1,7 @@
 import { ArrowRight, Bot, GraduationCap, ShieldCheck } from 'lucide-react';
 import { AuthError } from 'next-auth';
 import { redirect } from 'next/navigation';
+import { BsGoogle, BsMicrosoft } from 'react-icons/bs';
 
 import { auth, isAuthConfigured, providerMap, signIn } from '@/auth';
 import { getSafeCallbackUrl } from '@/lib/callback-url';
@@ -119,7 +120,20 @@ const SignInPage = async ({ searchParams }: SignInPageProps) => {
                     className="group flex w-full items-center justify-between rounded-2xl border border-border bg-background px-4 py-3 text-left text-sm font-medium transition hover:border-primary/60 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     type="submit"
                   >
-                    <span>Најави се со {provider.name}</span>
+                    <span className="flex items-center gap-3">
+                      {provider.id === 'google' ? (
+                        <BsGoogle
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0"
+                        />
+                      ) : (
+                        <BsMicrosoft
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0"
+                        />
+                      )}
+                      <span>Најави се со {provider.name}</span>
+                    </span>
                     <ArrowRight
                       aria-hidden="true"
                       className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary"

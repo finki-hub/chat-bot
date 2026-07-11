@@ -50,7 +50,7 @@ const authProviderDefinitions: readonly AuthProviderDefinition[] = [
       }),
     enabled: isMicrosoftConfigured,
     id: 'microsoft-entra-id',
-    name: 'Microsoft Entra ID',
+    name: 'Microsoft',
   },
 ];
 

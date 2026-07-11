@@ -7,7 +7,7 @@ Make the configured Google and Microsoft login methods easier to recognize while
 ## Design
 
 - Keep the existing auth card, provider-button spacing, semantic colors, hover treatment, focus ring, and trailing arrow.
-- Add a leading Google or Microsoft brand icon from `react-icons/si` beside each provider label. Icons are decorative and use `aria-hidden="true"`.
+- Add a leading Google or Microsoft brand icon from `react-icons` beside each provider label. Icons are decorative and use `aria-hidden="true"`.
 - Rename the Microsoft provider display name from `Microsoft Entra ID` to `Microsoft`.
 - Keep the Auth.js provider ID `microsoft-entra-id`, environment variable names, issuer configuration, callbacks, and persisted provider claims unchanged.
 - Render no locally authored SVG assets.

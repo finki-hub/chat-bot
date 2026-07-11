@@ -64,7 +64,7 @@ Expected: PASS.
 
 **Interfaces:**
 - Consumes: provider IDs `google` and `microsoft-entra-id`
-- Produces: decorative `SiGoogle` and `SiMicrosoft` React icon elements within the existing submit buttons
+- Produces: decorative `BsGoogle` and `BsMicrosoft` React icon elements within the existing submit buttons
 
 - [ ] **Step 1: Install the approved icon dependency**
 
@@ -74,7 +74,7 @@ Expected: `react-icons` appears in dependencies and the lockfile updates.
 - [ ] **Step 2: Import the two packaged brand icons**
 
 ```typescript
-import { SiGoogle, SiMicrosoft } from 'react-icons/si';
+import { BsGoogle, BsMicrosoft } from 'react-icons/bs';
 ```
 
 - [ ] **Step 3: Add the icon beside the provider label without changing submission behavior**
@@ -82,9 +82,9 @@ import { SiGoogle, SiMicrosoft } from 'react-icons/si';
 ```tsx
 <span className="flex items-center gap-3">
   {provider.id === 'google' ? (
-    <SiGoogle aria-hidden="true" className="h-4 w-4 shrink-0" />
+    <BsGoogle aria-hidden="true" className="h-4 w-4 shrink-0" />
   ) : (
-    <SiMicrosoft aria-hidden="true" className="h-4 w-4 shrink-0" />
+    <BsMicrosoft aria-hidden="true" className="h-4 w-4 shrink-0" />
   )}
   <span>Најави се со {provider.name}</span>
 </span>
