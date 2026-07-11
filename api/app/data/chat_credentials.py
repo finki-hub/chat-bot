@@ -125,10 +125,11 @@ async def get_chat_credential_secret(
         api_key = _fernet(settings).decrypt(encrypted.encode()).decode()
     except InvalidToken:
         return None
+    base_url = row["base_url"]
     return ChatCredentialSecret(
         provider=provider,
         api_key=api_key,
-        base_url=row["base_url"] if isinstance(row["base_url"], str) else None,
+        base_url=base_url if isinstance(base_url, str) else None,
     )
 
 
