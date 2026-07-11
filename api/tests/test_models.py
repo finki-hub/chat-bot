@@ -31,18 +31,22 @@ from app.schemas.chat import ChatSchema
 from app.schemas.chat_credentials import ChatCredentialSecret
 
 EXPECTED_CHAT_IDS = (
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-5.5",
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.4-nano",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
+    "gemini-3.1-pro-preview",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
     "claude-opus-4-8",
     "claude-sonnet-5",
     "claude-haiku-4-5",
-    "llama3.3:70b",
-    "deepseek-r1:70b",
-    "hf.co/LVSTCK/domestic-yak-8B-instruct-GGUF:Q8_0",
-    "hf.co/mradermacher/VezilkaLLM-GGUF:Q8_0",
+    "qwen3:30b-a3b-thinking-2507-q4_K_M",
+    "qwen3:30b-a3b-instruct-2507-q4_K_M",
+    "qwen3:14b-q4_K_M",
 )
 
 
@@ -54,6 +58,8 @@ def test_removed_chat_values_are_not_parseable_or_active() -> None:
         "claude-opus-4-7",
         "claude-sonnet-4-6",
         "gemini-3-flash-preview",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
         "gpt-4.1",
         "gpt-4.1-mini",
         "gpt-4.1-nano",
@@ -62,6 +68,10 @@ def test_removed_chat_values_are_not_parseable_or_active() -> None:
         "gpt-5-nano",
         "gpt-5.2",
         "mistral:latest",
+        "llama3.3:70b",
+        "deepseek-r1:70b",
+        "hf.co/LVSTCK/domestic-yak-8B-instruct-GGUF:Q8_0",
+        "hf.co/mradermacher/VezilkaLLM-GGUF:Q8_0",
         "qwen2.5:72b",
     }
 
@@ -147,7 +157,7 @@ def test_every_byok_chat_model_requires_provider_credential() -> None:
 
 
 def test_ollama_models_are_not_priced_as_self_hosted() -> None:
-    assert not is_self_hosted(Model.LLAMA_3_3_70B)
+    assert not is_self_hosted(Model.QWEN3_14B)
 
 
 def test_claude_sonnet_5_routes_to_anthropic(monkeypatch):

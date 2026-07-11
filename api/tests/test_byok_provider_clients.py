@@ -36,7 +36,7 @@ def test_google_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
     monkeypatch.setattr(google, "ChatGoogleGenerativeAI", GoogleCapturingClient)
 
     google.get_google_llm(
-        Model.GEMINI_2_5_FLASH,
+        Model.GEMINI_3_5_FLASH,
         temperature=0.0,
         top_p=1.0,
         max_tokens=128,
@@ -44,6 +44,29 @@ def test_google_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
     )
 
     assert captured_base_urls == [None]
+
+
+def test_gemini_3_reasoning_uses_thinking_level(monkeypatch) -> None:
+    captured: list[dict] = []
+
+    class GoogleCapturingClient:
+        def __init__(self, **kwargs):
+            captured.append(kwargs)
+
+    monkeypatch.setattr(google, "ChatGoogleGenerativeAI", GoogleCapturingClient)
+
+    google.get_google_llm(
+        Model.GEMINI_3_5_FLASH,
+        temperature=0.2,
+        top_p=0.8,
+        max_tokens=128,
+        reasoning=True,
+        credential=ChatCredentialSecret(provider="google", api_key="user-key"),
+    )
+
+    assert captured[0]["thinking_level"] == "medium"
+    assert captured[0]["include_thoughts"] is True
+    assert "thinking_budget" not in captured[0]
 
 
 def test_anthropic_byok_client_does_not_inherit_deployment_base_url(
@@ -102,7 +125,7 @@ def test_ollama_byok_client_uses_user_endpoint_and_bearer_key(monkeypatch) -> No
     monkeypatch.setattr(ollama, "ChatOllama", OllamaCapturingClient)
 
     ollama.get_llm(
-        Model.LLAMA_3_3_70B,
+        Model.QWEN3_14B,
         temperature=0.0,
         top_p=1.0,
         max_tokens=128,
@@ -119,7 +142,7 @@ def test_ollama_byok_client_uses_user_endpoint_and_bearer_key(monkeypatch) -> No
             "client_kwargs": {
                 "headers": {"Authorization": "Bearer ollama-user-key"},
             },
-            "model": Model.LLAMA_3_3_70B.value,
+            "model": Model.QWEN3_14B.value,
             "num_predict": 128,
             "reasoning": False,
             "temperature": 0.0,
@@ -144,7 +167,7 @@ def test_ollama_byok_clients_are_not_shared_between_requests(monkeypatch) -> Non
 
     for api_key in ("first-user-key", "second-user-key"):
         ollama.get_llm(
-            Model.LLAMA_3_3_70B,
+            Model.QWEN3_14B,
             temperature=0.0,
             top_p=1.0,
             max_tokens=128,
@@ -161,9 +184,9 @@ def test_ollama_byok_clients_are_not_shared_between_requests(monkeypatch) -> Non
     ("provider", "factory", "model"),
     [
         ("openai", openai.get_openai_llm, Model.GPT_5_4_MINI),
-        ("google", google.get_google_llm, Model.GEMINI_2_5_FLASH),
+        ("google", google.get_google_llm, Model.GEMINI_3_5_FLASH),
         ("anthropic", anthropic.get_anthropic_llm, Model.CLAUDE_HAIKU_4_5),
-        ("ollama", ollama.get_llm, Model.LLAMA_3_3_70B),
+        ("ollama", ollama.get_llm, Model.QWEN3_14B),
     ],
 )
 def test_byok_llm_client_requires_user_credential(

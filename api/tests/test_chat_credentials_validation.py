@@ -41,7 +41,7 @@ def _client() -> TestClient:
             "inference",
         ),
         (
-            Model.LLAMA_3_3_70B,
+            Model.QWEN3_14B,
             Model.BGE_M3_LOCAL,
             "ollama",
             "inference",

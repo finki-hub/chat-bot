@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { CatalogTier, ModelDescriptor } from '@/lib/api-types';
 
 import {
+  CURATED_MODEL_DESCRIPTORS,
   groupModelsByProviderTier,
   parseModelCatalog,
   providerLabel,
@@ -18,19 +19,34 @@ const STANDARD = 'default';
 const CHEAP = 'cheap';
 const LIVE = 'live';
 
+const EXPECTED_CURATED_IDS = [
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
+  'gpt-5.5',
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'gpt-5.4-nano',
+  'gemini-3.1-pro-preview',
+  'gemini-3.5-flash',
+  'gemini-3.1-flash-lite',
+  'claude-opus-4-8',
+  'claude-sonnet-5',
+  'claude-haiku-4-5',
+  'qwen3:30b-a3b-thinking-2507-q4_K_M',
+  'qwen3:30b-a3b-instruct-2507-q4_K_M',
+  'qwen3:14b-q4_K_M',
+];
+
 const GPT = 'gpt-5.4';
+const GPT_TERRA = 'gpt-5.6-terra';
 const GPT_MINI = 'gpt-5.4-mini';
 const GPT_MINI_NAME = 'GPT-5.4 Mini';
 const GPT_NANO = 'gpt-5.4-nano';
-const GEMINI_PRO = 'gemini-2.5-pro';
-const GEMINI_FLASH = 'gemini-2.5-flash';
+const GEMINI_PRO = 'gemini-3.1-pro-preview';
 const CLAUDE_OPUS = 'claude-opus-4-8';
-const CLAUDE_5 = 'claude-sonnet-5';
 const CLAUDE_LEGACY = 'claude-sonnet-4-6';
-const LLAMA = 'llama3.3:70b';
-const DEEPSEEK = 'deepseek-r1:70b';
-const DOMESTIC_YAK = 'hf.co/LVSTCK/domestic-yak-8B-instruct-GGUF:Q8_0';
-const VEZILKA = 'hf.co/mradermacher/VezilkaLLM-GGUF:Q8_0';
+const QWEN_THINKING = 'qwen3:30b-a3b-thinking-2507-q4_K_M';
 
 const descriptor = (
   id: string,
@@ -50,14 +66,24 @@ const typedModels = [
   },
   { id: GPT_NANO, name: 'GPT-5.4 Nano', provider: OPENAI, tier: CHEAP },
   { id: GPT_MINI, name: GPT_MINI_NAME, provider: OPENAI, tier: STANDARD },
-  { id: GEMINI_PRO, name: 'Gemini 2.5 Pro', provider: GOOGLE, tier: PREMIUM },
+  {
+    id: GEMINI_PRO,
+    name: 'Gemini 3.1 Pro Preview',
+    provider: GOOGLE,
+    tier: PREMIUM,
+  },
   {
     id: CLAUDE_OPUS,
     name: 'Claude Opus 4.8',
     provider: ANTHROPIC,
     tier: PREMIUM,
   },
-  { id: LLAMA, name: 'Llama 3.3 70B', provider: OLLAMA, tier: STANDARD },
+  {
+    id: QWEN_THINKING,
+    name: 'Qwen3 30B Thinking',
+    provider: OLLAMA,
+    tier: PREMIUM,
+  },
 ];
 
 const typedCatalog = (source: string = LIVE) => ({
@@ -67,6 +93,12 @@ const typedCatalog = (source: string = LIVE) => ({
 });
 
 describe('parseModelCatalog', () => {
+  it('exposes the complete executable fallback catalog', () => {
+    expect(Object.keys(CURATED_MODEL_DESCRIPTORS)).toStrictEqual(
+      EXPECTED_CURATED_IDS,
+    );
+  });
+
   it('parses a typed catalog and keeps only the web-relevant fields', () => {
     const catalog = parseModelCatalog(typedCatalog());
 
@@ -83,72 +115,12 @@ describe('parseModelCatalog', () => {
   });
 
   it('normalizes every curated legacy id with its immutable fallback descriptor', () => {
-    const legacyIds = [
-      GPT,
-      GPT_MINI,
-      GPT_NANO,
-      GEMINI_PRO,
-      GEMINI_FLASH,
-      CLAUDE_OPUS,
-      CLAUDE_5,
-      'claude-haiku-4-5',
-      LLAMA,
-      DEEPSEEK,
-      DOMESTIC_YAK,
-      VEZILKA,
-    ];
-    const catalog = parseModelCatalog(legacyIds);
+    const catalog = parseModelCatalog(EXPECTED_CURATED_IDS);
 
     expect(catalog.source).toBe(LIVE);
-    expect(catalog.models).toStrictEqual([
-      { id: GPT, name: 'GPT-5.4', provider: OPENAI, tier: PREMIUM },
-      { id: GPT_MINI, name: GPT_MINI_NAME, provider: OPENAI, tier: STANDARD },
-      { id: GPT_NANO, name: 'GPT-5.4 Nano', provider: OPENAI, tier: CHEAP },
-      {
-        id: GEMINI_PRO,
-        name: 'Gemini 2.5 Pro',
-        provider: GOOGLE,
-        tier: PREMIUM,
-      },
-      {
-        id: GEMINI_FLASH,
-        name: 'Gemini 2.5 Flash',
-        provider: GOOGLE,
-        tier: STANDARD,
-      },
-      {
-        id: CLAUDE_OPUS,
-        name: 'Claude Opus 4.8',
-        provider: ANTHROPIC,
-        tier: PREMIUM,
-      },
-      {
-        id: CLAUDE_5,
-        name: 'Claude Sonnet 5',
-        provider: ANTHROPIC,
-        tier: STANDARD,
-      },
-      {
-        id: 'claude-haiku-4-5',
-        name: 'Claude Haiku 4.5',
-        provider: ANTHROPIC,
-        tier: CHEAP,
-      },
-      { id: LLAMA, name: 'Llama 3.3 70B', provider: OLLAMA, tier: STANDARD },
-      {
-        id: DEEPSEEK,
-        name: 'DeepSeek R1 70B',
-        provider: OLLAMA,
-        tier: STANDARD,
-      },
-      {
-        id: DOMESTIC_YAK,
-        name: 'Domestic Yak 8B Instruct',
-        provider: OLLAMA,
-        tier: CHEAP,
-      },
-      { id: VEZILKA, name: 'VezilkaLLM', provider: OLLAMA, tier: CHEAP },
-    ]);
+    expect(catalog.models).toStrictEqual(
+      Object.values(CURATED_MODEL_DESCRIPTORS),
+    );
   });
 
   it('uses inferred provider, raw id name, and default tier for an unknown legacy id', () => {
@@ -258,7 +230,7 @@ describe('groupModelsByProviderTier', () => {
     ]);
     expect(
       groups.map(({ providers }) => providers.map(({ provider }) => provider)),
-    ).toStrictEqual([[OPENAI, GOOGLE, ANTHROPIC], [OPENAI, OLLAMA], [OPENAI]]);
+    ).toStrictEqual([[OPENAI, GOOGLE, ANTHROPIC, OLLAMA], [OPENAI], [OPENAI]]);
     expect(
       groups[0]?.providers[0]?.models.map((model) => model.id),
     ).toStrictEqual([GPT]);
@@ -271,7 +243,7 @@ describe('groupModelsByProviderTier', () => {
   });
 
   it('is stable for models that share a tier', () => {
-    const { models } = parseModelCatalog([LLAMA, DEEPSEEK]);
+    const { models } = parseModelCatalog([GPT_TERRA, GPT_MINI]);
 
     const groups = groupModelsByProviderTier(models);
 
@@ -279,7 +251,7 @@ describe('groupModelsByProviderTier', () => {
     expect(groups[0]?.providers).toHaveLength(1);
     expect(
       groups[0]?.providers[0]?.models.map((model) => model.id),
-    ).toStrictEqual([LLAMA, DEEPSEEK]);
+    ).toStrictEqual([GPT_TERRA, GPT_MINI]);
   });
 });
 

@@ -49,12 +49,7 @@ async def stream_response_with_agent(
         observation.model = model.value
 
     match model:
-        case (
-            Model.LLAMA_3_3_70B
-            | Model.DEEPSEEK_R1_70B
-            | Model.DOMESTIC_YAK_8B_INSTRUCT_GGUF
-            | Model.VEZILKALLM_GGUF
-        ):
+        case Model.QWEN3_30B_THINKING | Model.QWEN3_30B_INSTRUCT | Model.QWEN3_14B:
             _tag_provider(observation, "ollama")
             return await stream_ollama_agent_response(
                 user_prompt,
@@ -69,7 +64,15 @@ async def stream_response_with_agent(
                 credential=None if credentials is None else credentials.ollama,
             )
 
-        case Model.GPT_5_4 | Model.GPT_5_4_MINI | Model.GPT_5_4_NANO:
+        case (
+            Model.GPT_5_6_SOL
+            | Model.GPT_5_6_TERRA
+            | Model.GPT_5_6_LUNA
+            | Model.GPT_5_5
+            | Model.GPT_5_4
+            | Model.GPT_5_4_MINI
+            | Model.GPT_5_4_NANO
+        ):
             _tag_provider(observation, "openai")
             return await stream_openai_agent_response(
                 user_prompt,
@@ -84,7 +87,11 @@ async def stream_response_with_agent(
                 credential=None if credentials is None else credentials.openai,
             )
 
-        case Model.GEMINI_2_5_FLASH | Model.GEMINI_2_5_PRO:
+        case (
+            Model.GEMINI_3_1_PRO_PREVIEW
+            | Model.GEMINI_3_5_FLASH
+            | Model.GEMINI_3_1_FLASH_LITE
+        ):
             _tag_provider(observation, "google")
             return await stream_google_agent_response(
                 user_prompt,

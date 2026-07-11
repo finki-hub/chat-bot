@@ -27,23 +27,32 @@ const TIER_ORDER = ['premium', 'default', 'cheap'] as const;
 const API_CATALOG_SOURCES = ['live', 'snapshot', 'stale'] as const;
 
 const CURATED_MODEL_DATA = [
+  ['gpt-5.6-sol', 'GPT-5.6 Sol', 'openai', 'premium'],
+  ['gpt-5.6-terra', 'GPT-5.6 Terra', 'openai', 'default'],
+  ['gpt-5.6-luna', 'GPT-5.6 Luna', 'openai', 'cheap'],
+  ['gpt-5.5', 'GPT-5.5', 'openai', 'premium'],
   ['gpt-5.4', 'GPT-5.4', 'openai', 'premium'],
   ['gpt-5.4-mini', 'GPT-5.4 Mini', 'openai', 'default'],
   ['gpt-5.4-nano', 'GPT-5.4 Nano', 'openai', 'cheap'],
-  ['gemini-2.5-pro', 'Gemini 2.5 Pro', 'google', 'premium'],
-  ['gemini-2.5-flash', 'Gemini 2.5 Flash', 'google', 'default'],
+  ['gemini-3.1-pro-preview', 'Gemini 3.1 Pro Preview', 'google', 'premium'],
+  ['gemini-3.5-flash', 'Gemini 3.5 Flash', 'google', 'default'],
+  ['gemini-3.1-flash-lite', 'Gemini 3.1 Flash Lite', 'google', 'cheap'],
   ['claude-opus-4-8', 'Claude Opus 4.8', 'anthropic', 'premium'],
   ['claude-sonnet-5', 'Claude Sonnet 5', 'anthropic', 'default'],
   ['claude-haiku-4-5', 'Claude Haiku 4.5', 'anthropic', 'cheap'],
-  ['llama3.3:70b', 'Llama 3.3 70B', 'ollama', 'default'],
-  ['deepseek-r1:70b', 'DeepSeek R1 70B', 'ollama', 'default'],
   [
-    'hf.co/LVSTCK/domestic-yak-8B-instruct-GGUF:Q8_0',
-    'Domestic Yak 8B Instruct',
+    'qwen3:30b-a3b-thinking-2507-q4_K_M',
+    'Qwen3 30B Thinking',
     'ollama',
-    'cheap',
+    'premium',
   ],
-  ['hf.co/mradermacher/VezilkaLLM-GGUF:Q8_0', 'VezilkaLLM', 'ollama', 'cheap'],
+  [
+    'qwen3:30b-a3b-instruct-2507-q4_K_M',
+    'Qwen3 30B Instruct',
+    'ollama',
+    'default',
+  ],
+  ['qwen3:14b-q4_K_M', 'Qwen3 14B', 'ollama', 'cheap'],
 ] as const satisfies ReadonlyArray<
   readonly [string, string, CatalogProvider, CatalogTier]
 >;

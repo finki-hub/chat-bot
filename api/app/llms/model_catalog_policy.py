@@ -40,23 +40,42 @@ def _policy(
 
 
 MODEL_CATALOG: Final[tuple[CatalogPolicy, ...]] = (
+    _policy(Model.GPT_5_6_SOL, "openai", "premium", "GPT-5.6 Sol"),
+    _policy(Model.GPT_5_6_TERRA, "openai", "default", "GPT-5.6 Terra"),
+    _policy(Model.GPT_5_6_LUNA, "openai", "cheap", "GPT-5.6 Luna"),
+    _policy(Model.GPT_5_5, "openai", "premium", "GPT-5.5"),
     _policy(Model.GPT_5_4, "openai", "premium", "GPT-5.4"),
     _policy(Model.GPT_5_4_MINI, "openai", "default", "GPT-5.4 Mini"),
     _policy(Model.GPT_5_4_NANO, "openai", "cheap", "GPT-5.4 Nano"),
-    _policy(Model.GEMINI_2_5_PRO, "google", "premium", "Gemini 2.5 Pro"),
-    _policy(Model.GEMINI_2_5_FLASH, "google", "default", "Gemini 2.5 Flash"),
+    _policy(
+        Model.GEMINI_3_1_PRO_PREVIEW,
+        "google",
+        "premium",
+        "Gemini 3.1 Pro Preview",
+    ),
+    _policy(Model.GEMINI_3_5_FLASH, "google", "default", "Gemini 3.5 Flash"),
+    _policy(
+        Model.GEMINI_3_1_FLASH_LITE,
+        "google",
+        "cheap",
+        "Gemini 3.1 Flash Lite",
+    ),
     _policy(Model.CLAUDE_OPUS_4_8, "anthropic", "premium", "Claude Opus 4.8"),
     _policy(Model.CLAUDE_SONNET_5, "anthropic", "default", "Claude Sonnet 5"),
     _policy(Model.CLAUDE_HAIKU_4_5, "anthropic", "cheap", "Claude Haiku 4.5"),
-    _policy(Model.LLAMA_3_3_70B, "ollama", "default", "Llama 3.3 70B"),
-    _policy(Model.DEEPSEEK_R1_70B, "ollama", "default", "DeepSeek R1 70B"),
     _policy(
-        Model.DOMESTIC_YAK_8B_INSTRUCT_GGUF,
+        Model.QWEN3_30B_THINKING,
         "ollama",
-        "cheap",
-        "Domestic Yak 8B Instruct",
+        "premium",
+        "Qwen3 30B Thinking",
     ),
-    _policy(Model.VEZILKALLM_GGUF, "ollama", "cheap", "VezilkaLLM"),
+    _policy(
+        Model.QWEN3_30B_INSTRUCT,
+        "ollama",
+        "default",
+        "Qwen3 30B Instruct",
+    ),
+    _policy(Model.QWEN3_14B, "ollama", "cheap", "Qwen3 14B"),
 )
 
 if tuple(policy.model for policy in MODEL_CATALOG) != CHAT_MODEL_ORDER:

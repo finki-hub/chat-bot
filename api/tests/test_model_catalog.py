@@ -16,18 +16,22 @@ from app.llms.model_catalog import (
 from app.llms.model_catalog_policy import MODEL_CATALOG
 
 EXPECTED_IDS = [
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-5.5",
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.4-nano",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
+    "gemini-3.1-pro-preview",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
     "claude-opus-4-8",
     "claude-sonnet-5",
     "claude-haiku-4-5",
-    "llama3.3:70b",
-    "deepseek-r1:70b",
-    "hf.co/LVSTCK/domestic-yak-8B-instruct-GGUF:Q8_0",
-    "hf.co/mradermacher/VezilkaLLM-GGUF:Q8_0",
+    "qwen3:30b-a3b-thinking-2507-q4_K_M",
+    "qwen3:30b-a3b-instruct-2507-q4_K_M",
+    "qwen3:14b-q4_K_M",
 ]
 
 
@@ -43,16 +47,16 @@ def _payload(*, name: str = "Remote GPT", description: str = "display only") -> 
     return (
         "{"
         '"openai":{"id":"openai","name":"OpenAI","models":{'
-        '"gpt-5.4":{"id":"gpt-5.4","name":"'
+        '"gpt-5.6-sol":{"id":"gpt-5.6-sol","name":"'
         + name
         + '","description":"'
         + description
         + '","reasoning":true,"tool_call":true,"structured_output":true,'
         '"temperature":false,"modalities":{"input":["text"],"output":["text"]},'
         '"limit":{"context":1000000,"input":900000,"output":100000},'
-        '"cost":{"input":2.5,"output":15.0},"status":"available"},'
+        '"cost":{"input":5.0,"output":30.0},"status":"available"},'
         '"remote-only":{"id":"remote-only","name":"Never executable"},'
-        '"gpt-5.4-mini":{"id":7,"name":"malformed"}'
+        '"gpt-5.6-terra":{"id":7,"name":"malformed"}'
         "}}}"
     ).encode()
 
@@ -67,13 +71,17 @@ def test_static_catalog_has_exact_order_provider_and_tiers() -> None:
         "default",
         "cheap",
         "premium",
-        "default",
         "premium",
         "default",
         "cheap",
-        "default",
+        "premium",
         "default",
         "cheap",
+        "premium",
+        "default",
+        "cheap",
+        "premium",
+        "default",
         "cheap",
     ]
 

@@ -182,7 +182,7 @@ describe('Composer', () => {
   });
 
   it('disables the reasoning toggle for non-capable models', () => {
-    setup({ model: 'llama3.3:70b', reasoning: false });
+    setup({ model: 'qwen3:30b-a3b-instruct-2507-q4_K_M', reasoning: false });
 
     expect(screen.getByTestId('composer-reasoning')).toBeDisabled();
   });

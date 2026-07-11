@@ -58,8 +58,9 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
       page.getByRole('option', { exact: true, name: 'GPT-5.4' }),
     ).toBeVisible();
     await expect(
-      page.getByRole('option', { name: 'VezilkaLLM' }),
+      page.getByRole('option', { name: 'Qwen3 30B Thinking' }),
     ).toBeVisible();
+    await page.screenshot({ path: 'test-results/model-selector-open-qa.png' });
 
     const selectedModel = page.getByRole('option', {
       exact: true,

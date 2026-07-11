@@ -9,11 +9,16 @@ from app.llms.models import Model
 
 # (input_usd_per_1m, output_usd_per_1m) for hosted models with a reliable published price.
 HOSTED_PRICING: dict[Model, tuple[float, float]] = {
+    Model.GPT_5_6_SOL: (5.00, 30.00),
+    Model.GPT_5_6_TERRA: (2.50, 15.00),
+    Model.GPT_5_6_LUNA: (1.00, 6.00),
+    Model.GPT_5_5: (5.00, 30.00),
     Model.GPT_5_4: (2.50, 15.00),
     Model.GPT_5_4_MINI: (0.75, 4.50),
     Model.GPT_5_4_NANO: (0.20, 1.25),
-    Model.GEMINI_2_5_FLASH: (0.30, 2.50),
-    Model.GEMINI_2_5_PRO: (1.25, 10.00),
+    Model.GEMINI_3_1_PRO_PREVIEW: (2.00, 12.00),
+    Model.GEMINI_3_5_FLASH: (1.50, 9.00),
+    Model.GEMINI_3_1_FLASH_LITE: (0.25, 1.50),
     Model.CLAUDE_OPUS_4_8: (5.00, 25.00),
     Model.CLAUDE_SONNET_5: (3.00, 15.00),
     Model.CLAUDE_HAIKU_4_5: (1.00, 5.00),

@@ -131,6 +131,7 @@ export const ComposerActions = ({
           </SelectTrigger>
           <SelectContent
             align="end"
+            collisionPadding={{ bottom: 12, left: 12, right: 12, top: 56 }}
             position="popper"
           >
             {groups.map((group) => (

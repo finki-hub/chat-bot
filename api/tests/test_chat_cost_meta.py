@@ -43,10 +43,12 @@ def _run_captured_stream(
         "capture",
         lambda distinct_id, event, props: captured.append((distinct_id, event, props)),
     )
-    payload = ChatSchema(
-        interface="web",
-        inference_model=model,
-        messages=[{"role": "user", "content": "Прашање?"}],
+    payload = ChatSchema.model_validate(
+        {
+            "interface": "web",
+            "inference_model": model,
+            "messages": [{"role": "user", "content": "Прашање?"}],
+        },
     )
     observation = StreamObservation(distinct_id="user-1", response_id="response-1")
 
@@ -89,7 +91,7 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
 
 
 def test_chat_stream_records_bare_data_token_frames(monkeypatch):
-    chunks, props = _run_captured_stream(monkeypatch, _gpu_body(), Model.LLAMA_3_3_70B)
+    chunks, props = _run_captured_stream(monkeypatch, _gpu_body(), Model.QWEN3_14B)
 
     assert chunks[0] == "data: self-hosted answer\n\n"
     assert props["$ai_output_choices"] == [
@@ -101,7 +103,7 @@ def test_chat_stream_records_fragmented_bare_data_token_frames(monkeypatch):
     chunks, props = _run_captured_stream(
         monkeypatch,
         _gpu_fragmented_body(),
-        Model.LLAMA_3_3_70B,
+        Model.QWEN3_14B,
     )
 
     assert chunks[:3] == [
@@ -115,14 +117,16 @@ def test_chat_stream_records_fragmented_bare_data_token_frames(monkeypatch):
 
 
 def test_chat_request_log_fields_do_not_include_message_content():
-    payload = ChatSchema(
-        interface="web",
-        inference_model=Model.CLAUDE_HAIKU_4_5,
-        messages=[
-            {"role": "user", "content": "private first question"},
-            {"role": "assistant", "content": "private previous answer"},
-            {"role": "user", "content": "private latest question"},
-        ],
+    payload = ChatSchema.model_validate(
+        {
+            "interface": "web",
+            "inference_model": Model.CLAUDE_HAIKU_4_5,
+            "messages": [
+                {"role": "user", "content": "private first question"},
+                {"role": "assistant", "content": "private previous answer"},
+                {"role": "user", "content": "private latest question"},
+            ],
+        },
     )
 
     fields = chat_api._chat_request_log_fields(payload)  # noqa: SLF001
@@ -145,14 +149,16 @@ def test_chat_request_log_fields_do_not_include_message_content():
 
 
 def test_chat_request_posthog_fields_include_message_content():
-    payload = ChatSchema(
-        interface="web",
-        inference_model=Model.CLAUDE_HAIKU_4_5,
-        messages=[
-            {"role": "user", "content": "private first question"},
-            {"role": "assistant", "content": "private previous answer"},
-            {"role": "user", "content": "private latest question"},
-        ],
+    payload = ChatSchema.model_validate(
+        {
+            "interface": "web",
+            "inference_model": Model.CLAUDE_HAIKU_4_5,
+            "messages": [
+                {"role": "user", "content": "private first question"},
+                {"role": "assistant", "content": "private previous answer"},
+                {"role": "user", "content": "private latest question"},
+            ],
+        },
     )
 
     fields = chat_api._chat_request_posthog_fields(payload)  # noqa: SLF001

@@ -72,6 +72,12 @@ for six hours; refresh failures serve the last successful catalog, and cold-star
 failures use the bundled snapshot. Remote metadata cannot add executable model IDs,
 change providers or tiers, or alter execution policy.
 
+The hosted catalog includes GPT-5.6 Sol, Terra, and Luna, GPT-5.5, and the current
+Gemini 3.5 Flash, Gemini 3.1 Pro Preview, and Gemini 3.1 Flash Lite models. The
+Ollama catalog uses multilingual Qwen3 30B and 14B quantizations selected to fit a
+24 GB GPU; the advertised context limits still require enough remaining memory for
+the KV cache.
+
 `BAAI/bge-m3`, `text-embedding-3-large`, and `gemini-embedding-001` are active for authenticated chat requests. Corpus fill jobs remain limited to local BGE-M3 because they do not have a user credential boundary. Legacy embedding columns and historical model values remain readable for existing data.
 
 The compose files also support optional variables that are not listed in `.env.sample` because they have built-in defaults: `POSTHOG_KEY`, `POSTHOG_HOST`, `RERANKER_MODEL`, and `WEB_API_BASE_URL`.
