@@ -199,6 +199,51 @@ describe('createChatStateClient', () => {
     });
   });
 
+  it('forwards BYOK credential writes without exposing the secret elsewhere', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json(
+        Object.fromEntries([
+          ['base_url', 'https://api.openai.com/v1'],
+          ['has_api_key', true],
+          ['provider', 'openai'],
+          ['user_id', CHAT_USER_ID],
+        ]),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createChatStateClient } = await import('@/lib/chat-state-client');
+    const credential = await createChatStateClient().upsertCredential({
+      apiKey: 'user-secret-key',
+      baseUrl: 'https://api.openai.com/v1',
+      provider: 'openai',
+      userId: CHAT_USER_ID,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(url).toBe(
+      `https://api:8880/chat/state/users/${CHAT_USER_ID}/credentials/openai`,
+    );
+    expect(init.method).toBe('PUT');
+    expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
+    expect(JSON.parse(init.body as string)).toStrictEqual(
+      Object.fromEntries([
+        ['api_key', 'user-secret-key'],
+        ['base_url', 'https://api.openai.com/v1'],
+        ['provider', 'openai'],
+      ]),
+    );
+    expect(credential).toStrictEqual(
+      Object.fromEntries([
+        ['base_url', 'https://api.openai.com/v1'],
+        ['has_api_key', true],
+        ['provider', 'openai'],
+        ['user_id', CHAT_USER_ID],
+      ]),
+    );
+  });
+
   it('throws a typed request error when state writes fail', async () => {
     vi.stubGlobal(
       'fetch',

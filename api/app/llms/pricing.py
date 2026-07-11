@@ -1,9 +1,8 @@
 """Single source of truth for hosted-model token prices (USD per 1M tokens).
 
-Update prices here when a provider changes them. Self-hosted models (Ollama and the local
-GPU) have no marginal token cost and are priced at 0; brand-new hosted models without a
-reliable published price are omitted, so callers treat their cost as unknown rather than
-guessing.
+Update prices here when a provider changes them. Self-hosted local GPU models have no
+marginal token cost and are priced at 0; provider models without a reliable published price
+are omitted, so callers treat their cost as unknown rather than guessing.
 """
 
 from app.llms.models import Model
@@ -20,16 +19,9 @@ HOSTED_PRICING: dict[Model, tuple[float, float]] = {
     Model.CLAUDE_SONNET_4_6: (3.00, 15.00),
 }
 
-# Models we run ourselves (Ollama + local GPU): zero marginal token cost.
+# Models we run ourselves on the local GPU: zero marginal token cost.
 SELF_HOSTED_MODELS: frozenset[Model] = frozenset(
     {
-        Model.LLAMA_3_3_70B,
-        Model.MISTRAL,
-        Model.DEEPSEEK_R1_70B,
-        Model.QWEN2_5_72B,
-        Model.BGE_M3,
-        Model.DOMESTIC_YAK_8B_INSTRUCT_GGUF,
-        Model.VEZILKALLM_GGUF,
         Model.MULTILINGUAL_E5_LARGE,
         Model.BGE_M3_LOCAL,
         Model.QWEN2_1_5_B_INSTRUCT,

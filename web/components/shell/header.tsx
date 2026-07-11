@@ -1,4 +1,4 @@
-import { PanelLeft } from 'lucide-react';
+import { KeyRound, PanelLeft } from 'lucide-react';
 
 import { AuthButton } from '@/components/shell/auth-button';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
@@ -6,6 +6,7 @@ import { IconButton, IconLink } from '@/components/ui/icon-controls';
 import { t } from '@/lib/i18n';
 
 export type HeaderProps = {
+  onOpenCredentials: () => void;
   onToggleSidebar: () => void;
 };
 
@@ -20,7 +21,7 @@ const GitHubIcon = () => (
   </svg>
 );
 
-export const Header = ({ onToggleSidebar }: HeaderProps) => (
+export const Header = ({ onOpenCredentials, onToggleSidebar }: HeaderProps) => (
   <header className="z-30 shrink-0 border-b border-border/60 bg-background">
     <div className="flex h-14 items-center gap-3 px-4">
       <IconButton
@@ -41,6 +42,16 @@ export const Header = ({ onToggleSidebar }: HeaderProps) => (
         {t('header.title')}
       </h1>
       <div className="ml-auto flex shrink-0 items-center gap-2">
+        <IconButton
+          aria-label={t('header.credentials')}
+          onClick={onOpenCredentials}
+          title={t('header.credentials')}
+        >
+          <KeyRound
+            aria-hidden="true"
+            className="h-5 w-5"
+          />
+        </IconButton>
         <AuthButton />
         <IconLink
           href="https://github.com/finki-hub/chat-bot"

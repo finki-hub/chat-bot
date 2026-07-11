@@ -23,6 +23,11 @@ from app.llms.models import (
 )
 from app.llms.ollama import generate_ollama_embeddings
 from app.llms.openai import generate_openai_embeddings
+from app.llms.provider_credentials import (
+    LlmProviderCredentials,
+    ProviderCredentialRequiredError,
+    provider_for_model,
+)
 from app.llms.text_utils import _prepare_text_for_embedding
 from app.recommenders.text import build_proposal_text
 from app.utils.database import embedding_to_pgvector
@@ -39,19 +44,29 @@ async def _dispatch_embeddings(
     model: Model,
     *,
     is_document: bool,
+    credentials: LlmProviderCredentials | None,
 ) -> list[float] | list[list[float]]:
     match model:
         case Model.LLAMA_3_3_70B | Model.BGE_M3:
-            return await generate_ollama_embeddings(text, model)
+            return await generate_ollama_embeddings(
+                text,
+                model,
+                None if credentials is None else credentials.ollama,
+            )
 
         case Model.TEXT_EMBEDDING_3_LARGE:
-            return await generate_openai_embeddings(text, model)
+            return await generate_openai_embeddings(
+                text,
+                model,
+                None if credentials is None else credentials.openai,
+            )
 
         case Model.GEMINI_EMBEDDING_001:
             return await generate_google_embeddings(
                 text,
                 model,
                 is_document=is_document,
+                credential=None if credentials is None else credentials.google,
             )
 
         case Model.MULTILINGUAL_E5_LARGE | Model.BGE_M3_LOCAL:
@@ -67,6 +82,7 @@ async def generate_embeddings(
     model: Model,
     *,
     is_document: bool = ...,
+    credentials: LlmProviderCredentials | None = None,
 ) -> list[float]: ...
 
 
@@ -76,6 +92,7 @@ async def generate_embeddings(
     model: Model,
     *,
     is_document: bool = ...,
+    credentials: LlmProviderCredentials | None = None,
 ) -> list[list[float]]: ...
 
 
@@ -84,6 +101,7 @@ async def generate_embeddings(
     model: Model,
     *,
     is_document: bool = False,
+    credentials: LlmProviderCredentials | None = None,
 ) -> list[float] | list[list[float]]:
     """
     Generate embeddings for the given text using the specified model.
@@ -101,7 +119,14 @@ async def generate_embeddings(
 
     for attempt in range(1, EMBEDDING_MAX_ATTEMPTS + 1):
         try:
-            return await _dispatch_embeddings(text, model, is_document=is_document)
+            return await _dispatch_embeddings(
+                text,
+                model,
+                is_document=is_document,
+                credentials=credentials,
+            )
+        except ProviderCredentialRequiredError:
+            raise
         except ValueError:
             raise
         except Exception:
@@ -128,15 +153,24 @@ async def generate_embeddings(
     )
 
 
-def _resolve_models(model: Model, *, all_models: bool) -> list[Model]:
-    if all_models:
-        return list(ALL_MODELS_EMBEDDINGS)
-
+def ensure_self_hosted_embedding_model(model: Model) -> None:
     if model not in MODEL_EMBEDDINGS_COLUMNS:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported embedding model: {model.value}",
         )
+    if provider_for_model(model) is not None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Hosted embeddings require a user-authenticated BYOK chat request",
+        )
+
+
+def _resolve_models(model: Model, *, all_models: bool) -> list[Model]:
+    if all_models:
+        return list(ALL_MODELS_EMBEDDINGS)
+
+    ensure_self_hosted_embedding_model(model)
     return [model]
 
 

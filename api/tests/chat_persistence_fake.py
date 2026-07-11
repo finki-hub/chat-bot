@@ -9,10 +9,11 @@ class FakeChatDatabase:
         self.feedback: dict[tuple[object, object, object], dict[str, object]] = {}
         self.messages: dict[object, dict[str, object]] = {}
         self.users: dict[tuple[object, object], dict[str, object]] = {}
+        self.credentials: dict[tuple[object, object], dict[str, object]] = {}
         self.now = datetime(2026, 7, 7, tzinfo=UTC)
 
     async def fetchrow(self, query: str, *args: object) -> dict[str, object] | None:
-        if "INSERT INTO chat_user" in query:
+        if "INSERT INTO chat_user (" in query:
             provider, provider_subject, email, name, avatar_url = args
             user_key = (provider, provider_subject)
             current = self.users.get(user_key)
@@ -34,6 +35,30 @@ class FakeChatDatabase:
             current["avatar_url"] = avatar_url
             current["updated_at"] = self.now
             return current
+
+        if "INSERT INTO chat_user_credential" in query:
+            user_id, provider, encrypted_api_key, base_url = args
+            credential_key = (user_id, provider)
+            current = self.credentials.get(credential_key)
+            if current is None:
+                current = {
+                    "user_id": user_id,
+                    "provider": provider,
+                    "encrypted_api_key": encrypted_api_key,
+                    "base_url": base_url,
+                    "created_at": self.now,
+                    "updated_at": self.now,
+                }
+                self.credentials[credential_key] = current
+                return current
+            current["encrypted_api_key"] = encrypted_api_key
+            current["base_url"] = base_url
+            current["updated_at"] = self.now
+            return current
+
+        if "FROM chat_user_credential" in query and "encrypted_api_key" in query:
+            user_id, provider = args
+            return self.credentials.get((user_id, provider))
 
         if "SELECT" in query and "assistant.content AS answer_text" in query:
             response_id, user_id = args
@@ -80,8 +105,8 @@ class FakeChatDatabase:
                 embeddings_model,
                 query_transform_model,
             ) = args
-            key = (response_id, client, user_id)
-            current = self.feedback.get(key)
+            feedback_key = (response_id, client, user_id)
+            current = self.feedback.get(feedback_key)
             if current is None:
                 current = {
                     "id": uuid4(),
@@ -100,7 +125,7 @@ class FakeChatDatabase:
                     "created_at": self.now,
                     "updated_at": self.now,
                 }
-                self.feedback[key] = current
+                self.feedback[feedback_key] = current
             else:
                 current["feedback_type"] = feedback_type
                 current["updated_at"] = self.now
@@ -309,6 +334,13 @@ class FakeChatDatabase:
         raise AssertionError(msg)
 
     async def fetch(self, query: str, *args: object) -> list[dict[str, object]]:
+        if "FROM chat_user_credential" in query:
+            (user_id,) = args
+            rows = [
+                row for row in self.credentials.values() if row["user_id"] == user_id
+            ]
+            return sorted(rows, key=lambda row: str(row["provider"]))
+
         if "DELETE FROM chat_conversation" in query:
             (user_id,) = args
             deleted = [
@@ -366,6 +398,15 @@ class FakeChatDatabase:
                 row["active_status"] = None
                 cleared += 1
         return cleared
+
+    async def execute(self, query: str, *args: object) -> str:
+        if "DELETE FROM chat_user_credential" in query:
+            user_id, provider = args
+            self.credentials.pop((user_id, provider), None)
+            return "DELETE 1"
+
+        msg = f"Unhandled execute query: {query}"
+        raise AssertionError(msg)
 
     def _created_at(self, row: dict[str, object]) -> datetime:
         created_at = row["created_at"]

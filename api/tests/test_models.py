@@ -9,9 +9,13 @@ from app.llms.agents import StreamObservation
 from app.llms.models import (
     ANTHROPIC_QUERY_TRANSFORM_MODELS,
     CHAT_MODELS,
+    GPU_API_MODELS,
     REASONING_CAPABLE_MODELS,
     Model,
 )
+from app.llms.pricing import is_self_hosted
+from app.llms.provider_credentials import provider_for_model
+from app.schemas.chat_credentials import ChatCredentialSecret
 
 
 def test_claude_sonnet_5_is_a_supported_anthropic_chat_model():
@@ -20,6 +24,20 @@ def test_claude_sonnet_5_is_a_supported_anthropic_chat_model():
     assert model in CHAT_MODELS
     assert model in ANTHROPIC_QUERY_TRANSFORM_MODELS
     assert model in REASONING_CAPABLE_MODELS
+
+
+def test_every_byok_chat_model_requires_provider_credential() -> None:
+    self_hosted_models = {*GPU_API_MODELS}
+    hosted_models = CHAT_MODELS - self_hosted_models
+
+    assert hosted_models
+    assert {
+        model for model in hosted_models if provider_for_model(model) is None
+    } == set()
+
+
+def test_ollama_models_are_not_priced_as_self_hosted() -> None:
+    assert not is_self_hosted(Model.MISTRAL)
 
 
 def test_claude_sonnet_5_routes_to_anthropic(monkeypatch):
@@ -36,6 +54,7 @@ def test_claude_sonnet_5_routes_to_anthropic(monkeypatch):
         max_tokens: int,
         reasoning: bool = False,
         observation: StreamObservation | None = None,
+        credential: ChatCredentialSecret | None = None,
     ) -> StreamingResponse:
         async def empty_body() -> AsyncIterator[bytes]:
             if False:

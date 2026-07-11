@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.constants.defaults import DEFAULT_QUERY_TRANSFORM_MODEL
@@ -8,6 +10,10 @@ from app.schemas.chat import ConversationTurn
 class ChatTitleSchema(BaseModel):
     model_config = ConfigDict(frozen=True)
 
+    user_id: UUID | None = Field(
+        None,
+        description="Authenticated chat user id used to resolve per-user provider credentials.",
+    )
     messages: list[ConversationTurn] = Field(
         min_length=1,
         max_length=4,

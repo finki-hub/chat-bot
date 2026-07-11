@@ -107,12 +107,14 @@ const jsonError = (message: string, status: number): Response =>
 const unauthenticated = (): Response =>
   jsonError('Authentication required', 401);
 
-const toSchema = (payload: ChatTitleClientPayload) => ({
+const toSchema = (payload: ChatTitleClientPayload, userId: string) => ({
   messages: payload.messages,
   ...(payload.queryTransformModel !== undefined && {
     // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
     query_transform_model: payload.queryTransformModel,
   }),
+  // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+  user_id: userId,
 });
 
 const parseResponse = async (
@@ -155,7 +157,39 @@ export const POST = async (req: Request): Promise<Response> => {
   }
 
   try {
-    await getAuthenticatedChatUserId();
+    const userId = await getAuthenticatedChatUserId();
+    const { payload } = result;
+
+    let upstream: Response;
+
+    try {
+      upstream = await fetch(`${API_BASE_URL}/chat/title`, {
+        body: JSON.stringify(toSchema(payload, userId)),
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': CHAT_API_KEY,
+        },
+        method: 'POST',
+        signal: req.signal,
+      });
+    } catch {
+      return jsonError('Failed to reach the title service.', 502);
+    }
+
+    if (!upstream.ok) {
+      return jsonError('The title service rejected the request.', 502);
+    }
+
+    const title = await parseResponse(upstream);
+
+    if (title === null) {
+      return jsonError('The title service returned an invalid response.', 502);
+    }
+
+    return Response.json(title, {
+      headers: { 'content-type': 'application/json' },
+      status: 200,
+    });
   } catch (error) {
     if (error instanceof AuthenticationRequiredError) {
       return unauthenticated();
@@ -163,37 +197,4 @@ export const POST = async (req: Request): Promise<Response> => {
 
     throw error;
   }
-
-  const { payload } = result;
-
-  let upstream: Response;
-
-  try {
-    upstream = await fetch(`${API_BASE_URL}/chat/title`, {
-      body: JSON.stringify(toSchema(payload)),
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': CHAT_API_KEY,
-      },
-      method: 'POST',
-      signal: req.signal,
-    });
-  } catch {
-    return jsonError('Failed to reach the title service.', 502);
-  }
-
-  if (!upstream.ok) {
-    return jsonError('The title service rejected the request.', 502);
-  }
-
-  const title = await parseResponse(upstream);
-
-  if (title === null) {
-    return jsonError('The title service returned an invalid response.', 502);
-  }
-
-  return Response.json(title, {
-    headers: { 'content-type': 'application/json' },
-    status: 200,
-  });
 };

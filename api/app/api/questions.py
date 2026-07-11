@@ -20,7 +20,11 @@ from app.data.questions import (
 from app.data.questions import (
     get_closest_questions as query_closest_questions,
 )
-from app.llms.embeddings import generate_embeddings, stream_fill_embeddings
+from app.llms.embeddings import (
+    ensure_self_hosted_embedding_model,
+    generate_embeddings,
+    stream_fill_embeddings,
+)
 from app.llms.models import MODEL_EMBEDDINGS_COLUMNS, Model
 from app.schemas.questions import (
     ClosestQuestionsSchema,
@@ -75,6 +79,7 @@ async def closest_questions(
     params: Annotated[ClosestQuestionsSchema, Depends()],
     db: Database = db_dep,
 ) -> list[QuestionSchema]:
+    ensure_self_hosted_embedding_model(params.embeddings_model)
     prompt_embedding = await generate_embeddings(params.prompt, params.embeddings_model)
     results = await query_closest_questions(
         db,

@@ -22,33 +22,23 @@ from app.llms.models import (
     Model,
 )
 from app.llms.prompts import build_agent_messages
+from app.llms.provider_credentials import require_provider_credential
 from app.llms.tools import get_agent_tools
-from app.utils.settings import Settings
+from app.schemas.chat_credentials import ChatCredentialSecret
 
 logger = logging.getLogger(__name__)
 
-settings = Settings()
 
-# Model, temperature, top_p (None when not forwarded), max_tokens, reasoning -> LLM
-openai_llm_clients: dict[tuple[str, float, float | None, int, bool], ChatOpenAI] = {}
-openai_embedders: dict[str, OpenAIEmbeddings] = {}
-
-
-def get_openai_embedder(model: Model) -> OpenAIEmbeddings:
-    """
-    Return a singleton OpenAIEmbeddings instance for the specified model.
-    If the model is not already in the cache, create a new instance.
-    """
-    key = model.value
-
-    if key not in openai_embedders:
-        openai_embedders[key] = OpenAIEmbeddings(
-            model=model.value,
-            api_key=SecretStr(settings.OPENAI_API_KEY),  # type: ignore[call-arg]
-            base_url=settings.OPENAI_BASE_URL or None,
-        )
-
-    return openai_embedders[key]
+def get_openai_embedder(
+    model: Model,
+    credential: ChatCredentialSecret | None = None,
+) -> OpenAIEmbeddings:
+    credential = require_provider_credential("openai", credential)
+    return OpenAIEmbeddings(
+        model=model.value,
+        api_key=SecretStr(credential.api_key),  # type: ignore[call-arg]
+        base_url=credential.base_url or None,
+    )
 
 
 def get_openai_llm(
@@ -58,9 +48,10 @@ def get_openai_llm(
     max_tokens: int,
     *,
     reasoning: bool = False,
+    credential: ChatCredentialSecret | None = None,
 ) -> ChatOpenAI:
     """
-    Return a singleton ChatOpenAI instance for the specified model and parameters.
+    Return a user-scoped ChatOpenAI instance for the specified model and parameters.
 
     All OpenAI requests use the Responses API (`use_responses_api=True`); reasoning content
     is only surfaced there. When `reasoning` is on, a `reasoning` config requests a
@@ -76,40 +67,32 @@ def get_openai_llm(
     # top_p is dropped for reasoning-capable (GPT-5) models, so it must not split the cache
     # for them — fold it out of the key when it isn't forwarded.
     forwards_top_p = model not in REASONING_CAPABLE_MODELS
-    key = (
-        model.value,
-        temperature,
-        top_p if forwards_top_p else None,
-        max_tokens,
-        reasoning,
+    client_kwargs: dict[str, object] = {"use_responses_api": True}
+    if reasoning:
+        client_kwargs["reasoning"] = {"effort": "medium", "summary": "auto"}
+    elif model in OPENAI_MINIMAL_EFFORT_MODELS:
+        client_kwargs["reasoning"] = {"effort": "minimal"}
+    if forwards_top_p:
+        client_kwargs["top_p"] = top_p
+
+    credential = require_provider_credential("openai", credential)
+    return ChatOpenAI(
+        model=model.value,
+        api_key=SecretStr(credential.api_key),
+        base_url=credential.base_url or None,
+        temperature=temperature,
+        streaming=True,
+        stream_usage=True,
+        max_tokens=max_tokens,  # type: ignore[call-arg]
+        **client_kwargs,
     )
-
-    if key not in openai_llm_clients:
-        client_kwargs: dict[str, object] = {"use_responses_api": True}
-        if reasoning:
-            client_kwargs["reasoning"] = {"effort": "medium", "summary": "auto"}
-        elif model in OPENAI_MINIMAL_EFFORT_MODELS:
-            client_kwargs["reasoning"] = {"effort": "minimal"}
-        if forwards_top_p:
-            client_kwargs["top_p"] = top_p
-        openai_llm_clients[key] = ChatOpenAI(
-            model=model.value,
-            api_key=SecretStr(settings.OPENAI_API_KEY),
-            base_url=settings.OPENAI_BASE_URL or None,
-            temperature=temperature,
-            streaming=True,
-            stream_usage=True,
-            max_tokens=max_tokens,  # type: ignore[call-arg]
-            **client_kwargs,
-        )
-
-    return openai_llm_clients[key]
 
 
 @overload
 async def generate_openai_embeddings(
     text: str,
     model: Model,
+    credential: ChatCredentialSecret | None = None,
 ) -> list[float]: ...
 
 
@@ -117,12 +100,14 @@ async def generate_openai_embeddings(
 async def generate_openai_embeddings(
     text: list[str],
     model: Model,
+    credential: ChatCredentialSecret | None = None,
 ) -> list[list[float]]: ...
 
 
 async def generate_openai_embeddings(
     text: str | list[str],
     model: Model,
+    credential: ChatCredentialSecret | None = None,
 ) -> list[float] | list[list[float]]:
     """
     Generate embeddings for the given text using the specified OpenAI model.
@@ -134,7 +119,7 @@ async def generate_openai_embeddings(
         model.value,
     )
 
-    emb = get_openai_embedder(model)
+    emb = get_openai_embedder(model, credential)
 
     if isinstance(text, str):
         return await asyncio.to_thread(emb.embed_query, text)
@@ -152,6 +137,7 @@ def stream_openai_response(
     top_p: float,
     max_tokens: int,
     reasoning: bool = False,
+    credential: ChatCredentialSecret | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from the specified OpenAI model using the provided user prompt and system prompt.
@@ -163,7 +149,14 @@ def stream_openai_response(
         model.value,
     )
 
-    llm = get_openai_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
+    llm = get_openai_llm(
+        model,
+        temperature,
+        top_p,
+        max_tokens,
+        reasoning=reasoning,
+        credential=credential,
+    )
 
     messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
@@ -185,6 +178,7 @@ async def stream_openai_agent_response(
     max_tokens: int,
     reasoning: bool = False,
     observation: StreamObservation | None = None,
+    credential: ChatCredentialSecret | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from an OpenAI agent with MCP tools.
@@ -197,7 +191,14 @@ async def stream_openai_agent_response(
     )
 
     try:
-        llm = get_openai_llm(model, temperature, top_p, max_tokens, reasoning=reasoning)
+        llm = get_openai_llm(
+            model,
+            temperature,
+            top_p,
+            max_tokens,
+            reasoning=reasoning,
+            credential=credential,
+        )
 
         tools = await get_agent_tools()
 
@@ -234,6 +235,7 @@ async def stream_openai_agent_response(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
+            credential=credential,
         )
 
 
@@ -245,6 +247,7 @@ async def transform_query_with_openai(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    credential: ChatCredentialSecret | None = None,
 ) -> str:
     """
     Transform a query using the specified OpenAI model and system prompt.
@@ -258,7 +261,13 @@ async def transform_query_with_openai(
     )
 
     try:
-        llm = get_openai_llm(model, temperature, top_p, max_tokens)
+        llm = get_openai_llm(
+            model,
+            temperature,
+            top_p,
+            max_tokens,
+            credential=credential,
+        )
 
         messages = [
             SystemMessage(content=system_prompt),
