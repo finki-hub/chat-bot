@@ -65,5 +65,6 @@ async def handle_chat(
             max_tokens=payload.max_tokens,
             reasoning=payload.reasoning,
             observation=observation,
+            interface=payload.interface,
             credentials=credentials,
         )

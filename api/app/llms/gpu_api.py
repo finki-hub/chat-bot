@@ -13,7 +13,8 @@ from app.llms.agents import (
     error_event,
 )
 from app.llms.models import GPU_API_MODELS, Model
-from app.llms.prompts import history_transcript
+from app.llms.prompts import build_gpu_user_prompt
+from app.schemas.chat import ChatInterface
 from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
 from app.utils.timing import current_distinct_id, current_response_id
@@ -81,12 +82,12 @@ def stream_gpu_api_response(
     user_prompt: str,
     model: Model,
     *,
-    system_prompt: str,
     history: list[BaseMessage] | None = None,
     temperature: float,
     top_p: float,
     max_tokens: int,
     observation: StreamObservation | None = None,
+    interface: ChatInterface,
 ) -> StreamingResponse:
     """
     Stream a response from the GPU API service.
@@ -103,14 +104,12 @@ def stream_gpu_api_response(
 
     gpu_api_url = f"{settings.GPU_API_URL}/stream/"
 
-    prompt = user_prompt
-    if history:
-        prompt = f"Претходен разговор:\n{history_transcript(history)}\n\n{user_prompt}"
+    prompt = build_gpu_user_prompt(history or [], user_prompt)
 
     payload = {
         "prompt": prompt,
         "inference_model": model.value,
-        "system_prompt": system_prompt,
+        "interface": interface,
         "temperature": temperature,
         "top_p": top_p,
         "max_tokens": max_tokens,

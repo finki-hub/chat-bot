@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget && \
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/app /app/app
+COPY --from=builder /app/resources /app/resources
 COPY --from=builder /app/gunicorn.conf.py /app/
 
 ENV PATH="/app/.venv/bin:${PATH}" \

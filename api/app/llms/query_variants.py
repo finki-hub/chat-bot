@@ -117,8 +117,8 @@ async def _hyde_passage(
             search_query,
             query_transform_model,
             system_prompt=HYDE_SYSTEM_PROMPT,
-            temperature=0.7,
-            top_p=0.9,
+            temperature=0.2,
+            top_p=1.0,
             max_tokens=200,
             credentials=credentials,
         )

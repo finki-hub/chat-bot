@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import Final
 
 from fastapi import APIRouter, status
@@ -9,16 +10,20 @@ from app.schemas.streams import StreamRequestSchema
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SYSTEM_PROMPT: Final[str] = (
-    "Ти си ФИНКИ Хаб бот — стручен асистент за ФИНКИ "
-    "(Факултет за информатички науки и компјутерско инженерство при УКИМ — "
-    "Скопје). Одговарај исклучиво на македонски јазик и кирилично писмо, "
-    "со јасни, точни и концизни одговори поврзани со ФИНКИ, студирањето "
-    "на ФИНКИ или ФИНКИ Хаб. Буквално зачувај само URL-адреси, команди, "
-    "кодови, кратенки, имиња на системи, предмети, професори/асистенти "
-    "и други официјални идентификатори кога се потребни. Не измислувај "
-    "факти, бројки, рокови или прописи."
+_PROMPTS_DIR: Final = Path(__file__).resolve().parents[2] / "resources" / "prompts"
+DEFAULT_SYSTEM_PROMPT: Final = (
+    (_PROMPTS_DIR / "agent_system.txt")
+    .read_text(
+        encoding="utf-8",
+    )
+    .strip()
 )
+_FORMAT_PROMPTS: Final = {
+    "discord": (_PROMPTS_DIR / "discord_format.txt")
+    .read_text(encoding="utf-8")
+    .strip(),
+    "web": (_PROMPTS_DIR / "web_format.txt").read_text(encoding="utf-8").strip(),
+}
 
 router = APIRouter(
     prefix="/stream",
@@ -51,7 +56,9 @@ async def stream(
     return stream_response(
         user_prompt=payload.prompt,
         model=payload.inference_model,
-        system_prompt=DEFAULT_SYSTEM_PROMPT,
+        system_prompt="\n\n".join(
+            [DEFAULT_SYSTEM_PROMPT, _FORMAT_PROMPTS[payload.interface]],
+        ),
         temperature=payload.temperature,
         top_p=payload.top_p,
         max_tokens=payload.max_tokens,

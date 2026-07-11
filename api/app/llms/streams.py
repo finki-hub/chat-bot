@@ -11,6 +11,7 @@ from app.llms.models import REASONING_CAPABLE_MODELS, Model
 from app.llms.ollama import stream_ollama_agent_response
 from app.llms.openai import stream_openai_agent_response
 from app.llms.provider_credentials import LlmProviderCredentials
+from app.schemas.chat import ChatInterface
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ async def stream_response_with_agent(
     max_tokens: int,
     reasoning: bool = False,
     observation: StreamObservation | None = None,
+    interface: ChatInterface,
     credentials: LlmProviderCredentials | None = None,
 ) -> StreamingResponse:
     """
@@ -140,12 +142,12 @@ async def stream_response_with_agent(
             return stream_gpu_api_response(
                 user_prompt,
                 model,
-                system_prompt=system_prompt,
                 history=history,
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
                 observation=observation,
+                interface=interface,
             )
 
         case _:
