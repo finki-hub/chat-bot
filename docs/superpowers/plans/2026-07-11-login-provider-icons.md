@@ -64,7 +64,7 @@ Expected: PASS.
 
 **Interfaces:**
 - Consumes: provider IDs `google` and `microsoft-entra-id`
-- Produces: decorative `BsGoogle` and `BsMicrosoft` React icon elements within the existing submit buttons
+- Produces: an exhaustive `Record<AuthProviderId, IconType>` that renders decorative `BsGoogle` and `BsMicrosoft` elements within the existing submit buttons
 
 - [ ] **Step 1: Install the approved icon dependency**
 
@@ -80,12 +80,15 @@ import { BsGoogle, BsMicrosoft } from 'react-icons/bs';
 - [ ] **Step 3: Add the icon beside the provider label without changing submission behavior**
 
 ```tsx
+const providerIcons = {
+  google: BsGoogle,
+  'microsoft-entra-id': BsMicrosoft,
+} satisfies Record<AuthProviderId, IconType>;
+
+const ProviderIcon = providerIcons[provider.id];
+
 <span className="flex items-center gap-3">
-  {provider.id === 'google' ? (
-    <BsGoogle aria-hidden="true" className="h-4 w-4 shrink-0" />
-  ) : (
-    <BsMicrosoft aria-hidden="true" className="h-4 w-4 shrink-0" />
-  )}
+  <ProviderIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
   <span>Најави се со {provider.name}</span>
 </span>
 ```

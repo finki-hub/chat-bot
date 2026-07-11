@@ -23,10 +23,12 @@ export const isAuthConfigured = (): boolean =>
   (isGoogleConfigured() || isMicrosoftConfigured()) &&
   authEnv('AUTH_SECRET').length > 0;
 
+export type AuthProviderId = 'google' | 'microsoft-entra-id';
+
 type AuthProviderDefinition = {
   readonly create: () => Provider;
   readonly enabled: () => boolean;
-  readonly id: string;
+  readonly id: AuthProviderId;
   readonly name: string;
 };
 
