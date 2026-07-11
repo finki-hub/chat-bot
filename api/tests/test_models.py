@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from inspect import Parameter, signature
 
 import anyio
 from fastapi.responses import StreamingResponse
@@ -16,6 +17,12 @@ from app.llms.models import (
 from app.llms.pricing import is_self_hosted
 from app.llms.provider_credentials import provider_for_model
 from app.schemas.chat_credentials import ChatCredentialSecret
+
+
+def test_stream_response_requires_explicit_interface() -> None:
+    interface = signature(streams.stream_response_with_agent).parameters["interface"]
+
+    assert interface.default is Parameter.empty
 
 
 def test_claude_sonnet_5_is_a_supported_anthropic_chat_model():
@@ -79,6 +86,7 @@ def test_claude_sonnet_5_routes_to_anthropic(monkeypatch):
             temperature=0.0,
             top_p=1.0,
             max_tokens=128,
+            interface="discord",
         )
 
     response = anyio.run(route_response)

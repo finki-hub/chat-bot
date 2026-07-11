@@ -32,7 +32,7 @@ async def stream_response_with_agent(
     max_tokens: int,
     reasoning: bool = False,
     observation: StreamObservation | None = None,
-    interface: ChatInterface = "web",
+    interface: ChatInterface,
     credentials: LlmProviderCredentials | None = None,
 ) -> StreamingResponse:
     """
