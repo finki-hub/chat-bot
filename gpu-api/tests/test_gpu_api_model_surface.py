@@ -1,15 +1,11 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from threading import Event
-from typing import cast
 
-import torch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.llms import embeddings as embeddings_module
 from app.llms.models import Model
-from app.llms.qwen3 import _CancellationStoppingCriteria
 from app.main import make_app
 from app.utils.settings import Settings
 
@@ -35,8 +31,15 @@ def test_openapi_exposes_gpu_inference_and_health_routes():
         "/health/",
         "/health/health",
         "/rerank/",
-        "/stream/",
     }
+
+
+def test_stream_endpoint_is_not_available():
+    client = make_test_client()
+
+    response = client.post("/stream/", json={})
+
+    assert response.status_code == 404
 
 
 def test_embedding_openapi_documents_validation_error_only():
@@ -93,41 +96,5 @@ def test_embedding_endpoint_rejects_e5(monkeypatch):
     assert "intfloat/multilingual-e5-large" not in response.text
 
 
-def test_stream_endpoint_uses_qwen3_8b(monkeypatch):
-    async def fake_stream(*args, **kwargs):
-        yield "modern response"
-
-    monkeypatch.setattr("app.api.streams.stream_qwen3_response", fake_stream)
-    client = make_test_client()
-    response = client.post(
-        "/stream/",
-        json={
-            "prompt": "private prompt",
-            "inference_model": Model.QWEN3_8B.value,
-            "temperature": 0.7,
-            "top_p": 0.8,
-            "max_tokens": 128,
-            "interface": "web",
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/event-stream")
-    assert "data: modern response" in response.text
-
-
-def test_qwen_generation_stops_after_stream_cancellation():
-    cancelled = Event()
-    criterion = _CancellationStoppingCriteria(cancelled)
-    input_ids = cast(torch.LongTensor, torch.ones((1, 2), dtype=torch.long))
-    scores = cast(torch.FloatTensor, torch.ones((1, 2), dtype=torch.float))
-
-    assert not criterion(input_ids, scores).item()
-
-    cancelled.set()
-
-    assert criterion(input_ids, scores).item()
-
-
-def test_model_enum_exposes_bge_and_qwen3_only():
-    assert {model.value for model in Model} == {"BAAI/bge-m3", "Qwen/Qwen3-8B"}
+def test_model_enum_exposes_bge_only():
+    assert {model.value for model in Model} == {"BAAI/bge-m3"}

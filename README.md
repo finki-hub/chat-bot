@@ -1,6 +1,6 @@
 # FINKI Hub / Chat Bot
 
-RAG chat bot and web front-end for the [`FINKI Hub`](https://discord.gg/finki-studenti-810997107376914444) Discord server, powered by [FastAPI](https://github.com/fastapi/fastapi), [LangChain](https://github.com/langchain-ai/langchain), and [Next.js](https://github.com/vercel/next.js). It uses [PostgreSQL](https://github.com/postgres/postgres) with [pgvector](https://github.com/pgvector/pgvector) for storage and vector search, supports hosted and Ollama LLM providers, and uses the GPU service for embeddings, reranking, and Qwen3-8B chat streaming.
+RAG chat bot and web front-end for the [`FINKI Hub`](https://discord.gg/finki-studenti-810997107376914444) Discord server, powered by [FastAPI](https://github.com/fastapi/fastapi), [LangChain](https://github.com/langchain-ai/langchain), and [Next.js](https://github.com/vercel/next.js). It uses [PostgreSQL](https://github.com/postgres/postgres) with [pgvector](https://github.com/pgvector/pgvector) for storage and vector search, supports hosted and Ollama LLM providers, and uses the GPU service for embeddings and reranking.
 
 It answers questions using a retrieval pipeline over an FAQ dataset (the `question` table) and over chunked source-of-truth documents (the `document` / `chunk` tables — laws, rulebooks, procedures), retrieved together in a single reranked pass. It also manages links, chat feedback, diplomas, professor publications/groups, and thesis committee recommendations.
 
@@ -9,7 +9,7 @@ It answers questions using a retrieval pipeline over an FAQ dataset (the `questi
 This project comes as a monorepo of microservices:
 
 - API ([`/api`](/api)) for managing questions, documents, links, diplomas, recommendations, feedback, and chat (default port: 8880)
-- GPU API ([`/gpu-api`](/gpu-api)) for locally executing GPU-accelerated embeddings, reranking, and Qwen3-8B chat streaming (default port: 8888)
+- GPU API ([`/gpu-api`](/gpu-api)) for locally executing GPU-accelerated embeddings and reranking (default port: 8888)
 - Web ([`/web`](/web)) for the chat front-end — Next.js with a thin BFF (default port: 3000)
 - Database (PostgreSQL + pgvector) for keeping questions, links, documents/chunks, diplomas, professor data, feedback, and embeddings
 
@@ -144,7 +144,6 @@ GPU API service (`/gpu-api` directory, default port `8888`):
 
 - `/embeddings/embed` - generate embedding vectors for input text(s)
 - `/rerank/` - re-rank documents by relevance to a query
-- `/stream/` - stream a response from the local Qwen3-8B model
 - `/health/` - liveness check; `/health/health` - detailed GPU API health check
 
 Web BFF (`/web`, default port `3000`):

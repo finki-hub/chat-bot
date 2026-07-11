@@ -3,9 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     APP_TITLE: str = "GPU API"
-    APP_DESCRIPTION: str = (
-        "API providing GPU-accelerated embeddings, reranking, and chat streaming."
-    )
+    APP_DESCRIPTION: str = "API providing GPU-accelerated embeddings and reranking."
     API_VERSION: str = "1.0.0"
 
     LOG_LEVEL: str = "INFO"
