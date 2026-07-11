@@ -1,8 +1,17 @@
+import type { IconType } from 'react-icons';
+
 import { ArrowRight, Bot, GraduationCap, ShieldCheck } from 'lucide-react';
 import { AuthError } from 'next-auth';
 import { redirect } from 'next/navigation';
+import { BsGoogle, BsMicrosoft } from 'react-icons/bs';
 
-import { auth, isAuthConfigured, providerMap, signIn } from '@/auth';
+import {
+  auth,
+  type AuthProviderId,
+  isAuthConfigured,
+  providerMap,
+  signIn,
+} from '@/auth';
 import { getSafeCallbackUrl } from '@/lib/callback-url';
 
 type SignInPageProps = {
@@ -17,6 +26,11 @@ const featureItems = [
   'Разговорите се чуваат безбедно за да можеш да продолжиш подоцна.',
   'ФИНКИ Хаб асистентот останува фокусиран на студиски прашања.',
 ] as const;
+
+const providerIcons = {
+  google: BsGoogle,
+  'microsoft-entra-id': BsMicrosoft,
+} satisfies Record<AuthProviderId, IconType>;
 
 const SignInPage = async ({ searchParams }: SignInPageProps) => {
   const [{ callbackUrl, error }, session] = await Promise.all([
@@ -97,36 +111,46 @@ const SignInPage = async ({ searchParams }: SignInPageProps) => {
             </p>
           ) : (
             <div className="space-y-3">
-              {providerMap.map((provider) => (
-                <form
-                  action={async () => {
-                    'use server';
+              {providerMap.map((provider) => {
+                const ProviderIcon = providerIcons[provider.id];
 
-                    try {
-                      await signIn(provider.id, {
-                        redirectTo: safeCallbackUrl,
-                      });
-                    } catch (signInError) {
-                      if (signInError instanceof AuthError) {
-                        redirect('/signin?error=OAuthSignin');
+                return (
+                  <form
+                    action={async () => {
+                      'use server';
+
+                      try {
+                        await signIn(provider.id, {
+                          redirectTo: safeCallbackUrl,
+                        });
+                      } catch (signInError) {
+                        if (signInError instanceof AuthError) {
+                          redirect('/signin?error=OAuthSignin');
+                        }
+                        throw signInError;
                       }
-                      throw signInError;
-                    }
-                  }}
-                  key={provider.id}
-                >
-                  <button
-                    className="group flex w-full items-center justify-between rounded-2xl border border-border bg-background px-4 py-3 text-left text-sm font-medium transition hover:border-primary/60 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    type="submit"
+                    }}
+                    key={provider.id}
                   >
-                    <span>Најави се со {provider.name}</span>
-                    <ArrowRight
-                      aria-hidden="true"
-                      className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary"
-                    />
-                  </button>
-                </form>
-              ))}
+                    <button
+                      className="group flex w-full items-center justify-between rounded-2xl border border-border bg-background px-4 py-3 text-left text-sm font-medium transition hover:border-primary/60 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      type="submit"
+                    >
+                      <span className="flex items-center gap-3">
+                        <ProviderIcon
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0"
+                        />
+                        <span>Најави се со {provider.name}</span>
+                      </span>
+                      <ArrowRight
+                        aria-hidden="true"
+                        className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary"
+                      />
+                    </button>
+                  </form>
+                );
+              })}
             </div>
           )}
         </section>

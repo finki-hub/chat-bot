@@ -141,7 +141,7 @@ describe('Auth.js route handler', () => {
 
     expect(providerMap).toStrictEqual([
       { id: 'google', name: 'Google' },
-      { id: 'microsoft-entra-id', name: 'Microsoft Entra ID' },
+      { id: 'microsoft-entra-id', name: 'Microsoft' },
     ]);
   });
 
