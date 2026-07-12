@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+/* eslint-disable camelcase -- Test fixtures mirror the Python chat state API wire format. */
 import {
   CONVERSATION_ID,
   installRouteMocks,
+  MODEL,
   resetRouteMocks,
   RESPONSE_ID,
   routeMocks,
@@ -42,6 +44,49 @@ describe('GET /api/chat/[id]/history', () => {
 
   it('returns persisted UI messages for the owner', async () => {
     // Given: the Python API has durable conversation messages for this owner.
+    routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
+      conversation: {
+        active_response_id: null,
+        active_status: null,
+        active_stream_id: null,
+        id: CONVERSATION_ID,
+        model: MODEL,
+        title: 'Stored title',
+        user_id: USER_ID,
+      },
+      messages: [
+        {
+          content: 'Stored question',
+          id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d31',
+          metadata: {},
+          parts: null,
+          response_id: null,
+          role: 'user',
+        },
+        {
+          content: 'Stored answer',
+          id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d32',
+          metadata: {
+            diagnostics: {
+              serverTotalMs: 1_700,
+              serverTtftMs: 200,
+              thinkingMs: 400,
+            },
+            inferenceModel: MODEL,
+          },
+          parts: [
+            {
+              state: 'done',
+              text: 'Stored reasoning',
+              type: 'reasoning',
+            },
+            { state: 'done', text: 'Stored answer', type: 'text' },
+          ],
+          response_id: RESPONSE_ID,
+          role: 'assistant',
+        },
+      ],
+    });
     const get = await importGet();
 
     // When: the browser asks for completed history after local storage was cleared.
@@ -53,7 +98,7 @@ describe('GET /api/chat/[id]/history', () => {
     expect(body).toStrictEqual({
       conversation: {
         id: CONVERSATION_ID,
-        model: 'claude-sonnet-5',
+        model: MODEL,
         title: 'Stored title',
       },
       messages: [
@@ -66,10 +111,23 @@ describe('GET /api/chat/[id]/history', () => {
         {
           id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d32',
           metadata: {
-            inferenceModel: 'claude-sonnet-5',
+            diagnostics: {
+              serverTotalMs: 1_700,
+              serverTtftMs: 200,
+              thinkingMs: 400,
+            },
+            inferenceModel: MODEL,
             responseId: RESPONSE_ID,
+            timing: { totalMs: 1_700, ttftMs: 200 },
           },
-          parts: [{ text: 'Stored answer', type: 'text' }],
+          parts: [
+            {
+              state: 'done',
+              text: 'Stored reasoning',
+              type: 'reasoning',
+            },
+            { state: 'done', text: 'Stored answer', type: 'text' },
+          ],
           role: 'assistant',
         },
       ],
@@ -77,6 +135,66 @@ describe('GET /api/chat/[id]/history', () => {
     expect(routeMocks.stateClient.loadConversation).toHaveBeenCalledWith({
       conversationId: CONVERSATION_ID,
       userId: USER_ID,
+    });
+  });
+
+  it('falls back to text when persisted parts are absent or invalid', async () => {
+    // Given: legacy and malformed rows still have durable text content.
+    routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
+      conversation: {
+        active_response_id: null,
+        active_status: null,
+        active_stream_id: null,
+        id: CONVERSATION_ID,
+        model: MODEL,
+        title: 'Stored title',
+        user_id: USER_ID,
+      },
+      messages: [
+        {
+          content: 'Legacy question',
+          id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d33',
+          metadata: {},
+          response_id: null,
+          role: 'user',
+        },
+        {
+          content: 'Recoverable answer',
+          id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d34',
+          metadata: {},
+          parts: [{ text: 42, type: 'text' }],
+          response_id: RESPONSE_ID,
+          role: 'assistant',
+        },
+      ],
+    });
+
+    // When: history is reconstructed from those rows.
+    const res = await (await importGet())(historyRequest(), routeContext());
+    const body: unknown = await res.json();
+
+    // Then: neither turn is dropped and both use their durable text content.
+    expect(res.status).toBe(200);
+    expect(body).toStrictEqual({
+      conversation: {
+        id: CONVERSATION_ID,
+        model: MODEL,
+        title: 'Stored title',
+      },
+      messages: [
+        {
+          id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d33',
+          metadata: {},
+          parts: [{ text: 'Legacy question', type: 'text' }],
+          role: 'user',
+        },
+        {
+          id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d34',
+          metadata: { responseId: RESPONSE_ID },
+          parts: [{ text: 'Recoverable answer', type: 'text' }],
+          role: 'assistant',
+        },
+      ],
     });
   });
 
@@ -108,3 +226,5 @@ describe('GET /api/chat/[id]/history', () => {
     expect(routeMocks.stateClient.loadConversation).not.toHaveBeenCalled();
   });
 });
+
+/* eslint-enable camelcase -- end Python chat state API wire fixtures. */

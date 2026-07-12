@@ -295,6 +295,7 @@ async def upsert_user_message_state(
                 role=ChatMessageRole.USER,
                 content=payload.content,
                 metadata=payload.metadata,
+                parts=payload.parts,
             ),
         )
     except ChatMessageConflictError as error:
@@ -322,6 +323,7 @@ async def upsert_assistant_message_state(
             content=payload.content,
             response_id=response_id,
             metadata=payload.metadata,
+            parts=payload.parts,
         ),
     )
 
@@ -352,6 +354,7 @@ async def replace_assistant_message_state(
             content=payload.content,
             response_id=response_id,
             metadata=payload.metadata,
+            parts=payload.parts,
         ),
         retained_message_ids=payload.retained_message_ids,
         user_id=payload.user_id,

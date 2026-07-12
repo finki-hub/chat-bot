@@ -8,7 +8,7 @@ import {
   getAuthenticatedChatUserId,
 } from '@/lib/authenticated-chat-user';
 import {
-  assistantMetadata,
+  assistantState,
   lastUserMessageForState,
   persistedTurns,
 } from '@/lib/chat-route-state';
@@ -337,12 +337,13 @@ export const POST = async (req: Request): Promise<Response> => {
           const content = joinText(responseMessage).trim();
 
           if (content.length > 0) {
-            const metadata = assistantMetadata(meta);
+            const { metadata, parts } = assistantState(responseMessage, meta);
             if (regenerationReplacement === null) {
               await chatState.upsertAssistantMessage({
                 content,
                 conversationId,
                 metadata,
+                parts,
                 responseId: streamId,
                 userId,
               });
@@ -352,6 +353,7 @@ export const POST = async (req: Request): Promise<Response> => {
                 conversationId,
                 messageId: regenerationReplacement.messageId,
                 metadata,
+                parts,
                 responseId: streamId,
                 retainedMessageIds: regenerationReplacement.retainedMessageIds,
                 userId,

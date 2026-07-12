@@ -83,6 +83,17 @@ def test_chat_user_migration_allows_supported_auth_providers() -> None:
     assert "provider IN ('google', 'microsoft-entra-id')" in migration
 
 
+def test_chat_message_parts_migration_adds_nullable_jsonb_column() -> None:
+    # Given: persisted chat messages need durable AI SDK UI parts.
+    migration = Path(
+        "resources/migrations/0005_add_chat_message_parts.sql",
+    ).read_text()
+
+    # When / Then: the forward migration keeps legacy rows valid while adding parts.
+    assert "ADD COLUMN IF NOT EXISTS parts JSONB" in migration
+    assert "NOT NULL" not in migration
+
+
 def test_run_migrations_applies_only_pending_versions(
     monkeypatch,
     tmp_path: Path,
