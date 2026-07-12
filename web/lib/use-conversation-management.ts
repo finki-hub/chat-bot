@@ -97,7 +97,10 @@ export const useConversationManagement = ({
             title: expectedTitle,
           });
         } catch (error) {
-          if (error instanceof ChatConversationRequestError) {
+          if (
+            error instanceof ChatConversationRequestError ||
+            error instanceof TypeError
+          ) {
             setActiveError({
               code: 'conversation_create',
               message: t('conversation.createError'),

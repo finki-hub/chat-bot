@@ -181,6 +181,26 @@ describe('useConversations resumable streaming', () => {
     });
   });
 
+  it('returns false and preserves the draft error when conversation creation cannot reach the server', async () => {
+    saveChatConversation.mockRejectedValueOnce(
+      new TypeError('Failed to fetch'),
+    );
+    const { result } = renderHook(() => useConversations('model-a'));
+    let accepted = true;
+
+    await act(async () => {
+      accepted = await result.current.submitMessage('Прашање');
+    });
+
+    expect(accepted).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(result.current.activeError).toStrictEqual({
+      code: 'conversation_create',
+      message:
+        'Разговорот не можеше да се започне. Прашањето е зачувано за повторен обид.',
+    });
+  });
+
   it('sends the first message without waiting for sidebar refresh', async () => {
     refreshConversations.mockRejectedValueOnce(new Error('list unavailable'));
     const { result } = renderHook(() => useConversations('model-a'));
