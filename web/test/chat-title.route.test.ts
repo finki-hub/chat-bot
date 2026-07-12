@@ -13,6 +13,7 @@ const { getAuthenticatedChatUserIdMock } = vi.hoisted(() => ({
 }));
 
 const API_USER_ID = 'api-user-1';
+const CLAUDE_MODEL = 'claude-sonnet-5';
 
 vi.mock('@/lib/env', () => ({
   API_BASE_URL: 'https://api:8880',
@@ -66,7 +67,9 @@ describe('POST /api/chat/title', () => {
     const payload: ChatTitleRequestBody = {
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
-      query_transform_model: 'claude-sonnet-5',
+      provider_model: CLAUDE_MODEL,
+      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+      query_transform_model: CLAUDE_MODEL,
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       user_id: API_USER_ID,
     };
@@ -90,7 +93,9 @@ describe('POST /api/chat/title', () => {
     expect(JSON.parse(init.body as string)).toStrictEqual({
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
-      query_transform_model: 'claude-sonnet-5',
+      provider_model: CLAUDE_MODEL,
+      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+      query_transform_model: CLAUDE_MODEL,
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       user_id: API_USER_ID,
     });
@@ -101,7 +106,7 @@ describe('POST /api/chat/title', () => {
   it('also accepts the legacy camelCase model field', async () => {
     const payload: ChatTitleClientPayload = {
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
-      queryTransformModel: 'claude-sonnet-5',
+      queryTransformModel: CLAUDE_MODEL,
     };
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -116,7 +121,7 @@ describe('POST /api/chat/title', () => {
     expect(JSON.parse(init.body as string)).toStrictEqual({
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
-      query_transform_model: 'claude-sonnet-5',
+      query_transform_model: CLAUDE_MODEL,
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       user_id: API_USER_ID,
     });

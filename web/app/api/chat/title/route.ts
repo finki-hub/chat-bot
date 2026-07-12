@@ -44,6 +44,20 @@ const parseTurn = (value: unknown): ConversationTurn | null => {
   return { content, role };
 };
 
+const readModelField = (
+  candidate: Record<string, unknown>,
+  snakeCaseKey: string,
+  camelCaseKey: string,
+): string | undefined => {
+  const snakeCaseValue = candidate[snakeCaseKey];
+  if (typeof snakeCaseValue === 'string') {
+    return snakeCaseValue;
+  }
+
+  const camelCaseValue = candidate[camelCaseKey];
+  return typeof camelCaseValue === 'string' ? camelCaseValue : undefined;
+};
+
 const parsePayload = (value: unknown): ParsePayloadResult => {
   if (typeof value !== 'object' || value === null) {
     return { kind: 'invalid' };
@@ -79,16 +93,23 @@ const parsePayload = (value: unknown): ParsePayloadResult => {
     messages.push(turn);
   }
 
-  const queryTransformModel =
-    typeof candidate['query_transform_model'] === 'string'
-      ? candidate['query_transform_model']
-      : candidate['queryTransformModel'];
+  const queryTransformModel = readModelField(
+    candidate,
+    'query_transform_model',
+    'queryTransformModel',
+  );
+  const providerModel = readModelField(
+    candidate,
+    'provider_model',
+    'providerModel',
+  );
 
   return {
     kind: 'ok',
     payload: {
       messages,
-      ...(typeof queryTransformModel === 'string' && {
+      ...(providerModel !== undefined && { providerModel }),
+      ...(queryTransformModel !== undefined && {
         queryTransformModel,
       }),
     },
@@ -109,6 +130,10 @@ const unauthenticated = (): Response =>
 
 const toSchema = (payload: ChatTitleClientPayload, userId: string) => ({
   messages: payload.messages,
+  ...(payload.providerModel !== undefined && {
+    // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+    provider_model: payload.providerModel,
+  }),
   ...(payload.queryTransformModel !== undefined && {
     // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
     query_transform_model: payload.queryTransformModel,
