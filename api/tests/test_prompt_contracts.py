@@ -34,7 +34,7 @@ def test_agent_policy_requires_evidence_and_reports_conflicts():
     assert "износи, датуми, рокови" in prompt
     assert "постапки и прописи" in prompt
     assert "ако изворите се спротивставени" in prompt
-    assert "наведи го изворот непосредно" in prompt
+    assert "наведи го изворот непосредно" not in prompt
 
 
 def test_agent_policy_orders_scope_before_tool_use():
