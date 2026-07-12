@@ -69,6 +69,7 @@ async def generate_chat_title(
     db: ChatCredentialDatabase | None = None,
     settings: Settings | None = None,
 ) -> ChatTitleResponse:
+    candidate_models: tuple[Model, ...]
     if payload.query_transform_model is not None:
         candidate_models = (payload.query_transform_model,)
     else:
