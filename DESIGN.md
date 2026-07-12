@@ -33,14 +33,13 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Mobile sidebar: a modal Radix dialog that traps focus, closes on Escape or overlay interaction, and restores focus to the header trigger. Desktop retains the static complementary landmark.
 - Conversation loading state: preserve the current list/thread during transient failures and present an inline alert with a retry action. Only a confirmed missing conversation clears the selection.
 - Composer submission failure: retain the draft and show an inline retryable error; clear the draft only after the message is accepted.
-- Dislike feedback dialog: require one structured category, allow an optional trimmed 500-character detail, and leave vote state unchanged on cancel or request failure.
 
 ## 6. Accessibility
 
 - Every icon-only action must have an `aria-label` from `web/lib/i18n.ts`.
 - Primary mobile controls and conversation row actions expose at least 44px touch targets.
 - Mobile header and drawer honor safe-area insets; decorative logo and GitHub shortcut are hidden below `sm` to protect the title and primary actions.
-- Modal drawers and feedback dialogs contain keyboard focus and restore it to their invoking control.
+- Modal drawers contain keyboard focus and restore it to their invoking control.
 - Disabled async actions must expose `aria-busy` when work is pending.
 - Auth failures must use `role="alert"` and include a direct recovery step. Missing provider configuration must be described as temporary unavailability without exposing server terminology.
 

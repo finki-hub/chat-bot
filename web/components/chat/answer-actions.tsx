@@ -4,10 +4,6 @@ import { useState } from 'react';
 
 import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
-import {
-  type DislikeFeedback,
-  DislikeFeedbackDialog,
-} from '@/components/chat/dislike-feedback-dialog';
 import { t } from '@/lib/i18n';
 import { lastText } from '@/lib/message-parts';
 import { cn } from '@/lib/utils';
@@ -32,7 +28,6 @@ export const AnswerActions = ({
 }: AnswerActionsProps) => {
   const responseId = message.metadata?.responseId;
   const [copied, setCopied] = useState(false);
-  const [dislikeOpen, setDislikeOpen] = useState(false);
   const [vote, setVote] = useState<FeedbackType | null>(
     message.metadata?.feedback ?? null,
   );
@@ -57,22 +52,15 @@ export const AnswerActions = ({
     }, 1_500);
   };
 
-  const sendFeedback = async (
-    feedbackType: FeedbackType,
-    dislikeFeedback?: DislikeFeedback,
-  ): Promise<boolean> => {
+  const sendFeedback = async (feedbackType: FeedbackType): Promise<void> => {
     if (pending) {
-      return false;
+      return;
     }
     const previous = vote;
     setVote(feedbackType);
     try {
       const res = await fetch('/api/feedback', {
         body: JSON.stringify({
-          ...(dislikeFeedback && {
-            dislikeReasonCategory: dislikeFeedback.category,
-            dislikeReasonDetail: dislikeFeedback.detail,
-          }),
           feedbackType,
           responseId,
         }),
@@ -81,13 +69,11 @@ export const AnswerActions = ({
       });
       if (!res.ok) {
         setVote(previous);
-        return false;
+        return;
       }
       onVote?.(feedbackType);
-      return true;
     } catch {
       setVote(previous);
-      return false;
     }
   };
 
@@ -161,7 +147,7 @@ export const AnswerActions = ({
         data-testid="dislike-button"
         disabled={pending}
         onClick={() => {
-          setDislikeOpen(true);
+          void sendFeedback('dislike');
         }}
         type="button"
       >
@@ -170,11 +156,6 @@ export const AnswerActions = ({
           className={cn('size-4', vote === 'dislike' && 'fill-current')}
         />
       </button>
-      <DislikeFeedbackDialog
-        onOpenChange={setDislikeOpen}
-        onSubmit={(feedback) => sendFeedback('dislike', feedback)}
-        open={dislikeOpen}
-      />
     </div>
   );
 };

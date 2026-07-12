@@ -59,16 +59,11 @@ async def upsert_feedback(
     INSERT INTO feedback (
         response_id, client, user_id, feedback_type, client_ref,
         channel_id, guild_id, question_text, answer_text,
-        inference_model, embeddings_model, query_transform_model,
-        dislike_reason_category, dislike_reason_detail
+        inference_model, embeddings_model, query_transform_model
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     ON CONFLICT (response_id, client, user_id)
-    DO UPDATE SET
-        feedback_type = EXCLUDED.feedback_type,
-        dislike_reason_category = EXCLUDED.dislike_reason_category,
-        dislike_reason_detail = EXCLUDED.dislike_reason_detail,
-        updated_at = NOW()
+    DO UPDATE SET feedback_type = EXCLUDED.feedback_type, updated_at = NOW()
     RETURNING id, response_id, feedback_type
     """
     result = await db.fetchrow(
@@ -85,8 +80,6 @@ async def upsert_feedback(
         feedback.inference_model,
         feedback.embeddings_model,
         feedback.query_transform_model,
-        feedback.dislike_reason_category,
-        feedback.dislike_reason_detail,
     )
 
     if not result:

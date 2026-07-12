@@ -105,8 +105,6 @@ class FakeChatDatabase:
                 inference_model,
                 embeddings_model,
                 query_transform_model,
-                dislike_reason_category,
-                dislike_reason_detail,
             ) = args
             feedback_key = (response_id, client, user_id)
             current = self.feedback.get(feedback_key)
@@ -125,16 +123,12 @@ class FakeChatDatabase:
                     "inference_model": inference_model,
                     "embeddings_model": embeddings_model,
                     "query_transform_model": query_transform_model,
-                    "dislike_reason_category": dislike_reason_category,
-                    "dislike_reason_detail": dislike_reason_detail,
                     "created_at": self.now,
                     "updated_at": self.now,
                 }
                 self.feedback[feedback_key] = current
             else:
                 current["feedback_type"] = feedback_type
-                current["dislike_reason_category"] = dislike_reason_category
-                current["dislike_reason_detail"] = dislike_reason_detail
                 current["updated_at"] = self.now
             return current
 

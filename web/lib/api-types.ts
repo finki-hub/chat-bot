@@ -91,13 +91,6 @@ export const MAX_CHARS_PER_TURN = 2_000;
 
 export type ChatErrorCode = 'agent_error' | 'interrupted' | 'no_answer';
 
-export type DislikeReasonCategory =
-  | 'incomplete'
-  | 'incorrect'
-  | 'off_topic'
-  | 'other'
-  | 'outdated';
-
 // A user-facing error: the live transient `error` part, the persisted metadata, and
 // the in-memory active error all share this shape (`code` is looser than ChatErrorCode
 // because it also carries transport codes like 'network'/'pre_stream').
@@ -110,8 +103,6 @@ export type FeedbackAck = {
 };
 
 export type FeedbackClientPayload = {
-  readonly dislikeReasonCategory?: DislikeReasonCategory;
-  readonly dislikeReasonDetail?: string;
   readonly feedbackType: FeedbackType;
   readonly responseId: string;
 };
@@ -121,8 +112,6 @@ export type FeedbackSchema = {
   channel_id?: string;
   client: 'web';
   client_ref?: string;
-  dislike_reason_category?: DislikeReasonCategory;
-  dislike_reason_detail?: string;
   embeddings_model?: string;
   feedback_type: FeedbackType;
   guild_id?: string;

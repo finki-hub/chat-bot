@@ -1,5 +1,4 @@
 import type {
-  DislikeReasonCategory,
   FeedbackAck,
   FeedbackClientPayload,
   FeedbackSchema,
@@ -18,31 +17,13 @@ export const dynamic = 'force-dynamic';
 const isFeedbackType = (value: unknown): value is FeedbackType =>
   value === 'dislike' || value === 'like';
 
-const dislikeReasonCategories: ReadonlySet<string> = new Set([
-  'incomplete',
-  'incorrect',
-  'off_topic',
-  'other',
-  'outdated',
-]);
-
-const isDislikeReasonCategory = (
-  value: unknown,
-): value is DislikeReasonCategory =>
-  typeof value === 'string' && dislikeReasonCategories.has(value);
-
 const parsePayload = (value: unknown): FeedbackClientPayload | null => {
   if (typeof value !== 'object' || value === null) {
     return null;
   }
 
   const candidate = value as Record<string, unknown>;
-  const {
-    dislikeReasonCategory,
-    dislikeReasonDetail,
-    feedbackType,
-    responseId,
-  } = candidate;
+  const { feedbackType, responseId } = candidate;
 
   if (typeof responseId !== 'string' || responseId.length === 0) {
     return null;
@@ -51,24 +32,8 @@ const parsePayload = (value: unknown): FeedbackClientPayload | null => {
   if (!isFeedbackType(feedbackType)) {
     return null;
   }
-  if (
-    dislikeReasonCategory !== undefined &&
-    !isDislikeReasonCategory(dislikeReasonCategory)
-  ) {
-    return null;
-  }
-  if (
-    dislikeReasonDetail !== undefined &&
-    (typeof dislikeReasonDetail !== 'string' ||
-      dislikeReasonDetail.length > 500)
-  ) {
-    return null;
-  }
-
   return {
     feedbackType,
-    ...(dislikeReasonCategory !== undefined && { dislikeReasonCategory }),
-    ...(dislikeReasonDetail !== undefined && { dislikeReasonDetail }),
     responseId,
   };
 };
@@ -80,12 +45,6 @@ const toSchema = (
   client: 'web',
   /* eslint-disable camelcase -- snake_case mirrors the Python API wire contract */
   feedback_type: payload.feedbackType,
-  ...(payload.dislikeReasonCategory !== undefined && {
-    dislike_reason_category: payload.dislikeReasonCategory,
-  }),
-  ...(payload.dislikeReasonDetail !== undefined && {
-    dislike_reason_detail: payload.dislikeReasonDetail,
-  }),
   response_id: payload.responseId,
   user_id: userId,
   /* eslint-enable camelcase -- snake_case mirrors the Python API wire contract */

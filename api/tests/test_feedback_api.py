@@ -124,27 +124,3 @@ def test_web_feedback_rejects_unowned_response_id() -> None:
     # Then: the response is hidden and no feedback row is written.
     assert response.status_code == 404
     assert db.feedback == {}
-
-
-def test_dislike_feedback_persists_structured_reason() -> None:
-    db = FakeChatDatabase()
-    client = _client(db)
-    _, response_id = _seed_owned_response(db)
-
-    response = client.post(
-        "/chat/feedback",
-        headers=_auth_headers(),
-        json={
-            "client": "web",
-            "feedback_type": "dislike",
-            "dislike_reason_category": "incorrect",
-            "dislike_reason_detail": "  The cited deadline is wrong.  ",
-            "response_id": str(response_id),
-            "user_id": OWNER_ID,
-        },
-    )
-
-    assert response.status_code == 200
-    stored = next(iter(db.feedback.values()))
-    assert stored["dislike_reason_category"] == "incorrect"
-    assert stored["dislike_reason_detail"] == "The cited deadline is wrong."

@@ -82,7 +82,6 @@ async def submit_feedback(
             "response_id": str(feedback.response_id),
             "client": feedback.client,
             "feedback_type": feedback.feedback_type,
-            "dislike_reason_category": feedback.dislike_reason_category,
             "inference_model": feedback.inference_model,
             "embeddings_model": feedback.embeddings_model,
             "query_transform_model": feedback.query_transform_model,
