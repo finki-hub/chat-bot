@@ -53,7 +53,7 @@ def test_chat_title_uses_transform_prompt_and_normalizes_quotes(monkeypatch):
     payload = ChatTitleSchema(
         user_id=user_id,
         messages=[ConversationTurn(role="user", content="Кога е јунската сесија?")],
-        query_transform_model=Model.QWEN3_14B,
+        query_transform_model="qwen3:14b-q4_K_M",
     )
 
     async def run_title():
@@ -108,7 +108,7 @@ def test_chat_title_falls_back_to_first_user_message_when_model_returns_empty(
                 content="  Како да пријавам испит?\nИ кои се роковите?  ",
             ),
         ],
-        query_transform_model=Model.QWEN3_14B,
+        query_transform_model="qwen3:14b-q4_K_M",
     )
 
     response = anyio.run(chat_title.generate_chat_title, payload)

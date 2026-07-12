@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 
 from app.data.connection import Database
 from app.llms.agents import StreamObservation
+from app.llms.models import model_id
 from app.llms.prompts import (
     DEFAULT_AGENT_SYSTEM_PROMPT,
     build_user_agent_prompt,
@@ -36,7 +37,7 @@ async def handle_chat(
     logger.info(
         "Handling chat for user prompt length: '%d' with model: %s",
         len(payload.query),
-        payload.inference_model.value,
+        model_id(payload.inference_model),
     )
 
     system_prompt = "\n\n".join(

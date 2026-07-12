@@ -1,12 +1,13 @@
 import type { ModelCatalog } from '@/lib/api-types';
 
+import { getAuthenticatedChatUserId } from '@/lib/authenticated-chat-user';
 import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
 import { parseModelCatalog } from '@/lib/model-catalog';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=600';
+const CACHE_CONTROL = 'private, no-store';
 
 const ERROR_CATALOG: ModelCatalog = { models: [], source: 'error', version: 1 };
 
@@ -26,7 +27,9 @@ export const GET = async (): Promise<Response> => {
   let upstream: Response;
 
   try {
-    upstream = await fetch(`${API_BASE_URL}/chat/models`, {
+    const userId = await getAuthenticatedChatUserId();
+    const url = `${API_BASE_URL}/chat/models?user_id=${encodeURIComponent(userId)}`;
+    upstream = await fetch(url, {
       headers: { accept: 'application/json', 'x-api-key': CHAT_API_KEY },
       method: 'GET',
     });

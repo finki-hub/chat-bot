@@ -28,7 +28,9 @@ from app.llms.chat import handle_chat
 from app.llms.context import get_retrieved_context_with_sources
 from app.llms.link_context import get_links_context
 from app.llms.model_catalog import model_catalog_service
-from app.llms.model_catalog_types import ModelCatalogResponse
+from app.llms.model_catalog_types import ModelCatalogResponse, OllamaCatalogModel
+from app.llms.models import model_id
+from app.llms.ollama import fetch_ollama_catalog
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
@@ -160,9 +162,9 @@ def _chat_request_log_fields(
     payload: ChatSchema,
 ) -> dict[str, bool | float | int | str]:
     return {
-        "inference_model": payload.inference_model.value,
+        "inference_model": model_id(payload.inference_model),
         "embeddings_model": payload.embeddings_model.value,
-        "query_transform_model": payload.query_transform_model.value,
+        "query_transform_model": model_id(payload.query_transform_model),
         "query_transform_mode": payload.query_transform_mode.value,
         "reasoning": payload.reasoning,
         "interface": payload.interface,
@@ -214,7 +216,7 @@ def _capture_chat_response(
 
     props: dict[str, object] = {
         "$ai_trace_id": str(response_id),
-        "$ai_model": model.value,
+        "$ai_model": model_id(model),
         "$ai_provider": observation.provider or None,
         "$ai_input": _chat_messages(payload),
         "$ai_output_choices": [
@@ -404,9 +406,9 @@ async def _instrument_stream(
             json.dumps(
                 {
                     "response_id": str(response_id),
-                    "inference_model": payload.inference_model.value,
+                    "inference_model": model_id(payload.inference_model),
                     "embeddings_model": payload.embeddings_model.value,
-                    "query_transform_model": payload.query_transform_model.value,
+                    "query_transform_model": model_id(payload.query_transform_model),
                     "query_transform_mode": payload.query_transform_mode.value,
                     "retrieval_hit": retrieval_hit,
                     "outcome": outcome,
@@ -562,7 +564,9 @@ async def _chat_response_stream(
                     {
                         "response_id": str(response_id),
                         "embeddings_model": payload.embeddings_model.value,
-                        "query_transform_model": payload.query_transform_model.value,
+                        "query_transform_model": model_id(
+                            payload.query_transform_model,
+                        ),
                         "query_transform_mode": payload.query_transform_mode.value,
                         "candidate_count": timings.candidate_count,
                         "top_distance": timings.top_distance,
@@ -676,6 +680,20 @@ async def chat(
     summary="List available LLM models",
     description="Retrieve a list of all available LLM models for chat.",
     status_code=status.HTTP_200_OK,
+    dependencies=[api_key_dep],
 )
-async def list_models() -> ModelCatalogResponse:
-    return await model_catalog_service.get_catalog()
+async def list_models(
+    request: Request,
+    user_id: UUID | None = None,
+    db: Database = db_dep,
+) -> ModelCatalogResponse:
+    credentials = await resolve_provider_credentials(
+        db,
+        user_id=user_id,
+        providers=frozenset({"ollama"}),
+        settings=request.app.state.settings,
+    )
+    ollama_models: tuple[OllamaCatalogModel, ...] = ()
+    if credentials is not None and credentials.ollama is not None:
+        ollama_models = await fetch_ollama_catalog(credentials.ollama)
+    return await model_catalog_service.get_catalog(ollama_models)

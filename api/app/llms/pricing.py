@@ -5,7 +5,7 @@ marginal token cost and are priced at 0; provider models without a reliable publ
 are omitted, so callers treat their cost as unknown rather than guessing.
 """
 
-from app.llms.models import Model
+from app.llms.models import ChatModel, Model
 
 # (input_usd_per_1m, output_usd_per_1m) for hosted models with a reliable published price.
 HOSTED_PRICING: dict[Model, tuple[float, float]] = {
@@ -32,12 +32,14 @@ SELF_HOSTED_MODELS: frozenset[Model] = frozenset(
 )
 
 
-def is_self_hosted(model: Model) -> bool:
+def is_self_hosted(model: ChatModel) -> bool:
+    if not isinstance(model, Model):
+        return False
     return model in SELF_HOSTED_MODELS
 
 
 def cost_usd(
-    model: Model,
+    model: ChatModel,
     input_tokens: int,
     output_tokens: int,
 ) -> tuple[float, float, float] | None:
@@ -46,6 +48,8 @@ def cost_usd(
     Self-hosted models cost 0; an unpriced hosted model returns None so the caller can flag
     the cost as unknown instead of recording a fabricated 0.
     """
+    if not isinstance(model, Model):
+        return None
     if model in SELF_HOSTED_MODELS:
         return (0.0, 0.0, 0.0)
     price = HOSTED_PRICING.get(model)

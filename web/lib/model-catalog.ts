@@ -91,7 +91,7 @@ const normalizeDescriptor = (
   if (!isRecord(value)) {
     return null;
   }
-  const { description, id, name, provider } = value;
+  const { description, id, loaded, name, provider } = value;
   if (typeof id !== 'string' || id.length === 0) {
     return null;
   }
@@ -100,6 +100,9 @@ const normalizeDescriptor = (
     (typeof name !== 'string' ||
       name.length === 0 ||
       !isCatalogProvider(provider) ||
+      (loaded !== undefined &&
+        loaded !== null &&
+        typeof loaded !== 'boolean') ||
       (description !== undefined &&
         description !== null &&
         typeof description !== 'string'))
@@ -108,6 +111,7 @@ const normalizeDescriptor = (
   }
   const base = {
     id,
+    ...((loaded === null || typeof loaded === 'boolean') && { loaded }),
     name: typeof name === 'string' && name.length > 0 ? name : id,
     provider: isCatalogProvider(provider) ? provider : inferProvider(id),
   } satisfies ModelDescriptor;

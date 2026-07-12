@@ -58,17 +58,6 @@ MODEL_CATALOG: Final[tuple[CatalogPolicy, ...]] = (
     _policy(Model.CLAUDE_OPUS_4_8, "anthropic", "Claude Opus 4.8"),
     _policy(Model.CLAUDE_SONNET_5, "anthropic", "Claude Sonnet 5"),
     _policy(Model.CLAUDE_HAIKU_4_5, "anthropic", "Claude Haiku 4.5"),
-    _policy(
-        Model.QWEN3_30B_THINKING,
-        "ollama",
-        "Qwen3 30B Thinking",
-    ),
-    _policy(
-        Model.QWEN3_30B_INSTRUCT,
-        "ollama",
-        "Qwen3 30B Instruct",
-    ),
-    _policy(Model.QWEN3_14B, "ollama", "Qwen3 14B"),
 )
 
 if tuple(policy.model for policy in MODEL_CATALOG) != CHAT_MODEL_ORDER:

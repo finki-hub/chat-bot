@@ -152,6 +152,30 @@ def test_ollama_byok_client_uses_user_endpoint_and_bearer_key(monkeypatch) -> No
     ]
 
 
+def test_ollama_byok_client_accepts_dynamic_model_tag(monkeypatch) -> None:
+    captured_clients: list[dict] = []
+
+    class OllamaCapturingClient:
+        def __init__(self, **kwargs):
+            captured_clients.append(kwargs)
+
+    monkeypatch.setattr(ollama, "ChatOllama", OllamaCapturingClient)
+
+    ollama.get_llm(
+        "bge-m3:latest",
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=128,
+        credential=ChatCredentialSecret(
+            provider="ollama",
+            api_key="ollama-user-key",
+            base_url="https://ollama.example",
+        ),
+    )
+
+    assert [client["model"] for client in captured_clients] == ["bge-m3:latest"]
+
+
 def test_ollama_byok_clients_are_not_shared_between_requests(monkeypatch) -> None:
     captured_clients: list[tuple[str, str]] = []
 

@@ -14,15 +14,19 @@ from app.llms.agents import (
     create_agent_token_generator,
     stream_sync_gen_as_sse,
 )
-from app.llms.models import Model
+from app.llms.models import ChatModel, Model, model_id
 from app.llms.prompts import build_agent_messages, stitch_conversation
 from app.llms.provider_credentials import require_provider_credential
 from app.llms.tools import get_agent_tools
 from app.schemas.chat_credentials import OLLAMA_DEFAULT_BASE_URL, ChatCredentialSecret
 
+from .ollama_catalog import fetch_ollama_catalog
+
 logger = logging.getLogger(__name__)
 
 type _OllamaClientKwargs = dict[str, dict[str, str]]
+
+__all__ = ("fetch_ollama_catalog",)
 
 
 def _connection(
@@ -51,7 +55,7 @@ def get_embedder(
 
 
 def get_llm(
-    model: Model,
+    model: ChatModel,
     temperature: float,
     top_p: float,
     max_tokens: int,
@@ -61,7 +65,7 @@ def get_llm(
 ) -> ChatOllama:
     base_url, client_kwargs = _connection(credential)
     return ChatOllama(
-        model=model.value,
+        model=model_id(model),
         base_url=base_url,
         client_kwargs=client_kwargs,
         temperature=temperature,
@@ -112,7 +116,7 @@ async def generate_ollama_embeddings(
 
 def stream_ollama_response(
     user_prompt: str,
-    model: Model,
+    model: ChatModel,
     *,
     system_prompt: str,
     history: list[BaseMessage] | None = None,
@@ -132,7 +136,7 @@ def stream_ollama_response(
     logger.info(
         "Streaming Ollama response for user prompt length: '%d' with model: %s",
         len(user_prompt),
-        model.value,
+        model_id(model),
     )
 
     llm = get_llm(
@@ -154,7 +158,7 @@ def stream_ollama_response(
 
 async def transform_query_with_ollama(
     query: str,
-    model: Model,
+    model: ChatModel,
     *,
     system_prompt: str,
     temperature: float,
@@ -169,7 +173,7 @@ async def transform_query_with_ollama(
 
     logger.info(
         "Transforming query with model=%s query_len=%d",
-        model.value,
+        model_id(model),
         len(query),
     )
 
@@ -197,7 +201,7 @@ async def transform_query_with_ollama(
 
 async def stream_ollama_agent_response(
     user_prompt: str,
-    model: Model,
+    model: ChatModel,
     *,
     system_prompt: str,
     history: list[BaseMessage] | None = None,
@@ -215,7 +219,7 @@ async def stream_ollama_agent_response(
     logger.info(
         "Streaming Ollama agent response for user prompt length: '%d' with model: %s",
         len(user_prompt),
-        model.value,
+        model_id(model),
     )
 
     try:
@@ -250,8 +254,8 @@ async def stream_ollama_agent_response(
         )
         capture_model_fallback(
             observation,
-            from_model=model.value,
-            to_model=model.value,
+            from_model=model_id(model),
+            to_model=model_id(model),
             reason="agent_setup_failed",
         )
 

@@ -74,6 +74,7 @@ const typedModels = [
   },
   {
     id: QWEN_THINKING,
+    loaded: true,
     name: 'Qwen3 30B Thinking',
     provider: OLLAMA,
   },
@@ -104,6 +105,28 @@ describe('parseModelCatalog', () => {
       name: 'GPT-5.4',
       provider: OPENAI,
     });
+    expect(catalog.models.at(-1)).toMatchObject({
+      id: QWEN_THINKING,
+      loaded: true,
+      provider: OLLAMA,
+    });
+  });
+
+  it('preserves an unknown Ollama loaded status', () => {
+    const catalog = parseModelCatalog({
+      models: [
+        {
+          id: 'llama3.2:latest',
+          loaded: null,
+          name: 'llama3.2:latest',
+          provider: OLLAMA,
+        },
+      ],
+      source: LIVE,
+      version: 1,
+    });
+
+    expect(catalog.models[0]).toMatchObject({ loaded: null });
   });
 
   it('normalizes every curated legacy id with its immutable fallback descriptor', () => {
