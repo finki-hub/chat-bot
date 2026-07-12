@@ -868,13 +868,11 @@ describe('ChatPage persistence', () => {
                 id: 'claude-sonnet-5',
                 name: 'Claude Sonnet 5',
                 provider: 'anthropic',
-                tier: 'default',
               },
               {
                 id: 'gpt-5.4-mini',
                 name: 'GPT-5.4 Mini',
                 provider: 'openai',
-                tier: 'default',
               },
             ],
             source: 'live',

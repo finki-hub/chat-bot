@@ -22,9 +22,6 @@ export const messages = {
   'composer.reasoning': 'Размислување',
   'composer.send': 'Испрати',
   'composer.stop': 'Запри',
-  'composer.tier.cheap': 'Економичен',
-  'composer.tier.default': 'Стандарден',
-  'composer.tier.premium': 'Премиум',
   'conversation.delete': 'Избриши',
   'conversation.deleteAllDescription':
     'Сите разговори и историја ќе бидат трајно избришани.',
@@ -78,6 +75,10 @@ export const messages = {
   'service.unavailable':
     'Услугата е привремено недостапна. Чатот не е достапен во моментов.',
   'settings.baseUrl': 'Base URL (опционално)',
+  'settings.credentialBaseUrlError':
+    'Base URL адресата не е дозволена. Остави го полето празно за стандардниот endpoint или побарај администраторот да ја додаде.',
+  'settings.credentialDeleteError': 'Клучот не можеше да се избрише.',
+  'settings.credentialSaveError': 'Клучот не можеше да се зачува.',
   'settings.credentialsDescription':
     'Зачувај лични OpenAI, Google/Gemini, Anthropic или Ollama клучеви. Тие се користат само за твоите разговори и за пребарувачките LLM чекори.',
   'settings.credentialsError': 'Клучевите не можеа да се вчитаат.',

@@ -76,7 +76,6 @@ def _descriptor(
     return ModelDescriptor(
         id=policy.model.value,
         provider=policy.provider,
-        tier=policy.tier,
         name=metadata.name,
         description=metadata.description,
         execution=policy.execution,

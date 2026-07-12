@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { CatalogTier, ModelDescriptor } from '@/lib/api-types';
+import type { ModelDescriptor } from '@/lib/api-types';
 
 import {
   CURATED_MODEL_DESCRIPTORS,
-  groupModelsByProviderTier,
+  groupModelsByProvider,
   parseModelCatalog,
   providerLabel,
   recoverSelectedModel,
@@ -14,9 +14,6 @@ const OPENAI = 'openai';
 const GOOGLE = 'google';
 const ANTHROPIC = 'anthropic';
 const OLLAMA = 'ollama';
-const PREMIUM = 'premium';
-const STANDARD = 'default';
-const CHEAP = 'cheap';
 const LIVE = 'live';
 
 const EXPECTED_CURATED_IDS = [
@@ -48,11 +45,11 @@ const CLAUDE_OPUS = 'claude-opus-4-8';
 const CLAUDE_LEGACY = 'claude-sonnet-4-6';
 const QWEN_THINKING = 'qwen3:30b-a3b-thinking-2507-q4_K_M';
 
-const descriptor = (
-  id: string,
-  provider: string,
-  tier: CatalogTier,
-): ModelDescriptor => ({ id, name: id, provider, tier });
+const descriptor = (id: string, provider: string): ModelDescriptor => ({
+  id,
+  name: id,
+  provider,
+});
 
 const typedModels = [
   {
@@ -62,27 +59,23 @@ const typedModels = [
     name: 'GPT-5.4',
     pricing: { input: 2.5, output: 15 },
     provider: OPENAI,
-    tier: PREMIUM,
   },
-  { id: GPT_NANO, name: 'GPT-5.4 Nano', provider: OPENAI, tier: CHEAP },
-  { id: GPT_MINI, name: GPT_MINI_NAME, provider: OPENAI, tier: STANDARD },
+  { id: GPT_NANO, name: 'GPT-5.4 Nano', provider: OPENAI },
+  { id: GPT_MINI, name: GPT_MINI_NAME, provider: OPENAI },
   {
     id: GEMINI_PRO,
     name: 'Gemini 3.1 Pro Preview',
     provider: GOOGLE,
-    tier: PREMIUM,
   },
   {
     id: CLAUDE_OPUS,
     name: 'Claude Opus 4.8',
     provider: ANTHROPIC,
-    tier: PREMIUM,
   },
   {
     id: QWEN_THINKING,
     name: 'Qwen3 30B Thinking',
     provider: OLLAMA,
-    tier: PREMIUM,
   },
 ];
 
@@ -110,7 +103,6 @@ describe('parseModelCatalog', () => {
       id: GPT,
       name: 'GPT-5.4',
       provider: OPENAI,
-      tier: PREMIUM,
     });
   });
 
@@ -123,11 +115,11 @@ describe('parseModelCatalog', () => {
     );
   });
 
-  it('uses inferred provider, raw id name, and default tier for an unknown legacy id', () => {
+  it('uses inferred provider and raw id name for an unknown legacy id', () => {
     const unknown = 'acme/new-model';
 
     expect(parseModelCatalog([unknown]).models).toStrictEqual([
-      descriptor(unknown, 'acme', STANDARD),
+      descriptor(unknown, 'acme'),
     ]);
   });
 
@@ -135,19 +127,7 @@ describe('parseModelCatalog', () => {
     { models: typedModels, source: LIVE, version: 2 },
     { models: typedModels, source: 'weird', version: 1 },
     {
-      models: [{ id: GPT_MINI, name: GPT_MINI_NAME, tier: STANDARD }],
-      source: LIVE,
-      version: 1,
-    },
-    {
-      models: [
-        {
-          id: GPT_MINI,
-          name: GPT_MINI_NAME,
-          provider: OPENAI,
-          tier: 'bogus',
-        },
-      ],
+      models: [{ id: GPT_MINI, name: GPT_MINI_NAME }],
       source: LIVE,
       version: 1,
     },
@@ -161,7 +141,7 @@ describe('parseModelCatalog', () => {
 
   it('rejects a typed entry with no usable name', () => {
     const catalog = parseModelCatalog({
-      models: [{ id: 'mystery-model', provider: OPENAI, tier: PREMIUM }],
+      models: [{ id: 'mystery-model', provider: OPENAI }],
       source: 'snapshot',
       version: 1,
     });
@@ -172,8 +152,8 @@ describe('parseModelCatalog', () => {
   it('rejects the envelope when an entry has no string id', () => {
     const catalog = parseModelCatalog({
       models: [
-        { name: 'No id', provider: OPENAI, tier: PREMIUM },
-        { id: GPT_MINI, name: GPT_MINI_NAME, provider: OPENAI, tier: STANDARD },
+        { name: 'No id', provider: OPENAI },
+        { id: GPT_MINI, name: GPT_MINI_NAME, provider: OPENAI },
       ],
       source: LIVE,
       version: 1,
@@ -227,41 +207,35 @@ describe('parseModelCatalog', () => {
   });
 });
 
-describe('groupModelsByProviderTier', () => {
-  it('groups tier-first, then provider, while preserving API order within providers', () => {
+describe('groupModelsByProvider', () => {
+  it('groups by first-seen provider while preserving API order within providers', () => {
     const { models } = parseModelCatalog(typedCatalog());
 
-    const groups = groupModelsByProviderTier(models);
+    const groups = groupModelsByProvider(models);
 
-    expect(groups.map(({ tier }) => tier)).toStrictEqual([
-      PREMIUM,
-      STANDARD,
-      CHEAP,
+    expect(groups.map(({ provider }) => provider)).toStrictEqual([
+      OPENAI,
+      GOOGLE,
+      ANTHROPIC,
+      OLLAMA,
     ]);
-    expect(
-      groups.map(({ providers }) => providers.map(({ provider }) => provider)),
-    ).toStrictEqual([[OPENAI, GOOGLE, ANTHROPIC, OLLAMA], [OPENAI], [OPENAI]]);
-    expect(
-      groups[0]?.providers[0]?.models.map((model) => model.id),
-    ).toStrictEqual([GPT]);
-    expect(
-      groups[1]?.providers[0]?.models.map((model) => model.id),
-    ).toStrictEqual([GPT_MINI]);
-    expect(
-      groups[2]?.providers[0]?.models.map((model) => model.id),
-    ).toStrictEqual([GPT_NANO]);
+    expect(groups[0]?.models.map((model) => model.id)).toStrictEqual([
+      GPT,
+      GPT_NANO,
+      GPT_MINI,
+    ]);
   });
 
-  it('is stable for models that share a tier', () => {
+  it('is stable for models that share a provider', () => {
     const { models } = parseModelCatalog([GPT_TERRA, GPT_MINI]);
 
-    const groups = groupModelsByProviderTier(models);
+    const groups = groupModelsByProvider(models);
 
     expect(groups).toHaveLength(1);
-    expect(groups[0]?.providers).toHaveLength(1);
-    expect(
-      groups[0]?.providers[0]?.models.map((model) => model.id),
-    ).toStrictEqual([GPT_TERRA, GPT_MINI]);
+    expect(groups[0]?.models.map((model) => model.id)).toStrictEqual([
+      GPT_TERRA,
+      GPT_MINI,
+    ]);
   });
 });
 

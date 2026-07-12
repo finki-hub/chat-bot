@@ -10,6 +10,7 @@ import type {
 
 import { CredentialProviderForm } from '@/components/shell/credential-provider-form';
 import {
+  CredentialBaseUrlRejectedError,
   deleteCredential,
   saveCredential,
 } from '@/components/shell/credential-settings-client';
@@ -63,7 +64,6 @@ export const CredentialSettingsDialog = ({
   const [busyProvider, setBusyProvider] =
     useState<ChatCredentialProvider | null>(null);
   const [error, setError] = useState<null | string>(null);
-
   useEffect(() => {
     if (!open) {
       return;
@@ -77,7 +77,6 @@ export const CredentialSettingsDialog = ({
     }
     setForms(loadedForms);
   }, [credentials, open]);
-
   const saved = credentialsByProvider(credentials);
 
   const updateForm = (
@@ -90,7 +89,6 @@ export const CredentialSettingsDialog = ({
       [provider]: { ...current[provider], [field]: value },
     }));
   };
-
   const saveProvider = async (
     event: SyntheticEvent<HTMLFormElement>,
     provider: ChatCredentialProvider,
@@ -110,7 +108,7 @@ export const CredentialSettingsDialog = ({
         provider,
       });
       if (credential === null) {
-        setError(credentialsError());
+        setError(t('settings.credentialSaveError'));
         return;
       }
       queryClient.setQueryData<null | readonly ChatCredentialPublic[]>(
@@ -126,10 +124,13 @@ export const CredentialSettingsDialog = ({
         [provider]: { apiKey: '', baseUrl: credential.base_url ?? '' },
       }));
     } catch (error_) {
-      if (!(error_ instanceof TypeError)) {
+      if (error_ instanceof CredentialBaseUrlRejectedError) {
+        setError(t('settings.credentialBaseUrlError'));
+      } else if (error_ instanceof TypeError) {
+        setError(t('settings.credentialSaveError'));
+      } else {
         throw error_;
       }
-      setError(credentialsError());
     } finally {
       setBusyProvider(null);
     }
@@ -141,7 +142,7 @@ export const CredentialSettingsDialog = ({
     try {
       const deleted = await deleteCredential(provider);
       if (!deleted) {
-        setError(credentialsError());
+        setError(t('settings.credentialDeleteError'));
         return;
       }
       queryClient.setQueryData<null | readonly ChatCredentialPublic[]>(
@@ -160,7 +161,7 @@ export const CredentialSettingsDialog = ({
       if (!(error_ instanceof TypeError)) {
         throw error_;
       }
-      setError(credentialsError());
+      setError(t('settings.credentialDeleteError'));
     } finally {
       setBusyProvider(null);
     }

@@ -60,29 +60,29 @@ def _payload(*, name: str = "Remote GPT", description: str = "display only") -> 
     ).encode()
 
 
-def test_static_catalog_has_exact_order_provider_and_tiers() -> None:
+def test_static_catalog_has_exact_order_and_providers_without_tiers() -> None:
     ids = [entry.model.value for entry in MODEL_CATALOG]
 
     assert ids == EXPECTED_IDS
-    assert all(entry.provider and entry.tier for entry in MODEL_CATALOG)
-    assert [entry.tier for entry in MODEL_CATALOG] == [
-        "premium",
-        "default",
-        "cheap",
-        "premium",
-        "premium",
-        "default",
-        "cheap",
-        "premium",
-        "default",
-        "cheap",
-        "premium",
-        "default",
-        "cheap",
-        "premium",
-        "default",
-        "cheap",
+    assert [entry.provider for entry in MODEL_CATALOG] == [
+        "openai",
+        "openai",
+        "openai",
+        "openai",
+        "openai",
+        "openai",
+        "openai",
+        "google",
+        "google",
+        "google",
+        "anthropic",
+        "anthropic",
+        "anthropic",
+        "ollama",
+        "ollama",
+        "ollama",
     ]
+    assert all(not hasattr(entry, "tier") for entry in MODEL_CATALOG)
 
 
 def test_remote_metadata_only_enriches_allowlisted_display_fields() -> None:

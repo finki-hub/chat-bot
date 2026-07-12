@@ -14,7 +14,7 @@ import {
   type ComposerStatus,
 } from '@/components/chat/composer-actions';
 import { t } from '@/lib/i18n';
-import { groupModelsByProviderTier } from '@/lib/model-catalog';
+import { groupModelsByProvider } from '@/lib/model-catalog';
 
 export type ComposerProps = {
   availableProviders: ReadonlySet<string>;
@@ -52,7 +52,7 @@ export const Composer = ({
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isBusy = status === 'streaming' || status === 'submitted';
-  const groups = useMemo(() => groupModelsByProviderTier(models), [models]);
+  const groups = useMemo(() => groupModelsByProvider(models), [models]);
   const noModels = models.length === 0;
   const selectedModel = models.find((entry) => entry.id === model);
   const selectedModelAvailable =

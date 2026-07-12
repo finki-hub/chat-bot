@@ -20,7 +20,7 @@ const hideDevelopmentOverlay = async (
 };
 
 test.describe('model catalog selector (typed, mocked BFF)', () => {
-  test('renders tier-first provider subgroups and recovers a stale selection', async ({
+  test('renders provider groups and recovers a stale selection', async ({
     page,
   }) => {
     await mockModels(page);
@@ -57,14 +57,12 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
 
     await trigger.click();
 
-    await expect(page.getByTestId('model-tier-label')).toHaveText([
-      'Премиум',
-      'Стандарден',
-      'Економичен',
-    ]);
-    await expect(page.getByTestId('model-provider-label').first()).toHaveText(
+    await expect(page.getByTestId('model-provider-label')).toHaveText([
       'OpenAI',
-    );
+      'Google / Gemini',
+      'Anthropic',
+      'Ollama',
+    ]);
 
     // Model display names render (not raw ids).
     await expect(
@@ -82,6 +80,17 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     await selectedModel.focus();
     await page.keyboard.press('Enter');
     await expect(trigger).toContainText('GPT-5.4 Mini');
+
+    await page.setViewportSize({ height: 844, width: 390 });
+    await trigger.click();
+    await expect(page.getByTestId('model-provider-label')).toHaveText([
+      'OpenAI',
+      'Google / Gemini',
+      'Anthropic',
+      'Ollama',
+    ]);
+    await expect(page.getByTestId('model-tier-label')).toHaveCount(0);
+    await page.keyboard.press('Escape');
 
     await page.getByTestId('composer-input').fill('Провери модел');
     const chatRequest = page.waitForRequest((request) => {
