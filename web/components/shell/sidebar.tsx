@@ -120,15 +120,17 @@ export const Sidebar = ({
           role="alert"
         >
           <p className="text-destructive">{t('sidebar.loadError')}</p>
-          <button
-            className="mt-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => {
-              void onRetryList?.();
-            }}
-            type="button"
-          >
-            {t('error.retry')}
-          </button>
+          {onRetryList ? (
+            <button
+              className="mt-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => {
+                void onRetryList();
+              }}
+              type="button"
+            >
+              {t('error.retry')}
+            </button>
+          ) : null}
         </div>
       ) : null}
       {listLoading && conversations.length === 0 ? (

@@ -48,6 +48,20 @@ describe('Sidebar conversation loading', () => {
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
+  it('does not show a retry action without a retry handler', () => {
+    render(
+      <Sidebar
+        {...baseProps}
+        listError
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Обиди се повторно' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('announces initial conversation loading', () => {
     render(
       <Sidebar

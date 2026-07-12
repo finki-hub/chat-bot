@@ -86,8 +86,6 @@ export const useConversationHydration = ({
         }
 
         if (!isCancelled()) {
-          clearPreserveMarker(id);
-          clearActiveStreamMarker(id);
           setActiveError({
             code: 'history_load',
             message: t('conversation.historyLoadError'),
@@ -108,8 +106,6 @@ export const useConversationHydration = ({
             setMessages([]);
             return;
           }
-          clearPreserveMarker(id);
-          clearActiveStreamMarker(id);
           if (
             error instanceof ChatConversationRequestError ||
             error instanceof TypeError
@@ -120,6 +116,8 @@ export const useConversationHydration = ({
             });
             return;
           }
+          clearPreserveMarker(id);
+          clearActiveStreamMarker(id);
           throw error;
         }
       } finally {
