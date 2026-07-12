@@ -38,9 +38,19 @@ class ChatTitleSchema(BaseModel):
             raise ValueError("messages must include at least one user turn")
         return value
 
-    @field_validator("provider_model", "query_transform_model")
+    @field_validator("provider_model")
     @classmethod
-    def _must_support_title_generation(cls, value: Model | None) -> Model | None:
+    def _provider_must_support_title_generation(cls, value: Model) -> Model:
+        if value not in QUERY_TRANSFORM_MODELS:
+            raise ValueError("provider_model must be a chat-capable model")
+        return value
+
+    @field_validator("query_transform_model")
+    @classmethod
+    def _override_must_support_title_generation(
+        cls,
+        value: Model | None,
+    ) -> Model | None:
         if value is not None and value not in QUERY_TRANSFORM_MODELS:
             raise ValueError("query_transform_model must be a chat-capable model")
         return value

@@ -1,6 +1,8 @@
 from uuid import UUID
 
 import anyio
+import pytest
+from pydantic import ValidationError
 
 from app.api import chat_title
 from app.data.chat_credentials import upsert_chat_credential
@@ -10,6 +12,21 @@ from app.schemas.chat_credentials import ChatCredentialUpsert
 from app.schemas.chat_title import ChatTitleSchema
 from app.utils.settings import Settings
 from tests.chat_persistence_fake import FakeChatDatabase
+
+
+def test_provider_model_validation_names_the_invalid_field() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="provider_model must be a chat-capable model",
+    ):
+        ChatTitleSchema.model_validate(
+            {
+                "messages": [
+                    ConversationTurn(role="user", content="Кога е јунската сесија?"),
+                ],
+                "provider_model": Model.BGE_M3_LOCAL,
+            },
+        )
 
 
 def test_chat_title_uses_cheapest_model_for_active_provider(monkeypatch):
