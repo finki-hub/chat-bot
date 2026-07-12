@@ -147,7 +147,7 @@ const SignInPage = async ({ searchParams }: SignInPageProps) => {
                       </span>
                       <ArrowRight
                         aria-hidden="true"
-                        className="h-4 w-4 text-muted-foreground transition-[color,transform] group-hover:translate-x-0.5 group-hover:text-primary"
+                        className="h-4 w-4 text-muted-foreground group-hover:text-primary motion-safe:transition-[color,transform] motion-safe:group-hover:translate-x-0.5"
                       />
                     </button>
                   </form>

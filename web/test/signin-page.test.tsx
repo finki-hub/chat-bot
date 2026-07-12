@@ -79,6 +79,20 @@ describe('SignInPage', () => {
     ).toBeVisible();
   });
 
+  it('limits provider arrow movement to motion-safe preferences', async () => {
+    await renderSignInPage();
+
+    const providerButton = screen.getByRole('button', {
+      name: 'Продолжи со Google',
+    });
+    const arrow = providerButton.querySelector('.lucide-arrow-right');
+
+    expect(arrow).toHaveClass(
+      'motion-safe:transition-[color,transform]',
+      'motion-safe:group-hover:translate-x-0.5',
+    );
+  });
+
   it('announces an OAuth failure with a recovery step', async () => {
     await renderSignInPage(oauthErrorSearchParams);
 
