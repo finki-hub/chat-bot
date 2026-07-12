@@ -11,26 +11,6 @@ const BASE_URL_FIELD = 'base_url';
 const HAS_API_KEY_FIELD = 'has_api_key';
 const USER_ID_FIELD = 'user_id';
 
-const mockCredentials = async (
-  page: Parameters<typeof mockModels>[0],
-  providers: readonly string[],
-) => {
-  await page.route('**/api/chat/credentials', async (route) => {
-    await route.fulfill({
-      body: JSON.stringify(
-        providers.map((provider) => ({
-          [BASE_URL_FIELD]: null,
-          [HAS_API_KEY_FIELD]: true,
-          provider,
-          [USER_ID_FIELD]: USER_ID,
-        })),
-      ),
-      contentType: 'application/json',
-      status: 200,
-    });
-  });
-};
-
 const hideDevelopmentOverlay = async (
   page: Parameters<typeof mockModels>[0],
 ) => {
@@ -44,7 +24,6 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     page,
   }) => {
     await mockModels(page);
-    await mockCredentials(page, ['anthropic', 'google', 'ollama', 'openai']);
     await page.route('**/api/health', async (route) => {
       await route.fulfill({
         body: '{}',
@@ -120,8 +99,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
   });
 
   test('shows models without credentials as unavailable', async ({ page }) => {
-    await mockModels(page);
-    await mockCredentials(page, ['anthropic']);
+    await mockModels(page, ['anthropic']);
     await page.route('**/api/health', async (route) => {
       await route.fulfill({
         body: '{}',
@@ -169,7 +147,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
   }) => {
     let credentialRequests = 0;
     let credentialsAvailable = false;
-    await mockModels(page);
+    await mockModels(page, null);
     await page.route('**/api/chat/credentials', async (route) => {
       credentialRequests += 1;
       await route.fulfill(
