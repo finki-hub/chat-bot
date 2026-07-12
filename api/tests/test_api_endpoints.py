@@ -34,6 +34,10 @@ def test_api_exposes_liveness_and_model_catalog_over_http(monkeypatch):
         liveness = client.get("/health/")
         health = client.get("/health/health")
         models_without_key = client.get("/chat/models")
+        models_with_key = client.get(
+            "/chat/models",
+            headers={"x-api-key": "test-api-key"},
+        )
 
     assert liveness.status_code == 200
     assert liveness.json() == {"message": "The API is up and running."}
@@ -42,16 +46,17 @@ def test_api_exposes_liveness_and_model_catalog_over_http(monkeypatch):
         "healthy": True,
         "status": "ok",
     }
-    assert models_without_key.status_code == 200
-    body = models_without_key.json()
+    assert models_without_key.status_code == 401
+    assert models_with_key.status_code == 200
+    body = models_with_key.json()
     assert body["version"] == 1
     assert body["source"] in {"live", "stale", "snapshot"}
     assert len(body["models"]) == 13
     assert "claude-sonnet-5" in {model["id"] for model in body["models"]}
 
 
-def test_models_endpoint_keeps_unauthenticated_access_with_typed_envelope(monkeypatch):
-    # Given the modernized unauthenticated models endpoint
+def test_models_endpoint_returns_typed_envelope_with_api_key(monkeypatch):
+    # Given the authenticated models endpoint
     monkeypatch.setattr("app.main.Database", HealthyDatabase)
     app = make_app(
         Settings(
@@ -61,9 +66,12 @@ def test_models_endpoint_keeps_unauthenticated_access_with_typed_envelope(monkey
         ),
     )
 
-    # When the endpoint is requested without an API key
+    # When the endpoint is requested with an API key
     with TestClient(app) as client:
-        response = client.get("/chat/models")
+        response = client.get(
+            "/chat/models",
+            headers={"x-api-key": "test-api-key"},
+        )
 
     # Then its contract is a typed, ordered descriptor envelope
     assert response.status_code == 200

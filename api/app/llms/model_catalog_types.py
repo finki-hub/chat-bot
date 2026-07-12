@@ -79,7 +79,7 @@ class OllamaCatalogModel(BaseModel):
 
     id: str
     name: str
-    loaded: bool
+    loaded: bool | None
 
 
 class ModelCatalogResponse(BaseModel):

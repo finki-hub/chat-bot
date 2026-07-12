@@ -17,7 +17,7 @@ vi.mock('@/lib/authenticated-chat-user', () => ({
 }));
 
 const CACHE_CONTROL = 'cache-control';
-const CACHE_HEADER = 'public, max-age=300, stale-while-revalidate=600';
+const CACHE_HEADER = 'private, no-store';
 const SOURCE_HEADER = 'x-models-source';
 const LIVE = 'live';
 const ERROR = 'error';
@@ -28,6 +28,7 @@ const GPT_MINI = 'gpt-5.4-mini';
 const GPT_MINI_NAME = 'GPT-5.4 Mini';
 const CLAUDE_5 = 'claude-sonnet-5';
 const CLAUDE_5_NAME = 'Claude Sonnet 5';
+const OLLAMA_MODEL = 'llama3.2:latest';
 
 const okJson = (body: unknown, init?: ResponseInit): Response =>
   Response.json(body, {
@@ -69,6 +70,12 @@ describe('GET /api/models', () => {
           provider: OPENAI,
         },
         { ...claudeSonnet, loaded: false },
+        {
+          id: OLLAMA_MODEL,
+          loaded: null,
+          name: OLLAMA_MODEL,
+          provider: 'ollama',
+        },
       ],
       source: LIVE,
       version: 1,
@@ -102,6 +109,12 @@ describe('GET /api/models', () => {
           provider: OPENAI,
         },
         { ...claudeSonnet, loaded: false },
+        {
+          id: OLLAMA_MODEL,
+          loaded: null,
+          name: OLLAMA_MODEL,
+          provider: 'ollama',
+        },
       ],
       source: LIVE,
       version: 1,

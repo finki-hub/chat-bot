@@ -112,6 +112,23 @@ describe('parseModelCatalog', () => {
     });
   });
 
+  it('preserves an unknown Ollama loaded status', () => {
+    const catalog = parseModelCatalog({
+      models: [
+        {
+          id: 'llama3.2:latest',
+          loaded: null,
+          name: 'llama3.2:latest',
+          provider: OLLAMA,
+        },
+      ],
+      source: LIVE,
+      version: 1,
+    });
+
+    expect(catalog.models[0]).toMatchObject({ loaded: null });
+  });
+
   it('normalizes every curated legacy id with its immutable fallback descriptor', () => {
     const catalog = parseModelCatalog(EXPECTED_CURATED_IDS);
 

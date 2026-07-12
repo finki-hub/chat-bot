@@ -75,7 +75,7 @@ class ChatSchema(BaseModel):
         examples=[DEFAULT_INFERENCE_MODEL.value],
         description=(
             "Which Model to use for generating / streaming the response. "
-            "Must be one of the values in `app.llms.models.Model`."
+            "Must be an active hosted model or an installed Ollama model tag."
         ),
     )
     query_transform_model: ChatModel = Field(

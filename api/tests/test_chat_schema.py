@@ -30,6 +30,21 @@ def test_chat_schema_rejects_unknown_non_ollama_chat_model_id():
         )
 
 
+@pytest.mark.parametrize(
+    "model_id",
+    [":latest", "llama3.2:", "llama 3:latest", "llama3:latest:extra"],
+)
+def test_chat_schema_rejects_invalid_ollama_model_tags(model_id: str):
+    with pytest.raises(
+        ValueError,
+        match="inference_model must be an active chat model",
+    ):
+        ChatSchema(
+            inference_model=model_id,
+            messages=[{"role": "user", "content": "hi"}],
+        )
+
+
 def test_chat_schema_rejects_more_than_10_messages():
     messages = [
         {"role": "user" if i % 2 == 0 else "assistant", "content": f"m{i}"}

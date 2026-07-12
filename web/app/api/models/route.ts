@@ -7,7 +7,7 @@ import { parseModelCatalog } from '@/lib/model-catalog';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=600';
+const CACHE_CONTROL = 'private, no-store';
 
 const ERROR_CATALOG: ModelCatalog = { models: [], source: 'error', version: 1 };
 

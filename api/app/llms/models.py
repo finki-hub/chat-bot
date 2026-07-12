@@ -1,3 +1,4 @@
+import re
 from enum import StrEnum
 from typing import Final
 
@@ -66,6 +67,10 @@ CHAT_MODEL_ORDER: Final[tuple[Model, ...]] = (
 )
 CHAT_MODELS: Final[frozenset[Model]] = frozenset(CHAT_MODEL_ORDER)
 type ChatModel = Model | str
+
+_OLLAMA_MODEL_TAG_PATTERN: Final = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9._/-]*:[A-Za-z0-9][A-Za-z0-9._-]*",
+)
 
 OPENAI_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     {
@@ -158,8 +163,7 @@ def model_id(model: ChatModel) -> str:
 
 
 def is_ollama_model_tag(value: str) -> bool:
-    stripped = value.strip()
-    return stripped == value and ":" in value and bool(value)
+    return _OLLAMA_MODEL_TAG_PATTERN.fullmatch(value) is not None
 
 
 def parse_chat_model(value: Model | str, active_models: frozenset[Model]) -> ChatModel:

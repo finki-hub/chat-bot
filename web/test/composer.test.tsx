@@ -19,6 +19,8 @@ const GPT_CHEAP_NAME = 'GPT-5.4 Nano';
 const OLLAMA_ID = 'llama3.2:latest';
 const OLLAMA_NAME = 'llama3.2:latest';
 const OLLAMA_OPTION_NAME = /llama3\.2:latest/u;
+const OLLAMA_UNKNOWN_ID = 'qwen3:14b';
+const OLLAMA_UNKNOWN_NAME = 'qwen3:14b';
 const MODEL_SELECTOR_TEST_ID = 'composer-model';
 
 const MODELS: ModelDescriptor[] = [
@@ -30,6 +32,12 @@ const MODELS: ModelDescriptor[] = [
   { id: GPT_ID, name: GPT_NAME, provider: 'openai' },
   { id: CLAUDE_ID, name: CLAUDE_NAME, provider: 'anthropic' },
   { id: OLLAMA_ID, loaded: true, name: OLLAMA_NAME, provider: 'ollama' },
+  {
+    id: OLLAMA_UNKNOWN_ID,
+    loaded: null,
+    name: OLLAMA_UNKNOWN_NAME,
+    provider: 'ollama',
+  },
   { id: GPT_CHEAP_ID, name: GPT_CHEAP_NAME, provider: 'openai' },
 ];
 const ALL_PROVIDERS = new Set(['anthropic', 'ollama', 'openai']);
@@ -125,6 +133,9 @@ describe('Composer', () => {
     expect(
       screen.getByRole('option', { name: OLLAMA_OPTION_NAME }),
     ).toHaveTextContent('Вчитан');
+    expect(
+      screen.getByRole('option', { name: OLLAMA_UNKNOWN_NAME }),
+    ).not.toHaveTextContent('Не е вчитан');
   });
 
   it('groups models only by provider in catalog order', async () => {

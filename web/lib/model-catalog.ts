@@ -111,7 +111,7 @@ const normalizeDescriptor = (
   }
   const base = {
     id,
-    ...(typeof loaded === 'boolean' && { loaded }),
+    ...((loaded === null || typeof loaded === 'boolean') && { loaded }),
     name: typeof name === 'string' && name.length > 0 ? name : id,
     provider: isCatalogProvider(provider) ? provider : inferProvider(id),
   } satisfies ModelDescriptor;

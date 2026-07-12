@@ -680,6 +680,7 @@ async def chat(
     summary="List available LLM models",
     description="Retrieve a list of all available LLM models for chat.",
     status_code=status.HTTP_200_OK,
+    dependencies=[api_key_dep],
 )
 async def list_models(
     request: Request,

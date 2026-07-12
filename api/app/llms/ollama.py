@@ -3,12 +3,10 @@ import logging
 from collections.abc import Generator
 from typing import overload
 
-import httpx
 from fastapi.responses import StreamingResponse
 from langchain.agents import create_agent
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama, OllamaEmbeddings
-from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.llms.agents import (
     StreamObservation,
@@ -16,36 +14,19 @@ from app.llms.agents import (
     create_agent_token_generator,
     stream_sync_gen_as_sse,
 )
-from app.llms.model_catalog_types import OllamaCatalogModel
 from app.llms.models import ChatModel, Model, model_id
 from app.llms.prompts import build_agent_messages, stitch_conversation
 from app.llms.provider_credentials import require_provider_credential
 from app.llms.tools import get_agent_tools
 from app.schemas.chat_credentials import OLLAMA_DEFAULT_BASE_URL, ChatCredentialSecret
-from app.utils.http_client import get_http_client
+
+from .ollama_catalog import fetch_ollama_catalog
 
 logger = logging.getLogger(__name__)
 
 type _OllamaClientKwargs = dict[str, dict[str, str]]
 
-
-class _OllamaTagModel(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    name: str
-    capabilities: tuple[str, ...] = ()
-
-
-class _OllamaTagsResponse(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    models: tuple[_OllamaTagModel, ...] = ()
-
-
-class _OllamaPsResponse(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    models: tuple[_OllamaTagModel, ...] = ()
+__all__ = ("fetch_ollama_catalog",)
 
 
 def _connection(
@@ -288,37 +269,3 @@ async def stream_ollama_agent_response(
             max_tokens=max_tokens,
             credential=credential,
         )
-
-
-async def fetch_ollama_catalog(
-    credential: ChatCredentialSecret | None,
-) -> tuple[OllamaCatalogModel, ...]:
-    base_url, client_kwargs = _connection(credential)
-    headers = client_kwargs["headers"]
-    timeout = httpx.Timeout(connect=3.0, read=5.0, write=5.0, pool=3.0)
-
-    try:
-        tags_response = await get_http_client().get(
-            f"{base_url.rstrip('/')}/api/tags",
-            headers=headers,
-            timeout=timeout,
-        )
-        ps_response = await get_http_client().get(
-            f"{base_url.rstrip('/')}/api/ps",
-            headers=headers,
-            timeout=timeout,
-        )
-        tags_response.raise_for_status()
-        ps_response.raise_for_status()
-        tags = _OllamaTagsResponse.model_validate(tags_response.json())
-        ps = _OllamaPsResponse.model_validate(ps_response.json())
-    except (httpx.HTTPError, ValidationError, ValueError) as error:
-        logger.warning("Ollama model discovery failed: %s", type(error).__name__)
-        return ()
-
-    loaded = frozenset(model.name for model in ps.models)
-    return tuple(
-        OllamaCatalogModel(id=model.name, name=model.name, loaded=model.name in loaded)
-        for model in tags.models
-        if "completion" in model.capabilities
-    )
