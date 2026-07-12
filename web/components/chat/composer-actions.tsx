@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { t } from '@/lib/i18n';
-import { type ModelGroup, providerLabel, tierLabel } from '@/lib/model-catalog';
+import { type ModelGroup, providerLabel } from '@/lib/model-catalog';
 import { isReasoningCapableModel } from '@/lib/reasoning';
 
 export type ComposerActionsProps = {
@@ -84,8 +84,7 @@ export const ComposerActions = ({
   };
 
   const selectedModel = groups
-    .flatMap((group) => group.providers)
-    .flatMap((provider) => provider.models)
+    .flatMap((group) => group.models)
     .find((entry) => entry.id === model);
   const triggerLabel = showModelPlaceholder
     ? modelPlaceholder
@@ -148,52 +147,37 @@ export const ComposerActions = ({
             position="popper"
           >
             {groups.map((group) => (
-              <SelectGroup key={group.tier}>
-                <SelectLabel data-testid="model-tier-label">
-                  {tierLabel(group.tier)}
+              <SelectGroup key={group.provider}>
+                <SelectLabel data-testid="model-provider-label">
+                  {providerLabel(group.provider)}
                 </SelectLabel>
-                {group.providers.map((providerGroup) => (
-                  <fieldset
-                    aria-label={providerLabel(providerGroup.provider)}
-                    className="m-0 border-0 p-0"
-                    key={providerGroup.provider}
+                {group.models.map((entry) => (
+                  <SelectItem
+                    aria-label={
+                      availableProviders.has(entry.provider)
+                        ? entry.name
+                        : `${entry.name} ${t('composer.apiKeyRequired')}`
+                    }
+                    className="data-[disabled]:opacity-75"
+                    disabled={!availableProviders.has(entry.provider)}
+                    key={entry.id}
+                    textValue={
+                      availableProviders.has(entry.provider)
+                        ? entry.name
+                        : `${entry.name} ${t('composer.apiKeyRequired')}`
+                    }
+                    value={entry.id}
                   >
-                    <span
-                      aria-hidden="true"
-                      className="block px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-                      data-testid="model-provider-label"
-                    >
-                      {providerLabel(providerGroup.provider)}
-                    </span>
-                    {providerGroup.models.map((entry) => (
-                      <SelectItem
-                        aria-label={
-                          availableProviders.has(entry.provider)
-                            ? entry.name
-                            : `${entry.name} ${t('composer.apiKeyRequired')}`
-                        }
-                        className="data-[disabled]:opacity-75"
-                        disabled={!availableProviders.has(entry.provider)}
-                        key={entry.id}
-                        textValue={
-                          availableProviders.has(entry.provider)
-                            ? entry.name
-                            : `${entry.name} ${t('composer.apiKeyRequired')}`
-                        }
-                        value={entry.id}
-                      >
-                        <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                          <span className="truncate">{entry.name}</span>
-                          {availableProviders.has(entry.provider) ? null : (
-                            <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                              <KeyRound aria-hidden="true" />
-                              {t('composer.apiKeyRequired')}
-                            </span>
-                          )}
+                    <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                      <span className="truncate">{entry.name}</span>
+                      {availableProviders.has(entry.provider) ? null : (
+                        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                          <KeyRound aria-hidden="true" />
+                          {t('composer.apiKeyRequired')}
                         </span>
-                      </SelectItem>
-                    ))}
-                  </fieldset>
+                      )}
+                    </span>
+                  </SelectItem>
                 ))}
               </SelectGroup>
             ))}

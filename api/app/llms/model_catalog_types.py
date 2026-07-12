@@ -3,7 +3,6 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 CatalogProvider = Literal["openai", "google", "anthropic", "ollama"]
-CatalogTier = Literal["premium", "default", "cheap"]
 CatalogSource = Literal["live", "stale", "snapshot"]
 
 
@@ -64,7 +63,6 @@ class ModelDescriptor(BaseModel):
 
     id: str
     provider: CatalogProvider
-    tier: CatalogTier
     name: str
     description: str | None = None
     execution: ExecutionPolicy

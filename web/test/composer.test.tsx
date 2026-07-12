@@ -23,11 +23,10 @@ const MODELS: ModelDescriptor[] = [
     id: GPT_PREMIUM_ID,
     name: GPT_PREMIUM_NAME,
     provider: 'openai',
-    tier: 'premium',
   },
-  { id: GPT_ID, name: GPT_NAME, provider: 'openai', tier: 'default' },
-  { id: CLAUDE_ID, name: CLAUDE_NAME, provider: 'anthropic', tier: 'default' },
-  { id: GPT_CHEAP_ID, name: GPT_CHEAP_NAME, provider: 'openai', tier: 'cheap' },
+  { id: GPT_ID, name: GPT_NAME, provider: 'openai' },
+  { id: CLAUDE_ID, name: CLAUDE_NAME, provider: 'anthropic' },
+  { id: GPT_CHEAP_ID, name: GPT_CHEAP_NAME, provider: 'openai' },
 ];
 const ALL_PROVIDERS = new Set(['anthropic', 'openai']);
 
@@ -121,26 +120,16 @@ describe('Composer', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders accessible tier groups before their provider subgroups', async () => {
+  it('groups models only by provider in catalog order', async () => {
     setup();
     const user = userEvent.setup();
     await user.click(screen.getByTestId(MODEL_SELECTOR_TEST_ID));
 
-    const groupLabels = await screen.findAllByTestId('model-tier-label');
-
-    expect(groupLabels.map((label) => label.textContent)).toStrictEqual([
-      'Премиум',
-      'Стандарден',
-      'Економичен',
-    ]);
-
-    const providerLabels = screen.getAllByTestId('model-provider-label');
+    const providerLabels = await screen.findAllByTestId('model-provider-label');
 
     expect(providerLabels.map((label) => label.textContent)).toStrictEqual([
       'OpenAI',
-      'OpenAI',
       'Anthropic',
-      'OpenAI',
     ]);
   });
 

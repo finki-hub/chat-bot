@@ -5,6 +5,8 @@ import type {
   ChatCredentialPublic,
 } from '@/lib/api-types';
 
+import { ChatStateRequestError as ChatStateRequestErrorForTest } from '@/lib/chat-state-client';
+
 /* eslint-disable camelcase -- Route tests assert the Python API wire contract. */
 
 type DeleteCredentialInput = {
@@ -137,6 +139,26 @@ describe('/api/chat/credentials', () => {
       baseUrl: 'https://api.openai.com/v1',
       provider: 'openai',
       userId: USER_ID,
+    });
+  });
+
+  it('identifies a rejected custom credential base URL', async () => {
+    stateClientMock.upsertCredential.mockRejectedValueOnce(
+      new ChatStateRequestErrorForTest(422),
+    );
+    const { PUT } = await import('@/app/api/chat/credentials/route');
+
+    const response = await PUT(
+      jsonRequest({
+        api_key: 'user-secret-key',
+        base_url: 'https://openai-proxy.example/v1',
+        provider: 'openai',
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toStrictEqual({
+      error: 'Credential base URL is not allowed',
     });
   });
 

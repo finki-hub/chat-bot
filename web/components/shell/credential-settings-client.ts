@@ -17,6 +17,13 @@ type SaveCredentialParams = {
 const API_KEY_FIELD = 'api_key';
 const BASE_URL_FIELD = 'base_url';
 
+export class CredentialBaseUrlRejectedError extends Error {
+  constructor() {
+    super('Credential base URL is not allowed');
+    this.name = 'CredentialBaseUrlRejectedError';
+  }
+}
+
 export const loadCredentials = async (
   signal: AbortSignal,
 ): Promise<null | readonly ChatCredentialPublic[]> => {
@@ -43,6 +50,9 @@ export const saveCredential = async ({
     method: 'PUT',
   });
   if (!response.ok) {
+    if (response.status === 422) {
+      throw new CredentialBaseUrlRejectedError();
+    }
     return null;
   }
   const body: unknown = await response.json();

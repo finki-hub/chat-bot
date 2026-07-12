@@ -70,7 +70,7 @@ The API owns the executable chat catalog. `/chat/models` returns the fixed, orde
 allowlist enriched with display metadata from models.dev. Metadata is cached in process
 for six hours; refresh failures serve the last successful catalog, and cold-start
 failures use the bundled snapshot. Remote metadata cannot add executable model IDs,
-change providers or tiers, or alter execution policy.
+change providers or alter execution policy.
 
 The hosted catalog includes GPT-5.6 Sol, Terra, and Luna, GPT-5.5, and the current
 Gemini 3.5 Flash, Gemini 3.1 Pro Preview, and Gemini 3.1 Flash Lite models. The

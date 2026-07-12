@@ -13,6 +13,7 @@ import type {
   ChatCredentialPublic,
 } from '@/lib/api-types';
 
+import { CredentialBaseUrlRejectedError } from '@/components/shell/credential-settings-client';
 import { CredentialSettingsDialog } from '@/components/shell/credential-settings-dialog';
 import { CREDENTIALS_QUERY_KEY } from '@/lib/use-credentials';
 
@@ -27,6 +28,9 @@ const HAS_API_KEY_FIELD = 'has_api_key';
 const USER_ID = '00000000-0000-4000-8000-000000000001';
 const USER_ID_FIELD = 'user_id';
 const OPENAI_BASE_URL = 'https://openai-proxy.example/v1';
+const OPENAI_API_KEY_LABEL = 'OpenAI API key';
+const OPENAI_FORM_NOT_FOUND = 'OpenAI credential form not found';
+const REPLACEMENT_KEY = 'replacement-key';
 
 const openaiCredential = (baseUrl: string): ChatCredentialPublic => ({
   [BASE_URL_FIELD]: baseUrl,
@@ -64,6 +68,7 @@ const { deleteCredentialMock, loadCredentialsMock, saveCredentialMock } =
   }));
 
 vi.mock('@/components/shell/credential-settings-client', () => ({
+  CredentialBaseUrlRejectedError: class extends Error {},
   deleteCredential: deleteCredentialMock,
   loadCredentials: loadCredentialsMock,
   saveCredential: saveCredentialMock,
@@ -95,18 +100,18 @@ describe('CredentialSettingsDialog', () => {
   it('preserves a saved custom base URL when only the API key changes', async () => {
     const { queryClient } = renderDialog();
 
-    const keyInput = await screen.findByLabelText('OpenAI API key');
+    const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
     const form = keyInput.closest('form');
     if (form === null) {
-      throw new Error('OpenAI credential form not found');
+      throw new Error(OPENAI_FORM_NOT_FOUND);
     }
 
-    fireEvent.change(keyInput, { target: { value: 'replacement-key' } });
+    fireEvent.change(keyInput, { target: { value: REPLACEMENT_KEY } });
     fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
 
     await waitFor(() => {
       expect(saveCredentialMock).toHaveBeenCalledWith({
-        apiKey: 'replacement-key',
+        apiKey: REPLACEMENT_KEY,
         baseUrl: OPENAI_BASE_URL,
         provider: 'openai',
       });
@@ -146,13 +151,13 @@ describe('CredentialSettingsDialog', () => {
       ])
       .mockResolvedValueOnce([openaiCredential(OPENAI_BASE_URL)]);
     const { queryClient } = renderDialog();
-    const keyInput = await screen.findByLabelText('OpenAI API key');
+    const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
     const form = keyInput.closest('form');
     if (form === null) {
-      throw new Error('OpenAI credential form not found');
+      throw new Error(OPENAI_FORM_NOT_FOUND);
     }
 
-    fireEvent.change(keyInput, { target: { value: 'replacement-key' } });
+    fireEvent.change(keyInput, { target: { value: REPLACEMENT_KEY } });
     fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
 
     await waitFor(() => {
@@ -173,12 +178,60 @@ describe('CredentialSettingsDialog', () => {
     await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
       'Клучевите не можеа да се вчитаат.',
     );
-    expect(screen.queryByLabelText('OpenAI API key')).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(OPENAI_API_KEY_LABEL),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Обиди се повторно' }));
 
     await expect(
-      screen.findByLabelText('OpenAI API key'),
+      screen.findByLabelText(OPENAI_API_KEY_LABEL),
+    ).resolves.toBeInTheDocument();
+  });
+
+  it('reports a save failure without claiming credential loading failed', async () => {
+    saveCredentialMock.mockResolvedValueOnce(null);
+    renderDialog();
+
+    const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+    const form = keyInput.closest('form');
+    if (form === null) {
+      throw new Error(OPENAI_FORM_NOT_FOUND);
+    }
+
+    fireEvent.change(keyInput, { target: { value: REPLACEMENT_KEY } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
+
+    await expect(
+      screen.findByText('Клучот не можеше да се зачува.'),
+    ).resolves.toBeInTheDocument();
+    expect(
+      screen.queryByText('Клучевите не можеа да се вчитаат.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('explains how to fix a rejected custom base URL', async () => {
+    saveCredentialMock.mockRejectedValueOnce(
+      new CredentialBaseUrlRejectedError(),
+    );
+    renderDialog();
+
+    const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+    const form = keyInput.closest('form');
+    if (form === null) {
+      throw new Error(OPENAI_FORM_NOT_FOUND);
+    }
+
+    fireEvent.change(keyInput, { target: { value: REPLACEMENT_KEY } });
+    fireEvent.change(screen.getByLabelText('OpenAI base URL'), {
+      target: { value: 'https://openai-proxy.example/v1' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
+
+    await expect(
+      screen.findByText(
+        'Base URL адресата не е дозволена. Остави го полето празно за стандардниот endpoint или побарај администраторот да ја додаде.',
+      ),
     ).resolves.toBeInTheDocument();
   });
 

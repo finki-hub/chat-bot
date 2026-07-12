@@ -4,8 +4,6 @@ export type CatalogProvider = 'anthropic' | 'google' | 'ollama' | 'openai';
 
 export type CatalogSource = 'error' | 'live' | 'snapshot' | 'stale';
 
-export type CatalogTier = 'cheap' | 'default' | 'premium';
-
 export type ChatCredentialProvider =
   | 'anthropic'
   | 'google'
@@ -78,7 +76,6 @@ export type ModelDescriptor = {
   readonly id: ModelId;
   readonly name: string;
   readonly provider: string;
-  readonly tier: CatalogTier;
 };
 
 // eslint-disable-next-line sonarjs/redundant-type-aliases -- semantic alias for the public wire contract; consumers reference ModelId, not bare string

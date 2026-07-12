@@ -16,7 +16,6 @@ const ERROR = 'error';
 const STALE = 'stale';
 const OPENAI = 'openai';
 const ANTHROPIC = 'anthropic';
-const STANDARD = 'default';
 const GPT_MINI = 'gpt-5.4-mini';
 const GPT_MINI_NAME = 'GPT-5.4 Mini';
 const CLAUDE_5 = 'claude-sonnet-5';
@@ -33,14 +32,12 @@ const gptMini = {
   id: GPT_MINI,
   name: GPT_MINI_NAME,
   provider: OPENAI,
-  tier: STANDARD,
 };
 
 const claudeSonnet = {
   id: CLAUDE_5,
   name: CLAUDE_5_NAME,
   provider: ANTHROPIC,
-  tier: STANDARD,
 };
 
 describe('GET /api/models', () => {
@@ -62,7 +59,6 @@ describe('GET /api/models', () => {
           name: GPT_MINI_NAME,
           pricing: { input: 0.75, output: 4.5 },
           provider: OPENAI,
-          tier: STANDARD,
         },
         claudeSonnet,
       ],
@@ -94,7 +90,6 @@ describe('GET /api/models', () => {
           id: GPT_MINI,
           name: GPT_MINI_NAME,
           provider: OPENAI,
-          tier: STANDARD,
         },
         claudeSonnet,
       ],
@@ -121,9 +116,8 @@ describe('GET /api/models', () => {
           id: CLAUDE_5,
           name: CLAUDE_5_NAME,
           provider: ANTHROPIC,
-          tier: STANDARD,
         },
-        { id: GPT_MINI, name: GPT_MINI_NAME, provider: OPENAI, tier: STANDARD },
+        { id: GPT_MINI, name: GPT_MINI_NAME, provider: OPENAI },
       ],
       source: LIVE,
       version: 1,

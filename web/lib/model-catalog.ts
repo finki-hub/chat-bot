@@ -1,7 +1,6 @@
 import type {
   CatalogProvider,
   CatalogSource,
-  CatalogTier,
   ModelCatalog,
   ModelDescriptor,
 } from '@/lib/api-types';
@@ -15,54 +14,34 @@ const PROVIDER_LABEL_KEYS: Record<CatalogProvider, TKey> = {
   openai: 'settings.provider.openai',
 };
 
-const TIER_LABEL_KEYS: Record<CatalogTier, TKey> = {
-  cheap: 'composer.tier.cheap',
-  default: 'composer.tier.default',
-  premium: 'composer.tier.premium',
-};
-
 const CATALOG_PROVIDERS = ['anthropic', 'google', 'ollama', 'openai'] as const;
-const CATALOG_TIERS = ['cheap', 'default', 'premium'] as const;
-const TIER_ORDER = ['premium', 'default', 'cheap'] as const;
 const API_CATALOG_SOURCES = ['live', 'snapshot', 'stale'] as const;
 
 const CURATED_MODEL_DATA = [
-  ['gpt-5.6-sol', 'GPT-5.6 Sol', 'openai', 'premium'],
-  ['gpt-5.6-terra', 'GPT-5.6 Terra', 'openai', 'default'],
-  ['gpt-5.6-luna', 'GPT-5.6 Luna', 'openai', 'cheap'],
-  ['gpt-5.5', 'GPT-5.5', 'openai', 'premium'],
-  ['gpt-5.4', 'GPT-5.4', 'openai', 'premium'],
-  ['gpt-5.4-mini', 'GPT-5.4 Mini', 'openai', 'default'],
-  ['gpt-5.4-nano', 'GPT-5.4 Nano', 'openai', 'cheap'],
-  ['gemini-3.1-pro-preview', 'Gemini 3.1 Pro Preview', 'google', 'premium'],
-  ['gemini-3.5-flash', 'Gemini 3.5 Flash', 'google', 'default'],
-  ['gemini-3.1-flash-lite', 'Gemini 3.1 Flash Lite', 'google', 'cheap'],
-  ['claude-opus-4-8', 'Claude Opus 4.8', 'anthropic', 'premium'],
-  ['claude-sonnet-5', 'Claude Sonnet 5', 'anthropic', 'default'],
-  ['claude-haiku-4-5', 'Claude Haiku 4.5', 'anthropic', 'cheap'],
-  [
-    'qwen3:30b-a3b-thinking-2507-q4_K_M',
-    'Qwen3 30B Thinking',
-    'ollama',
-    'premium',
-  ],
-  [
-    'qwen3:30b-a3b-instruct-2507-q4_K_M',
-    'Qwen3 30B Instruct',
-    'ollama',
-    'default',
-  ],
-  ['qwen3:14b-q4_K_M', 'Qwen3 14B', 'ollama', 'cheap'],
-] as const satisfies ReadonlyArray<
-  readonly [string, string, CatalogProvider, CatalogTier]
->;
+  ['gpt-5.6-sol', 'GPT-5.6 Sol', 'openai'],
+  ['gpt-5.6-terra', 'GPT-5.6 Terra', 'openai'],
+  ['gpt-5.6-luna', 'GPT-5.6 Luna', 'openai'],
+  ['gpt-5.5', 'GPT-5.5', 'openai'],
+  ['gpt-5.4', 'GPT-5.4', 'openai'],
+  ['gpt-5.4-mini', 'GPT-5.4 Mini', 'openai'],
+  ['gpt-5.4-nano', 'GPT-5.4 Nano', 'openai'],
+  ['gemini-3.1-pro-preview', 'Gemini 3.1 Pro Preview', 'google'],
+  ['gemini-3.5-flash', 'Gemini 3.5 Flash', 'google'],
+  ['gemini-3.1-flash-lite', 'Gemini 3.1 Flash Lite', 'google'],
+  ['claude-opus-4-8', 'Claude Opus 4.8', 'anthropic'],
+  ['claude-sonnet-5', 'Claude Sonnet 5', 'anthropic'],
+  ['claude-haiku-4-5', 'Claude Haiku 4.5', 'anthropic'],
+  ['qwen3:30b-a3b-thinking-2507-q4_K_M', 'Qwen3 30B Thinking', 'ollama'],
+  ['qwen3:30b-a3b-instruct-2507-q4_K_M', 'Qwen3 30B Instruct', 'ollama'],
+  ['qwen3:14b-q4_K_M', 'Qwen3 14B', 'ollama'],
+] as const satisfies ReadonlyArray<readonly [string, string, CatalogProvider]>;
 
 export const CURATED_MODEL_DESCRIPTORS: Readonly<
   Record<string, ModelDescriptor>
 > = Object.fromEntries(
-  CURATED_MODEL_DATA.map(([id, name, provider, tier]) => [
+  CURATED_MODEL_DATA.map(([id, name, provider]) => [
     id,
-    { id, name, provider, tier },
+    { id, name, provider },
   ]),
 );
 
@@ -83,9 +62,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isCatalogProvider = (value: unknown): value is CatalogProvider =>
   CATALOG_PROVIDERS.includes(value as CatalogProvider);
-
-const isCatalogTier = (value: unknown): value is CatalogTier =>
-  CATALOG_TIERS.includes(value as CatalogTier);
 
 const isCatalogSource = (value: unknown): value is CatalogSource =>
   API_CATALOG_SOURCES.includes(value as (typeof API_CATALOG_SOURCES)[number]);
@@ -115,7 +91,7 @@ const normalizeDescriptor = (
   if (!isRecord(value)) {
     return null;
   }
-  const { description, id, name, provider, tier } = value;
+  const { description, id, name, provider } = value;
   if (typeof id !== 'string' || id.length === 0) {
     return null;
   }
@@ -124,7 +100,6 @@ const normalizeDescriptor = (
     (typeof name !== 'string' ||
       name.length === 0 ||
       !isCatalogProvider(provider) ||
-      !isCatalogTier(tier) ||
       (description !== undefined &&
         description !== null &&
         typeof description !== 'string'))
@@ -135,7 +110,6 @@ const normalizeDescriptor = (
     id,
     name: typeof name === 'string' && name.length > 0 ? name : id,
     provider: isCatalogProvider(provider) ? provider : inferProvider(id),
-    tier: isCatalogTier(tier) ? tier : 'default',
   } satisfies ModelDescriptor;
   return typeof description === 'string' && description.length > 0
     ? { ...base, description }
@@ -143,11 +117,6 @@ const normalizeDescriptor = (
 };
 
 export type ModelGroup = {
-  readonly providers: readonly ModelProviderGroup[];
-  readonly tier: CatalogTier;
-};
-
-export type ModelProviderGroup = {
   readonly models: readonly ModelDescriptor[];
   readonly provider: string;
 };
@@ -179,37 +148,22 @@ export const parseModelCatalog = (value: unknown): ModelCatalog => {
   return { models: [], source: 'error', version: 1 };
 };
 
-export const groupModelsByProviderTier = (
+export const groupModelsByProvider = (
   models: readonly ModelDescriptor[],
 ): ModelGroup[] => {
-  const buckets = new Map<CatalogTier, Map<string, ModelDescriptor[]>>();
+  const buckets = new Map<string, ModelDescriptor[]>();
   for (const model of models) {
-    const tierBucket = buckets.get(model.tier);
-    if (tierBucket) {
-      const providerBucket = tierBucket.get(model.provider);
-      if (providerBucket) {
-        providerBucket.push(model);
-      } else {
-        tierBucket.set(model.provider, [model]);
-      }
+    const providerBucket = buckets.get(model.provider);
+    if (providerBucket) {
+      providerBucket.push(model);
     } else {
-      buckets.set(model.tier, new Map([[model.provider, [model]]]));
+      buckets.set(model.provider, [model]);
     }
   }
-  return TIER_ORDER.flatMap((tier) => {
-    const tierBucket = buckets.get(tier);
-    return tierBucket
-      ? [
-          {
-            providers: Array.from(tierBucket, ([provider, providerModels]) => ({
-              models: providerModels,
-              provider,
-            })),
-            tier,
-          },
-        ]
-      : [];
-  });
+  return Array.from(buckets, ([provider, providerModels]) => ({
+    models: providerModels,
+    provider,
+  }));
 };
 
 // Repair a persisted selection when the catalog no longer contains it: prefer the current
@@ -231,6 +185,3 @@ export const recoverSelectedModel = (
 
 export const providerLabel = (provider: string): string =>
   isCatalogProvider(provider) ? t(PROVIDER_LABEL_KEYS[provider]) : provider;
-
-export const tierLabel = (tier: CatalogTier): string =>
-  t(TIER_LABEL_KEYS[tier]);
