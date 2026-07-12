@@ -215,6 +215,16 @@ describe('parseModelCatalog', () => {
       version: 1,
     });
   });
+
+  it('treats an empty typed catalog as an error', () => {
+    expect(
+      parseModelCatalog({ models: [], source: LIVE, version: 1 }),
+    ).toStrictEqual({
+      models: [],
+      source: 'error',
+      version: 1,
+    });
+  });
 });
 
 describe('groupModelsByProviderTier', () => {

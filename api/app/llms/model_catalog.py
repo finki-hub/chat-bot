@@ -7,7 +7,7 @@ from typing import Final
 
 import anyio
 import httpx
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.llms.model_catalog_policy import MODEL_CATALOG, CatalogPolicy
 from app.llms.model_catalog_remote import CatalogMetadataError, parse_models_dev
@@ -88,6 +88,39 @@ def _descriptor(
     )
 
 
+def _merge_optional_metadata[MetadataT: BaseModel](
+    snapshot: MetadataT | None,
+    remote: MetadataT | None,
+) -> MetadataT | None:
+    if remote is None:
+        return snapshot
+    if snapshot is None:
+        return remote
+    return snapshot.model_copy(update=remote.model_dump(exclude_none=True))
+
+
+def _merge_metadata(
+    snapshot: DisplayMetadata,
+    remote: DisplayMetadata | None,
+) -> DisplayMetadata:
+    if remote is None:
+        return snapshot
+    return DisplayMetadata(
+        name=remote.name,
+        description=(
+            snapshot.description if remote.description is None else remote.description
+        ),
+        capabilities=_merge_optional_metadata(
+            snapshot.capabilities,
+            remote.capabilities,
+        ),
+        modalities=_merge_optional_metadata(snapshot.modalities, remote.modalities),
+        limits=_merge_optional_metadata(snapshot.limits, remote.limits),
+        pricing=_merge_optional_metadata(snapshot.pricing, remote.pricing),
+        status=snapshot.status if remote.status is None else remote.status,
+    )
+
+
 class ModelCatalogService:
     """Mutable in-process TTL cache for immutable catalog responses."""
 
@@ -108,7 +141,10 @@ class ModelCatalogService:
         source: CatalogSource,
         remote: dict[Model, DisplayMetadata],
     ) -> ModelCatalogResponse:
-        metadata = self._snapshot | remote
+        metadata = {
+            model: _merge_metadata(snapshot, remote.get(model))
+            for model, snapshot in self._snapshot.items()
+        }
         return ModelCatalogResponse(
             source=source,
             models=tuple(
@@ -140,7 +176,9 @@ class ModelCatalogService:
                     "model catalog refresh failed; source=snapshot error=%s",
                     error,
                 )
-                return self._build("snapshot", {})
+                self._cached = self._build("snapshot", {})
+                self._expires_at = now + CATALOG_TTL_SECONDS
+                return self._cached
 
             self._cached = self._build("live", remote)
             self._expires_at = now + CATALOG_TTL_SECONDS

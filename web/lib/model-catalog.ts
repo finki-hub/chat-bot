@@ -158,7 +158,8 @@ export const parseModelCatalog = (value: unknown): ModelCatalog => {
     if (
       version === 1 &&
       isCatalogSource(rawSource) &&
-      Array.isArray(rawModels)
+      Array.isArray(rawModels) &&
+      rawModels.length > 0
     ) {
       const models = rawModels.map((entry) => normalizeDescriptor(entry, true));
       if (models.every((model): model is ModelDescriptor => model !== null)) {

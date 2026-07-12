@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -35,9 +34,9 @@ EXPECTED_IDS = [
 ]
 
 
-@dataclass(slots=True)
 class FakeClock:
-    value: float = 0.0
+    def __init__(self, value: float = 0.0) -> None:
+        self.value = value
 
     def __call__(self) -> float:
         return self.value
@@ -105,6 +104,41 @@ def test_remote_metadata_only_enriches_allowlisted_display_fields() -> None:
     assert "remote-only" not in {model.id for model in response.models}
 
 
+def test_partial_remote_metadata_preserves_snapshot_fields() -> None:
+    async def fetch_snapshot() -> bytes:
+        await anyio.lowlevel.checkpoint()
+        return b"not-json"
+
+    async def fetch_partial() -> bytes:
+        await anyio.lowlevel.checkpoint()
+        return (
+            b'{"openai":{"id":"openai","name":"OpenAI","models":{'
+            b'"gpt-5.6-sol":{"id":"gpt-5.6-sol","name":"Remote GPT",'
+            b'"description":null,"reasoning":true}}}}'
+        )
+
+    snapshot = anyio.run(
+        ModelCatalogService(
+            fetch_metadata=fetch_snapshot,
+            clock=FakeClock(),
+        ).get_catalog,
+    ).models[0]
+    enriched = anyio.run(
+        ModelCatalogService(
+            fetch_metadata=fetch_partial,
+            clock=FakeClock(),
+        ).get_catalog,
+    ).models[0]
+
+    assert enriched.name == "Remote GPT"
+    assert enriched.description == snapshot.description
+    assert enriched.capabilities == snapshot.capabilities
+    assert enriched.modalities == snapshot.modalities
+    assert enriched.limits == snapshot.limits
+    assert enriched.pricing == snapshot.pricing
+    assert enriched.status == snapshot.status
+
+
 def test_success_is_cached_for_six_hours_then_refreshes() -> None:
     clock = FakeClock()
     calls = 0
@@ -166,6 +200,32 @@ def test_cold_malformed_response_returns_validated_snapshot() -> None:
 
     assert response.source == "snapshot"
     assert [model.id for model in response.models] == EXPECTED_IDS
+
+
+def test_cold_snapshot_fallback_is_cached_until_ttl() -> None:
+    clock = FakeClock()
+    calls = 0
+
+    async def fetch() -> bytes:
+        await anyio.lowlevel.checkpoint()
+        nonlocal calls
+        calls += 1
+        return b"not-json"
+
+    service = ModelCatalogService(fetch_metadata=fetch, clock=clock)
+
+    async def scenario() -> tuple[str, str, str]:
+        first = await service.get_catalog()
+        clock.value = 21_599
+        cached = await service.get_catalog()
+        clock.value = 21_600
+        refreshed = await service.get_catalog()
+        return first.source, cached.source, refreshed.source
+
+    sources = anyio.run(scenario)
+
+    assert calls == 2
+    assert sources == ("snapshot", "snapshot", "stale")
 
 
 def test_service_construction_does_not_fetch_metadata() -> None:
