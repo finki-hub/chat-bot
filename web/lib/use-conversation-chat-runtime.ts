@@ -1,7 +1,7 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import { useMemo, useRef, useState } from 'react';
+import { type RefObject, useMemo, useRef, useState } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
 
@@ -18,6 +18,7 @@ import { useStreamTiming } from '@/lib/use-stream-timing';
 type UseConversationChatRuntimeOptions = {
   readonly activeId: null | string;
   readonly model: string;
+  readonly preserveEmptyHydrationIdRef: RefObject<null | string>;
   readonly reasoning: boolean;
   readonly refreshConversations: () => Promise<void>;
   readonly setActiveId: (id: null | string) => void;
@@ -26,6 +27,7 @@ type UseConversationChatRuntimeOptions = {
 export const useConversationChatRuntime = ({
   activeId,
   model,
+  preserveEmptyHydrationIdRef,
   reasoning,
   refreshConversations,
   setActiveId,
@@ -139,9 +141,10 @@ export const useConversationChatRuntime = ({
     status,
   });
 
-  useConversationHydration({
+  const hydratingConversation = useConversationHydration({
     activeId,
     convoIdRef,
+    preserveEmptyHydrationIdRef,
     setActiveError,
     setActiveId,
     setActiveStatus,
@@ -152,6 +155,7 @@ export const useConversationChatRuntime = ({
     activeError,
     activeStatus,
     convoIdRef,
+    hydratingConversation,
     messages,
     modelRef,
     regenerate,

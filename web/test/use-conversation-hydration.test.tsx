@@ -28,17 +28,32 @@ const message = (id: string, text: string): MyUIMessage => ({
   role: 'user',
 });
 
-const useHydratedMessages = (): MyUIMessage[] => {
+const useHydratedMessages = ({
+  preserveEmptyHydrationId,
+}: {
+  readonly preserveEmptyHydrationId?: string;
+} = {}): MyUIMessage[] => {
   const [messages, setMessages] = useState<MyUIMessage[]>(() => [
     message('previous-a', 'Conversation A'),
   ]);
   const convoIdRef = useRef<null | string>(null);
+  const preserveEmptyHydrationIdRef = useRef<null | string>(
+    preserveEmptyHydrationId ?? null,
+  );
+  const setActiveError = useRef(
+    vi.fn<(value: ErrorNotice | undefined) => void>(),
+  ).current;
+  const setActiveId = useRef(vi.fn<(id: null | string) => void>()).current;
+  const setActiveStatus = useRef(
+    vi.fn<(value: ActiveStatus) => void>(),
+  ).current;
   useConversationHydration({
     activeId: 'conversation-b',
     convoIdRef,
-    setActiveError: vi.fn<(value: ErrorNotice | undefined) => void>(),
-    setActiveId: vi.fn<(id: null | string) => void>(),
-    setActiveStatus: vi.fn<(value: ActiveStatus) => void>(),
+    preserveEmptyHydrationIdRef,
+    setActiveError,
+    setActiveId,
+    setActiveStatus,
     setMessages,
   });
 
@@ -64,5 +79,44 @@ describe('useConversationHydration', () => {
     expect(transportMocks.loadChatConversationHistory).toHaveBeenCalledWith(
       'conversation-b',
     );
+  });
+
+  it('clears previous messages when the selected server conversation is empty', async () => {
+    transportMocks.loadChatConversationHistory.mockResolvedValue({
+      messages: [],
+    });
+
+    const { result } = renderHook(useHydratedMessages);
+
+    await waitFor(() => {
+      expect(result.current).toHaveLength(0);
+    });
+  });
+
+  it('preserves local messages when a locally created conversation has not saved history yet', async () => {
+    transportMocks.loadChatConversationHistory.mockResolvedValue({
+      messages: [],
+    });
+
+    const { result } = renderHook(() =>
+      useHydratedMessages({ preserveEmptyHydrationId: 'conversation-b' }),
+    );
+
+    await waitFor(() => {
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0]?.id).toBe('previous-a');
+    });
+  });
+
+  it('clears previous messages when selected conversation history rejects', async () => {
+    transportMocks.loadChatConversationHistory.mockRejectedValue(
+      new Error('network failed'),
+    );
+
+    const { result } = renderHook(useHydratedMessages);
+
+    await waitFor(() => {
+      expect(result.current).toHaveLength(0);
+    });
   });
 });
