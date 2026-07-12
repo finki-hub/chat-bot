@@ -30,6 +30,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Auth sign-in content: limit the supporting value list to 2 concise benefits so the primary action remains visible on small screens. The panel uses `Започни разговор`, and provider actions follow `Продолжи со {provider.name}`.
 - Credential settings dialog: modal card using existing `Dialog`, `Input`, and `Button` primitives. Provider rows use `border`, `card`, `muted`, and `muted-foreground` tokens, with saved state indicated by text and destructive delete action only when a credential exists.
 - Model selector option: group models only by provider in catalog order. Models without saved provider credentials remain visible but disabled, use `muted-foreground`, and pair a Lucide key icon with visible key-required text rather than relying on color or hover help.
+- Scrollable select menu: keep both scroll-arrow rows mounted while overflow exists so reaching a boundary never moves the popup. Show the unavailable direction with `muted-foreground` and without pointer behavior; hide both rows when the menu does not overflow.
 
 ## 6. Accessibility
 
