@@ -9,8 +9,16 @@ export default defineConfig({
   forbidOnly: isCI,
   fullyParallel: true,
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile-chromium', use: { ...devices['Pixel 5'] } },
+    {
+      name: 'chromium',
+      testIgnore: /mobile-chat\.spec\.ts/u,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'mobile-chromium',
+      testMatch: /mobile-chat\.spec\.ts/u,
+      use: { ...devices['Pixel 5'] },
+    },
   ],
   retries: isCI ? 2 : 0,
   testDir: './e2e',
