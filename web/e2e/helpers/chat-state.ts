@@ -1,5 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 
+import type { ChatConversationHistory } from '@/lib/conversation-types';
+
 type ConversationRow = {
   readonly id: string;
   readonly model: null | string;
@@ -7,6 +9,8 @@ type ConversationRow = {
 };
 
 type MockChatStateOptions = {
+  readonly conversations?: readonly ConversationRow[];
+  readonly histories?: Readonly<Record<string, ChatConversationHistory>>;
   readonly streamUrl: string;
 };
 
@@ -22,13 +26,20 @@ const conversationIdFrom = (route: Route): string => {
 
 export const installMockChatState = async (
   page: Page,
-  { streamUrl }: MockChatStateOptions,
+  {
+    conversations: initialConversations = [],
+    histories = {},
+    streamUrl,
+  }: MockChatStateOptions,
 ): Promise<void> => {
-  const conversations: ConversationRow[] = [];
+  const conversations = [...initialConversations];
 
   await page.route('**/api/chat/*/history', async (route) => {
+    const conversationId = conversationIdFrom(route);
     await route.fulfill({
-      body: JSON.stringify(emptyHistory(conversationIdFrom(route))),
+      body: JSON.stringify(
+        histories[conversationId] ?? emptyHistory(conversationId),
+      ),
       contentType: 'application/json',
       status: 200,
     });

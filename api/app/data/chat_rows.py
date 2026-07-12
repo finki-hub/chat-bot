@@ -25,28 +25,26 @@ def metadata_from_row(value: object) -> dict[str, JsonValue]:
     return {str(key): json_value(item) for key, item in parsed.items()}
 
 
+def parts_from_row(value: object) -> list[JsonValue] | None:
+    parsed: object = json.loads(value) if isinstance(value, str) else value
+    if (
+        parsed is None
+        or not isinstance(parsed, Sequence)
+        or isinstance(
+            parsed,
+            str | bytes | bytearray,
+        )
+    ):
+        return None
+    return [json_value(item) for item in parsed]
+
+
 def conversation_from_row(row: Mapping[str, object]) -> ChatConversation:
-    return ChatConversation(
-        id=row["id"],
-        user_id=row["user_id"],
-        active_stream_id=row["active_stream_id"],
-        active_response_id=row["active_response_id"],
-        active_status=row["active_status"],
-        model=row["model"],
-        title=row["title"],
-        created_at=row["created_at"],
-        updated_at=row["updated_at"],
-    )
+    return ChatConversation.model_validate(dict(row))
 
 
 def message_from_row(row: Mapping[str, object]) -> ChatMessage:
-    return ChatMessage(
-        id=row["id"],
-        conversation_id=row["conversation_id"],
-        role=row["role"],
-        content=row["content"],
-        response_id=row["response_id"],
-        metadata=metadata_from_row(row["metadata"]),
-        created_at=row["created_at"],
-        updated_at=row["updated_at"],
-    )
+    values = dict(row)
+    values["metadata"] = metadata_from_row(row["metadata"])
+    values["parts"] = parts_from_row(row.get("parts"))
+    return ChatMessage.model_validate(values)

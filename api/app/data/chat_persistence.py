@@ -171,13 +171,14 @@ async def upsert_message(
 ) -> ChatMessage:
     row = await db.fetchrow(
         """
-        INSERT INTO chat_message (id, conversation_id, role, content, response_id, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+        INSERT INTO chat_message (id, conversation_id, role, content, response_id, metadata, parts)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
         ON CONFLICT (id) DO UPDATE SET
             role = EXCLUDED.role,
             content = EXCLUDED.content,
             response_id = EXCLUDED.response_id,
             metadata = EXCLUDED.metadata,
+            parts = EXCLUDED.parts,
             updated_at = NOW()
         WHERE chat_message.conversation_id = EXCLUDED.conversation_id
         RETURNING *
@@ -188,6 +189,7 @@ async def upsert_message(
         message.content,
         message.response_id,
         json.dumps(message.metadata),
+        None if message.parts is None else json.dumps(message.parts),
     )
     if row is None:
         raise ChatMessageConflictError

@@ -21,6 +21,7 @@ from app.schemas.chat_persistence import (
     ChatConversationUpdate,
     ChatMessageRole,
     ChatMessageUpsert,
+    JsonValue,
 )
 from tests.chat_persistence_fake import FakeChatDatabase
 
@@ -35,6 +36,10 @@ async def test_chat_persistence_happy_path_orders_messages_and_clears_current_st
     # Given: a new web chat conversation owned by one anonymous user.
     db = FakeChatDatabase()
     response_id = uuid4()
+    assistant_parts: list[JsonValue] = [
+        {"state": "done", "text": "Check the enrollment rules.", "type": "reasoning"},
+        {"state": "done", "text": "Submit the semester form.", "type": "text"},
+    ]
     conversation = await create_conversation(
         db,
         ChatConversationCreate(
@@ -72,6 +77,7 @@ async def test_chat_persistence_happy_path_orders_messages_and_clears_current_st
             content="Submit the semester form.",
             response_id=response_id,
             metadata={"responseId": str(response_id)},
+            parts=assistant_parts,
         ),
     )
     cleared = await clear_active_stream_if_current(
@@ -98,6 +104,7 @@ async def test_chat_persistence_happy_path_orders_messages_and_clears_current_st
         ChatMessageRole.ASSISTANT,
     ]
     assert loaded.messages[1].metadata == {"responseId": str(response_id)}
+    assert loaded.messages[1].parts == assistant_parts
 
 
 @pytest.mark.anyio
@@ -253,12 +260,14 @@ async def test_chat_persistence_rejects_message_id_collision_across_conversation
 def test_chat_persistence_rejects_malformed_role_and_status() -> None:
     # Given / When / Then: malformed boundary inputs never reach SQL.
     with pytest.raises(ValueError, match="Input should be"):
-        ChatMessageUpsert(
-            id=uuid4(),
-            conversation_id=uuid4(),
-            role="system",
-            content="bad",
+        ChatMessageUpsert.model_validate(
+            {
+                "content": "bad",
+                "conversation_id": uuid4(),
+                "id": uuid4(),
+                "role": "system",
+            },
         )
 
     with pytest.raises(ValueError, match="Input should be"):
-        ChatConversationUpdate(active_status="lost")
+        ChatConversationUpdate.model_validate({"active_status": "lost"})

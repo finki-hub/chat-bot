@@ -25,6 +25,10 @@ const okStreamResponse = (...frames: string[]): Response =>
 
 const DONE_FRAME = 'event: done\ndata: {}\n\n';
 const HELLO_TOKEN_FRAME = 'event: token\ndata: {"text":"Здраво"}\n\n';
+const THINKING_FRAME =
+  'event: thinking\ndata: {"text":"Проверувам правила."}\n\n';
+const DIAGNOSTICS_FRAME =
+  'event: meta\ndata: {"timing":{"thinking_ms":400,"total_ms":1700,"ttft_ms":200},"tokens":{"input":10,"output":20,"total":30}}\n\n';
 const SERVER_USER_MESSAGE_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d31';
 const TARGET_ASSISTANT_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d32';
 
@@ -208,8 +212,10 @@ describe('POST /api/chat', () => {
         .fn<typeof fetch>()
         .mockResolvedValue(
           okStreamResponse(
+            THINKING_FRAME,
             HELLO_TOKEN_FRAME,
             'event: token\ndata: {"text":"!"}\n\n',
+            DIAGNOSTICS_FRAME,
             DONE_FRAME,
           ),
         ),
@@ -223,7 +229,28 @@ describe('POST /api/chat', () => {
     ).toHaveBeenCalledExactlyOnceWith({
       content: 'Здраво!',
       conversationId: CONVERSATION_ID,
-      metadata: { inferenceModel: MODEL, responseId: RESPONSE_ID },
+      metadata: {
+        diagnostics: {
+          candidateCount: null,
+          serverTotalMs: 1_700,
+          serverTtftMs: 200,
+          spans: {},
+          thinkingMs: 400,
+          tokens: { input: 10, output: 20, total: 30 },
+          topDistance: null,
+        },
+        inferenceModel: MODEL,
+        responseId: RESPONSE_ID,
+        timing: { totalMs: 1_700, ttftMs: 200 },
+      },
+      parts: [
+        {
+          state: 'done',
+          text: 'Проверувам правила.',
+          type: 'reasoning',
+        },
+        { state: 'done', text: 'Здраво!', type: 'text' },
+      ],
       responseId: RESPONSE_ID,
       userId: USER_ID,
     });
@@ -294,6 +321,7 @@ describe('POST /api/chat', () => {
       conversationId: CONVERSATION_ID,
       messageId: TARGET_ASSISTANT_ID,
       metadata: { inferenceModel: MODEL, responseId: RESPONSE_ID },
+      parts: [{ state: 'done', text: 'Нов одговор', type: 'text' }],
       responseId: RESPONSE_ID,
       retainedMessageIds: [SERVER_USER_MESSAGE_ID, TARGET_ASSISTANT_ID],
       userId: USER_ID,

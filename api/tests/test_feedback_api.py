@@ -1,3 +1,4 @@
+import json
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -50,7 +51,11 @@ def _seed_owned_response(db: FakeChatDatabase) -> tuple[UUID, UUID]:
         "conversation_id": conversation_id,
         "created_at": db.now,
         "id": uuid4(),
-        "metadata": {"inferenceModel": "server-model"},
+        "metadata": json.dumps({"inferenceModel": "server-model"}),
+        "parts": [
+            {"state": "done", "text": "Stored reasoning", "type": "reasoning"},
+            {"state": "done", "text": "Server answer", "type": "text"},
+        ],
         "response_id": response_id,
         "role": "assistant",
         "updated_at": db.now,
@@ -92,6 +97,10 @@ def test_web_feedback_uses_server_owned_message_context() -> None:
         "feedback": "like",
         "inferenceModel": "server-model",
     }
+    assert assistant["parts"] == [
+        {"state": "done", "text": "Stored reasoning", "type": "reasoning"},
+        {"state": "done", "text": "Server answer", "type": "text"},
+    ]
 
 
 def test_web_feedback_rejects_unowned_response_id() -> None:
