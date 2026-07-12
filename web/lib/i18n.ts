@@ -24,6 +24,8 @@ export const messages = {
   'composer.reasoning': 'Размислување',
   'composer.send': 'Испрати',
   'composer.stop': 'Запри',
+  'conversation.createError':
+    'Разговорот не можеше да се започне. Прашањето е зачувано за повторен обид.',
   'conversation.delete': 'Избриши',
   'conversation.deleteAllDescription':
     'Сите разговори и историја ќе бидат трајно избришани.',
@@ -32,6 +34,8 @@ export const messages = {
     'Ова дејство е трајно и не може да се врати.',
   'conversation.deleteTitle': 'Избриши разговор?',
   'conversation.generateTitle': 'Генерирај име',
+  'conversation.historyLoadError':
+    'Разговорот не можеше да се вчита. Обидете се повторно.',
   'conversation.rename': 'Преименувај',
   'conversation.renamePrompt': 'Ново име на разговорот',
   'conversation.renameTitle': 'Преименувај разговор',
@@ -97,6 +101,8 @@ export const messages = {
   'sidebar.deleteAll': 'Избриши ги сите',
   'sidebar.history': 'Разговори',
   'sidebar.label': 'Странична лента',
+  'sidebar.loadError': 'Разговорите не можеа да се вчитаат.',
+  'sidebar.loading': 'Се вчитуваат разговори…',
   'sidebar.new': 'Нов разговор',
   'sidebar.noResults': 'Нема совпаѓања',
   'sidebar.search': 'Пребарај разговори',

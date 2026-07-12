@@ -3,7 +3,7 @@ import type { AnchorHTMLAttributes, ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
 const iconControlClass =
-  'inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-input bg-background text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'inline-flex size-11 cursor-pointer items-center justify-center rounded-md border border-input bg-background text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:size-9';
 
 const IconButton = ({
   className,

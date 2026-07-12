@@ -43,6 +43,7 @@ export const ChatScreen = () => {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const [sidebarSynced, setSidebarSynced] = useState(false);
+  const [desktopSidebar, setDesktopSidebar] = useState(false);
   const [credentialSettingsOpen, setCredentialSettingsOpen] = useState(false);
 
   const { unavailable } = useHealth();
@@ -54,9 +55,11 @@ export const ChatScreen = () => {
 
     const media = matchMedia(DESKTOP_SIDEBAR_QUERY);
     const syncSidebarWithViewport = (event: MediaQueryListEvent) => {
+      setDesktopSidebar(event.matches);
       setSidebarOpen(event.matches);
     };
 
+    setDesktopSidebar(media.matches);
     setSidebarOpen(media.matches);
     setSidebarSynced(true);
 
@@ -116,6 +119,8 @@ export const ChatScreen = () => {
     activeError,
     activeId,
     activeStatus,
+    conversationListError,
+    conversationListLoading,
     conversations,
     generatingTitleId,
     messages,
@@ -124,6 +129,7 @@ export const ChatScreen = () => {
     onGenerateTitle,
     onNewChat,
     onRename,
+    onRetryConversationList,
     onSelect,
     onStop,
     renderActions,
@@ -150,6 +156,9 @@ export const ChatScreen = () => {
           activeId={activeId}
           conversations={conversations}
           generatingTitleId={generatingTitleId}
+          listError={conversationListError}
+          listLoading={conversationListLoading}
+          mobile={sidebarSynced && !desktopSidebar}
           onClearAll={onClearAll}
           onClose={() => {
             setSidebarOpen(false);
@@ -158,6 +167,7 @@ export const ChatScreen = () => {
           onGenerateTitle={onGenerateTitle}
           onNewChat={onNewChat}
           onRename={onRename}
+          onRetryList={onRetryConversationList}
           onSelect={onSelect}
           open={sidebarOpen}
           synced={sidebarSynced}

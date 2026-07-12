@@ -22,8 +22,8 @@ const GitHubIcon = () => (
 );
 
 export const Header = ({ onOpenCredentials, onToggleSidebar }: HeaderProps) => (
-  <header className="z-30 shrink-0 border-b border-border/60 bg-background">
-    <div className="flex h-14 items-center gap-3 px-4">
+  <header className="z-30 shrink-0 border-b border-border/60 bg-background pt-[env(safe-area-inset-top)]">
+    <div className="flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-4">
       <IconButton
         aria-label={t('header.toggleSidebar')}
         onClick={onToggleSidebar}
@@ -35,7 +35,7 @@ export const Header = ({ onOpenCredentials, onToggleSidebar }: HeaderProps) => (
       </IconButton>
       <img
         alt="ФИНКИ Хаб"
-        className="h-9 w-9 shrink-0 object-contain"
+        className="hidden h-9 w-9 shrink-0 object-contain sm:block"
         src="/logo.png"
       />
       <h1 className="min-w-0 flex-1 truncate text-base font-bold leading-tight tracking-tight sm:text-lg">
@@ -54,6 +54,7 @@ export const Header = ({ onOpenCredentials, onToggleSidebar }: HeaderProps) => (
         </IconButton>
         <AuthButton />
         <IconLink
+          className="hidden sm:inline-flex"
           href="https://github.com/finki-hub/chat-bot"
           rel="noopener noreferrer"
           target="_blank"

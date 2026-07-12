@@ -18,7 +18,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 
 ## 4. Motion
 
-- Motion is limited to opacity, color, and transform transitions already present in the sidebar.
+- Motion is limited to explicitly named color, shadow, opacity, grid-row, and transform transitions. Broad `transition-all` is not used.
 - Loading indicators may rotate, but only to communicate an in-progress action.
 
 ## 5. Components
@@ -30,13 +30,20 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Auth sign-in content: limit the supporting value list to 2 concise benefits so the primary action remains visible on small screens. The panel uses `Започни разговор`, and provider actions follow `Продолжи со {provider.name}`.
 - Credential settings dialog: modal card using existing `Dialog`, `Input`, and `Button` primitives. Provider rows use `border`, `card`, `muted`, and `muted-foreground` tokens, with saved state indicated by text and destructive delete action only when a credential exists.
 - Model selector option: group models only by provider in catalog order. Models without saved provider credentials remain visible but disabled, use `muted-foreground`, and pair a Lucide key icon with visible key-required text rather than relying on color or hover help.
+- Mobile sidebar: a modal Radix dialog that traps focus, closes on Escape or overlay interaction, and restores focus to the header trigger. Desktop retains the static complementary landmark.
+- Conversation loading state: preserve the current list/thread during transient failures and present an inline alert with a retry action. Only a confirmed missing conversation clears the selection.
+- Composer submission failure: retain the draft and show an inline retryable error; clear the draft only after the message is accepted.
 
 ## 6. Accessibility
 
 - Every icon-only action must have an `aria-label` from `web/lib/i18n.ts`.
+- Primary mobile controls and conversation row actions expose at least 44px touch targets.
+- Mobile header and drawer honor safe-area insets; decorative logo and GitHub shortcut are hidden below `sm` to protect the title and primary actions.
+- Modal drawers contain keyboard focus and restore it to their invoking control.
 - Disabled async actions must expose `aria-busy` when work is pending.
 - Auth failures must use `role="alert"` and include a direct recovery step. Missing provider configuration must be described as temporary unavailability without exposing server terminology.
 
 ## 7. Accepted debt
 
 - The app currently has no richer brand reference document. This file captures the existing implicit system so small sidebar actions can remain consistent without a redesign.
+- Attachments, sharing/export, message search, edit/branching, command palette, font replacement, and Streamdown bundle splitting remain deferred product/performance work.
