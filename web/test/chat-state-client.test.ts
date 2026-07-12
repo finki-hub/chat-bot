@@ -199,6 +199,60 @@ describe('createChatStateClient', () => {
     });
   });
 
+  it('serializes durable assistant parts on upsert', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createChatStateClient } = await import('@/lib/chat-state-client');
+    await createChatStateClient().upsertAssistantMessage({
+      content: 'Answer',
+      conversationId: 'conv-parts',
+      metadata: { responseId: 'response-parts' },
+      parts: [
+        { state: 'done', text: 'Reasoning', type: 'reasoning' },
+        { state: 'done', text: 'Answer', type: 'text' },
+      ],
+      responseId: 'response-parts',
+      userId: CHAT_USER_ID,
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      parts: [
+        { state: 'done', text: 'Reasoning', type: 'reasoning' },
+        { state: 'done', text: 'Answer', type: 'text' },
+      ],
+    });
+  });
+
+  it('serializes durable assistant parts on replacement', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createChatStateClient } = await import('@/lib/chat-state-client');
+    await createChatStateClient().replaceAssistantMessage({
+      content: 'Replacement',
+      conversationId: 'conv-parts',
+      messageId: 'message-parts',
+      metadata: { responseId: 'response-parts' },
+      parts: [{ state: 'done', text: 'Replacement', type: 'text' }],
+      responseId: 'response-parts',
+      retainedMessageIds: ['message-parts'],
+      userId: CHAT_USER_ID,
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      parts: [{ state: 'done', text: 'Replacement', type: 'text' }],
+    });
+  });
+
   it('forwards BYOK credential writes without exposing the secret elsewhere', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json(

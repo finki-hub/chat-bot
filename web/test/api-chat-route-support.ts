@@ -39,6 +39,7 @@ type StateClientInput = {
   readonly messageId?: string;
   readonly metadata?: Record<string, unknown>;
   readonly model?: string;
+  readonly parts?: readonly unknown[];
   readonly responseId?: string;
   readonly retainedMessageIds?: readonly string[];
   readonly streamId?: string;

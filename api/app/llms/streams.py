@@ -6,7 +6,7 @@ from langchain_core.messages import BaseMessage
 from app.llms.agents import StreamObservation
 from app.llms.anthropic import stream_anthropic_agent_response
 from app.llms.google import stream_google_agent_response
-from app.llms.models import REASONING_CAPABLE_MODELS, Model
+from app.llms.models import REASONING_CAPABLE_MODELS, ChatModel, Model, model_id
 from app.llms.ollama import stream_ollama_agent_response
 from app.llms.openai import stream_openai_agent_response
 from app.llms.provider_credentials import LlmProviderCredentials
@@ -22,7 +22,7 @@ def _tag_provider(observation: StreamObservation | None, provider: str) -> None:
 
 async def stream_response_with_agent(
     user_prompt: str,
-    model: Model,
+    model: ChatModel,
     *,
     system_prompt: str,
     history: list[BaseMessage],
@@ -38,15 +38,32 @@ async def stream_response_with_agent(
         "Streaming response with agent for user prompt length: '%d' "
         "with model: %s, interface: %s, and %d prior turn(s)",
         len(user_prompt),
-        model.value,
+        model_id(model),
         interface,
         len(history),
     )
 
-    reasoning = reasoning and model in REASONING_CAPABLE_MODELS
+    reasoning = (
+        reasoning and isinstance(model, Model) and model in REASONING_CAPABLE_MODELS
+    )
 
     if observation is not None:
-        observation.model = model.value
+        observation.model = model_id(model)
+
+    if not isinstance(model, Model):
+        _tag_provider(observation, "ollama")
+        return await stream_ollama_agent_response(
+            user_prompt,
+            model,
+            system_prompt=system_prompt,
+            history=history,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            reasoning=reasoning,
+            observation=observation,
+            credential=None if credentials is None else credentials.ollama,
+        )
 
     match model:
         case Model.QWEN3_30B_THINKING | Model.QWEN3_30B_INSTRUCT | Model.QWEN3_14B:

@@ -2,7 +2,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Literal, assert_never
 
-from app.llms.models import Model
+from app.llms.models import ChatModel
 from app.llms.prompts import HYDE_SYSTEM_PROMPT
 from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.query_modes import QueryTransformMode
@@ -40,7 +40,7 @@ def query_variant_count(mode: QueryTransformMode) -> int:
 
 async def build_query_variants(
     search_query: str,
-    query_transform_model: Model,
+    query_transform_model: ChatModel,
     mode: QueryTransformMode,
     credentials: LlmProviderCredentials | None = None,
 ) -> QueryVariantBundle:
@@ -92,7 +92,7 @@ async def build_query_variants(
 
 async def _rewrite_query(
     search_query: str,
-    query_transform_model: Model,
+    query_transform_model: ChatModel,
     credentials: LlmProviderCredentials | None = None,
 ) -> str:
     with timed("retrieval.query_rewrite"):
@@ -109,7 +109,7 @@ async def _rewrite_query(
 
 async def _hyde_passage(
     search_query: str,
-    query_transform_model: Model,
+    query_transform_model: ChatModel,
     credentials: LlmProviderCredentials | None = None,
 ) -> str:
     with timed("retrieval.hyde"):

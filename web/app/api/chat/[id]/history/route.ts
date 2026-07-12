@@ -1,4 +1,6 @@
-import type { ModelId, MyMetadata, MyUIMessage } from '@/lib/api-types';
+import { safeValidateUIMessages } from 'ai';
+
+import type { ModelId, MyUIMessage } from '@/lib/api-types';
 import type { ChatStateJsonValue } from '@/lib/chat-state-client';
 
 import {
@@ -15,6 +17,7 @@ type ChatStateMessage = {
   readonly content: string;
   readonly id: string;
   readonly metadata: ChatStateJsonValue;
+  readonly parts: null | readonly ChatStateJsonValue[];
   readonly response_id: null | string;
   readonly role: 'assistant' | 'user';
 };
@@ -32,38 +35,80 @@ type RouteContext = {
 const empty = (status: number): Response => new Response(null, { status });
 
 const isRecord = (
-  value: ChatStateJsonValue,
+  value: unknown,
 ): value is Record<string, ChatStateJsonValue> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const metadataFrom = (
   metadata: ChatStateJsonValue,
   responseId: null | string,
-): MyMetadata => {
+): Record<string, ChatStateJsonValue> => {
   const base = isRecord(metadata) ? metadata : {};
-  const feedback = base['feedback'];
-  const inferenceModel = base['inferenceModel'];
   const persistedResponseId = base['responseId'];
-  const feedbackMetadata: Pick<MyMetadata, 'feedback'> =
-    feedback === 'dislike' || feedback === 'like' ? { feedback } : {};
+  const diagnostics = base['diagnostics'];
+  const serverTotalMs = isRecord(diagnostics)
+    ? diagnostics['serverTotalMs']
+    : undefined;
+  const serverTtftMs = isRecord(diagnostics)
+    ? diagnostics['serverTtftMs']
+    : undefined;
+  const derivedTiming =
+    base['timing'] === undefined && typeof serverTotalMs === 'number'
+      ? {
+          totalMs: serverTotalMs,
+          ttftMs: typeof serverTtftMs === 'number' ? serverTtftMs : null,
+        }
+      : undefined;
 
   return {
-    ...feedbackMetadata,
-    ...(typeof inferenceModel === 'string' && { inferenceModel }),
+    ...base,
     ...(responseId !== null && { responseId }),
     ...(responseId === null &&
       typeof persistedResponseId === 'string' && {
         responseId: persistedResponseId,
       }),
+    ...(derivedTiming !== undefined && { timing: derivedTiming }),
   };
 };
 
-const messageFrom = (message: ChatStateMessage): MyUIMessage => ({
-  id: message.id,
-  metadata: metadataFrom(message.metadata, message.response_id),
-  parts: [{ text: message.content, type: 'text' }],
-  role: message.role,
-});
+const messageFrom = async (
+  message: ChatStateMessage,
+): Promise<MyUIMessage | null> => {
+  const fallbackParts = [{ text: message.content, type: 'text' }] as const;
+  const parts =
+    message.parts === null || message.parts.length === 0
+      ? fallbackParts
+      : message.parts;
+  const validation = await safeValidateUIMessages<MyUIMessage>({
+    messages: [
+      {
+        id: message.id,
+        metadata: metadataFrom(message.metadata, message.response_id),
+        parts,
+        role: message.role,
+      },
+    ],
+  });
+
+  if (validation.success) {
+    return validation.data[0] ?? null;
+  }
+
+  const fallbackValidation = await safeValidateUIMessages<MyUIMessage>({
+    messages: [
+      {
+        id: message.id,
+        metadata: metadataFrom(message.metadata, message.response_id),
+        parts: fallbackParts,
+        role: message.role,
+      },
+    ],
+  });
+
+  return fallbackValidation.success
+    ? (fallbackValidation.data[0] ?? null)
+    : null;
+};
 
 const isMessageRole = (value: unknown): value is ChatStateMessage['role'] =>
   value === 'assistant' || value === 'user';
@@ -76,6 +121,8 @@ const parseMessage = (value: ChatStateJsonValue): ChatStateMessage | null => {
   const content = value['content'];
   const id = value['id'];
   const metadata = value['metadata'];
+  const persistedParts = value['parts'];
+  const parts = Array.isArray(persistedParts) ? persistedParts : null;
   const responseId = value['response_id'];
   const role = value['role'];
 
@@ -89,7 +136,7 @@ const parseMessage = (value: ChatStateJsonValue): ChatStateMessage | null => {
     return null;
   }
 
-  return { content, id, metadata, response_id: responseId, role };
+  return { content, id, metadata, parts, response_id: responseId, role };
 };
 
 export const GET = async (
@@ -107,11 +154,16 @@ export const GET = async (
       conversationId,
       userId,
     });
-    const uiMessages = messages.flatMap((message) => {
-      const parsed = parseMessage(message);
+    const parsedMessages = await Promise.all(
+      messages.map(async (message) => {
+        const parsed = parseMessage(message);
 
-      return parsed === null ? [] : [messageFrom(parsed)];
-    });
+        return parsed === null ? null : messageFrom(parsed);
+      }),
+    );
+    const uiMessages = parsedMessages.flatMap((message) =>
+      message === null ? [] : [message],
+    );
     const historyConversation: HistoryConversation = {
       id: conversation.id,
       model: conversation.model ?? null,

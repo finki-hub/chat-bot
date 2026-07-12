@@ -76,6 +76,7 @@ export type ModelCatalog = {
 export type ModelDescriptor = {
   readonly description?: string;
   readonly id: ModelId;
+  readonly loaded?: boolean | null;
   readonly name: string;
   readonly provider: string;
 };
@@ -120,7 +121,6 @@ export type FeedbackSchema = {
   response_id: string;
   user_id: string;
 };
-
 export type FeedbackType = 'dislike' | 'like';
 
 // Every field is optional: a `meta` frame carries only part of it (timing vs tokens),

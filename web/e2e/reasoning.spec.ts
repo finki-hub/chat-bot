@@ -154,4 +154,95 @@ test.describe('reasoning streaming (mocked BFF)', () => {
       await chatServer.close();
     }
   });
+
+  test('keeps persisted reasoning and diagnostics visible after switching chats', async ({
+    page,
+  }) => {
+    const firstId = '11111111-1111-4111-8111-111111111111';
+    const secondId = '22222222-2222-4222-8222-222222222222';
+    await page.route('**/api/health', async (route) => {
+      await route.fulfill({
+        body: '{}',
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
+    await mockModels(page);
+    await installMockChatState(page, {
+      conversations: [
+        { id: firstId, model: INFERENCE_MODEL, title: 'Reasoning history' },
+        { id: secondId, model: INFERENCE_MODEL, title: 'Other history' },
+      ],
+      histories: {
+        [firstId]: {
+          conversation: {
+            id: firstId,
+            model: INFERENCE_MODEL,
+            title: 'Reasoning history',
+          },
+          messages: [
+            {
+              id: 'assistant-reasoning-history',
+              metadata: {
+                diagnostics: {
+                  serverTotalMs: 1_700,
+                  serverTtftMs: 200,
+                  thinkingMs: 400,
+                },
+                inferenceModel: INFERENCE_MODEL,
+                responseId: RESPONSE_ID,
+                timing: { totalMs: 1_700, ttftMs: 200 },
+              },
+              parts: [
+                { state: 'done', text: 'Stored reasoning', type: 'reasoning' },
+                { state: 'done', text: 'Stored answer', type: 'text' },
+              ],
+              role: 'assistant',
+            },
+          ],
+        },
+        [secondId]: {
+          conversation: {
+            id: secondId,
+            model: INFERENCE_MODEL,
+            title: 'Other history',
+          },
+          messages: [
+            {
+              id: 'assistant-other-history',
+              metadata: {},
+              parts: [{ text: 'Other answer', type: 'text' }],
+              role: 'assistant',
+            },
+          ],
+        },
+      },
+      streamUrl: 'http://127.0.0.1:9/unused',
+    });
+
+    await page.goto('/');
+    await page
+      .getByRole('button', { exact: true, name: 'Reasoning history' })
+      .click();
+    await expect(page.getByTestId('reasoning')).toBeVisible();
+    await expect(page.getByTestId('message-timing')).toBeVisible();
+
+    await page
+      .getByRole('button', { exact: true, name: 'Other history' })
+      .click();
+    await expect(page.getByText('Other answer', { exact: true })).toBeVisible();
+    await page
+      .getByRole('button', { exact: true, name: 'Reasoning history' })
+      .click();
+
+    await expect(
+      page.getByText('Stored answer', { exact: true }),
+    ).toBeVisible();
+    await page.getByTestId('reasoning').getByRole('button').click();
+    await expect(page.getByTestId('reasoning-panel')).toContainText(
+      'Stored reasoning',
+    );
+    await page.getByTestId('message-timing').hover();
+    await expect(page.getByText(RESPONSE_ID)).toBeVisible();
+  });
 });

@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +16,11 @@ const GPT_PREMIUM_ID = 'gpt-5.4';
 const GPT_PREMIUM_NAME = 'GPT-5.4';
 const GPT_CHEAP_ID = 'gpt-5.4-nano';
 const GPT_CHEAP_NAME = 'GPT-5.4 Nano';
+const OLLAMA_ID = 'llama3.2:latest';
+const OLLAMA_NAME = 'llama3.2:latest';
+const OLLAMA_OPTION_NAME = /llama3\.2:latest/u;
+const OLLAMA_UNKNOWN_ID = 'qwen3:14b';
+const OLLAMA_UNKNOWN_NAME = 'qwen3:14b';
 const MODEL_SELECTOR_TEST_ID = 'composer-model';
 
 const MODELS: ModelDescriptor[] = [
@@ -26,12 +31,21 @@ const MODELS: ModelDescriptor[] = [
   },
   { id: GPT_ID, name: GPT_NAME, provider: 'openai' },
   { id: CLAUDE_ID, name: CLAUDE_NAME, provider: 'anthropic' },
+  { id: OLLAMA_ID, loaded: true, name: OLLAMA_NAME, provider: 'ollama' },
+  {
+    id: OLLAMA_UNKNOWN_ID,
+    loaded: null,
+    name: OLLAMA_UNKNOWN_NAME,
+    provider: 'ollama',
+  },
   { id: GPT_CHEAP_ID, name: GPT_CHEAP_NAME, provider: 'openai' },
 ];
-const ALL_PROVIDERS = new Set(['anthropic', 'openai']);
+const ALL_PROVIDERS = new Set(['anthropic', 'ollama', 'openai']);
 
 const setup = (overrides: Partial<ComponentProps<typeof Composer>> = {}) => {
-  const onSubmit = vi.fn<(text: string) => void>();
+  const onSubmit = vi
+    .fn<(text: string) => Promise<boolean>>()
+    .mockResolvedValue(true);
   const onStop = vi.fn<() => void>();
   const onModelChange = vi.fn<(model: string) => void>();
   const onReasoningChange = vi.fn<(reasoning: boolean) => void>();
@@ -54,13 +68,43 @@ const setup = (overrides: Partial<ComponentProps<typeof Composer>> = {}) => {
 };
 
 describe('Composer', () => {
-  it('submits trimmed text on Enter (no Shift)', () => {
+  it('submits trimmed text on Enter (no Shift)', async () => {
     const { onSubmit } = setup();
     const textarea = screen.getByRole('textbox');
     fireEvent.change(textarea, { target: { value: '  Здраво  ' } });
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
 
-    expect(onSubmit).toHaveBeenCalledWith('Здраво');
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith('Здраво');
+    });
+  });
+
+  it('keeps the draft when submission fails before the message is accepted', async () => {
+    const user = userEvent.setup();
+    setup({
+      onSubmit: vi
+        .fn<(text: string) => Promise<boolean>>()
+        .mockResolvedValue(false),
+    });
+    const textarea = screen.getByRole('textbox');
+
+    await user.type(textarea, 'Не го губи прашањето');
+    await user.keyboard('{Enter}');
+
+    expect(textarea).toHaveValue('Не го губи прашањето');
+  });
+
+  it('clears the draft after submission is accepted', async () => {
+    const user = userEvent.setup();
+    setup();
+    const textarea = screen.getByRole('textbox');
+
+    await user.type(textarea, 'Зачувај го прашањето');
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue('');
+    });
   });
 
   it('does NOT submit on Shift+Enter (newline)', () => {
@@ -118,6 +162,12 @@ describe('Composer', () => {
     expect(
       screen.getByRole('option', { name: GPT_PREMIUM_NAME }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: OLLAMA_OPTION_NAME }),
+    ).toHaveTextContent('Вчитан');
+    expect(
+      screen.getByRole('option', { name: OLLAMA_UNKNOWN_NAME }),
+    ).not.toHaveTextContent('Не е вчитан');
   });
 
   it('groups models only by provider in catalog order', async () => {
@@ -130,6 +180,7 @@ describe('Composer', () => {
     expect(providerLabels.map((label) => label.textContent)).toStrictEqual([
       'OpenAI',
       'Anthropic',
+      'Ollama',
     ]);
   });
 

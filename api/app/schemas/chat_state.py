@@ -35,6 +35,7 @@ class UserMessageUpsertRequest(UserScopedRequest):
     id: UUID
     content: str = Field(min_length=1)
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
+    parts: list[JsonValue] | None = None
 
     @field_validator("content")
     @classmethod
@@ -52,6 +53,7 @@ class AssistantMessageUpsertRequest(UserMessageUpsertRequest):
 class AssistantMessageReplacementRequest(UserScopedRequest):
     content: str = Field(min_length=1)
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
+    parts: list[JsonValue] | None = None
     retained_message_ids: list[UUID] = Field(min_length=1)
 
     @field_validator("content")

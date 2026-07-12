@@ -9,7 +9,7 @@ from app.api.provider_credentials import (
 )
 from app.data.chat_credentials import ChatCredentialDatabase
 from app.data.db import get_db
-from app.llms.models import Model
+from app.llms.models import ChatModel, Model
 from app.llms.pricing import HOSTED_PRICING
 from app.llms.provider_credentials import has_provider_credential, provider_for_model
 from app.llms.query_transform import transform_query
@@ -69,9 +69,11 @@ async def generate_chat_title(
     db: ChatCredentialDatabase | None = None,
     settings: Settings | None = None,
 ) -> ChatTitleResponse:
-    candidate_models: tuple[Model, ...]
+    candidate_models: tuple[ChatModel, ...]
     if payload.query_transform_model is not None:
         candidate_models = (payload.query_transform_model,)
+    elif not isinstance(payload.provider_model, Model):
+        candidate_models = (payload.provider_model,)
     else:
         provider = provider_for_model(payload.provider_model)
         candidate_models = tuple(

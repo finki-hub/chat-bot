@@ -99,7 +99,7 @@ export const ComposerActions = ({
         <Button
           aria-label={t('composer.reasoning')}
           aria-pressed={reasoning}
-          className="h-8 w-fit shrink-0 gap-1.5 rounded-full px-3 text-xs font-medium"
+          className="min-h-11 w-fit shrink-0 gap-1.5 rounded-full px-3 text-xs font-medium sm:min-h-8"
           data-testid="composer-reasoning"
           disabled={(disabled ?? false) || !isReasoningCapableModel(model)}
           onClick={() => {
@@ -122,7 +122,7 @@ export const ComposerActions = ({
         >
           <SelectTrigger
             aria-label={t('composer.model')}
-            className="h-8 w-fit max-w-[70vw] shrink-0 gap-1.5 rounded-full border-0 bg-transparent px-3 text-xs font-medium text-muted-foreground shadow-none hover:bg-muted hover:text-foreground sm:max-w-[240px]"
+            className="min-h-11 w-fit max-w-[70vw] shrink-0 gap-1.5 rounded-full border-0 bg-transparent px-3 text-xs font-medium text-muted-foreground shadow-none hover:bg-muted hover:text-foreground sm:min-h-8 sm:max-w-[240px]"
             data-testid="composer-model"
             size="sm"
           >
@@ -170,6 +170,14 @@ export const ComposerActions = ({
                   >
                     <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
                       <span className="truncate">{entry.name}</span>
+                      {entry.provider === 'ollama' &&
+                      typeof entry.loaded === 'boolean' ? (
+                        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                          {entry.loaded
+                            ? t('composer.modelLoaded')
+                            : t('composer.modelNotLoaded')}
+                        </span>
+                      ) : null}
                       {availableProviders.has(entry.provider) ? null : (
                         <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
                           <KeyRound aria-hidden="true" />
@@ -186,7 +194,7 @@ export const ComposerActions = ({
       </div>
       <Button
         aria-label={isBusy ? t('composer.stop') : t('composer.send')}
-        className="size-9 shrink-0 rounded-full transition-transform active:scale-95"
+        className="size-11 shrink-0 rounded-full transition-transform active:scale-95 sm:size-9"
         data-testid="composer-submit"
         disabled={submitDisabled}
         onClick={onButtonClick}

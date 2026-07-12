@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from app.api import chat_title
 from app.data.chat_credentials import upsert_chat_credential
-from app.llms.models import Model
+from app.llms.models import ChatModel, Model
 from app.schemas.chat import ConversationTurn
 from app.schemas.chat_credentials import ChatCredentialUpsert
 from app.schemas.chat_title import ChatTitleSchema
@@ -86,3 +86,37 @@ def test_chat_title_uses_cheapest_model_for_active_provider(monkeypatch):
 
     assert response.title == "Испитен рок"
     assert selected_models == [Model.CLAUDE_HAIKU_4_5]
+
+
+def test_chat_title_uses_dynamic_ollama_provider_model_directly(monkeypatch):
+    selected_models: list[ChatModel] = []
+
+    async def fake_transform_query(
+        query: str,
+        model: ChatModel,
+        *,
+        system_prompt: str,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        credentials=None,
+    ) -> str:
+        selected_models.append(model)
+        return "Испитен рок"
+
+    monkeypatch.setattr(chat_title, "transform_query", fake_transform_query)
+    monkeypatch.setattr(chat_title, "has_provider_credential", lambda *args: True)
+    dynamic_model = "llama3.2:latest"
+    payload = ChatTitleSchema.model_validate(
+        {
+            "messages": [
+                ConversationTurn(role="user", content="Кога е јунската сесија?"),
+            ],
+            "provider_model": dynamic_model,
+        },
+    )
+
+    response = anyio.run(chat_title.generate_chat_title, payload)
+
+    assert response.title == "Испитен рок"
+    assert selected_models == [dynamic_model]

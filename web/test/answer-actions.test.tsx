@@ -79,13 +79,23 @@ describe('AnswerActions feedback', () => {
     });
   });
 
-  it('optimistically marks the chosen vote as pressed', async () => {
+  it('posts a dislike and marks it as pressed', async () => {
     render(<AnswerActions message={assistant('resp-9')} />);
     const dislike = screen.getByRole('button', { name: 'Не допаѓа' });
     fireEvent.click(dislike);
 
     await waitFor(() => {
       expect(dislike).toHaveAttribute(PRESSED, 'true');
+    });
+
+    const fetchMock = fetch as unknown as ReturnType<
+      typeof vi.fn<typeof fetch>
+    >;
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(JSON.parse(init.body as string)).toStrictEqual({
+      feedbackType: 'dislike',
+      responseId: 'resp-9',
     });
   });
 

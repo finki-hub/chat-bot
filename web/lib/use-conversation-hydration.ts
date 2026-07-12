@@ -11,7 +11,11 @@ import {
 import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
 
 import { fireAndForget } from '@/lib/async';
-import { loadChatConversationHistory } from '@/lib/transport';
+import { t } from '@/lib/i18n';
+import {
+  ChatConversationRequestError,
+  loadChatConversationHistory,
+} from '@/lib/transport';
 
 type UseConversationHydrationOptions = {
   readonly activeId: null | string;
@@ -58,7 +62,11 @@ export const useConversationHydration = ({
         activeStreamConversationIdRef.current = null;
       }
     };
+    const hasLocalConversationState = (id: string): boolean =>
+      preserveEmptyHydrationIdRef.current === id ||
+      activeStreamConversationIdRef.current === id;
 
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- cancellation and server/local reconciliation are one request state machine
     const hydrate = async (id: string): Promise<void> => {
       try {
         const serverHistory = await loadChatConversationHistory(id);
@@ -67,8 +75,7 @@ export const useConversationHydration = ({
             setMessages((current) =>
               serverHistory.messages.length === 0 &&
               current.length > 0 &&
-              (preserveEmptyHydrationIdRef.current === id ||
-                activeStreamConversationIdRef.current === id)
+              hasLocalConversationState(id)
                 ? current
                 : [...serverHistory.messages],
             );
@@ -79,17 +86,39 @@ export const useConversationHydration = ({
         }
 
         if (!isCancelled()) {
-          clearPreserveMarker(id);
-          clearActiveStreamMarker(id);
-          setActiveId(null);
-          setMessages([]);
+          setActiveError({
+            code: 'history_load',
+            message: t('conversation.historyLoadError'),
+          });
         }
-      } catch {
+      } catch (error) {
         if (!isCancelled()) {
+          if (
+            error instanceof ChatConversationRequestError &&
+            error.status === 404
+          ) {
+            if (hasLocalConversationState(id)) {
+              return;
+            }
+            clearPreserveMarker(id);
+            clearActiveStreamMarker(id);
+            setActiveId(null);
+            setMessages([]);
+            return;
+          }
+          if (
+            error instanceof ChatConversationRequestError ||
+            error instanceof TypeError
+          ) {
+            setActiveError({
+              code: 'history_load',
+              message: t('conversation.historyLoadError'),
+            });
+            return;
+          }
           clearPreserveMarker(id);
           clearActiveStreamMarker(id);
-          setActiveId(null);
-          setMessages([]);
+          throw error;
         }
       } finally {
         if (!isCancelled()) {

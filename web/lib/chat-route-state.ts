@@ -12,6 +12,15 @@ import {
 } from '@/lib/api-types';
 import { joinText } from '@/lib/message-parts';
 
+type AssistantState = {
+  readonly metadata: ChatStateMetadata;
+  readonly parts: readonly ChatStateJsonValue[];
+};
+
+type JsonValueResult =
+  | { readonly success: false }
+  | { readonly success: true; readonly value: ChatStateJsonValue };
+
 type PersistedTurn = ConversationTurn & {
   readonly id: string;
 };
@@ -22,7 +31,7 @@ type UserMessageForState = {
 };
 
 const isRecord = (
-  value: ChatStateJsonValue,
+  value: unknown,
 ): value is Record<string, ChatStateJsonValue> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -84,9 +93,73 @@ export const lastUserMessageForState = (
   return content.length === 0 ? null : { content, id: message.id };
 };
 
-export const assistantMetadata = (meta: UiStreamMeta): ChatStateMetadata => ({
-  ...(meta.inferenceModel !== undefined && {
-    inferenceModel: meta.inferenceModel,
-  }),
-  ...(meta.responseId !== undefined && { responseId: meta.responseId }),
-});
+const jsonValueFrom = (value: unknown): JsonValueResult => {
+  if (value === null) {
+    return { success: true, value: null };
+  }
+  if (
+    typeof value === 'boolean' ||
+    typeof value === 'number' ||
+    typeof value === 'string'
+  ) {
+    return { success: true, value };
+  }
+  if (Array.isArray(value)) {
+    const parsedItems = value.flatMap((item) => {
+      const parsed = jsonValueFrom(item);
+
+      return parsed.success ? [parsed.value] : [];
+    });
+    return { success: true, value: parsedItems };
+  }
+  if (typeof value === 'object') {
+    const parsedRecord = Object.fromEntries(
+      Object.entries(value).flatMap(([key, item]) => {
+        const parsed = jsonValueFrom(item);
+
+        return parsed.success ? [[key, parsed.value]] : [];
+      }),
+    );
+    return { success: true, value: parsedRecord };
+  }
+
+  return { success: false };
+};
+
+export const assistantState = (
+  message: MyUIMessage,
+  meta: UiStreamMeta,
+): AssistantState => {
+  const persistedMetadata = jsonValueFrom(message.metadata ?? {});
+  const metadata =
+    persistedMetadata.success && isRecord(persistedMetadata.value)
+      ? persistedMetadata.value
+      : {};
+  const diagnostics = message.metadata?.diagnostics;
+  const serverTotalMs = diagnostics?.serverTotalMs;
+  const serverTtftMs = diagnostics?.serverTtftMs;
+  const timing =
+    message.metadata?.timing ??
+    (typeof serverTotalMs === 'number'
+      ? {
+          totalMs: serverTotalMs,
+          ttftMs: typeof serverTtftMs === 'number' ? serverTtftMs : null,
+        }
+      : undefined);
+
+  return {
+    metadata: {
+      ...metadata,
+      ...(meta.inferenceModel !== undefined && {
+        inferenceModel: meta.inferenceModel,
+      }),
+      ...(meta.responseId !== undefined && { responseId: meta.responseId }),
+      ...(timing !== undefined && { timing }),
+    },
+    parts: message.parts.flatMap((part) => {
+      const parsed = jsonValueFrom(part);
+
+      return parsed.success ? [parsed.value] : [];
+    }),
+  };
+};

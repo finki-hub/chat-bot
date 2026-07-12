@@ -266,6 +266,20 @@ describe('buildChatTransport', () => {
     await expect(loadChatConversationHistory('conv-7')).resolves.toBeNull();
   });
 
+  it('throws a typed request error when conversation history is unavailable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response(null, { status: 503 })),
+    );
+
+    await expect(loadChatConversationHistory('conv-7')).rejects.toMatchObject({
+      name: 'ChatConversationRequestError',
+      status: 503,
+    });
+  });
+
   it('rejects malformed server conversation history messages', async () => {
     vi.stubGlobal(
       'fetch',

@@ -71,6 +71,15 @@ class ModelDescriptor(BaseModel):
     limits: ModelLimits | None = None
     pricing: ModelPricing | None = None
     status: str | None = None
+    loaded: bool | None = None
+
+
+class OllamaCatalogModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    name: str
+    loaded: bool | None
 
 
 class ModelCatalogResponse(BaseModel):

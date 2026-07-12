@@ -9,7 +9,7 @@ from app.data.connection import Database
 from app.data.documents import get_chunks_window, get_closest_chunks
 from app.data.questions import get_closest_questions
 from app.llms.embeddings import generate_embeddings
-from app.llms.models import Model
+from app.llms.models import ChatModel, Model
 from app.llms.prompts import CONTEXTUALIZE_SYSTEM_PROMPT
 from app.llms.provider_credentials import (
     LlmProviderCredentials,
@@ -238,7 +238,7 @@ async def get_retrieved_context(
     db: Database,
     query: str,
     embedding_model: Model,
-    query_transform_model: Model,
+    query_transform_model: ChatModel,
     *,
     query_transform_mode: QueryTransformMode = QueryTransformMode.REWRITE_HYDE,
     history_text: str | None = None,
@@ -266,7 +266,7 @@ async def get_retrieved_context_with_sources(
     db: Database,
     query: str,
     embedding_model: Model,
-    query_transform_model: Model,
+    query_transform_model: ChatModel,
     *,
     query_transform_mode: QueryTransformMode = QueryTransformMode.REWRITE_HYDE,
     history_text: str | None = None,
@@ -509,7 +509,7 @@ async def get_retrieved_context_with_sources(
 
 async def _contextualize_query(
     query: str,
-    query_transform_model: Model,
+    query_transform_model: ChatModel,
     history_text: str | None,
     credentials: LlmProviderCredentials | None = None,
 ) -> str:

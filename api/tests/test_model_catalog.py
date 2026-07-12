@@ -13,6 +13,7 @@ from app.llms.model_catalog import (
     fetch_models_dev,
 )
 from app.llms.model_catalog_policy import MODEL_CATALOG
+from app.llms.model_catalog_types import OllamaCatalogModel
 
 EXPECTED_IDS = [
     "gpt-5.6-sol",
@@ -28,9 +29,6 @@ EXPECTED_IDS = [
     "claude-opus-4-8",
     "claude-sonnet-5",
     "claude-haiku-4-5",
-    "qwen3:30b-a3b-thinking-2507-q4_K_M",
-    "qwen3:30b-a3b-instruct-2507-q4_K_M",
-    "qwen3:14b-q4_K_M",
 ]
 
 
@@ -78,11 +76,35 @@ def test_static_catalog_has_exact_order_and_providers_without_tiers() -> None:
         "anthropic",
         "anthropic",
         "anthropic",
-        "ollama",
-        "ollama",
-        "ollama",
     ]
     assert all(not hasattr(entry, "tier") for entry in MODEL_CATALOG)
+
+
+def test_catalog_can_append_dynamic_ollama_models_with_loaded_status() -> None:
+    async def fetch() -> bytes:
+        await anyio.lowlevel.checkpoint()
+        return b"not-json"
+
+    service = ModelCatalogService(fetch_metadata=fetch, clock=FakeClock())
+
+    response = anyio.run(
+        service.get_catalog,
+        (
+            OllamaCatalogModel(id="bge-m3:latest", name="bge-m3:latest", loaded=True),
+            OllamaCatalogModel(
+                id="llama3.2:latest",
+                name="llama3.2:latest",
+                loaded=False,
+            ),
+        ),
+    )
+
+    ollama_models = [model for model in response.models if model.provider == "ollama"]
+    assert [model.id for model in ollama_models] == [
+        "bge-m3:latest",
+        "llama3.2:latest",
+    ]
+    assert [model.loaded for model in ollama_models] == [True, False]
 
 
 def test_remote_metadata_only_enriches_allowlisted_display_fields() -> None:

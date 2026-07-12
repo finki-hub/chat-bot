@@ -1,3 +1,4 @@
+import re
 from enum import StrEnum
 from typing import Final
 
@@ -63,11 +64,14 @@ CHAT_MODEL_ORDER: Final[tuple[Model, ...]] = (
     Model.CLAUDE_OPUS_4_8,
     Model.CLAUDE_SONNET_5,
     Model.CLAUDE_HAIKU_4_5,
-    Model.QWEN3_30B_THINKING,
-    Model.QWEN3_30B_INSTRUCT,
-    Model.QWEN3_14B,
 )
 CHAT_MODELS: Final[frozenset[Model]] = frozenset(CHAT_MODEL_ORDER)
+type ChatModel = Model | str
+
+_OLLAMA_MODEL_TAG_PATTERN: Final = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9._/-]*:[A-Za-z0-9][A-Za-z0-9._-]*",
+)
+_ACTIVE_CHAT_MODEL_ERROR: Final = "model must be an active chat model"
 
 OPENAI_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     {
@@ -90,13 +94,7 @@ GOOGLE_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
 ANTHROPIC_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     {Model.CLAUDE_OPUS_4_8, Model.CLAUDE_SONNET_5, Model.CLAUDE_HAIKU_4_5},
 )
-OLLAMA_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
-    {
-        Model.QWEN3_30B_THINKING,
-        Model.QWEN3_30B_INSTRUCT,
-        Model.QWEN3_14B,
-    },
-)
+OLLAMA_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset()
 QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     {
         *OPENAI_QUERY_TRANSFORM_MODELS,
@@ -121,8 +119,6 @@ REASONING_CAPABLE_MODELS: Final[frozenset[Model]] = frozenset(
         Model.CLAUDE_OPUS_4_8,
         Model.CLAUDE_SONNET_5,
         Model.CLAUDE_HAIKU_4_5,
-        Model.QWEN3_30B_THINKING,
-        Model.QWEN3_14B,
     },
 )
 OPENAI_MINIMAL_EFFORT_MODELS: Final[frozenset[Model]] = frozenset()
@@ -161,3 +157,29 @@ def _validate_model_maps() -> None:
 
 
 _validate_model_maps()
+
+
+def model_id(model: ChatModel) -> str:
+    return model.value if isinstance(model, Model) else model
+
+
+def is_ollama_model_tag(value: str) -> bool:
+    return _OLLAMA_MODEL_TAG_PATTERN.fullmatch(value) is not None
+
+
+def parse_chat_model(value: Model | str, active_models: frozenset[Model]) -> ChatModel:
+    if isinstance(value, Model):
+        if value in active_models:
+            return value
+        raise ValueError(_ACTIVE_CHAT_MODEL_ERROR)
+    try:
+        model = Model(value)
+    except ValueError:
+        if is_ollama_model_tag(value):
+            return value
+        raise ValueError(_ACTIVE_CHAT_MODEL_ERROR) from None
+    if model in active_models:
+        return model
+    if is_ollama_model_tag(value):
+        return value
+    raise ValueError(_ACTIVE_CHAT_MODEL_ERROR)

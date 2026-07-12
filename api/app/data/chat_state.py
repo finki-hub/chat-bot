@@ -16,13 +16,14 @@ async def upsert_assistant_message_by_response_id(
 ) -> ChatMessage:
     row = await db.fetchrow(
         """
-        INSERT INTO chat_message (id, conversation_id, role, content, response_id, metadata)
-        VALUES ($3, $1, 'assistant', $4, $2, $5::jsonb)
+        INSERT INTO chat_message (id, conversation_id, role, content, response_id, metadata, parts)
+        VALUES ($3, $1, 'assistant', $4, $2, $5::jsonb, $6::jsonb)
         ON CONFLICT (conversation_id, response_id)
         WHERE response_id IS NOT NULL AND role = 'assistant'
         DO UPDATE SET
             content = EXCLUDED.content,
             metadata = EXCLUDED.metadata,
+            parts = EXCLUDED.parts,
             updated_at = NOW()
         RETURNING *
         """,
@@ -31,6 +32,7 @@ async def upsert_assistant_message_by_response_id(
         message.id,
         message.content,
         json.dumps(message.metadata),
+        None if message.parts is None else json.dumps(message.parts),
     )
     if row is None:
         raise RuntimeError("assistant chat_message upsert returned no row")
@@ -60,6 +62,7 @@ async def replace_assistant_message_and_prune_after(
             SET content = $4,
                 response_id = $5,
                 metadata = $6::jsonb,
+                parts = $7::jsonb,
                 updated_at = NOW()
             FROM target
             WHERE assistant.id = target.id
@@ -69,7 +72,7 @@ async def replace_assistant_message_and_prune_after(
             USING target
             WHERE stale.conversation_id = target.conversation_id
               AND stale.created_at > target.created_at
-              AND NOT (stale.id = ANY($7::uuid[]))
+              AND NOT (stale.id = ANY($8::uuid[]))
             RETURNING stale.id
         )
         SELECT * FROM updated
@@ -80,6 +83,7 @@ async def replace_assistant_message_and_prune_after(
         message.content,
         message.response_id,
         json.dumps(message.metadata),
+        None if message.parts is None else json.dumps(message.parts),
         retained_message_ids,
     )
     return None if row is None else message_from_row(row)

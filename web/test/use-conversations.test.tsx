@@ -11,17 +11,27 @@ type UseChatOptions = {
   readonly resume?: boolean;
 };
 
-const { DeleteChatConversationError } = vi.hoisted(() => ({
-  DeleteChatConversationError: class MockDeleteChatConversationError extends Error {
-    readonly status: number;
+const { ChatConversationRequestError, DeleteChatConversationError } =
+  vi.hoisted(() => ({
+    ChatConversationRequestError: class MockChatConversationRequestError extends Error {
+      readonly status: number;
 
-    constructor(status: number) {
-      super('Delete chat conversation failed');
-      this.name = 'DeleteChatConversationError';
-      this.status = status;
-    }
-  },
-}));
+      constructor(status: number) {
+        super('Chat conversation request failed');
+        this.name = 'ChatConversationRequestError';
+        this.status = status;
+      }
+    },
+    DeleteChatConversationError: class MockDeleteChatConversationError extends Error {
+      readonly status: number;
+
+      constructor(status: number) {
+        super('Delete chat conversation failed');
+        this.name = 'DeleteChatConversationError';
+        this.status = status;
+      }
+    },
+  }));
 
 const chatState = { status: 'ready' };
 
@@ -30,6 +40,7 @@ const localStop = vi.fn<() => Promise<void> | void>();
 const deleteChatConversation = vi.fn<(id: string) => Promise<void>>();
 const refreshConversations = vi.fn<() => Promise<void>>();
 const saveChatConversation = vi.fn<() => Promise<void>>();
+const sendMessage = vi.fn<(message: MyUIMessage) => Promise<void>>();
 const stopChatStream =
   vi.fn<(id: string, snapshot?: unknown) => Promise<void>>();
 const chatMessages: MyUIMessage[] = [];
@@ -43,7 +54,7 @@ vi.mock('@ai-sdk/react', () => ({
     return {
       messages: chatMessages,
       regenerate: vi.fn<() => Promise<void>>(),
-      sendMessage: vi.fn<(message: MyUIMessage) => Promise<void>>(),
+      sendMessage,
       setMessages: vi.fn<(messages: MyUIMessage[]) => void>(),
       status: chatState.status,
       stop: localStop,
@@ -59,6 +70,7 @@ vi.mock('@/lib/transport', () => ({
   buildChatTransport: vi.fn<() => { readonly kind: 'transport' }>(() => ({
     kind: 'transport',
   })),
+  ChatConversationRequestError,
   clearChatConversations: () => clearChatConversations(),
   deleteChatConversation: (id: string) => deleteChatConversation(id),
   DeleteChatConversationError,
@@ -74,6 +86,8 @@ vi.mock('@/lib/use-conversation-hydration', () => ({
 vi.mock('@/lib/use-conversation-list', () => ({
   useConversationList: () => ({
     conversations: [],
+    error: false,
+    loading: false,
     refreshConversations,
   }),
 }));
@@ -89,6 +103,8 @@ describe('useConversations resumable streaming', () => {
     refreshConversations.mockResolvedValue();
     saveChatConversation.mockReset();
     saveChatConversation.mockResolvedValue();
+    sendMessage.mockReset();
+    sendMessage.mockResolvedValue();
     chatMessages.length = 0;
     stopChatStream.mockReset();
     stopChatStream.mockResolvedValue();
@@ -143,6 +159,57 @@ describe('useConversations resumable streaming', () => {
     });
 
     expect(calls).toStrictEqual(['local', 'server']);
+  });
+
+  it('returns false and does not send when initial conversation creation fails', async () => {
+    saveChatConversation.mockRejectedValueOnce(
+      new ChatConversationRequestError(503),
+    );
+    const { result } = renderHook(() => useConversations('model-a'));
+    let accepted = true;
+
+    await act(async () => {
+      accepted = await result.current.submitMessage('Прашање');
+    });
+
+    expect(accepted).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(result.current.activeError).toStrictEqual({
+      code: 'conversation_create',
+      message:
+        'Разговорот не можеше да се започне. Прашањето е зачувано за повторен обид.',
+    });
+  });
+
+  it('returns false and preserves the draft error when conversation creation cannot reach the server', async () => {
+    saveChatConversation.mockRejectedValueOnce(
+      new TypeError('Failed to fetch'),
+    );
+    const { result } = renderHook(() => useConversations('model-a'));
+    let accepted = true;
+
+    await act(async () => {
+      accepted = await result.current.submitMessage('Прашање');
+    });
+
+    expect(accepted).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(result.current.activeError).toStrictEqual({
+      code: 'conversation_create',
+      message:
+        'Разговорот не можеше да се започне. Прашањето е зачувано за повторен обид.',
+    });
+  });
+
+  it('sends the first message without waiting for sidebar refresh', async () => {
+    refreshConversations.mockRejectedValueOnce(new Error('list unavailable'));
+    const { result } = renderHook(() => useConversations('model-a'));
+
+    await act(async () => {
+      await result.current.submitMessage('Прашање');
+    });
+
+    expect(sendMessage).toHaveBeenCalledOnce();
   });
 
   it('stops the local chat before awaiting the BFF stop endpoint on explicit stop', async () => {

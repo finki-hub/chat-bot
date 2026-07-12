@@ -32,7 +32,6 @@ const parsePayload = (value: unknown): FeedbackClientPayload | null => {
   if (!isFeedbackType(feedbackType)) {
     return null;
   }
-
   return {
     feedbackType,
     responseId,

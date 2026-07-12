@@ -254,6 +254,10 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
     assistant_message_id = uuid4()
     stream_id = uuid4()
     response_id = uuid4()
+    final_parts = [
+        {"state": "done", "text": "Check the rules.", "type": "reasoning"},
+        {"state": "done", "text": "Final answer", "type": "text"},
+    ]
 
     created = client.post(
         "/chat/state/conversations",
@@ -300,6 +304,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
             "user_id": OWNER_ID,
             "content": "Final answer",
             "metadata": {"responseId": str(response_id), "done": True},
+            "parts": final_parts,
         },
     )
     loaded = client.get(
@@ -325,6 +330,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
         "responseId": str(response_id),
         "done": True,
     }
+    assert body["messages"][1]["parts"] == final_parts
 
 
 def test_chat_state_wrong_user_cannot_load_or_mutate_state() -> None:
@@ -400,6 +406,10 @@ def test_chat_state_replaces_regenerated_assistant_and_prunes_later_messages() -
         json={
             "content": "New first answer",
             "metadata": {"responseId": str(new_response_id)},
+            "parts": [
+                {"state": "done", "text": "New reasoning", "type": "reasoning"},
+                {"state": "done", "text": "New first answer", "type": "text"},
+            ],
             "retained_message_ids": [str(first_user_id), str(first_assistant_id)],
             "user_id": OWNER_ID,
         },
@@ -421,6 +431,10 @@ def test_chat_state_replaces_regenerated_assistant_and_prunes_later_messages() -
         str(first_assistant_id),
     ]
     assert messages[2]["content"] == "New first answer"
+    assert messages[2]["parts"] == [
+        {"state": "done", "text": "New reasoning", "type": "reasoning"},
+        {"state": "done", "text": "New first answer", "type": "text"},
+    ]
     assert messages[2]["response_id"] == str(new_response_id)
 
 
