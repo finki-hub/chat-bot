@@ -14,6 +14,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 
 - Sidebar rows use `text-sm`; section labels use `text-xs`, uppercase, and tracking-wide.
 - Conversation titles are single-line, truncated, and left-aligned.
+- Auth copy leads with the student task and concrete study value, not authentication mechanics or server terminology. Keep the auth headline balanced at `text-4xl`, `sm:text-5xl`, and `lg:text-5xl`.
 
 ## 4. Motion
 
@@ -26,6 +27,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Row action button: Lucide icon, `size-3.5`, semantic aria label, focus-visible ring, muted default color, stronger hover color matching the action intent.
 - Destructive row action: use destructive hover color only for delete.
 - Auth sign-in panel: card surface using `card`, `border`, `background`, `primary`, and `muted-foreground` tokens, with provider buttons that visibly change border/background on hover and use `focus-visible:ring-ring`.
+- Auth sign-in content: limit the supporting value list to 2 concise benefits so the primary action remains visible on small screens. The panel uses `Започни разговор`, and provider actions follow `Продолжи со {provider.name}`.
 - Credential settings dialog: modal card using existing `Dialog`, `Input`, and `Button` primitives. Provider rows use `border`, `card`, `muted`, and `muted-foreground` tokens, with saved state indicated by text and destructive delete action only when a credential exists.
 - Model selector option: retain tier/provider grouping. Models without saved provider credentials remain visible but disabled, use `muted-foreground`, and pair a Lucide key icon with visible key-required text rather than relying on color or hover help.
 
@@ -33,6 +35,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 
 - Every icon-only action must have an `aria-label` from `web/lib/i18n.ts`.
 - Disabled async actions must expose `aria-busy` when work is pending.
+- Auth failures must use `role="alert"` and include a direct recovery step. Missing provider configuration must be described as temporary unavailability without exposing server terminology.
 
 ## 7. Accepted debt
 
