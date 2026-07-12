@@ -1,11 +1,14 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+ChatUserProvider = Literal["google", "microsoft-entra-id", "discord"]
+
 
 class ChatUserUpsert(BaseModel):
-    provider: str = Field(min_length=1)
+    provider: ChatUserProvider
     provider_subject: str = Field(min_length=1)
     email: str | None = None
     name: str | None = None

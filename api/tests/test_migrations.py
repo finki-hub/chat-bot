@@ -74,13 +74,19 @@ def test_load_migrations_returns_non_empty_sql_files_in_filename_order(
 
 
 def test_chat_user_migration_allows_supported_auth_providers() -> None:
-    # Given: a forward migration owns the persisted provider whitelist update.
-    migration = Path(
+    # Given: forward migrations own the persisted provider whitelist updates.
+    microsoft_migration = Path(
         "resources/migrations/0003_allow_microsoft_chat_user_provider.sql",
     ).read_text()
+    discord_migration = Path(
+        "resources/migrations/0006_allow_discord_chat_user_provider.sql",
+    ).read_text()
 
-    # When / Then: both Auth.js providers accepted by the web BFF are allowed.
-    assert "provider IN ('google', 'microsoft-entra-id')" in migration
+    # When / Then: every provider accepted by the web BFF and Discord bot is allowed.
+    assert "provider IN ('google', 'microsoft-entra-id')" in microsoft_migration
+    assert (
+        "provider IN ('google', 'microsoft-entra-id', 'discord')" in discord_migration
+    )
 
 
 def test_chat_message_parts_migration_adds_nullable_jsonb_column() -> None:
