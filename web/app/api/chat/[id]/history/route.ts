@@ -121,7 +121,8 @@ const parseMessage = (value: ChatStateJsonValue): ChatStateMessage | null => {
   const content = value['content'];
   const id = value['id'];
   const metadata = value['metadata'];
-  const parts = value['parts'] ?? null;
+  const persistedParts = value['parts'];
+  const parts = Array.isArray(persistedParts) ? persistedParts : null;
   const responseId = value['response_id'];
   const role = value['role'];
 
@@ -129,7 +130,6 @@ const parseMessage = (value: ChatStateJsonValue): ChatStateMessage | null => {
     typeof content !== 'string' ||
     typeof id !== 'string' ||
     metadata === undefined ||
-    (parts !== null && !Array.isArray(parts)) ||
     (responseId !== null && typeof responseId !== 'string') ||
     !isMessageRole(role)
   ) {

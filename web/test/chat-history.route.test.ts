@@ -162,7 +162,7 @@ describe('GET /api/chat/[id]/history', () => {
           content: 'Recoverable answer',
           id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d34',
           metadata: {},
-          parts: [{ text: 42, type: 'text' }],
+          parts: { text: 'Unexpected non-array parts' },
           response_id: RESPONSE_ID,
           role: 'assistant',
         },
