@@ -1,9 +1,10 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import { mockModels } from './helpers/models';
 import { startChatStreamServer, type UiChunk } from './helpers/sse';
 
 const RESPONSE_ID = '22222222-3333-4444-5555-666666666666';
-const INFERENCE_MODEL = 'claude-sonnet-4-6';
+const INFERENCE_MODEL = 'claude-sonnet-5';
 const FIRST_TOKEN = 'Прв дел од одговорот';
 const FINAL_TOKEN = ' и продолжение по освежување.';
 const STOP_TOKEN = 'Делумен одговор';
@@ -68,13 +69,7 @@ const chunksForAnswer = (answer: string): UiChunk[] => [
 ];
 
 const installModelRoute = async (page: Page): Promise<void> => {
-  await page.route('**/api/models', async (route) => {
-    await route.fulfill({
-      body: JSON.stringify([INFERENCE_MODEL]),
-      contentType: 'application/json',
-      status: 200,
-    });
-  });
+  await mockModels(page);
 };
 
 const installHealthRoute = async (page: Page): Promise<void> => {

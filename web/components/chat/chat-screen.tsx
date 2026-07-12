@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 import { Composer } from '@/components/chat/composer';
 import { ServiceBanner } from '@/components/chat/service-banner';
@@ -8,9 +8,11 @@ import { Thread } from '@/components/chat/thread';
 import { CredentialSettingsDialog } from '@/components/shell/credential-settings-dialog';
 import { Header } from '@/components/shell/header';
 import { Sidebar } from '@/components/shell/sidebar';
+import { recoverSelectedModel } from '@/lib/model-catalog';
 import { isReasoningCapableModel } from '@/lib/reasoning';
-import { useUiStore } from '@/lib/ui-store';
+import { DEFAULT_MODEL, useUiStore } from '@/lib/ui-store';
 import { useConversations } from '@/lib/use-conversations';
+import { useCredentials } from '@/lib/use-credentials';
 import { useHealth } from '@/lib/use-health';
 import { useModels } from '@/lib/use-models';
 
@@ -62,10 +64,54 @@ export const ChatScreen = () => {
   }, [setSidebarOpen]);
 
   const {
-    data: modelList,
     isError: modelsError,
     isLoading: modelsLoading,
+    models: modelList,
   } = useModels();
+  const {
+    credentials,
+    isError: credentialsError,
+    isLoading: credentialsLoading,
+  } = useCredentials();
+  const availableProviders = useMemo(
+    () =>
+      new Set<string>(
+        credentials
+          .filter((credential) => credential.has_api_key)
+          .map((credential) => credential.provider),
+      ),
+    [credentials],
+  );
+  const availableModels = useMemo(
+    () => modelList.filter((entry) => availableProviders.has(entry.provider)),
+    [availableProviders, modelList],
+  );
+
+  useEffect(() => {
+    if (
+      modelsLoading ||
+      credentialsLoading ||
+      modelsError ||
+      availableModels.length === 0
+    ) {
+      return;
+    }
+    const recovered = recoverSelectedModel(
+      availableModels,
+      model,
+      DEFAULT_MODEL,
+    );
+    if (recovered !== model) {
+      setModel(recovered);
+    }
+  }, [
+    availableModels,
+    credentialsLoading,
+    modelsLoading,
+    modelsError,
+    model,
+    setModel,
+  ]);
   const {
     activeError,
     activeId,
@@ -127,9 +173,12 @@ export const ChatScreen = () => {
             status={status}
           />
           <Composer
+            availableProviders={availableProviders}
+            credentialsError={credentialsError}
+            credentialsLoading={credentialsLoading}
             disabled={unavailable}
             model={model}
-            models={modelList ?? []}
+            models={modelList}
             modelsError={modelsError}
             modelsLoading={modelsLoading}
             onModelChange={setModel}

@@ -53,7 +53,7 @@ describe('GET /api/chat/[id]/history', () => {
     expect(body).toStrictEqual({
       conversation: {
         id: CONVERSATION_ID,
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5',
         title: 'Stored title',
       },
       messages: [
@@ -66,7 +66,7 @@ describe('GET /api/chat/[id]/history', () => {
         {
           id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d32',
           metadata: {
-            inferenceModel: 'claude-sonnet-4-6',
+            inferenceModel: 'claude-sonnet-5',
             responseId: RESPONSE_ID,
           },
           parts: [{ text: 'Stored answer', type: 'text' }],

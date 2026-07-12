@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { type SyntheticEvent, useEffect, useState } from 'react';
 
 import type {
@@ -10,7 +11,6 @@ import type {
 import { CredentialProviderForm } from '@/components/shell/credential-provider-form';
 import {
   deleteCredential,
-  loadCredentials,
   saveCredential,
 } from '@/components/shell/credential-settings-client';
 import {
@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
 import { t } from '@/lib/i18n';
+import { CREDENTIALS_QUERY_KEY, useCredentials } from '@/lib/use-credentials';
 
 type CredentialSettingsDialogProps = {
   readonly onOpenChange: (open: boolean) => void;
@@ -43,8 +44,6 @@ const CREDENTIALS_ERROR_KEY = 'settings.credentialsError' satisfies Parameters<
 
 const credentialsError = (): string => t(CREDENTIALS_ERROR_KEY);
 
-const noop = () => {};
-
 const providerList: readonly ProviderConfig[] = PROVIDERS;
 
 type FormState = Record<ChatCredentialProvider, ProviderForm>;
@@ -53,58 +52,31 @@ export const CredentialSettingsDialog = ({
   onOpenChange,
   open,
 }: CredentialSettingsDialogProps) => {
-  const [credentials, setCredentials] = useState<
-    readonly ChatCredentialPublic[]
-  >([]);
+  const queryClient = useQueryClient();
+  const {
+    credentials,
+    isError: credentialsLoadError,
+    isLoading: loading,
+    refetch,
+  } = useCredentials();
   const [forms, setForms] = useState<FormState>(EMPTY_FORMS);
-  const [loading, setLoading] = useState(false);
   const [busyProvider, setBusyProvider] =
     useState<ChatCredentialProvider | null>(null);
   const [error, setError] = useState<null | string>(null);
 
   useEffect(() => {
     if (!open) {
-      return noop;
+      return;
     }
-
-    const controller = new AbortController();
-    const loadSavedCredentials = async (): Promise<void> => {
-      setLoading(true);
-      setError(null);
-      try {
-        const loadedCredentials = await loadCredentials(controller.signal);
-        if (loadedCredentials === null) {
-          setError(credentialsError());
-          return;
-        }
-        const loadedForms: FormState = { ...EMPTY_FORMS };
-        for (const credential of loadedCredentials) {
-          loadedForms[credential.provider] = {
-            apiKey: '',
-            baseUrl: credential.base_url ?? '',
-          };
-        }
-        setCredentials(loadedCredentials);
-        setForms(loadedForms);
-      } catch (error_) {
-        if (error_ instanceof DOMException && error_.name === 'AbortError') {
-          return;
-        }
-        if (error_ instanceof TypeError) {
-          setError(credentialsError());
-          return;
-        }
-        throw error_;
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void loadSavedCredentials();
-    return () => {
-      controller.abort();
-    };
-  }, [open]);
+    const loadedForms: FormState = { ...EMPTY_FORMS };
+    for (const credential of credentials) {
+      loadedForms[credential.provider] = {
+        apiKey: '',
+        baseUrl: credential.base_url ?? '',
+      };
+    }
+    setForms(loadedForms);
+  }, [credentials, open]);
 
   const saved = credentialsByProvider(credentials);
 
@@ -141,10 +113,14 @@ export const CredentialSettingsDialog = ({
         setError(credentialsError());
         return;
       }
-      setCredentials((current) => [
-        ...current.filter((item) => item.provider !== provider),
-        credential,
-      ]);
+      queryClient.setQueryData<null | readonly ChatCredentialPublic[]>(
+        CREDENTIALS_QUERY_KEY,
+        (current) => [
+          ...(current ?? []).filter((item) => item.provider !== provider),
+          credential,
+        ],
+      );
+      await queryClient.invalidateQueries({ queryKey: CREDENTIALS_QUERY_KEY });
       setForms((current) => ({
         ...current,
         [provider]: { apiKey: '', baseUrl: credential.base_url ?? '' },
@@ -168,9 +144,14 @@ export const CredentialSettingsDialog = ({
         setError(credentialsError());
         return;
       }
-      setCredentials((current) =>
-        current.filter((credential) => credential.provider !== provider),
+      queryClient.setQueryData<null | readonly ChatCredentialPublic[]>(
+        CREDENTIALS_QUERY_KEY,
+        (current) =>
+          (current ?? []).filter(
+            (credential) => credential.provider !== provider,
+          ),
       );
+      await queryClient.invalidateQueries({ queryKey: CREDENTIALS_QUERY_KEY });
       setForms((current) => ({
         ...current,
         [provider]: EMPTY_FORMS[provider],
@@ -202,7 +183,26 @@ export const CredentialSettingsDialog = ({
             <Spinner aria-hidden="true" />
             {t('composer.modelsLoading')}
           </div>
-        ) : (
+        ) : null}
+        {!loading && credentialsLoadError ? (
+          <div
+            className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
+            role="alert"
+          >
+            <p>{credentialsError()}</p>
+            <Button
+              onClick={() => {
+                void refetch();
+              }}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {t('error.retry')}
+            </Button>
+          </div>
+        ) : null}
+        {!loading && !credentialsLoadError ? (
           <div className="flex flex-col gap-3">
             {providerList.map(({ labelKey, provider }) => {
               const credential = saved[provider];
@@ -227,7 +227,7 @@ export const CredentialSettingsDialog = ({
               );
             })}
           </div>
-        )}
+        ) : null}
         {error === null ? null : (
           <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {error}

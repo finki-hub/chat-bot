@@ -27,6 +27,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Destructive row action: use destructive hover color only for delete.
 - Auth sign-in panel: card surface using `card`, `border`, `background`, `primary`, and `muted-foreground` tokens, with provider buttons that visibly change border/background on hover and use `focus-visible:ring-ring`.
 - Credential settings dialog: modal card using existing `Dialog`, `Input`, and `Button` primitives. Provider rows use `border`, `card`, `muted`, and `muted-foreground` tokens, with saved state indicated by text and destructive delete action only when a credential exists.
+- Model selector option: retain tier/provider grouping. Models without saved provider credentials remain visible but disabled, use `muted-foreground`, and pair a Lucide key icon with visible key-required text rather than relying on color or hover help.
 
 ## 6. Accessibility
 

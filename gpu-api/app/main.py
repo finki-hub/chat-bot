@@ -13,7 +13,6 @@ from starlette.middleware.cors import CORSMiddleware
 from app.api.embeddings import router as embeddings_router
 from app.api.health import router as health_router
 from app.api.rerank import router as rerank_router
-from app.api.streams import router as streams_router
 from app.llms.bge_m3 import init_bge_m3_embedder
 from app.llms.reranker import init_reranker
 from app.utils.analytics import (
@@ -50,9 +49,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     if not cuda_available:
         capture("gpu-api", "cuda_fallback", {"device": "cpu"})
 
-    tasks = [to_thread(init_reranker, settings.RERANKER_MODEL)]
-    if settings.PRELOAD_BGEM3:
-        tasks.append(to_thread(init_bge_m3_embedder))
+    tasks = [
+        to_thread(init_reranker, settings.RERANKER_MODEL),
+        to_thread(init_bge_m3_embedder),
+    ]
 
     await gather(*tasks)
 
@@ -62,9 +62,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 def make_app(settings: Settings) -> FastAPI:
-    """
-    Create and configure the FastAPI application.
-    """
     app = FastAPI(
         title=settings.APP_TITLE,
         description=settings.APP_DESCRIPTION,
@@ -88,11 +85,9 @@ def make_app(settings: Settings) -> FastAPI:
         expose_headers=settings.EXPOSE_HEADERS,
     )
 
-    # Added last so it sits outermost and times the whole request.
     register_request_middleware(app)
 
     app.include_router(embeddings_router)
-    app.include_router(streams_router)
     app.include_router(rerank_router)
     app.include_router(health_router)
 

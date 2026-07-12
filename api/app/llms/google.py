@@ -15,7 +15,6 @@ from app.llms.agents import (
     content_to_text,
     create_agent_token_generator,
     stream_sync_gen_as_sse,
-    thinking_budget,
 )
 from app.llms.models import Model
 from app.llms.prompts import build_agent_messages
@@ -51,21 +50,10 @@ def get_google_llm(
     reasoning: bool = False,
     credential: ChatCredentialSecret | None = None,
 ) -> ChatGoogleGenerativeAI:
-    """
-    Return a user-scoped ChatGoogleGenerativeAI instance for the specified model.
-
-    When `reasoning` is on, `include_thoughts=True` returns the model's thoughts; Gemini 3
-    uses `thinking_level`, while Gemini 2.5 uses a `thinking_budget` token cap.
-    """
     client_kwargs: dict[str, object] = {}
-    max_output = max_tokens
     if reasoning:
         client_kwargs["include_thoughts"] = True
-        budget, max_output = thinking_budget(max_tokens)
-        if model == Model.GEMINI_3_FLASH_PREVIEW:
-            client_kwargs["thinking_level"] = "medium"
-        else:
-            client_kwargs["thinking_budget"] = budget
+        client_kwargs["thinking_level"] = "medium"
     credential = require_provider_credential("google", credential)
     return ChatGoogleGenerativeAI(
         model=model.value,
@@ -73,7 +61,7 @@ def get_google_llm(
         base_url=credential.base_url or None,
         temperature=temperature,
         top_p=top_p,
-        max_output_tokens=max_output,
+        max_output_tokens=max_tokens,
         **client_kwargs,
     )
 

@@ -35,7 +35,7 @@ beforeAll(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
 
-const CLAUDE = 'claude-sonnet-4-6';
+const CLAUDE = 'claude-sonnet-5';
 const GPT = 'gpt-5.4-mini';
 const RESPONSE_ID = 'resp-123';
 const FIRST_TITLE = 'Прв разговор';
@@ -45,6 +45,10 @@ const CHAT_CONVERSATION_URL_PATTERN = /^\/api\/chat\/[0-9a-f-]{36}$/u;
 const CHAT_HISTORY_URL_PATTERN = /\/api\/chat\/[^/]+\/history$/u;
 const CHAT_STOP_URL_PATTERN = /\/api\/chat\/[^/]+\/stop$/u;
 const CHAT_STREAM_URL_PATTERN = /\/api\/chat\/[^/]+\/stream$/u;
+const BASE_URL_FIELD = 'base_url';
+const HAS_API_KEY_FIELD = 'has_api_key';
+const USER_ID_FIELD = 'user_id';
+const USER_ID = '00000000-0000-4000-8000-000000000001';
 
 const rows: ConversationRow[] = [
   {
@@ -443,6 +447,18 @@ const respondTo = (
   if (url.endsWith('/api/models')) {
     return Promise.resolve(jsonOk([CLAUDE, GPT]));
   }
+  if (url.endsWith('/api/chat/credentials')) {
+    return Promise.resolve(
+      jsonOk(
+        ['anthropic', 'openai'].map((provider) => ({
+          [BASE_URL_FIELD]: null,
+          [HAS_API_KEY_FIELD]: true,
+          provider,
+          [USER_ID_FIELD]: USER_ID,
+        })),
+      ),
+    );
+  }
   if (url.endsWith('/api/health')) {
     return Promise.resolve(jsonOk({ ok: true }));
   }
@@ -834,5 +850,46 @@ describe('ChatPage persistence', () => {
     await expect(
       screen.findByText('Серверски одговор'),
     ).resolves.toBeInTheDocument();
+  });
+
+  it('recovers the selected model when the persisted id is missing from the catalog', async () => {
+    useUiStore.setState({
+      activeConversationId: null,
+      model: 'claude-sonnet-4-6',
+      sidebarOpen: true,
+    });
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init) => {
+      const url = urlOf(input);
+      if (url.endsWith('/api/models')) {
+        return Promise.resolve(
+          jsonOk({
+            models: [
+              {
+                id: 'claude-sonnet-5',
+                name: 'Claude Sonnet 5',
+                provider: 'anthropic',
+                tier: 'default',
+              },
+              {
+                id: 'gpt-5.4-mini',
+                name: 'GPT-5.4 Mini',
+                provider: 'openai',
+                tier: 'default',
+              },
+            ],
+            source: 'live',
+            version: 1,
+          }),
+        );
+      }
+
+      return respondTo(url, methodOf(input, init));
+    });
+
+    renderChatPage();
+
+    await waitFor(() => {
+      expect(useUiStore.getState().model).toBe('claude-sonnet-5');
+    });
   });
 });

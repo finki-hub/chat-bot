@@ -59,13 +59,6 @@ def get_llm(
     reasoning: bool = False,
     credential: ChatCredentialSecret | None = None,
 ) -> ChatOllama:
-    """
-    Return a user-scoped ChatOllama instance for the specified model and parameters.
-
-    `reasoning` maps to Ollama's `think` mode: True makes reasoning-capable models (e.g.
-    deepseek-r1) expose thoughts in `additional_kwargs["reasoning_content"]`; False disables
-    it so a model that would otherwise emit raw inline `<think>` tags stays clean.
-    """
     base_url, client_kwargs = _connection(credential)
     return ChatOllama(
         model=model.value,

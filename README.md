@@ -1,6 +1,6 @@
 # FINKI Hub / Chat Bot
 
-RAG chat bot and web front-end for the [`FINKI Hub`](https://discord.gg/finki-studenti-810997107376914444) Discord server, powered by [FastAPI](https://github.com/fastapi/fastapi), [LangChain](https://github.com/langchain-ai/langchain), and [Next.js](https://github.com/vercel/next.js). It uses [PostgreSQL](https://github.com/postgres/postgres) with [pgvector](https://github.com/pgvector/pgvector) for storage and vector search, and supports multiple LLM providers plus self-hosted GPU-backed models.
+RAG chat bot and web front-end for the [`FINKI Hub`](https://discord.gg/finki-studenti-810997107376914444) Discord server, powered by [FastAPI](https://github.com/fastapi/fastapi), [LangChain](https://github.com/langchain-ai/langchain), and [Next.js](https://github.com/vercel/next.js). It uses [PostgreSQL](https://github.com/postgres/postgres) with [pgvector](https://github.com/pgvector/pgvector) for storage and vector search, supports hosted and Ollama LLM providers, and uses the GPU service for embeddings and reranking.
 
 It answers questions using a retrieval pipeline over an FAQ dataset (the `question` table) and over chunked source-of-truth documents (the `document` / `chunk` tables — laws, rulebooks, procedures), retrieved together in a single reranked pass. It also manages links, chat feedback, diplomas, professor publications/groups, and thesis committee recommendations.
 
@@ -9,7 +9,7 @@ It answers questions using a retrieval pipeline over an FAQ dataset (the `questi
 This project comes as a monorepo of microservices:
 
 - API ([`/api`](/api)) for managing questions, documents, links, diplomas, recommendations, feedback, and chat (default port: 8880)
-- GPU API ([`/gpu-api`](/gpu-api)) for locally executing GPU-accelerated tasks like embeddings generation, reranking, and self-hosted model streaming (default port: 8888)
+- GPU API ([`/gpu-api`](/gpu-api)) for locally executing GPU-accelerated embeddings and reranking (default port: 8888)
 - Web ([`/web`](/web)) for the chat front-end — Next.js with a thin BFF (default port: 3000)
 - Database (PostgreSQL + pgvector) for keeping questions, links, documents/chunks, diplomas, professor data, feedback, and embeddings
 
@@ -65,7 +65,20 @@ The root [`.env.sample`](.env.sample) contains the main variables used by the Do
 - OpenAI, Google, Anthropic, and Ollama models are BYOK-only and do not use deployment credentials. Ollama defaults to `https://ollama.com`; custom Ollama endpoints must be HTTPS and allowed by `BYOK_ALLOWED_BASE_URLS`.
 - `RESUMABLE_STREAM_REDIS_URL` - server-only Redis/Valkey URL used by the web BFF for resumable chat streams
 - `RERANKER_MIN_SCORE`, `SOURCE_RERANKER_MIN_SCORE`, `CHAT_HISTORY_MAX_TURNS` - retrieval and chat tuning
-- `PRELOAD_BGEM3` - whether the GPU API preloads the BGE-M3 embedder
+
+The API owns the executable chat catalog. `/chat/models` returns the fixed, ordered
+allowlist enriched with display metadata from models.dev. Metadata is cached in process
+for six hours; refresh failures serve the last successful catalog, and cold-start
+failures use the bundled snapshot. Remote metadata cannot add executable model IDs,
+change providers or tiers, or alter execution policy.
+
+The hosted catalog includes GPT-5.6 Sol, Terra, and Luna, GPT-5.5, and the current
+Gemini 3.5 Flash, Gemini 3.1 Pro Preview, and Gemini 3.1 Flash Lite models. The
+Ollama catalog uses multilingual Qwen3 30B and 14B quantizations selected to fit a
+24 GB GPU; the advertised context limits still require enough remaining memory for
+the KV cache.
+
+`BAAI/bge-m3`, `text-embedding-3-large`, and `gemini-embedding-001` are active for authenticated chat requests. Corpus fill jobs remain limited to local BGE-M3 because they do not have a user credential boundary. Legacy embedding columns and historical model values remain readable for existing data.
 
 The compose files also support optional variables that are not listed in `.env.sample` because they have built-in defaults: `POSTHOG_KEY`, `POSTHOG_HOST`, `RERANKER_MODEL`, and `WEB_API_BASE_URL`.
 
@@ -131,7 +144,6 @@ GPU API service (`/gpu-api` directory, default port `8888`):
 
 - `/embeddings/embed` - generate embedding vectors for input text(s)
 - `/rerank/` - re-rank documents by relevance to a query
-- `/stream/` - stream a chat response from a self-hosted model
 - `/health/` - liveness check; `/health/health` - detailed GPU API health check
 
 Web BFF (`/web`, default port `3000`):

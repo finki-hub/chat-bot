@@ -1,12 +1,3 @@
-"""
-Member-aware Markdown chunking for source-of-truth documents.
-
-Sizes are in characters, calibrated to multilingual-e5-large (~4.36 chars/token median
-on Macedonian Cyrillic, ~3.9 on digit-dense text). The 1650-char hard cap is ~415-420
-tokens worst case, leaving headroom for the "Наслов:/Содржина:" wrapper and the e5
-"passage:" prefix under e5's 512-token window (also the reranker's window).
-"""
-
 import re
 from dataclasses import dataclass
 
@@ -53,8 +44,6 @@ def _split_members(md: str) -> list[tuple[str | None, str]]:
         lines = part.splitlines()
         header = lines[0].lstrip("#").strip()
         body = "\n".join(lines[1:]).strip()
-        # No header fall-back: an empty body makes chunk_markdown skip this member
-        # instead of emitting a chunk whose only text is the label (kept in `section`).
         units.append((header, body))
     return units
 

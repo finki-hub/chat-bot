@@ -1,5 +1,11 @@
 import type { UIMessage } from 'ai';
 
+export type CatalogProvider = 'anthropic' | 'google' | 'ollama' | 'openai';
+
+export type CatalogSource = 'error' | 'live' | 'snapshot' | 'stale';
+
+export type CatalogTier = 'cheap' | 'default' | 'premium';
+
 export type ChatCredentialProvider =
   | 'anthropic'
   | 'google'
@@ -57,6 +63,22 @@ export type ConversationRole = 'assistant' | 'user';
 export type ConversationTurn = {
   content: string;
   role: ConversationRole;
+};
+
+export type ModelCatalog = {
+  readonly models: readonly ModelDescriptor[];
+  readonly source: CatalogSource;
+  readonly version: 1;
+};
+
+// `provider` is a `CatalogProvider` for typed catalogs; for legacy string[] responses
+// it is a best-effort bucket inferred from the id, so it stays a plain string.
+export type ModelDescriptor = {
+  readonly description?: string;
+  readonly id: ModelId;
+  readonly name: string;
+  readonly provider: string;
+  readonly tier: CatalogTier;
 };
 
 // eslint-disable-next-line sonarjs/redundant-type-aliases -- semantic alias for the public wire contract; consumers reference ModelId, not bare string

@@ -8,12 +8,40 @@ vi.mock('@/lib/env', () => ({
   env: { API_BASE_URL: 'https://api:8880', CHAT_API_KEY: 'test-key' },
 }));
 
+const CACHE_CONTROL = 'cache-control';
+const CACHE_HEADER = 'public, max-age=300, stale-while-revalidate=600';
+const SOURCE_HEADER = 'x-models-source';
+const LIVE = 'live';
+const ERROR = 'error';
+const STALE = 'stale';
+const OPENAI = 'openai';
+const ANTHROPIC = 'anthropic';
+const STANDARD = 'default';
+const GPT_MINI = 'gpt-5.4-mini';
+const GPT_MINI_NAME = 'GPT-5.4 Mini';
+const CLAUDE_5 = 'claude-sonnet-5';
+const CLAUDE_5_NAME = 'Claude Sonnet 5';
+
 const okJson = (body: unknown, init?: ResponseInit): Response =>
   Response.json(body, {
     headers: { 'content-type': 'application/json' },
     status: 200,
     ...init,
   });
+
+const gptMini = {
+  id: GPT_MINI,
+  name: GPT_MINI_NAME,
+  provider: OPENAI,
+  tier: STANDARD,
+};
+
+const claudeSonnet = {
+  id: CLAUDE_5,
+  name: CLAUDE_5_NAME,
+  provider: ANTHROPIC,
+  tier: STANDARD,
+};
 
 describe('GET /api/models', () => {
   beforeEach(() => {
@@ -24,9 +52,24 @@ describe('GET /api/models', () => {
     vi.unstubAllGlobals();
   });
 
-  it('proxies the upstream model list and returns a string[]', async () => {
-    const models = ['claude-sonnet-4-6', 'gpt-5.4-mini', 'BAAI/bge-m3'];
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson(models));
+  it('forwards a typed catalog and keeps only the web-relevant fields', async () => {
+    const upstream = {
+      models: [
+        {
+          description: 'Balanced OpenAI model.',
+          execution: { reasoning: true },
+          id: GPT_MINI,
+          name: GPT_MINI_NAME,
+          pricing: { input: 0.75, output: 4.5 },
+          provider: OPENAI,
+          tier: STANDARD,
+        },
+        claudeSonnet,
+      ],
+      source: LIVE,
+      version: 1,
+    };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson(upstream));
 
     vi.stubGlobal('fetch', fetchMock);
 
@@ -41,14 +84,68 @@ describe('GET /api/models', () => {
     expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('cache-control')).toBe(
-      'public, max-age=300, stale-while-revalidate=600',
-    );
+    expect(res.headers.get(CACHE_CONTROL)).toBe(CACHE_HEADER);
     expect(res.headers.get('x-api-key')).toBeNull();
-    await expect(res.json()).resolves.toStrictEqual(models);
+    expect(res.headers.get(SOURCE_HEADER)).toBe(LIVE);
+    await expect(res.json()).resolves.toStrictEqual({
+      models: [
+        {
+          description: 'Balanced OpenAI model.',
+          id: GPT_MINI,
+          name: GPT_MINI_NAME,
+          provider: OPENAI,
+          tier: STANDARD,
+        },
+        claudeSonnet,
+      ],
+      source: LIVE,
+      version: 1,
+    });
   });
 
-  it('returns [] with an error source header when upstream is non-2xx', async () => {
+  it('normalizes a legacy string[] upstream into a typed catalog', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(okJson([CLAUDE_5, GPT_MINI]));
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get(CACHE_CONTROL)).toBe(CACHE_HEADER);
+    expect(res.headers.get(SOURCE_HEADER)).toBe(LIVE);
+    await expect(res.json()).resolves.toStrictEqual({
+      models: [
+        {
+          id: CLAUDE_5,
+          name: CLAUDE_5_NAME,
+          provider: ANTHROPIC,
+          tier: STANDARD,
+        },
+        { id: GPT_MINI, name: GPT_MINI_NAME, provider: OPENAI, tier: STANDARD },
+      ],
+      source: LIVE,
+      version: 1,
+    });
+  });
+
+  it('propagates a stale source reported by the upstream', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        okJson({ models: [gptMini], source: STALE, version: 1 }),
+      );
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await GET();
+
+    expect(res.headers.get(SOURCE_HEADER)).toBe(STALE);
+    await expect(res.json()).resolves.toMatchObject({ source: STALE });
+  });
+
+  it('returns an error catalog when upstream is non-2xx', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response('nope', { status: 503 }));
@@ -58,11 +155,16 @@ describe('GET /api/models', () => {
     const res = await GET();
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('x-models-source')).toBe('error');
-    await expect(res.json()).resolves.toStrictEqual([]);
+    expect(res.headers.get(CACHE_CONTROL)).toBeNull();
+    expect(res.headers.get(SOURCE_HEADER)).toBe(ERROR);
+    await expect(res.json()).resolves.toStrictEqual({
+      models: [],
+      source: ERROR,
+      version: 1,
+    });
   });
 
-  it('returns [] with an error source header when fetch throws', async () => {
+  it('returns an error catalog when fetch throws', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockRejectedValue(new Error('network down'));
@@ -72,11 +174,15 @@ describe('GET /api/models', () => {
     const res = await GET();
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('x-models-source')).toBe('error');
-    await expect(res.json()).resolves.toStrictEqual([]);
+    expect(res.headers.get(SOURCE_HEADER)).toBe(ERROR);
+    await expect(res.json()).resolves.toStrictEqual({
+      models: [],
+      source: ERROR,
+      version: 1,
+    });
   });
 
-  it('returns [] when upstream JSON is not an array of strings', async () => {
+  it('returns an error catalog when upstream JSON is neither a catalog nor a string[]', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(okJson({ models: 'oops' }));
@@ -86,7 +192,11 @@ describe('GET /api/models', () => {
     const res = await GET();
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('x-models-source')).toBe('error');
-    await expect(res.json()).resolves.toStrictEqual([]);
+    expect(res.headers.get(SOURCE_HEADER)).toBe(ERROR);
+    await expect(res.json()).resolves.toStrictEqual({
+      models: [],
+      source: ERROR,
+      version: 1,
+    });
   });
 });

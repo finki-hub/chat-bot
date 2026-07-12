@@ -16,12 +16,12 @@ from app.data.professor_documents import fetch_professor_document_rows_for_fill
 from app.llms.google import generate_google_embeddings
 from app.llms.gpu_api import generate_gpu_api_embeddings
 from app.llms.models import (
+    ACTIVE_EMBEDDING_MODELS,
     ALL_MODELS_EMBEDDINGS,
     MODEL_EMBEDDING_DIMENSIONS,
     MODEL_EMBEDDINGS_COLUMNS,
     Model,
 )
-from app.llms.ollama import generate_ollama_embeddings
 from app.llms.openai import generate_openai_embeddings
 from app.llms.provider_credentials import (
     LlmProviderCredentials,
@@ -47,12 +47,8 @@ async def _dispatch_embeddings(
     credentials: LlmProviderCredentials | None,
 ) -> list[float] | list[list[float]]:
     match model:
-        case Model.LLAMA_3_3_70B | Model.BGE_M3:
-            return await generate_ollama_embeddings(
-                text,
-                model,
-                None if credentials is None else credentials.ollama,
-            )
+        case Model.BGE_M3_LOCAL:
+            return await generate_gpu_api_embeddings(text, model)
 
         case Model.TEXT_EMBEDDING_3_LARGE:
             return await generate_openai_embeddings(
@@ -68,9 +64,6 @@ async def _dispatch_embeddings(
                 is_document=is_document,
                 credential=None if credentials is None else credentials.google,
             )
-
-        case Model.MULTILINGUAL_E5_LARGE | Model.BGE_M3_LOCAL:
-            return await generate_gpu_api_embeddings(text, model)
 
         case _:
             raise ValueError(f"Unsupported model: {model}")
@@ -103,15 +96,6 @@ async def generate_embeddings(
     is_document: bool = False,
     credentials: LlmProviderCredentials | None = None,
 ) -> list[float] | list[list[float]]:
-    """
-    Generate embeddings for the given text using the specified model.
-    Pass is_document=True when indexing documents (only affects Gemini task_type).
-
-    Transient provider failures (a 429 / 5xx / timeout during a full-corpus fill) are
-    retried with bounded exponential backoff so a single blip does not fail a whole
-    batch. An unsupported model is a permanent ValueError and is not retried.
-    """
-
     log_preview = (
         text[:100] if isinstance(text, str) else f"[list of {len(text)} items]"
     )
@@ -154,7 +138,7 @@ async def generate_embeddings(
 
 
 def ensure_self_hosted_embedding_model(model: Model) -> None:
-    if model not in MODEL_EMBEDDINGS_COLUMNS:
+    if model not in ACTIVE_EMBEDDING_MODELS:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported embedding model: {model.value}",
@@ -265,12 +249,6 @@ async def stream_fill_embeddings(
     all_questions: bool = False,
     all_models: bool = False,
 ) -> StreamingResponse:
-    """
-    Stream progress of filling embeddings for questions.
-    Can process a single model or all available embedding models.
-    Emits one SSE event per question-model combination as JSON.
-    """
-
     logger.info(
         "Starting to fill embeddings for model: %s, all_questions: %s, all_models: %s",
         model,
@@ -390,8 +368,6 @@ async def stream_fill_chunk_embeddings(
     all_chunks: bool = False,
     all_models: bool = False,
 ) -> StreamingResponse:
-    """Stream per-chunk embedding-fill progress as SSE (analogue of stream_fill_embeddings)."""
-
     logger.info(
         "Filling chunk embeddings for model: %s, all_chunks: %s, all_models: %s",
         model,

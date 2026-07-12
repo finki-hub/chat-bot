@@ -108,14 +108,14 @@ describe('DELETE /api/chat/[id]', () => {
     const res = await (
       await importPatch()
     )(
-      patchRequest({ model: 'claude-sonnet-4-6', title: 'New chat' }),
+      patchRequest({ model: 'claude-sonnet-5', title: 'New chat' }),
       routeContext(),
     );
 
     expect(res.status).toBe(204);
     expect(routeMocks.stateClient.upsertConversation).toHaveBeenCalledWith({
       conversationId: CONVERSATION_ID,
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       title: 'New chat',
       userId: USER_ID,
     });

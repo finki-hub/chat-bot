@@ -5,12 +5,14 @@ import { isReasoningCapableModel } from '@/lib/reasoning';
 describe('isReasoningCapableModel', () => {
   it('is true for reasoning-capable model families', () => {
     const capable = [
-      'claude-sonnet-4-6',
+      'claude-sonnet-5',
       'claude-opus-4-8',
-      'gemini-2.5-flash',
-      'gemini-3-flash-preview',
+      'gemini-3.5-flash',
+      'claude-haiku-4-5',
       'gpt-5.4-mini',
-      'deepseek-r1:70b',
+      'gpt-5.6-sol',
+      'qwen3:30b-a3b-thinking-2507-q4_K_M',
+      'qwen3:14b-q4_K_M',
     ];
 
     expect(capable.map(isReasoningCapableModel)).toStrictEqual(
@@ -19,7 +21,7 @@ describe('isReasoningCapableModel', () => {
   });
 
   it('is false for non-reasoning models', () => {
-    const incapable = ['gpt-4.1', 'gpt-4o-mini', 'llama3.3:70b', 'BAAI/bge-m3'];
+    const incapable = ['qwen3:30b-a3b-instruct-2507-q4_K_M', 'BAAI/bge-m3'];
 
     expect(incapable.map(isReasoningCapableModel)).toStrictEqual(
       incapable.map(() => false),
