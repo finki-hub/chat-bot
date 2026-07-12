@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.chat_persistence import JsonValue
+
 ChatUserProvider = Literal["google", "microsoft-entra-id", "discord"]
 
 
@@ -14,7 +16,12 @@ class ChatUserUpsert(BaseModel):
     name: str | None = None
     avatar_url: str | None = None
 
-    @field_validator("provider", "provider_subject", "email", "name", "avatar_url")
+    @field_validator("provider", mode="before")
+    @classmethod
+    def _strip_provider(cls, value: JsonValue) -> JsonValue:
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("provider_subject", "email", "name", "avatar_url")
     @classmethod
     def _strip_present_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -27,7 +34,7 @@ class ChatUserUpsert(BaseModel):
 
 class ChatUser(BaseModel):
     id: UUID
-    provider: str
+    provider: ChatUserProvider
     provider_subject: str
     email: str | None = None
     name: str | None = None
