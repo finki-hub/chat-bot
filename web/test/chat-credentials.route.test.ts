@@ -66,7 +66,7 @@ vi.mock('@/lib/chat-state-client', () => {
 
     constructor(status: number, options?: ErrorOptions) {
       super('Chat state request failed', options);
-      this.name = 'MockChatStateRequestError';
+      this.name = 'ChatStateRequestError';
       this.status = status;
     }
   }
