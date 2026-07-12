@@ -15,6 +15,7 @@ import { loadChatConversationHistory } from '@/lib/transport';
 
 type UseConversationHydrationOptions = {
   readonly activeId: null | string;
+  readonly activeStreamConversationIdRef: RefObject<null | string>;
   readonly convoIdRef: RefObject<null | string>;
   readonly preserveEmptyHydrationIdRef: RefObject<null | string>;
   readonly setActiveError: (value: ErrorNotice | undefined) => void;
@@ -27,6 +28,7 @@ type UseConversationHydrationOptions = {
 
 export const useConversationHydration = ({
   activeId,
+  activeStreamConversationIdRef,
   convoIdRef,
   preserveEmptyHydrationIdRef,
   setActiveError,
@@ -46,6 +48,16 @@ export const useConversationHydration = ({
     setActiveStatus(undefined);
     let cancelled = false;
     const isCancelled = (): boolean => cancelled;
+    const clearPreserveMarker = (id: string): void => {
+      if (preserveEmptyHydrationIdRef.current === id) {
+        preserveEmptyHydrationIdRef.current = null;
+      }
+    };
+    const clearActiveStreamMarker = (id: string): void => {
+      if (activeStreamConversationIdRef.current === id) {
+        activeStreamConversationIdRef.current = null;
+      }
+    };
 
     const hydrate = async (id: string): Promise<void> => {
       try {
@@ -55,23 +67,27 @@ export const useConversationHydration = ({
             setMessages((current) =>
               serverHistory.messages.length === 0 &&
               current.length > 0 &&
-              preserveEmptyHydrationIdRef.current === id
+              (preserveEmptyHydrationIdRef.current === id ||
+                activeStreamConversationIdRef.current === id)
                 ? current
                 : [...serverHistory.messages],
             );
-            preserveEmptyHydrationIdRef.current = null;
+            clearPreserveMarker(id);
+            clearActiveStreamMarker(id);
           }
           return;
         }
 
         if (!isCancelled()) {
-          preserveEmptyHydrationIdRef.current = null;
+          clearPreserveMarker(id);
+          clearActiveStreamMarker(id);
           setActiveId(null);
           setMessages([]);
         }
       } catch {
         if (!isCancelled()) {
-          preserveEmptyHydrationIdRef.current = null;
+          clearPreserveMarker(id);
+          clearActiveStreamMarker(id);
           setActiveId(null);
           setMessages([]);
         }
@@ -94,6 +110,7 @@ export const useConversationHydration = ({
       cancelled = true;
     };
   }, [
+    activeStreamConversationIdRef,
     activeId,
     convoIdRef,
     preserveEmptyHydrationIdRef,

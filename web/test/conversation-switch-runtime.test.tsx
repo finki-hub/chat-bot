@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MyUIMessage } from '@/lib/api-types';
 
@@ -69,6 +69,15 @@ const RuntimeSwitchHarness = () => {
 };
 
 describe('conversation switch runtime', () => {
+  beforeEach(() => {
+    useUiStore.setState({
+      activeConversationId: null,
+      model: 'model-a',
+      reasoning: false,
+      sidebarOpen: false,
+    });
+  });
+
   it('keeps previous messages visible while the selected chat runtime is empty and hydrating', () => {
     useUiStore.setState({ activeConversationId: 'conversation-a' });
     render(<RuntimeSwitchHarness />);

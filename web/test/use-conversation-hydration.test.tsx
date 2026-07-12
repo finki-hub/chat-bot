@@ -29,8 +29,10 @@ const message = (id: string, text: string): MyUIMessage => ({
 });
 
 const useHydratedMessages = ({
+  activeStreamConversationId,
   preserveEmptyHydrationId,
 }: {
+  readonly activeStreamConversationId?: string;
   readonly preserveEmptyHydrationId?: string;
 } = {}): MyUIMessage[] => {
   const [messages, setMessages] = useState<MyUIMessage[]>(() => [
@@ -39,6 +41,9 @@ const useHydratedMessages = ({
   const convoIdRef = useRef<null | string>(null);
   const preserveEmptyHydrationIdRef = useRef<null | string>(
     preserveEmptyHydrationId ?? null,
+  );
+  const activeStreamConversationIdRef = useRef<null | string>(
+    activeStreamConversationId ?? null,
   );
   const setActiveError = useRef(
     vi.fn<(value: ErrorNotice | undefined) => void>(),
@@ -49,6 +54,7 @@ const useHydratedMessages = ({
   ).current;
   useConversationHydration({
     activeId: 'conversation-b',
+    activeStreamConversationIdRef,
     convoIdRef,
     preserveEmptyHydrationIdRef,
     setActiveError,
@@ -100,6 +106,21 @@ describe('useConversationHydration', () => {
 
     const { result } = renderHook(() =>
       useHydratedMessages({ preserveEmptyHydrationId: 'conversation-b' }),
+    );
+
+    await waitFor(() => {
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0]?.id).toBe('previous-a');
+    });
+  });
+
+  it('preserves resumed stream messages when server history is still empty', async () => {
+    transportMocks.loadChatConversationHistory.mockResolvedValue({
+      messages: [],
+    });
+
+    const { result } = renderHook(() =>
+      useHydratedMessages({ activeStreamConversationId: 'conversation-b' }),
     );
 
     await waitFor(() => {

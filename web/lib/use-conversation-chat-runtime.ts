@@ -131,6 +131,10 @@ export const useConversationChatRuntime = ({
       resume: activeId !== null,
       transport,
     });
+  const activeStreamConversationIdRef = useRef<null | string>(null);
+  if (activeId !== null && status !== 'ready') {
+    activeStreamConversationIdRef.current = activeId;
+  }
   const sendMessageRef = useRef(sendMessage);
   sendMessageRef.current = sendMessage;
 
@@ -143,6 +147,7 @@ export const useConversationChatRuntime = ({
 
   const hydratingConversation = useConversationHydration({
     activeId,
+    activeStreamConversationIdRef,
     convoIdRef,
     preserveEmptyHydrationIdRef,
     setActiveError,

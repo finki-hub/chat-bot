@@ -129,7 +129,6 @@ export const useConversationManagement = ({
 
   const handleSelect = useCallback(
     (id: string) => {
-      preserveEmptyHydrationIdRef.current = null;
       if (id !== convoIdRef.current && status !== 'ready') {
         fireAndForget(
           (async () => {
@@ -143,7 +142,7 @@ export const useConversationManagement = ({
       convoIdRef.current = id;
       setActiveId(id);
     },
-    [convoIdRef, handleStop, preserveEmptyHydrationIdRef, setActiveId, status],
+    [convoIdRef, handleStop, setActiveId, status],
   );
 
   const deleteConversationEverywhere = useCallback(
