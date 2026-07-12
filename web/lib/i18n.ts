@@ -13,7 +13,7 @@ export const messages = {
   'composer.apiKeyRequired': 'Потребен е API клуч',
   'composer.credentialsError': 'API клучевите се недостапни',
   'composer.disclaimer':
-    'ФИНКИ Хаб може да направи грешки. Проверете важни информации. Разговорите се чуваат само локално на вашиот уред.',
+    'ФИНКИ Хаб може да направи грешки. Проверете важни информации.',
   'composer.message': 'Порака',
   'composer.model': 'Модел',
   'composer.modelsError': 'Моделите се недостапни',

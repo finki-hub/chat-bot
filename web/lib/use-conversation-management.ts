@@ -29,6 +29,7 @@ type UseConversationManagementOptions = {
   readonly convoIdRef: RefObject<null | string>;
   readonly handleStop: (order?: StopOrder) => Promise<void>;
   readonly model: string;
+  readonly preserveEmptyHydrationIdRef: RefObject<null | string>;
   readonly refreshConversations: () => Promise<void>;
   readonly sendMessageRef: RefObject<(message: MyUIMessage) => Promise<void>>;
   readonly setActiveError: Dispatch<SetStateAction<ErrorNotice | undefined>>;
@@ -42,6 +43,7 @@ export const useConversationManagement = ({
   convoIdRef,
   handleStop,
   model,
+  preserveEmptyHydrationIdRef,
   refreshConversations,
   sendMessageRef,
   setActiveError,
@@ -50,11 +52,18 @@ export const useConversationManagement = ({
   status,
 }: UseConversationManagementOptions) => {
   const resetActiveConversation = useCallback(() => {
+    preserveEmptyHydrationIdRef.current = null;
     setActiveId(null);
     setMessages([]);
     setActiveError(undefined);
     convoIdRef.current = null;
-  }, [convoIdRef, setActiveError, setActiveId, setMessages]);
+  }, [
+    convoIdRef,
+    preserveEmptyHydrationIdRef,
+    setActiveError,
+    setActiveId,
+    setMessages,
+  ]);
 
   const handleNewChat = useCallback(() => {
     if (status !== 'ready') {
@@ -86,6 +95,7 @@ export const useConversationManagement = ({
         });
         // eslint-disable-next-line require-atomic-updates -- fresh id, not a read-modify-write race
         convoIdRef.current = cid;
+        preserveEmptyHydrationIdRef.current = cid;
         flushSync(() => {
           setActiveId(cid);
         });
@@ -109,6 +119,7 @@ export const useConversationManagement = ({
       applyGeneratedTitle,
       convoIdRef,
       model,
+      preserveEmptyHydrationIdRef,
       refreshConversations,
       sendMessageRef,
       setActiveError,
@@ -123,17 +134,15 @@ export const useConversationManagement = ({
           (async () => {
             await handleStop('local-first');
             convoIdRef.current = id;
-            setMessages([]);
             setActiveId(id);
           })(),
         );
         return;
       }
       convoIdRef.current = id;
-      setMessages([]);
       setActiveId(id);
     },
-    [convoIdRef, handleStop, setActiveId, setMessages, status],
+    [convoIdRef, handleStop, setActiveId, status],
   );
 
   const deleteConversationEverywhere = useCallback(
