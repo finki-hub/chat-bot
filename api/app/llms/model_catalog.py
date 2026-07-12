@@ -14,8 +14,10 @@ from app.llms.model_catalog_remote import CatalogMetadataError, parse_models_dev
 from app.llms.model_catalog_types import (
     CatalogSource,
     DisplayMetadata,
+    ExecutionPolicy,
     ModelCatalogResponse,
     ModelDescriptor,
+    OllamaCatalogModel,
     SnapshotCatalog,
 )
 from app.llms.models import Model
@@ -57,15 +59,15 @@ def _load_snapshot() -> dict[Model, DisplayMetadata]:
         raise CatalogMetadataError(
             reason="bundled model snapshot is invalid",
         ) from error
+    entries = {entry.id: entry for entry in snapshot.models}
     expected = tuple(policy.model.value for policy in MODEL_CATALOG)
-    actual = tuple(entry.id for entry in snapshot.models)
-    if actual != expected:
-        raise CatalogMetadataError(reason="bundled model snapshot order is invalid")
+    if not all(model_id in entries for model_id in expected):
+        raise CatalogMetadataError(reason="bundled model snapshot is incomplete")
     return {
-        Model(entry.id): DisplayMetadata.model_validate(
-            entry.model_dump(exclude={"id"}),
+        policy.model: DisplayMetadata.model_validate(
+            entries[policy.model.value].model_dump(exclude={"id"}),
         )
-        for entry in snapshot.models
+        for policy in MODEL_CATALOG
     }
 
 
@@ -84,6 +86,21 @@ def _descriptor(
         limits=metadata.limits,
         pricing=metadata.pricing,
         status=metadata.status,
+    )
+
+
+def _ollama_descriptor(model: OllamaCatalogModel) -> ModelDescriptor:
+    return ModelDescriptor(
+        id=model.id,
+        provider="ollama",
+        name=model.name,
+        execution=ExecutionPolicy(
+            reasoning=False,
+            sampling=True,
+            tool_call=False,
+            structured_output=False,
+        ),
+        loaded=model.loaded,
     )
 
 
@@ -139,6 +156,7 @@ class ModelCatalogService:
         self,
         source: CatalogSource,
         remote: dict[Model, DisplayMetadata],
+        ollama_models: tuple[OllamaCatalogModel, ...] = (),
     ) -> ModelCatalogResponse:
         metadata = {
             model: _merge_metadata(snapshot, remote.get(model))
@@ -146,21 +164,42 @@ class ModelCatalogService:
         }
         return ModelCatalogResponse(
             source=source,
-            models=tuple(
-                _descriptor(policy, metadata[policy.model]) for policy in MODEL_CATALOG
+            models=(
+                *(
+                    _descriptor(policy, metadata[policy.model])
+                    for policy in MODEL_CATALOG
+                ),
+                *(_ollama_descriptor(model) for model in ollama_models),
             ),
         )
 
-    async def get_catalog(self) -> ModelCatalogResponse:
+    async def get_catalog(
+        self,
+        ollama_models: tuple[OllamaCatalogModel, ...] = (),
+    ) -> ModelCatalogResponse:
         """Return live, cached, stale, or bundled catalog data without ever emptying it."""
         now = self._clock()
         if self._cached is not None and now < self._expires_at:
-            return self._cached
+            return self._cached.model_copy(
+                update={
+                    "models": (
+                        *self._cached.models,
+                        *map(_ollama_descriptor, ollama_models),
+                    ),
+                },
+            )
 
         async with self._lock:
             now = self._clock()
             if self._cached is not None and now < self._expires_at:
-                return self._cached
+                return self._cached.model_copy(
+                    update={
+                        "models": (
+                            *self._cached.models,
+                            *map(_ollama_descriptor, ollama_models),
+                        ),
+                    },
+                )
             try:
                 payload = await self._fetch_metadata()
                 remote = parse_models_dev(payload)
@@ -170,18 +209,40 @@ class ModelCatalogService:
                         "model catalog refresh failed; source=stale error=%s",
                         error,
                     )
-                    return self._cached.model_copy(update={"source": "stale"})
+                    stale = self._cached.model_copy(update={"source": "stale"})
+                    return stale.model_copy(
+                        update={
+                            "models": (
+                                *stale.models,
+                                *map(_ollama_descriptor, ollama_models),
+                            ),
+                        },
+                    )
                 logger.warning(
                     "model catalog refresh failed; source=snapshot error=%s",
                     error,
                 )
                 self._cached = self._build("snapshot", {})
                 self._expires_at = now + CATALOG_TTL_SECONDS
-                return self._cached
+                return self._cached.model_copy(
+                    update={
+                        "models": (
+                            *self._cached.models,
+                            *map(_ollama_descriptor, ollama_models),
+                        ),
+                    },
+                )
 
             self._cached = self._build("live", remote)
             self._expires_at = now + CATALOG_TTL_SECONDS
-            return self._cached
+            return self._cached.model_copy(
+                update={
+                    "models": (
+                        *self._cached.models,
+                        *map(_ollama_descriptor, ollama_models),
+                    ),
+                },
+            )
 
 
 model_catalog_service = ModelCatalogService()

@@ -6,6 +6,7 @@ from app.llms.models import (
     GOOGLE_QUERY_TRANSFORM_MODELS,
     OLLAMA_QUERY_TRANSFORM_MODELS,
     OPENAI_QUERY_TRANSFORM_MODELS,
+    ChatModel,
     Model,
 )
 from app.schemas.chat_credentials import ChatCredentialSecret
@@ -28,7 +29,9 @@ def require_provider_credential(
     return credential
 
 
-def provider_for_model(model: Model) -> ProviderName | None:
+def provider_for_model(model: ChatModel) -> ProviderName | None:
+    if not isinstance(model, Model):
+        return "ollama"
     if model in OPENAI_QUERY_TRANSFORM_MODELS or model == Model.TEXT_EMBEDDING_3_LARGE:
         return "openai"
     if model in GOOGLE_QUERY_TRANSFORM_MODELS or model == Model.GEMINI_EMBEDDING_001:
@@ -64,7 +67,7 @@ class LlmProviderCredentials:
 
 def has_provider_credential(
     credentials: LlmProviderCredentials | None,
-    model: Model,
+    model: ChatModel,
 ) -> bool:
     provider = provider_for_model(model)
     return provider is None or (

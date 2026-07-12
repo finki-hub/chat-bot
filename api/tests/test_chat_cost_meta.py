@@ -7,7 +7,7 @@ import pytest
 
 from app.api import chat as chat_api
 from app.llms.agents import StreamObservation
-from app.llms.models import Model
+from app.llms.models import ChatModel, Model
 from app.schemas.chat import ChatSchema
 from app.utils.timing import RequestTimings
 
@@ -35,7 +35,7 @@ async def _gpu_fragmented_body() -> AsyncIterator[str]:
 def _run_captured_stream(
     monkeypatch,
     body: AsyncIterator[str],
-    model: Model,
+    model: ChatModel,
 ) -> tuple[list[str], dict[str, object]]:
     captured: list[tuple[str, str, dict[str, object]]] = []
     monkeypatch.setattr(
@@ -91,7 +91,11 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
 
 
 def test_chat_stream_records_bare_data_token_frames(monkeypatch):
-    chunks, props = _run_captured_stream(monkeypatch, _gpu_body(), Model.QWEN3_14B)
+    chunks, props = _run_captured_stream(
+        monkeypatch,
+        _gpu_body(),
+        "qwen3:14b-q4_K_M",
+    )
 
     assert chunks[0] == "data: self-hosted answer\n\n"
     assert props["$ai_output_choices"] == [
@@ -103,7 +107,7 @@ def test_chat_stream_records_fragmented_bare_data_token_frames(monkeypatch):
     chunks, props = _run_captured_stream(
         monkeypatch,
         _gpu_fragmented_body(),
-        Model.QWEN3_14B,
+        "qwen3:14b-q4_K_M",
     )
 
     assert chunks[:3] == [

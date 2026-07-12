@@ -3,10 +3,12 @@ import logging
 from collections.abc import Generator
 from typing import overload
 
+import httpx
 from fastapi.responses import StreamingResponse
 from langchain.agents import create_agent
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama, OllamaEmbeddings
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.llms.agents import (
     StreamObservation,
@@ -14,15 +16,36 @@ from app.llms.agents import (
     create_agent_token_generator,
     stream_sync_gen_as_sse,
 )
-from app.llms.models import Model
+from app.llms.model_catalog_types import OllamaCatalogModel
+from app.llms.models import ChatModel, Model, model_id
 from app.llms.prompts import build_agent_messages, stitch_conversation
 from app.llms.provider_credentials import require_provider_credential
 from app.llms.tools import get_agent_tools
 from app.schemas.chat_credentials import OLLAMA_DEFAULT_BASE_URL, ChatCredentialSecret
+from app.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
 type _OllamaClientKwargs = dict[str, dict[str, str]]
+
+
+class _OllamaTagModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    capabilities: tuple[str, ...] = ()
+
+
+class _OllamaTagsResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    models: tuple[_OllamaTagModel, ...] = ()
+
+
+class _OllamaPsResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    models: tuple[_OllamaTagModel, ...] = ()
 
 
 def _connection(
@@ -51,7 +74,7 @@ def get_embedder(
 
 
 def get_llm(
-    model: Model,
+    model: ChatModel,
     temperature: float,
     top_p: float,
     max_tokens: int,
@@ -61,7 +84,7 @@ def get_llm(
 ) -> ChatOllama:
     base_url, client_kwargs = _connection(credential)
     return ChatOllama(
-        model=model.value,
+        model=model_id(model),
         base_url=base_url,
         client_kwargs=client_kwargs,
         temperature=temperature,
@@ -112,7 +135,7 @@ async def generate_ollama_embeddings(
 
 def stream_ollama_response(
     user_prompt: str,
-    model: Model,
+    model: ChatModel,
     *,
     system_prompt: str,
     history: list[BaseMessage] | None = None,
@@ -132,7 +155,7 @@ def stream_ollama_response(
     logger.info(
         "Streaming Ollama response for user prompt length: '%d' with model: %s",
         len(user_prompt),
-        model.value,
+        model_id(model),
     )
 
     llm = get_llm(
@@ -154,7 +177,7 @@ def stream_ollama_response(
 
 async def transform_query_with_ollama(
     query: str,
-    model: Model,
+    model: ChatModel,
     *,
     system_prompt: str,
     temperature: float,
@@ -169,7 +192,7 @@ async def transform_query_with_ollama(
 
     logger.info(
         "Transforming query with model=%s query_len=%d",
-        model.value,
+        model_id(model),
         len(query),
     )
 
@@ -197,7 +220,7 @@ async def transform_query_with_ollama(
 
 async def stream_ollama_agent_response(
     user_prompt: str,
-    model: Model,
+    model: ChatModel,
     *,
     system_prompt: str,
     history: list[BaseMessage] | None = None,
@@ -215,7 +238,7 @@ async def stream_ollama_agent_response(
     logger.info(
         "Streaming Ollama agent response for user prompt length: '%d' with model: %s",
         len(user_prompt),
-        model.value,
+        model_id(model),
     )
 
     try:
@@ -250,8 +273,8 @@ async def stream_ollama_agent_response(
         )
         capture_model_fallback(
             observation,
-            from_model=model.value,
-            to_model=model.value,
+            from_model=model_id(model),
+            to_model=model_id(model),
             reason="agent_setup_failed",
         )
 
@@ -265,3 +288,37 @@ async def stream_ollama_agent_response(
             max_tokens=max_tokens,
             credential=credential,
         )
+
+
+async def fetch_ollama_catalog(
+    credential: ChatCredentialSecret | None,
+) -> tuple[OllamaCatalogModel, ...]:
+    base_url, client_kwargs = _connection(credential)
+    headers = client_kwargs["headers"]
+    timeout = httpx.Timeout(connect=3.0, read=5.0, write=5.0, pool=3.0)
+
+    try:
+        tags_response = await get_http_client().get(
+            f"{base_url.rstrip('/')}/api/tags",
+            headers=headers,
+            timeout=timeout,
+        )
+        ps_response = await get_http_client().get(
+            f"{base_url.rstrip('/')}/api/ps",
+            headers=headers,
+            timeout=timeout,
+        )
+        tags_response.raise_for_status()
+        ps_response.raise_for_status()
+        tags = _OllamaTagsResponse.model_validate(tags_response.json())
+        ps = _OllamaPsResponse.model_validate(ps_response.json())
+    except (httpx.HTTPError, ValidationError, ValueError) as error:
+        logger.warning("Ollama model discovery failed: %s", type(error).__name__)
+        return ()
+
+    loaded = frozenset(model.name for model in ps.models)
+    return tuple(
+        OllamaCatalogModel(id=model.name, name=model.name, loaded=model.name in loaded)
+        for model in tags.models
+        if "completion" in model.capabilities
+    )

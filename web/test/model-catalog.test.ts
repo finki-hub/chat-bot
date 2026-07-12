@@ -74,6 +74,7 @@ const typedModels = [
   },
   {
     id: QWEN_THINKING,
+    loaded: true,
     name: 'Qwen3 30B Thinking',
     provider: OLLAMA,
   },
@@ -103,6 +104,11 @@ describe('parseModelCatalog', () => {
       id: GPT,
       name: 'GPT-5.4',
       provider: OPENAI,
+    });
+    expect(catalog.models.at(-1)).toMatchObject({
+      id: QWEN_THINKING,
+      loaded: true,
+      provider: OLLAMA,
     });
   });
 

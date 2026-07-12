@@ -74,6 +74,7 @@ export type ModelCatalog = {
 export type ModelDescriptor = {
   readonly description?: string;
   readonly id: ModelId;
+  readonly loaded?: boolean | null;
   readonly name: string;
   readonly provider: string;
 };

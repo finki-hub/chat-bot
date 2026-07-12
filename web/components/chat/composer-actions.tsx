@@ -170,6 +170,14 @@ export const ComposerActions = ({
                   >
                     <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
                       <span className="truncate">{entry.name}</span>
+                      {entry.provider === 'ollama' &&
+                      entry.loaded !== undefined ? (
+                        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                          {entry.loaded
+                            ? t('composer.modelLoaded')
+                            : t('composer.modelNotLoaded')}
+                        </span>
+                      ) : null}
                       {availableProviders.has(entry.provider) ? null : (
                         <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
                           <KeyRound aria-hidden="true" />

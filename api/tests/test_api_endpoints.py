@@ -46,7 +46,7 @@ def test_api_exposes_liveness_and_model_catalog_over_http(monkeypatch):
     body = models_without_key.json()
     assert body["version"] == 1
     assert body["source"] in {"live", "stale", "snapshot"}
-    assert len(body["models"]) == 16
+    assert len(body["models"]) == 13
     assert "claude-sonnet-5" in {model["id"] for model in body["models"]}
 
 
@@ -68,7 +68,7 @@ def test_models_endpoint_keeps_unauthenticated_access_with_typed_envelope(monkey
     # Then its contract is a typed, ordered descriptor envelope
     assert response.status_code == 200
     assert response.json()["version"] == 1
-    assert len(response.json()["models"]) == 16
+    assert len(response.json()["models"]) == 13
     assert all(isinstance(model["id"], str) for model in response.json()["models"])
 
 

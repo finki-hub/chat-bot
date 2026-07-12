@@ -8,6 +8,14 @@ vi.mock('@/lib/env', () => ({
   env: { API_BASE_URL: 'https://api:8880', CHAT_API_KEY: 'test-key' },
 }));
 
+const USER_ID = '00000000-0000-4000-8000-000000000001';
+
+vi.mock('@/lib/authenticated-chat-user', () => ({
+  getAuthenticatedChatUserId: vi.fn<() => Promise<string>>(() =>
+    Promise.resolve(USER_ID),
+  ),
+}));
+
 const CACHE_CONTROL = 'cache-control';
 const CACHE_HEADER = 'public, max-age=300, stale-while-revalidate=600';
 const SOURCE_HEADER = 'x-models-source';
@@ -60,7 +68,7 @@ describe('GET /api/models', () => {
           pricing: { input: 0.75, output: 4.5 },
           provider: OPENAI,
         },
-        claudeSonnet,
+        { ...claudeSonnet, loaded: false },
       ],
       source: LIVE,
       version: 1,
@@ -75,7 +83,9 @@ describe('GET /api/models', () => {
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
-    expect(url).toBe('https://api:8880/chat/models');
+    expect(url).toBe(
+      `https://api:8880/chat/models?user_id=${encodeURIComponent(USER_ID)}`,
+    );
     expect(init.method ?? 'GET').toBe('GET');
     expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
 
@@ -91,7 +101,7 @@ describe('GET /api/models', () => {
           name: GPT_MINI_NAME,
           provider: OPENAI,
         },
-        claudeSonnet,
+        { ...claudeSonnet, loaded: false },
       ],
       source: LIVE,
       version: 1,

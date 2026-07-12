@@ -16,6 +16,9 @@ const GPT_PREMIUM_ID = 'gpt-5.4';
 const GPT_PREMIUM_NAME = 'GPT-5.4';
 const GPT_CHEAP_ID = 'gpt-5.4-nano';
 const GPT_CHEAP_NAME = 'GPT-5.4 Nano';
+const OLLAMA_ID = 'llama3.2:latest';
+const OLLAMA_NAME = 'llama3.2:latest';
+const OLLAMA_OPTION_NAME = /llama3\.2:latest/u;
 const MODEL_SELECTOR_TEST_ID = 'composer-model';
 
 const MODELS: ModelDescriptor[] = [
@@ -26,9 +29,10 @@ const MODELS: ModelDescriptor[] = [
   },
   { id: GPT_ID, name: GPT_NAME, provider: 'openai' },
   { id: CLAUDE_ID, name: CLAUDE_NAME, provider: 'anthropic' },
+  { id: OLLAMA_ID, loaded: true, name: OLLAMA_NAME, provider: 'ollama' },
   { id: GPT_CHEAP_ID, name: GPT_CHEAP_NAME, provider: 'openai' },
 ];
-const ALL_PROVIDERS = new Set(['anthropic', 'openai']);
+const ALL_PROVIDERS = new Set(['anthropic', 'ollama', 'openai']);
 
 const setup = (overrides: Partial<ComponentProps<typeof Composer>> = {}) => {
   const onSubmit = vi.fn<(text: string) => void>();
@@ -118,6 +122,9 @@ describe('Composer', () => {
     expect(
       screen.getByRole('option', { name: GPT_PREMIUM_NAME }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: OLLAMA_OPTION_NAME }),
+    ).toHaveTextContent('Вчитан');
   });
 
   it('groups models only by provider in catalog order', async () => {
@@ -130,6 +137,7 @@ describe('Composer', () => {
     expect(providerLabels.map((label) => label.textContent)).toStrictEqual([
       'OpenAI',
       'Anthropic',
+      'Ollama',
     ]);
   });
 

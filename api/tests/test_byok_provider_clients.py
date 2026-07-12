@@ -1,3 +1,4 @@
+import httpx
 import pytest
 
 from app.llms import anthropic, google, ollama, openai
@@ -152,6 +153,30 @@ def test_ollama_byok_client_uses_user_endpoint_and_bearer_key(monkeypatch) -> No
     ]
 
 
+def test_ollama_byok_client_accepts_dynamic_model_tag(monkeypatch) -> None:
+    captured_clients: list[dict] = []
+
+    class OllamaCapturingClient:
+        def __init__(self, **kwargs):
+            captured_clients.append(kwargs)
+
+    monkeypatch.setattr(ollama, "ChatOllama", OllamaCapturingClient)
+
+    ollama.get_llm(
+        "bge-m3:latest",
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=128,
+        credential=ChatCredentialSecret(
+            provider="ollama",
+            api_key="ollama-user-key",
+            base_url="https://ollama.example",
+        ),
+    )
+
+    assert captured_clients[0]["model"] == "bge-m3:latest"
+
+
 def test_ollama_byok_clients_are_not_shared_between_requests(monkeypatch) -> None:
     captured_clients: list[tuple[str, str]] = []
 
@@ -179,6 +204,41 @@ def test_ollama_byok_clients_are_not_shared_between_requests(monkeypatch) -> Non
         ("https://ollama.com", "Bearer first-user-key"),
         ("https://ollama.com", "Bearer second-user-key"),
     ]
+
+
+@pytest.mark.anyio
+async def test_ollama_catalog_discovers_completion_models_and_loaded_status(
+    monkeypatch,
+) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/tags":
+            return httpx.Response(
+                200,
+                json={
+                    "models": [
+                        {"name": "llama3.2:latest", "capabilities": ["completion"]},
+                        {"name": "bge-m3:latest", "capabilities": ["embedding"]},
+                    ],
+                },
+            )
+        return httpx.Response(
+            200,
+            json={"models": [{"name": "llama3.2:latest"}]},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        monkeypatch.setattr(ollama, "get_http_client", lambda: client)
+
+        models = await ollama.fetch_ollama_catalog(
+            ChatCredentialSecret(
+                provider="ollama",
+                api_key="ollama-user-key",
+                base_url="https://ollama.example",
+            ),
+        )
+
+    assert [model.id for model in models] == ["llama3.2:latest"]
+    assert models[0].loaded is True
 
 
 @pytest.mark.parametrize(

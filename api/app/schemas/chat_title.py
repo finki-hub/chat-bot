@@ -3,7 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.constants.defaults import DEFAULT_QUERY_TRANSFORM_MODEL
-from app.llms.models import QUERY_TRANSFORM_MODELS, Model
+from app.llms.models import QUERY_TRANSFORM_MODELS, ChatModel, parse_chat_model
 from app.schemas.chat import ConversationTurn
 
 
@@ -19,7 +19,7 @@ class ChatTitleSchema(BaseModel):
         max_length=4,
         description="The first conversation turns used to generate a concise title.",
     )
-    query_transform_model: Model = Field(
+    query_transform_model: ChatModel = Field(
         DEFAULT_QUERY_TRANSFORM_MODEL,
         description="Which chat-capable model to use for title generation.",
     )
@@ -36,10 +36,13 @@ class ChatTitleSchema(BaseModel):
 
     @field_validator("query_transform_model")
     @classmethod
-    def _must_support_title_generation(cls, value: Model) -> Model:
-        if value not in QUERY_TRANSFORM_MODELS:
-            raise ValueError("query_transform_model must be a chat-capable model")
-        return value
+    def _must_support_title_generation(cls, value: ChatModel) -> ChatModel:
+        try:
+            return parse_chat_model(value, QUERY_TRANSFORM_MODELS)
+        except ValueError as error:
+            raise ValueError(
+                "query_transform_model must be a chat-capable model",
+            ) from error
 
     @property
     def first_user_text(self) -> str:

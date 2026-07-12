@@ -16,6 +16,8 @@ export const messages = {
     'ФИНКИ Хаб може да направи грешки. Проверете важни информации.',
   'composer.message': 'Порака',
   'composer.model': 'Модел',
+  'composer.modelLoaded': 'Вчитан',
+  'composer.modelNotLoaded': 'Не е вчитан',
   'composer.modelsError': 'Моделите се недостапни',
   'composer.modelsLoading': 'Се вчитуваат модели…',
   'composer.placeholder': 'Напиши порака…',

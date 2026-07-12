@@ -3,6 +3,33 @@ import pytest
 from app.schemas.chat import ChatSchema
 
 
+def test_chat_schema_accepts_dynamic_ollama_chat_model_tag():
+    # Given: an installed Ollama model tag returned by the user's Ollama instance.
+    ollama_model = "bge-m3:latest"
+
+    # When: the model is used for generation and query transformation.
+    payload = ChatSchema(
+        inference_model=ollama_model,
+        messages=[{"role": "user", "content": "hi"}],
+        query_transform_model=ollama_model,
+    )
+
+    # Then: the dynamic tag is preserved instead of being forced through the enum.
+    assert payload.inference_model == ollama_model
+    assert payload.query_transform_model == ollama_model
+
+
+def test_chat_schema_rejects_unknown_non_ollama_chat_model_id():
+    with pytest.raises(
+        ValueError,
+        match="inference_model must be an active chat model",
+    ):
+        ChatSchema(
+            inference_model="claude-sonnet-4-6",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+
+
 def test_chat_schema_rejects_more_than_10_messages():
     messages = [
         {"role": "user" if i % 2 == 0 else "assistant", "content": f"m{i}"}

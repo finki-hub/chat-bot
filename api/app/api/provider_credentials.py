@@ -3,7 +3,7 @@ from typing import Literal
 from uuid import UUID
 
 from app.data.chat_credentials import ChatCredentialDatabase, get_chat_credential_secret
-from app.llms.models import Model
+from app.llms.models import ChatModel, Model
 from app.llms.provider_credentials import (
     LlmProviderCredentials,
     ProviderName,
@@ -62,7 +62,7 @@ async def _get_secret(
     return None
 
 
-def credential_providers_for_models(*models: Model) -> frozenset[ProviderName]:
+def credential_providers_for_models(*models: ChatModel) -> frozenset[ProviderName]:
     providers: set[ProviderName] = set()
     for model in models:
         provider = provider_for_model(model)
@@ -74,10 +74,10 @@ def credential_providers_for_models(*models: Model) -> frozenset[ProviderName]:
 def missing_mandatory_credential(
     credentials: LlmProviderCredentials | None,
     *,
-    inference_model: Model,
+    inference_model: ChatModel,
     embeddings_model: Model,
 ) -> MissingProviderCredential | None:
-    required_models: tuple[tuple[CredentialStage, Model], ...] = (
+    required_models: tuple[tuple[CredentialStage, ChatModel], ...] = (
         ("inference", inference_model),
         ("embeddings", embeddings_model),
     )

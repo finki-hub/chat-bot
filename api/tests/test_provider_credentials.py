@@ -27,7 +27,13 @@ def test_credential_providers_for_models_includes_retrieval_time_models() -> Non
 
 
 def test_credential_providers_for_models_includes_ollama_models() -> None:
-    providers = credential_providers_for_models(Model.QWEN3_14B, Model.BGE_M3_LOCAL)
+    providers = credential_providers_for_models("qwen3:14b-q4_K_M", Model.BGE_M3_LOCAL)
+
+    assert providers == frozenset({"ollama"})
+
+
+def test_credential_providers_for_models_includes_dynamic_ollama_tags() -> None:
+    providers = credential_providers_for_models("bge-m3:latest", Model.BGE_M3_LOCAL)
 
     assert providers == frozenset({"ollama"})
 

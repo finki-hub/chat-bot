@@ -12,7 +12,9 @@ from app.llms.models import (
     ACTIVE_EMBEDDING_MODELS,
     CHAT_MODELS,
     QUERY_TRANSFORM_MODELS,
+    ChatModel,
     Model,
+    parse_chat_model,
 )
 from app.llms.query_modes import QueryTransformMode
 
@@ -68,7 +70,7 @@ class ChatSchema(BaseModel):
             "Must be one of the values in `app.llms.models.Model`."
         ),
     )
-    inference_model: Model = Field(
+    inference_model: ChatModel = Field(
         DEFAULT_INFERENCE_MODEL,
         examples=[DEFAULT_INFERENCE_MODEL.value],
         description=(
@@ -76,7 +78,7 @@ class ChatSchema(BaseModel):
             "Must be one of the values in `app.llms.models.Model`."
         ),
     )
-    query_transform_model: Model = Field(
+    query_transform_model: ChatModel = Field(
         DEFAULT_QUERY_TRANSFORM_MODEL,
         examples=[DEFAULT_QUERY_TRANSFORM_MODEL.value],
         description=(
@@ -147,17 +149,21 @@ class ChatSchema(BaseModel):
 
     @field_validator("query_transform_model")
     @classmethod
-    def _must_support_query_transform(cls, value: Model) -> Model:
-        if value not in QUERY_TRANSFORM_MODELS:
-            raise ValueError("query_transform_model must be a chat-capable model")
-        return value
+    def _must_support_query_transform(cls, value: ChatModel) -> ChatModel:
+        try:
+            return parse_chat_model(value, QUERY_TRANSFORM_MODELS)
+        except ValueError as error:
+            raise ValueError(
+                "query_transform_model must be a chat-capable model",
+            ) from error
 
     @field_validator("inference_model")
     @classmethod
-    def _must_be_active_chat_model(cls, value: Model) -> Model:
-        if value not in CHAT_MODELS:
-            raise ValueError("inference_model must be an active chat model")
-        return value
+    def _must_be_active_chat_model(cls, value: ChatModel) -> ChatModel:
+        try:
+            return parse_chat_model(value, CHAT_MODELS)
+        except ValueError as error:
+            raise ValueError("inference_model must be an active chat model") from error
 
     @field_validator("embeddings_model")
     @classmethod

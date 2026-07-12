@@ -44,9 +44,6 @@ EXPECTED_CHAT_IDS = (
     "claude-opus-4-8",
     "claude-sonnet-5",
     "claude-haiku-4-5",
-    "qwen3:30b-a3b-thinking-2507-q4_K_M",
-    "qwen3:30b-a3b-instruct-2507-q4_K_M",
-    "qwen3:14b-q4_K_M",
 )
 
 
