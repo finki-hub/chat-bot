@@ -5,7 +5,7 @@ import type {
   ChatCredentialPublic,
 } from '@/lib/api-types';
 
-import { ChatStateRequestError } from '@/lib/chat-state-client';
+import { ChatStateRequestError as ChatStateRequestErrorForTest } from '@/lib/chat-state-client';
 
 /* eslint-disable camelcase -- Route tests assert the Python API wire contract. */
 
@@ -61,7 +61,7 @@ vi.mock('@/lib/env', () => ({
 }));
 
 vi.mock('@/lib/chat-state-client', () => {
-  class MockChatStateRequestError extends Error {
+  class ChatStateRequestError extends Error {
     readonly status: number;
 
     constructor(status: number, options?: ErrorOptions) {
@@ -72,7 +72,7 @@ vi.mock('@/lib/chat-state-client', () => {
   }
 
   return {
-    ChatStateRequestError: MockChatStateRequestError,
+    ChatStateRequestError,
     createChatStateClient: () => stateClientMock,
   };
 });
@@ -144,7 +144,7 @@ describe('/api/chat/credentials', () => {
 
   it('identifies a rejected custom credential base URL', async () => {
     stateClientMock.upsertCredential.mockRejectedValueOnce(
-      new ChatStateRequestError(422),
+      new ChatStateRequestErrorForTest(422),
     );
     const { PUT } = await import('@/app/api/chat/credentials/route');
 
