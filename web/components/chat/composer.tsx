@@ -17,6 +17,9 @@ import { t } from '@/lib/i18n';
 import { groupModelsByProviderTier } from '@/lib/model-catalog';
 
 export type ComposerProps = {
+  availableProviders: ReadonlySet<string>;
+  credentialsError?: boolean;
+  credentialsLoading: boolean;
   disabled?: boolean;
   model: string;
   models: readonly ModelDescriptor[];
@@ -31,6 +34,9 @@ export type ComposerProps = {
 };
 
 export const Composer = ({
+  availableProviders,
+  credentialsError,
+  credentialsLoading,
   disabled,
   model,
   models,
@@ -48,13 +54,23 @@ export const Composer = ({
   const isBusy = status === 'streaming' || status === 'submitted';
   const groups = useMemo(() => groupModelsByProviderTier(models), [models]);
   const noModels = models.length === 0;
+  const selectedModel = models.find((entry) => entry.id === model);
+  const selectedModelAvailable =
+    selectedModel !== undefined &&
+    availableProviders.has(selectedModel.provider);
   const modelSelectDisabled =
-    (disabled ?? false) || modelsLoading === true || noModels;
+    (disabled ?? false) ||
+    modelsLoading === true ||
+    credentialsError === true ||
+    credentialsLoading ||
+    noModels;
   let modelPlaceholder = t('composer.model');
   if (modelsLoading === true) {
     modelPlaceholder = t('composer.modelsLoading');
   } else if (modelsError === true) {
     modelPlaceholder = t('composer.modelsError');
+  } else if (credentialsError === true) {
+    modelPlaceholder = t('composer.credentialsError');
   }
 
   // Keep the input ready for typing on desktop: focus on mount and whenever a
@@ -113,7 +129,7 @@ export const Composer = ({
 
   const submit = () => {
     const trimmed = value.trim();
-    if (!trimmed || isBusy || disabled) {
+    if (!trimmed || isBusy || disabled || !selectedModelAvailable) {
       return;
     }
     onSubmit(trimmed);
@@ -159,6 +175,7 @@ export const Composer = ({
             value={value}
           />
           <ComposerActions
+            availableProviders={availableProviders}
             disabled={disabled}
             groups={groups}
             isBusy={isBusy}
@@ -170,9 +187,18 @@ export const Composer = ({
             onModelChange={onModelChange}
             onReasoningChange={onReasoningChange}
             reasoning={reasoning}
+            showModelPlaceholder={
+              modelsLoading === true ||
+              modelsError === true ||
+              credentialsError === true
+            }
             status={status}
             submitDisabled={
-              isBusy ? false : (disabled ?? false) || value.trim().length === 0
+              isBusy
+                ? false
+                : (disabled ?? false) ||
+                  !selectedModelAvailable ||
+                  value.trim().length === 0
             }
           />
         </div>

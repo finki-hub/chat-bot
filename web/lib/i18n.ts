@@ -10,6 +10,8 @@ export const messages = {
   'common.delete': 'Избриши',
   'common.save': 'Зачувај',
   'common.saved': 'Зачувано',
+  'composer.apiKeyRequired': 'Потребен е API клуч',
+  'composer.credentialsError': 'API клучевите се недостапни',
   'composer.disclaimer':
     'ФИНКИ Хаб може да направи грешки. Проверете важни информации. Разговорите се чуваат само локално на вашиот уред.',
   'composer.message': 'Порака',

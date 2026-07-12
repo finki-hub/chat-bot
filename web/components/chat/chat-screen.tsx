@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 import { Composer } from '@/components/chat/composer';
 import { ServiceBanner } from '@/components/chat/service-banner';
@@ -12,6 +12,7 @@ import { recoverSelectedModel } from '@/lib/model-catalog';
 import { isReasoningCapableModel } from '@/lib/reasoning';
 import { DEFAULT_MODEL, useUiStore } from '@/lib/ui-store';
 import { useConversations } from '@/lib/use-conversations';
+import { useCredentials } from '@/lib/use-credentials';
 import { useHealth } from '@/lib/use-health';
 import { useModels } from '@/lib/use-models';
 
@@ -67,16 +68,50 @@ export const ChatScreen = () => {
     isLoading: modelsLoading,
     models: modelList,
   } = useModels();
+  const {
+    credentials,
+    isError: credentialsError,
+    isLoading: credentialsLoading,
+  } = useCredentials();
+  const availableProviders = useMemo(
+    () =>
+      new Set<string>(
+        credentials
+          .filter((credential) => credential.has_api_key)
+          .map((credential) => credential.provider),
+      ),
+    [credentials],
+  );
+  const availableModels = useMemo(
+    () => modelList.filter((entry) => availableProviders.has(entry.provider)),
+    [availableProviders, modelList],
+  );
 
   useEffect(() => {
-    if (modelsLoading || modelsError || modelList.length === 0) {
+    if (
+      modelsLoading ||
+      credentialsLoading ||
+      modelsError ||
+      availableModels.length === 0
+    ) {
       return;
     }
-    const recovered = recoverSelectedModel(modelList, model, DEFAULT_MODEL);
+    const recovered = recoverSelectedModel(
+      availableModels,
+      model,
+      DEFAULT_MODEL,
+    );
     if (recovered !== model) {
       setModel(recovered);
     }
-  }, [modelList, modelsLoading, modelsError, model, setModel]);
+  }, [
+    availableModels,
+    credentialsLoading,
+    modelsLoading,
+    modelsError,
+    model,
+    setModel,
+  ]);
   const {
     activeError,
     activeId,
@@ -138,6 +173,9 @@ export const ChatScreen = () => {
             status={status}
           />
           <Composer
+            availableProviders={availableProviders}
+            credentialsError={credentialsError}
+            credentialsLoading={credentialsLoading}
             disabled={unavailable}
             model={model}
             models={modelList}

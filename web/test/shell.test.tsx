@@ -45,6 +45,10 @@ const CHAT_CONVERSATION_URL_PATTERN = /^\/api\/chat\/[0-9a-f-]{36}$/u;
 const CHAT_HISTORY_URL_PATTERN = /\/api\/chat\/[^/]+\/history$/u;
 const CHAT_STOP_URL_PATTERN = /\/api\/chat\/[^/]+\/stop$/u;
 const CHAT_STREAM_URL_PATTERN = /\/api\/chat\/[^/]+\/stream$/u;
+const BASE_URL_FIELD = 'base_url';
+const HAS_API_KEY_FIELD = 'has_api_key';
+const USER_ID_FIELD = 'user_id';
+const USER_ID = '00000000-0000-4000-8000-000000000001';
 
 const rows: ConversationRow[] = [
   {
@@ -442,6 +446,18 @@ const respondTo = (
 ): Promise<Response> => {
   if (url.endsWith('/api/models')) {
     return Promise.resolve(jsonOk([CLAUDE, GPT]));
+  }
+  if (url.endsWith('/api/chat/credentials')) {
+    return Promise.resolve(
+      jsonOk(
+        ['anthropic', 'openai'].map((provider) => ({
+          [BASE_URL_FIELD]: null,
+          [HAS_API_KEY_FIELD]: true,
+          provider,
+          [USER_ID_FIELD]: USER_ID,
+        })),
+      ),
+    );
   }
   if (url.endsWith('/api/health')) {
     return Promise.resolve(jsonOk({ ok: true }));

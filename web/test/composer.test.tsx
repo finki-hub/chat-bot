@@ -16,6 +16,7 @@ const GPT_PREMIUM_ID = 'gpt-5.4';
 const GPT_PREMIUM_NAME = 'GPT-5.4';
 const GPT_CHEAP_ID = 'gpt-5.4-nano';
 const GPT_CHEAP_NAME = 'GPT-5.4 Nano';
+const MODEL_SELECTOR_TEST_ID = 'composer-model';
 
 const MODELS: ModelDescriptor[] = [
   {
@@ -28,6 +29,7 @@ const MODELS: ModelDescriptor[] = [
   { id: CLAUDE_ID, name: CLAUDE_NAME, provider: 'anthropic', tier: 'default' },
   { id: GPT_CHEAP_ID, name: GPT_CHEAP_NAME, provider: 'openai', tier: 'cheap' },
 ];
+const ALL_PROVIDERS = new Set(['anthropic', 'openai']);
 
 const setup = (overrides: Partial<ComponentProps<typeof Composer>> = {}) => {
   const onSubmit = vi.fn<(text: string) => void>();
@@ -36,6 +38,8 @@ const setup = (overrides: Partial<ComponentProps<typeof Composer>> = {}) => {
   const onReasoningChange = vi.fn<(reasoning: boolean) => void>();
   render(
     <Composer
+      availableProviders={ALL_PROVIDERS}
+      credentialsLoading={false}
       model={CLAUDE_ID}
       models={MODELS}
       onModelChange={onModelChange}
@@ -106,7 +110,7 @@ describe('Composer', () => {
   it('renders every model as an option, labelled by its display name', async () => {
     setup();
     const user = userEvent.setup();
-    await user.click(screen.getByTestId('composer-model'));
+    await user.click(screen.getByTestId(MODEL_SELECTOR_TEST_ID));
 
     await expect(
       screen.findByRole('option', { name: CLAUDE_NAME }),
@@ -120,7 +124,7 @@ describe('Composer', () => {
   it('renders accessible tier groups before their provider subgroups', async () => {
     setup();
     const user = userEvent.setup();
-    await user.click(screen.getByTestId('composer-model'));
+    await user.click(screen.getByTestId(MODEL_SELECTOR_TEST_ID));
 
     const groupLabels = await screen.findAllByTestId('model-tier-label');
 
@@ -164,10 +168,68 @@ describe('Composer', () => {
   it('reports model changes', async () => {
     const { onModelChange } = setup();
     const user = userEvent.setup();
-    await user.click(screen.getByTestId('composer-model'));
+    await user.click(screen.getByTestId(MODEL_SELECTOR_TEST_ID));
     await user.click(await screen.findByRole('option', { name: GPT_NAME }));
 
     expect(onModelChange).toHaveBeenCalledWith(GPT_ID);
+  });
+
+  it('shows models without provider credentials as disabled', async () => {
+    const { onModelChange } = setup({
+      availableProviders: new Set(['anthropic']),
+    });
+    const user = userEvent.setup();
+
+    await user.click(screen.getByTestId(MODEL_SELECTOR_TEST_ID));
+
+    const unavailableLabel = await screen.findByText(GPT_NAME);
+    const unavailable = unavailableLabel.closest('[role="option"]');
+
+    expect(unavailable).not.toBeNull();
+
+    if (unavailable === null) {
+      throw new Error('Unavailable model option not found');
+    }
+
+    expect(unavailable).toHaveAttribute('aria-disabled', 'true');
+    expect(unavailable).toHaveTextContent('Потребен е API клуч');
+
+    await user.click(unavailable);
+
+    expect(onModelChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps configured provider models selectable', async () => {
+    const { onModelChange } = setup({
+      availableProviders: new Set(['openai']),
+      model: GPT_PREMIUM_ID,
+    });
+    const user = userEvent.setup();
+
+    await user.click(screen.getByTestId(MODEL_SELECTOR_TEST_ID));
+    await user.click(await screen.findByRole('option', { name: GPT_NAME }));
+
+    expect(onModelChange).toHaveBeenCalledWith(GPT_ID);
+  });
+
+  it('blocks submission when the selected model provider is unavailable', () => {
+    const { onSubmit } = setup({ availableProviders: new Set(['openai']) });
+    const textarea = screen.getByRole('textbox');
+
+    fireEvent.change(textarea, { target: { value: 'Прашање' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByTestId('composer-submit')).toBeDisabled();
+  });
+
+  it('surfaces credential loading errors and disables model selection', () => {
+    setup({ credentialsError: true });
+
+    expect(screen.getByTestId(MODEL_SELECTOR_TEST_ID)).toBeDisabled();
+    expect(screen.getByTestId(MODEL_SELECTOR_TEST_ID)).toHaveTextContent(
+      'API клучевите се недостапни',
+    );
   });
 
   it('toggles reasoning for a reasoning-capable model', () => {

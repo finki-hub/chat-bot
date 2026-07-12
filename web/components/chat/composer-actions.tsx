@@ -1,4 +1,11 @@
-import { ArrowUp, Brain, Loader2, Sparkles, Square } from 'lucide-react';
+import {
+  ArrowUp,
+  Brain,
+  KeyRound,
+  Loader2,
+  Sparkles,
+  Square,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -15,6 +22,7 @@ import { type ModelGroup, providerLabel, tierLabel } from '@/lib/model-catalog';
 import { isReasoningCapableModel } from '@/lib/reasoning';
 
 export type ComposerActionsProps = {
+  availableProviders: ReadonlySet<string>;
   disabled?: boolean;
   groups: ModelGroup[];
   isBusy: boolean;
@@ -26,6 +34,7 @@ export type ComposerActionsProps = {
   onModelChange: (model: string) => void;
   onReasoningChange: (reasoning: boolean) => void;
   reasoning: boolean;
+  showModelPlaceholder: boolean;
   status: ComposerStatus;
   submitDisabled: boolean;
 };
@@ -33,6 +42,7 @@ export type ComposerActionsProps = {
 export type ComposerStatus = 'error' | 'ready' | 'streaming' | 'submitted';
 
 export const ComposerActions = ({
+  availableProviders,
   disabled,
   groups,
   isBusy,
@@ -44,6 +54,7 @@ export const ComposerActions = ({
   onModelChange,
   onReasoningChange,
   reasoning,
+  showModelPlaceholder,
   status,
   submitDisabled,
 }: ComposerActionsProps) => {
@@ -76,7 +87,9 @@ export const ComposerActions = ({
     .flatMap((group) => group.providers)
     .flatMap((provider) => provider.models)
     .find((entry) => entry.id === model);
-  const triggerLabel = selectedModel?.name ?? modelPlaceholder;
+  const triggerLabel = showModelPlaceholder
+    ? modelPlaceholder
+    : (selectedModel?.name ?? modelPlaceholder);
 
   return (
     <div className="flex items-center gap-1.5 px-2 pb-2">
@@ -154,11 +167,30 @@ export const ComposerActions = ({
                     </span>
                     {providerGroup.models.map((entry) => (
                       <SelectItem
+                        aria-label={
+                          availableProviders.has(entry.provider)
+                            ? entry.name
+                            : `${entry.name} ${t('composer.apiKeyRequired')}`
+                        }
+                        className="data-[disabled]:opacity-75"
+                        disabled={!availableProviders.has(entry.provider)}
                         key={entry.id}
-                        textValue={entry.name}
+                        textValue={
+                          availableProviders.has(entry.provider)
+                            ? entry.name
+                            : `${entry.name} ${t('composer.apiKeyRequired')}`
+                        }
                         value={entry.id}
                       >
-                        {entry.name}
+                        <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                          <span className="truncate">{entry.name}</span>
+                          {availableProviders.has(entry.provider) ? null : (
+                            <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                              <KeyRound aria-hidden="true" />
+                              {t('composer.apiKeyRequired')}
+                            </span>
+                          )}
+                        </span>
                       </SelectItem>
                     ))}
                   </fieldset>
