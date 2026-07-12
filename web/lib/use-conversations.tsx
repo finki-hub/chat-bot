@@ -26,7 +26,12 @@ export const useConversations = (
   const setActiveId = useUiStore((s) => s.setActiveConversationId);
   const preserveEmptyHydrationIdRef = useRef<null | string>(null);
 
-  const { conversations, refreshConversations } = useConversationList();
+  const {
+    conversations,
+    error: conversationListError,
+    loading: conversationListLoading,
+    refreshConversations,
+  } = useConversationList();
   const {
     activeError,
     activeStatus,
@@ -133,6 +138,8 @@ export const useConversations = (
     activeError,
     activeId,
     activeStatus,
+    conversationListError,
+    conversationListLoading,
     conversations,
     generatingTitleId,
     messages: visibleMessages,
@@ -141,6 +148,7 @@ export const useConversations = (
     onGenerateTitle: handleGenerateTitle,
     onNewChat: handleNewChat,
     onRename: handleRename,
+    onRetryConversationList: refreshConversations,
     onSelect: handleSelect,
     onStop: () => {
       fireAndForget(handleStop());

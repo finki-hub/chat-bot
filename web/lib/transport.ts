@@ -236,7 +236,7 @@ export const loadChatConversationHistory = async (
   );
 
   if (!response.ok) {
-    return null;
+    throw new ChatConversationRequestError(response.status);
   }
 
   const body = await parseJsonOrNull(response);

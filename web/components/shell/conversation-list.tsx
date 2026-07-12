@@ -79,7 +79,7 @@ export const ConversationList = ({
               key={c.id}
             >
               <button
-                className="flex-1 truncate rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                className="min-h-11 flex-1 truncate rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:min-h-0"
                 onClick={() => {
                   onSelect(c.id);
                 }}
@@ -95,7 +95,7 @@ export const ConversationList = ({
                   <button
                     aria-busy={isGeneratingTitle || undefined}
                     aria-label={t('conversation.generateTitle')}
-                    className="rounded-md p-1 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60"
+                    className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60 sm:size-6"
                     disabled={isGeneratingAnyTitle}
                     onClick={() => {
                       onGenerateTitle(c.id);
@@ -117,7 +117,7 @@ export const ConversationList = ({
                 ) : null}
                 <button
                   aria-label={t('conversation.rename')}
-                  className="rounded-md p-1 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                  className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 sm:size-6"
                   onClick={() => {
                     openRename(c);
                   }}
@@ -130,7 +130,7 @@ export const ConversationList = ({
                 </button>
                 <button
                   aria-label={t('conversation.delete')}
-                  className="rounded-md p-1 text-muted-foreground outline-none transition-colors hover:bg-background hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring/50"
+                  className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring/50 sm:size-6"
                   onClick={() => {
                     setPendingDelete(c);
                   }}

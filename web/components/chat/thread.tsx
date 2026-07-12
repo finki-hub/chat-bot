@@ -12,7 +12,7 @@ import {
   MessageContent,
   MessageResponse,
 } from '@/components/ai-elements/message';
-import { AssistantMessage } from '@/components/chat/message';
+import { AssistantMessage, MessageError } from '@/components/chat/message';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { t } from '@/lib/i18n';
 import { hasReasoning, hasText, joinText } from '@/lib/message-parts';
@@ -21,7 +21,7 @@ export type ThreadProps = {
   activeError?: ErrorNotice;
   activeStatus?: StatusPart;
   messages: MyUIMessage[];
-  onPickSuggestion?: (text: string) => void;
+  onPickSuggestion?: (text: string) => unknown;
   onRetry?: () => void;
   renderActions?: (message: MyUIMessage) => ReactNode;
   status: 'error' | 'ready' | 'streaming' | 'submitted';
@@ -37,7 +37,7 @@ const SUGGESTIONS = [
 const STAGGER = ['stagger-1', 'stagger-2', 'stagger-3', 'stagger-4'];
 
 const CHIP =
-  'group rounded-xl border border-border bg-card/60 px-4 py-3 text-left text-sm text-foreground/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:fill-mode-both';
+  'group rounded-xl border border-border bg-card/60 px-4 py-3 text-left text-sm text-foreground/90 shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:fill-mode-both';
 
 const Welcome = ({ onPick }: { onPick?: (text: string) => void }) => (
   <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-6 py-12 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:slide-in-from-bottom-4 motion-safe:duration-700">
@@ -152,6 +152,14 @@ export const Thread = ({
             ) : null}
           </div>
         )}
+        {activeError && lastAssistantId === undefined ? (
+          <div className="mx-auto w-full max-w-3xl">
+            <MessageError
+              errorPart={activeError}
+              onRetry={onRetry}
+            />
+          </div>
+        ) : null}
       </ConversationContent>
       <ConversationScrollButton />
     </Conversation>

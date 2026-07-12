@@ -264,7 +264,7 @@ const MessageTiming = ({
   );
 };
 
-const MessageError = ({
+export const MessageError = ({
   errorPart,
   onRetry,
 }: {
@@ -336,7 +336,7 @@ const AssistantMessageStatus = ({
     return (
       <div
         aria-hidden={stepper.exiting}
-        className={`grid transition-all duration-300 ease-out motion-reduce:transition-none ${
+        className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none ${
           stepper.exiting
             ? 'grid-rows-[0fr] opacity-0'
             : 'grid-rows-[1fr] opacity-100'

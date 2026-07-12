@@ -79,13 +79,33 @@ describe('AnswerActions feedback', () => {
     });
   });
 
-  it('optimistically marks the chosen vote as pressed', async () => {
+  it('submits a structured reason before marking dislike as pressed', async () => {
     render(<AnswerActions message={assistant('resp-9')} />);
     const dislike = screen.getByRole('button', { name: 'Не допаѓа' });
     fireEvent.click(dislike);
 
+    fireEvent.click(screen.getByRole('radio', { name: 'Неточен одговор' }));
+    fireEvent.change(screen.getByLabelText('Дополнителни детали (изборно)'), {
+      target: { value: 'Погрешен рок.' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Испрати повратна информација' }),
+    );
+
     await waitFor(() => {
       expect(dislike).toHaveAttribute(PRESSED, 'true');
+    });
+
+    const fetchMock = fetch as unknown as ReturnType<
+      typeof vi.fn<typeof fetch>
+    >;
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(JSON.parse(init.body as string)).toStrictEqual({
+      dislikeReasonCategory: 'incorrect',
+      dislikeReasonDetail: 'Погрешен рок.',
+      feedbackType: 'dislike',
+      responseId: 'resp-9',
     });
   });
 

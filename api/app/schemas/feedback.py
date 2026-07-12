@@ -1,7 +1,7 @@
-from typing import Literal
+from typing import Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class FeedbackSchema(BaseModel):
@@ -22,6 +22,10 @@ class FeedbackSchema(BaseModel):
         examples=["like"],
         description="The rating.",
     )
+    dislike_reason_category: (
+        Literal["incorrect", "incomplete", "off_topic", "outdated", "other"] | None
+    ) = None
+    dislike_reason_detail: str | None = Field(default=None, max_length=500)
     client_ref: str | None = Field(
         default=None,
         examples=["1380000000000000000"],
@@ -55,6 +59,16 @@ class FeedbackSchema(BaseModel):
         default=None,
         description="Query-transform model used, if known.",
     )
+
+    @model_validator(mode="after")
+    def normalize_dislike_reason(self) -> Self:
+        if self.feedback_type == "like":
+            self.dislike_reason_category = None
+            self.dislike_reason_detail = None
+            return self
+        if self.dislike_reason_detail is not None:
+            self.dislike_reason_detail = self.dislike_reason_detail.strip() or None
+        return self
 
 
 class FeedbackAckSchema(BaseModel):

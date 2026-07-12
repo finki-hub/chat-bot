@@ -8,7 +8,10 @@ const baseURL =
 export default defineConfig({
   forbidOnly: isCI,
   fullyParallel: true,
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'mobile-chromium', use: { ...devices['Pixel 5'] } },
+  ],
   retries: isCI ? 2 : 0,
   testDir: './e2e',
   use: {
@@ -17,6 +20,10 @@ export default defineConfig({
   },
   webServer: {
     command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,
+    env: {
+      ...process.env,
+      PLAYWRIGHT_AUTH_BYPASS: '1',
+    },
     reuseExistingServer:
       !isCI && process.env['PLAYWRIGHT_REUSE_SERVER'] === '1',
     timeout: 120_000,

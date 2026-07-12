@@ -127,6 +127,30 @@ describe('POST /api/feedback', () => {
     /* eslint-enable camelcase -- snake_case mirrors the Python API wire contract */
   });
 
+  it('forwards structured dislike reasons', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson(ack));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await POST(
+      jsonRequest({
+        dislikeReasonCategory: 'incorrect',
+        dislikeReasonDetail: 'The deadline is wrong.',
+        feedbackType: 'dislike',
+        responseId: 'r-123',
+      }),
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    /* eslint-disable camelcase -- snake_case mirrors the Python API wire contract */
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      dislike_reason_category: 'incorrect',
+      dislike_reason_detail: 'The deadline is wrong.',
+      feedback_type: 'dislike',
+    });
+    /* eslint-enable camelcase -- re-enable after wire-shaped assertion */
+  });
+
   it('never leaks the api key to the response or to the browser-facing body', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson(ack));
 

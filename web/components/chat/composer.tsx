@@ -28,7 +28,7 @@ export type ComposerProps = {
   onModelChange: (model: string) => void;
   onReasoningChange: (reasoning: boolean) => void;
   onStop: () => void;
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string) => Promise<boolean>;
   reasoning: boolean;
   status: ComposerStatus;
 };
@@ -50,6 +50,7 @@ export const Composer = ({
   status,
 }: ComposerProps) => {
   const [value, setValue] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isBusy = status === 'streaming' || status === 'submitted';
   const groups = useMemo(() => groupModelsByProvider(models), [models]);
@@ -127,14 +128,27 @@ export const Composer = ({
     };
   }, []);
 
-  const submit = () => {
+  const submit = async (): Promise<void> => {
     const trimmed = value.trim();
-    if (!trimmed || isBusy || disabled || !selectedModelAvailable) {
+    if (
+      !trimmed ||
+      isBusy ||
+      submitting ||
+      disabled ||
+      !selectedModelAvailable
+    ) {
       return;
     }
-    onSubmit(trimmed);
-    setValue('');
-    focusInput();
+    setSubmitting(true);
+    try {
+      const accepted = await onSubmit(trimmed);
+      if (accepted) {
+        setValue('');
+        focusInput();
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -143,14 +157,14 @@ export const Composer = ({
     }
 
     e.preventDefault();
-    submit();
+    void submit();
   };
 
   const onButtonClick = () => {
     if (isBusy) {
       onStop();
     } else {
-      submit();
+      void submit();
     }
   };
 
@@ -196,7 +210,8 @@ export const Composer = ({
             submitDisabled={
               isBusy
                 ? false
-                : (disabled ?? false) ||
+                : submitting ||
+                  (disabled ?? false) ||
                   !selectedModelAvailable ||
                   value.trim().length === 0
             }

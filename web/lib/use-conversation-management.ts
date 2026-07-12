@@ -12,8 +12,10 @@ import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
 import type { StopOrder } from '@/lib/use-stop-chat';
 
 import { fireAndForget } from '@/lib/async';
+import { t } from '@/lib/i18n';
 import { deriveTitle } from '@/lib/messages';
 import {
+  ChatConversationRequestError,
   clearChatConversations,
   deleteChatConversation,
   DeleteChatConversationError,
@@ -80,7 +82,7 @@ export const useConversationManagement = ({
   }, [handleStop, resetActiveConversation, status]);
 
   const handleSubmit = useCallback(
-    async (text: string) => {
+    async (text: string): Promise<boolean> => {
       setActiveError(undefined);
       const existing = convoIdRef.current;
       let cid = existing;
@@ -88,21 +90,32 @@ export const useConversationManagement = ({
       if (!existing) {
         expectedTitle = deriveTitle(text);
         cid = crypto.randomUUID();
-        await saveChatConversation({
-          id: cid,
-          model,
-          title: expectedTitle,
-        });
+        try {
+          await saveChatConversation({
+            id: cid,
+            model,
+            title: expectedTitle,
+          });
+        } catch (error) {
+          if (error instanceof ChatConversationRequestError) {
+            setActiveError({
+              code: 'conversation_create',
+              message: t('conversation.createError'),
+            });
+            return false;
+          }
+          throw error;
+        }
         // eslint-disable-next-line require-atomic-updates -- fresh id, not a read-modify-write race
         convoIdRef.current = cid;
         preserveEmptyHydrationIdRef.current = cid;
         flushSync(() => {
           setActiveId(cid);
         });
-        await refreshConversations();
+        fireAndForget(refreshConversations());
       }
       if (!cid) {
-        return;
+        return false;
       }
       const userMessage: MyUIMessage = {
         id: crypto.randomUUID(),
@@ -114,6 +127,7 @@ export const useConversationManagement = ({
         fireAndForget(applyGeneratedTitle(cid, [userMessage], expectedTitle));
       }
       fireAndForget(sendMessageRef.current(userMessage));
+      return true;
     },
     [
       applyGeneratedTitle,
@@ -193,9 +207,7 @@ export const useConversationManagement = ({
   }, [handleStop, refreshConversations, resetActiveConversation, status]);
 
   const submitMessage = useCallback(
-    (text: string) => {
-      fireAndForget(handleSubmit(text));
-    },
+    (text: string): Promise<boolean> => handleSubmit(text),
     [handleSubmit],
   );
 
