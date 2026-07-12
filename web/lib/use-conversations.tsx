@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
-import type { FeedbackType } from '@/lib/api-types';
+import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
 import { fireAndForget } from '@/lib/async';
 import { renderAnswerActions } from '@/lib/conversation-actions';
@@ -24,12 +24,14 @@ export const useConversations = (
 ) => {
   const activeId = useUiStore((s) => s.activeConversationId);
   const setActiveId = useUiStore((s) => s.setActiveConversationId);
+  const preserveEmptyHydrationIdRef = useRef<null | string>(null);
 
   const { conversations, refreshConversations } = useConversationList();
   const {
     activeError,
     activeStatus,
     convoIdRef,
+    hydratingConversation,
     messages,
     modelRef,
     regenerate,
@@ -45,6 +47,7 @@ export const useConversations = (
   } = useConversationChatRuntime({
     activeId,
     model,
+    preserveEmptyHydrationIdRef,
     reasoning,
     refreshConversations,
     setActiveId,
@@ -64,6 +67,7 @@ export const useConversations = (
     convoIdRef,
     handleStop,
     model,
+    preserveEmptyHydrationIdRef,
     refreshConversations,
     sendMessageRef,
     setActiveError,
@@ -108,7 +112,15 @@ export const useConversations = (
     [setMessages],
   );
 
-  const visibleMessages = previewRegeneration(messages, regeneratingMessageId);
+  const lastNonEmptyMessagesRef = useRef<readonly MyUIMessage[]>([]);
+  const previewMessages = previewRegeneration(messages, regeneratingMessageId);
+  if (previewMessages.length > 0) {
+    lastNonEmptyMessagesRef.current = previewMessages;
+  }
+  const visibleMessages =
+    hydratingConversation && previewMessages.length === 0
+      ? [...lastNonEmptyMessagesRef.current]
+      : previewMessages;
   const renderActions = renderAnswerActions({
     disabled,
     messages: visibleMessages,
