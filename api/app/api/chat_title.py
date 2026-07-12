@@ -1,4 +1,5 @@
 from html import escape
+from typing import Final
 
 from fastapi import APIRouter, Depends, Request, status
 
@@ -8,7 +9,9 @@ from app.api.provider_credentials import (
 )
 from app.data.chat_credentials import ChatCredentialDatabase
 from app.data.db import get_db
-from app.llms.provider_credentials import has_provider_credential
+from app.llms.models import ChatModel, Model
+from app.llms.pricing import HOSTED_PRICING
+from app.llms.provider_credentials import has_provider_credential, provider_for_model
 from app.llms.query_transform import transform_query
 from app.schemas.chat_title import ChatTitleResponse, ChatTitleSchema
 from app.utils.auth import verify_api_key
@@ -21,6 +24,12 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 
 _TITLE_MAX = 60
 _FALLBACK_TITLE = "Нов разговор"
+_TITLE_MODELS_BY_COST: Final[tuple[Model, ...]] = (
+    *sorted(HOSTED_PRICING, key=lambda model: sum(HOSTED_PRICING[model])),
+    Model.QWEN3_14B,
+    Model.QWEN3_30B_INSTRUCT,
+    Model.QWEN3_30B_THINKING,
+)
 _TITLE_SYSTEM_PROMPT = """Создај краток наслов за разговорот.
 
 Правила:
@@ -60,6 +69,18 @@ async def generate_chat_title(
     db: ChatCredentialDatabase | None = None,
     settings: Settings | None = None,
 ) -> ChatTitleResponse:
+    candidate_models: tuple[ChatModel, ...]
+    if payload.query_transform_model is not None:
+        candidate_models = (payload.query_transform_model,)
+    elif not isinstance(payload.provider_model, Model):
+        candidate_models = (payload.provider_model,)
+    else:
+        provider = provider_for_model(payload.provider_model)
+        candidate_models = tuple(
+            model
+            for model in _TITLE_MODELS_BY_COST
+            if provider_for_model(model) == provider
+        )
     if payload.user_id is None:
         credentials = None
     elif db is None:
@@ -72,17 +93,25 @@ async def generate_chat_title(
         credentials = await resolve_provider_credentials(
             db,
             user_id=payload.user_id,
-            providers=credential_providers_for_models(payload.query_transform_model),
+            providers=credential_providers_for_models(*candidate_models),
             settings=settings,
         )
-    if not has_provider_credential(credentials, payload.query_transform_model):
+    selected_model = next(
+        (
+            model
+            for model in candidate_models
+            if has_provider_credential(credentials, model)
+        ),
+        None,
+    )
+    if selected_model is None:
         return ChatTitleResponse(
             title=_normalize_title("", payload.first_user_text),
         )
     prompt = _build_title_prompt(payload.transcript)
     raw_title = await transform_query(
         prompt,
-        payload.query_transform_model,
+        selected_model,
         system_prompt=_TITLE_SYSTEM_PROMPT,
         temperature=0.2,
         top_p=1.0,

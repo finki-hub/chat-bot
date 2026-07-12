@@ -80,9 +80,10 @@ class FakeChatDatabase:
                 ]
                 question = max(prior_questions, key=self._created_at, default=None)
                 metadata = assistant["metadata"]
+                parsed = json.loads(metadata) if isinstance(metadata, str) else metadata
                 inference_model = None
-                if isinstance(metadata, dict):
-                    inference_model = metadata.get("inferenceModel")
+                if isinstance(parsed, dict):
+                    inference_model = parsed.get("inferenceModel")
                 return {
                     "answer_text": assistant["content"],
                     "inference_model": inference_model,
@@ -242,7 +243,14 @@ class FakeChatDatabase:
             return deleted
 
         if "ON CONFLICT (conversation_id, response_id)" in query:
-            conversation_id, response_id, message_id, content, metadata_json = args
+            (
+                conversation_id,
+                response_id,
+                message_id,
+                content,
+                metadata_json,
+                parts_json,
+            ) = args
             for existing in self.messages.values():
                 if (
                     existing["conversation_id"] == conversation_id
@@ -251,6 +259,7 @@ class FakeChatDatabase:
                 ):
                     existing["content"] = content
                     existing["metadata"] = metadata_json
+                    existing["parts"] = parts_json
                     existing["updated_at"] = self.now
                     return existing
             inserted_assistant = {
@@ -260,6 +269,7 @@ class FakeChatDatabase:
                 "content": content,
                 "response_id": response_id,
                 "metadata": metadata_json,
+                "parts": parts_json,
                 "created_at": self.now,
                 "updated_at": self.now,
             }
@@ -274,6 +284,7 @@ class FakeChatDatabase:
                 content,
                 response_id,
                 metadata_json,
+                parts_json,
                 retained_message_ids,
             ) = args
             target = self.messages.get(message_id)
@@ -298,15 +309,22 @@ class FakeChatDatabase:
             target["content"] = content
             target["response_id"] = response_id
             target["metadata"] = metadata_json
+            target["parts"] = parts_json
             target["updated_at"] = self.now
             for stale_id in stale_message_ids:
                 del self.messages[stale_id]
             return target
 
         if "INSERT INTO chat_message" in query:
-            message_id, conversation_id, role, content, response_id, metadata_json = (
-                args
-            )
+            (
+                message_id,
+                conversation_id,
+                role,
+                content,
+                response_id,
+                metadata_json,
+                parts_json,
+            ) = args
             current_message = self.messages.get(message_id)
             if current_message is None:
                 inserted_message = {
@@ -316,6 +334,7 @@ class FakeChatDatabase:
                     "content": content,
                     "response_id": response_id,
                     "metadata": metadata_json,
+                    "parts": parts_json,
                     "created_at": self.now,
                     "updated_at": self.now,
                 }
@@ -327,6 +346,7 @@ class FakeChatDatabase:
             current_message["content"] = content
             current_message["response_id"] = response_id
             current_message["metadata"] = metadata_json
+            current_message["parts"] = parts_json
             current_message["updated_at"] = self.now
             return current_message
 

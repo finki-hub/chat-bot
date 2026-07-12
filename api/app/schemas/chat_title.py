@@ -19,9 +19,13 @@ class ChatTitleSchema(BaseModel):
         max_length=4,
         description="The first conversation turns used to generate a concise title.",
     )
-    query_transform_model: ChatModel = Field(
+    query_transform_model: ChatModel | None = Field(
+        None,
+        description="Optional chat-capable model override for title generation.",
+    )
+    provider_model: ChatModel = Field(
         DEFAULT_QUERY_TRANSFORM_MODEL,
-        description="Which chat-capable model to use for title generation.",
+        description="Active model whose provider should be used for automatic selection.",
     )
 
     @field_validator("messages")
@@ -34,9 +38,22 @@ class ChatTitleSchema(BaseModel):
             raise ValueError("messages must include at least one user turn")
         return value
 
+    @field_validator("provider_model")
+    @classmethod
+    def _provider_must_support_title_generation(cls, value: ChatModel) -> ChatModel:
+        try:
+            return parse_chat_model(value, QUERY_TRANSFORM_MODELS)
+        except ValueError as error:
+            raise ValueError("provider_model must be a chat-capable model") from error
+
     @field_validator("query_transform_model")
     @classmethod
-    def _must_support_title_generation(cls, value: ChatModel) -> ChatModel:
+    def _override_must_support_title_generation(
+        cls,
+        value: ChatModel | None,
+    ) -> ChatModel | None:
+        if value is None:
+            return None
         try:
             return parse_chat_model(value, QUERY_TRANSFORM_MODELS)
         except ValueError as error:

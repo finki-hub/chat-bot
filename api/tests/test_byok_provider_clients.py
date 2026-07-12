@@ -173,7 +173,7 @@ def test_ollama_byok_client_accepts_dynamic_model_tag(monkeypatch) -> None:
         ),
     )
 
-    assert captured_clients[0]["model"] == "bge-m3:latest"
+    assert [client["model"] for client in captured_clients] == ["bge-m3:latest"]
 
 
 def test_ollama_byok_clients_are_not_shared_between_requests(monkeypatch) -> None:

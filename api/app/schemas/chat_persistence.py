@@ -82,6 +82,7 @@ class ChatMessageUpsert(BaseModel):
     content: str = Field(min_length=1)
     response_id: UUID | None = None
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
+    parts: list[JsonValue] | None = None
 
     @field_validator("content")
     @classmethod
@@ -99,6 +100,7 @@ class ChatMessage(BaseModel):
     content: str
     response_id: UUID | None = None
     metadata: dict[str, JsonValue]
+    parts: list[JsonValue] | None = None
     created_at: datetime
     updated_at: datetime
 

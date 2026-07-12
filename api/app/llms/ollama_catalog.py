@@ -5,7 +5,7 @@ from typing import Final
 
 import anyio
 import httpx
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict
 
 from app.llms.model_catalog_types import OllamaCatalogModel
 from app.llms.provider_credentials import require_provider_credential
@@ -67,7 +67,7 @@ async def _fetch_capabilities(
             return _OllamaShowResponse.model_validate(
                 response.json(),
             ).capabilities
-        except (httpx.HTTPError, ValidationError, ValueError) as error:
+        except (httpx.HTTPError, ValueError) as error:
             logger.warning(
                 "Ollama model capability discovery failed: model=%s error=%s",
                 model_name,
@@ -87,7 +87,7 @@ async def _fetch_loaded_models(
         )
         response.raise_for_status()
         parsed = _OllamaPsResponse.model_validate(response.json())
-    except (httpx.HTTPError, ValidationError, ValueError) as error:
+    except (httpx.HTTPError, ValueError) as error:
         logger.warning(
             "Ollama loaded-status discovery failed: %s",
             type(error).__name__,
@@ -115,7 +115,7 @@ async def fetch_ollama_catalog(
         )
         response.raise_for_status()
         tags = _OllamaTagsResponse.model_validate(response.json())
-    except (httpx.HTTPError, ValidationError, ValueError) as error:
+    except (httpx.HTTPError, ValueError) as error:
         logger.warning("Ollama model discovery failed: %s", type(error).__name__)
         return ()
 

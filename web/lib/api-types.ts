@@ -43,11 +43,13 @@ export type ChatRequestBody = {
 
 export type ChatTitleClientPayload = {
   readonly messages: readonly ConversationTurn[];
+  readonly providerModel?: ModelId;
   readonly queryTransformModel?: ModelId;
 };
 
 export type ChatTitleRequestBody = {
   readonly messages: readonly ConversationTurn[];
+  readonly provider_model?: ModelId;
   readonly query_transform_model?: ModelId;
   readonly user_id?: string;
 };

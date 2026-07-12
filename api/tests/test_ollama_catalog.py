@@ -2,6 +2,7 @@ import json
 
 import httpx
 import pytest
+from anyio import lowlevel
 
 from app.llms import ollama
 from app.schemas.chat_credentials import ChatCredentialSecret
@@ -12,6 +13,7 @@ async def test_ollama_catalog_discovers_completion_models_and_loaded_status(
     monkeypatch,
 ) -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
+        await lowlevel.checkpoint()
         if request.url.path == "/api/tags":
             return httpx.Response(
                 200,
@@ -53,6 +55,7 @@ async def test_ollama_catalog_keeps_models_when_loaded_status_is_unavailable(
     monkeypatch,
 ) -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
+        await lowlevel.checkpoint()
         if request.url.path == "/api/tags":
             return httpx.Response(
                 200,
@@ -88,6 +91,7 @@ async def test_ollama_catalog_caps_capability_discovery_fanout(monkeypatch) -> N
 
     async def handler(request: httpx.Request) -> httpx.Response:
         nonlocal show_requests
+        await lowlevel.checkpoint()
         if request.url.path == "/api/tags":
             return httpx.Response(
                 200,

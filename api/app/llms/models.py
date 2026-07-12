@@ -71,6 +71,7 @@ type ChatModel = Model | str
 _OLLAMA_MODEL_TAG_PATTERN: Final = re.compile(
     r"[A-Za-z0-9][A-Za-z0-9._/-]*:[A-Za-z0-9][A-Za-z0-9._-]*",
 )
+_ACTIVE_CHAT_MODEL_ERROR: Final = "model must be an active chat model"
 
 OPENAI_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     {
@@ -170,15 +171,15 @@ def parse_chat_model(value: Model | str, active_models: frozenset[Model]) -> Cha
     if isinstance(value, Model):
         if value in active_models:
             return value
-        raise ValueError("model must be an active chat model")
+        raise ValueError(_ACTIVE_CHAT_MODEL_ERROR)
     try:
         model = Model(value)
     except ValueError:
         if is_ollama_model_tag(value):
             return value
-        raise ValueError("model must be an active chat model") from None
+        raise ValueError(_ACTIVE_CHAT_MODEL_ERROR) from None
     if model in active_models:
         return model
     if is_ollama_model_tag(value):
         return value
-    raise ValueError("model must be an active chat model")
+    raise ValueError(_ACTIVE_CHAT_MODEL_ERROR)

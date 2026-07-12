@@ -37,7 +37,7 @@ export const useGeneratedTitle = ({
       try {
         const title = await generateChatTitle({
           messages: titleMessages,
-          queryTransformModel: modelRef.current,
+          providerModel: modelRef.current,
         });
 
         if (title === null) {

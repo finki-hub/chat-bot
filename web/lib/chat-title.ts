@@ -4,7 +4,8 @@ import { toChatTitleRequestBody } from '@/lib/chat-title-translate';
 
 type GenerateTitleInput = {
   readonly messages: readonly MyUIMessage[];
-  readonly queryTransformModel: ModelId;
+  readonly providerModel?: ModelId;
+  readonly queryTransformModel?: ModelId;
 };
 
 const parseTitle = (value: unknown): null | string => {
@@ -29,11 +30,12 @@ const parseTitle = (value: unknown): null | string => {
 
 export const generateChatTitle = async ({
   messages,
+  providerModel,
   queryTransformModel,
 }: GenerateTitleInput): Promise<null | string> => {
   const response = await fetch('/api/chat/title', {
     body: JSON.stringify(
-      toChatTitleRequestBody({ messages, queryTransformModel }),
+      toChatTitleRequestBody({ messages, providerModel, queryTransformModel }),
     ),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
