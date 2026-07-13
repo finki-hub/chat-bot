@@ -67,6 +67,41 @@ def test_chat_state_upserts_provider_user() -> None:
     assert second.json()["email"] == "new@example.com"
 
 
+def test_chat_state_upserts_discord_provider_user_idempotently() -> None:
+    # Given: an authenticated Discord bot integration resolves a Discord user.
+    db = FakeChatDatabase()
+    client = _client(db)
+
+    # When: the same Discord subject is upserted twice with updated profile metadata.
+    first = client.post(
+        "/chat/state/users",
+        headers=_auth_headers(),
+        json={
+            "provider": "discord",
+            "provider_subject": "123456789012345678",
+            "name": "Discord User",
+            "avatar_url": "https://cdn.discordapp.com/avatars/123456789012345678/old.png",
+        },
+    )
+    second = client.post(
+        "/chat/state/users",
+        headers=_auth_headers(),
+        json={
+            "provider": "discord",
+            "provider_subject": "123456789012345678",
+            "name": "Updated Discord User",
+            "avatar_url": "https://cdn.discordapp.com/avatars/123456789012345678/new.png",
+        },
+    )
+
+    # Then: the backend assigns one stable UUID across both upserts.
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["id"] == second.json()["id"]
+    assert second.json()["provider"] == "discord"
+    assert second.json()["name"] == "Updated Discord User"
+
+
 def test_chat_state_manages_user_credentials_without_exposing_secret() -> None:
     # Given: an authenticated BFF client and no stored BYOK credentials.
     db = FakeChatDatabase()
