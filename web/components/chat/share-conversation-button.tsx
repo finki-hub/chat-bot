@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, CircleAlert, LoaderCircle, Share2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { IconButton } from '@/components/ui/icon-controls';
 import { t } from '@/lib/i18n';
@@ -71,19 +71,54 @@ export const ShareConversationButton = ({
   readonly conversationId: null | string;
 }) => {
   const [status, setStatus] = useState<ShareStatus>('idle');
+  const requestControllerRef = useRef<AbortController | null>(null);
   const pending = status === 'pending';
   const label = labelFor(status);
+
+  useEffect(() => {
+    const controller = requestControllerRef.current;
+    requestControllerRef.current = null;
+    controller?.abort();
+    setStatus('idle');
+    return () => {
+      const activeController = requestControllerRef.current;
+      requestControllerRef.current = null;
+      activeController?.abort();
+    };
+  }, [conversationId]);
+
+  useEffect(() => {
+    const timer =
+      status === 'copied'
+        ? setTimeout(() => {
+            setStatus((currentStatus) =>
+              currentStatus === 'copied' ? 'idle' : currentStatus,
+            );
+          }, 1_500)
+        : null;
+    return () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+    };
+  }, [status]);
 
   const share = async (): Promise<void> => {
     if (conversationId === null || pending) {
       return;
     }
+    requestControllerRef.current?.abort();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
     setStatus('pending');
     try {
       const response = await fetch(
         `/api/chat/${encodeURIComponent(conversationId)}/share`,
-        { method: 'POST' },
+        { method: 'POST', signal: controller.signal },
       );
+      if (requestControllerRef.current !== controller) {
+        return;
+      }
       if (!response.ok) {
         setStatus('failed');
         return;
@@ -98,11 +133,14 @@ export const ShareConversationButton = ({
         location.origin,
       ).href;
       await navigator.clipboard.writeText(url);
+      if (requestControllerRef.current !== controller) {
+        return;
+      }
       setStatus('copied');
-      setTimeout(() => {
-        setStatus('idle');
-      }, 1_500);
     } catch (error) {
+      if (requestControllerRef.current !== controller) {
+        return;
+      }
       if (
         error instanceof DOMException ||
         error instanceof SyntaxError ||
@@ -112,6 +150,10 @@ export const ShareConversationButton = ({
         return;
       }
       throw error;
+    } finally {
+      if (requestControllerRef.current === controller) {
+        requestControllerRef.current = null;
+      }
     }
   };
 
