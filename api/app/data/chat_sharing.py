@@ -24,14 +24,15 @@ async def create_conversation_share(
     if row is None:
         return None
 
-    match row["share_token"]:
+    share_token = row["share_token"]
+    match share_token:
         case UUID() as share_token:
             return share_token
         case str() as share_token:
             return UUID(share_token)
-        case invalid_share_token:
-            message = f"chat_conversation share_token was invalid: {invalid_share_token!r}"
-            raise RuntimeError(message)
+
+    message = f"chat_conversation share_token was invalid: {share_token!r}"
+    raise RuntimeError(message)
 
 
 async def load_shared_conversation(
