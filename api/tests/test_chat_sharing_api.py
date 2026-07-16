@@ -13,6 +13,21 @@ INTRUDER_ID = "00000000-0000-4000-8000-000000000002"
 
 class SharingFakeChatDatabase(FakeChatDatabase):
     async def fetchrow(self, query: str, *args: object) -> dict[str, object] | None:
+        if "SELECT share_token FROM chat_conversation" in query:
+            conversation_id, user_id = args
+            conversation = self.conversations.get(conversation_id)
+            if conversation is None or conversation["user_id"] != user_id:
+                return None
+            return {"share_token": conversation.get("share_token")}
+
+        if "SET share_token = NULL" in query:
+            conversation_id, user_id = args
+            conversation = self.conversations.get(conversation_id)
+            if conversation is None or conversation["user_id"] != user_id:
+                return None
+            conversation["share_token"] = None
+            return {"id": conversation_id}
+
         if "RETURNING share_token" in query:
             conversation_id, user_id = args
             conversation = self.conversations.get(conversation_id)
@@ -67,6 +82,16 @@ def _create_conversation(client: TestClient, conversation_id: UUID) -> None:
     assert response.status_code == 200
 
 
+def _share_conversation(client: TestClient, conversation_id: UUID) -> str:
+    response = client.post(
+        f"/chat/state/conversations/{conversation_id}/share",
+        headers=_auth_headers(),
+        json={"user_id": OWNER_ID},
+    )
+    assert response.status_code == 200
+    return response.json()["share_token"]
+
+
 def test_owner_gets_stable_share_token() -> None:
     # Given: an authenticated BFF owns a persisted conversation.
     client = _client(SharingFakeChatDatabase())
@@ -108,6 +133,112 @@ def test_non_owner_cannot_create_share_link() -> None:
     # Then: ownership failure is indistinguishable from a missing conversation.
     assert response.status_code == 404
     assert response.json() == {"detail": "Conversation not found"}
+
+
+def test_owner_reads_unshared_conversation_status() -> None:
+    # Given: an owned conversation without a share token.
+    client = _client(SharingFakeChatDatabase())
+    conversation_id = uuid4()
+    _create_conversation(client, conversation_id)
+
+    # When: the owner checks whether it is shared.
+    response = client.get(
+        f"/chat/state/conversations/{conversation_id}/share",
+        headers=_auth_headers(),
+        params={"user_id": OWNER_ID},
+    )
+
+    # Then: the API reports the owned conversation as unshared.
+    assert response.status_code == 204
+    assert response.content == b""
+
+
+def test_owner_reads_shared_conversation_status() -> None:
+    # Given: an owned conversation with an active share token.
+    client = _client(SharingFakeChatDatabase())
+    conversation_id = uuid4()
+    _create_conversation(client, conversation_id)
+    _share_conversation(client, conversation_id)
+
+    # When: the owner checks whether it is shared.
+    response = client.get(
+        f"/chat/state/conversations/{conversation_id}/share",
+        headers=_auth_headers(),
+        params={"user_id": OWNER_ID},
+    )
+
+    # Then: the API reports an active share.
+    assert response.status_code == 200
+    assert response.content == b""
+
+
+def test_owner_revokes_share_link() -> None:
+    # Given: an owned conversation with an active public link.
+    client = _client(SharingFakeChatDatabase())
+    conversation_id = uuid4()
+    _create_conversation(client, conversation_id)
+    share_token = _share_conversation(client, conversation_id)
+
+    # When: the owner revokes the share.
+    response = client.request(
+        "DELETE",
+        f"/chat/state/conversations/{conversation_id}/share",
+        headers=_auth_headers(),
+        json={"user_id": OWNER_ID},
+    )
+
+    # Then: revocation succeeds and the old bearer link no longer resolves.
+    assert response.status_code == 204
+    loaded = client.get(
+        f"/chat/state/shared/{share_token}",
+        headers=_auth_headers(),
+    )
+    assert loaded.status_code == 404
+
+
+def test_non_owner_cannot_revoke_share_link() -> None:
+    # Given: another user's conversation has an active public link.
+    client = _client(SharingFakeChatDatabase())
+    conversation_id = uuid4()
+    _create_conversation(client, conversation_id)
+    share_token = _share_conversation(client, conversation_id)
+
+    # When: an intruder attempts to revoke it.
+    response = client.request(
+        "DELETE",
+        f"/chat/state/conversations/{conversation_id}/share",
+        headers=_auth_headers(),
+        json={"user_id": INTRUDER_ID},
+    )
+
+    # Then: ownership remains hidden and the original link still works.
+    assert response.status_code == 404
+    loaded = client.get(
+        f"/chat/state/shared/{share_token}",
+        headers=_auth_headers(),
+    )
+    assert loaded.status_code == 200
+
+
+def test_resharing_after_revoke_uses_fresh_token() -> None:
+    # Given: an owner revoked an existing conversation share.
+    client = _client(SharingFakeChatDatabase())
+    conversation_id = uuid4()
+    _create_conversation(client, conversation_id)
+    previous_token = _share_conversation(client, conversation_id)
+    revoked = client.request(
+        "DELETE",
+        f"/chat/state/conversations/{conversation_id}/share",
+        headers=_auth_headers(),
+        json={"user_id": OWNER_ID},
+    )
+    assert revoked.status_code == 204
+
+    # When: the owner shares the conversation again.
+    current_token = _share_conversation(client, conversation_id)
+
+    # Then: the new link does not reactivate the revoked bearer token.
+    assert current_token != previous_token
 
 
 def test_shared_conversation_loads_by_token() -> None:

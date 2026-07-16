@@ -36,3 +36,49 @@ export const POST = async (
     throw error;
   }
 };
+
+export const GET = async (
+  _request: Request,
+  { params }: RouteContext,
+): Promise<Response> => {
+  const { id: conversationId } = await params;
+  try {
+    const userId = await getAuthenticatedChatUserId();
+    const shared = await createChatSharingClient().getConversationShareStatus({
+      conversationId,
+      userId,
+    });
+    return empty(shared ? 200 : 204);
+  } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return empty(401);
+    }
+    if (error instanceof ChatStateRequestError) {
+      return empty(error.status);
+    }
+    throw error;
+  }
+};
+
+export const DELETE = async (
+  _request: Request,
+  { params }: RouteContext,
+): Promise<Response> => {
+  const { id: conversationId } = await params;
+  try {
+    const userId = await getAuthenticatedChatUserId();
+    await createChatSharingClient().revokeConversationShare({
+      conversationId,
+      userId,
+    });
+    return empty(204);
+  } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return empty(401);
+    }
+    if (error instanceof ChatStateRequestError) {
+      return empty(error.status);
+    }
+    throw error;
+  }
+};

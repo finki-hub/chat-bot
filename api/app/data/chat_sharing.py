@@ -35,6 +35,44 @@ async def create_conversation_share(
     raise RuntimeError(message)
 
 
+async def get_conversation_share_status(
+    db: ChatPersistenceDatabase,
+    *,
+    conversation_id: UUID,
+    user_id: UUID,
+) -> bool | None:
+    row = await db.fetchrow(
+        """
+        SELECT share_token FROM chat_conversation
+        WHERE id = $1 AND user_id = $2
+        """,
+        conversation_id,
+        user_id,
+    )
+    if row is None:
+        return None
+    return row["share_token"] is not None
+
+
+async def revoke_conversation_share(
+    db: ChatPersistenceDatabase,
+    *,
+    conversation_id: UUID,
+    user_id: UUID,
+) -> bool:
+    row = await db.fetchrow(
+        """
+        UPDATE chat_conversation
+        SET share_token = NULL
+        WHERE id = $1 AND user_id = $2
+        RETURNING id
+        """,
+        conversation_id,
+        user_id,
+    )
+    return row is not None
+
+
 async def load_shared_conversation(
     db: ChatPersistenceDatabase,
     *,

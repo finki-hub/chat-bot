@@ -25,9 +25,17 @@ type ChatSharingClient = {
     readonly conversationId: string;
     readonly userId: string;
   }) => Promise<ChatConversationShare>;
+  readonly getConversationShareStatus: (input: {
+    readonly conversationId: string;
+    readonly userId: string;
+  }) => Promise<boolean>;
   readonly loadSharedConversation: (input: {
     readonly shareToken: string;
   }) => Promise<SharedChatConversation>;
+  readonly revokeConversationShare: (input: {
+    readonly conversationId: string;
+    readonly userId: string;
+  }) => Promise<void>;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -102,6 +110,23 @@ export const createChatSharingClient = (): ChatSharingClient => ({
     const body: unknown = await response.json();
     return parseShare(body);
   },
+  getConversationShareStatus: async ({ conversationId, userId }) => {
+    const userQuery = new URLSearchParams({ [USER_ID_FIELD]: userId });
+    const response = await fetch(
+      `${API_BASE_URL}/chat/state/conversations/${encodeURIComponent(conversationId)}/share?${userQuery.toString()}`,
+      {
+        headers: { 'x-api-key': CHAT_API_KEY },
+        method: 'GET',
+      },
+    );
+    if (response.status === 204) {
+      return false;
+    }
+    if (!response.ok) {
+      throw new ChatStateRequestError(response.status);
+    }
+    return true;
+  },
   loadSharedConversation: async ({ shareToken }) => {
     const response = await fetch(
       `${API_BASE_URL}/chat/state/shared/${encodeURIComponent(shareToken)}`,
@@ -116,5 +141,21 @@ export const createChatSharingClient = (): ChatSharingClient => ({
     }
     const body: unknown = await response.json();
     return parseSharedConversation(body);
+  },
+  revokeConversationShare: async ({ conversationId, userId }) => {
+    const response = await fetch(
+      `${API_BASE_URL}/chat/state/conversations/${encodeURIComponent(conversationId)}/share`,
+      {
+        body: JSON.stringify({ [USER_ID_FIELD]: userId }),
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': CHAT_API_KEY,
+        },
+        method: 'DELETE',
+      },
+    );
+    if (!response.ok) {
+      throw new ChatStateRequestError(response.status);
+    }
   },
 });

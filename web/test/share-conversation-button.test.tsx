@@ -8,20 +8,25 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const SHARE_LABEL = 'Сподели разговор';
+const STOP_SHARING_LABEL = 'Прекини споделување';
 const SHARE_TOKEN = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d23';
 const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
+const fetchMock = vi.fn<typeof fetch>();
+const fetchCallFor = (method: 'DELETE' | 'POST') =>
+  fetchMock.mock.calls.find(([, init]) => init?.method === method);
 
 describe('ShareConversationButton', () => {
   beforeEach(() => {
     writeText.mockClear();
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn<typeof fetch>()
-        .mockResolvedValue(
-          Response.json({ shareToken: SHARE_TOKEN }, { status: 200 }),
-        ),
+    fetchMock.mockReset();
+    fetchMock.mockImplementation((_input, init) =>
+      init?.method === 'GET'
+        ? Promise.resolve(new Response(null, { status: 204 }))
+        : Promise.resolve(
+            Response.json({ shareToken: SHARE_TOKEN }, { status: 200 }),
+          ),
     );
+    vi.stubGlobal('fetch', fetchMock);
     Object.assign(navigator, { clipboard: { writeText } });
   });
 
@@ -44,10 +49,10 @@ describe('ShareConversationButton', () => {
       await import('@/components/chat/share-conversation-button');
     render(<ShareConversationButton conversationId="conversation-1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: SHARE_LABEL }));
+    fireEvent.click(await screen.findByRole('button', { name: SHARE_LABEL }));
 
     await waitFor(() => {
-      const fetchCall = vi.mocked(fetch).mock.calls[0];
+      const fetchCall = fetchCallFor('POST');
 
       expect(fetchCall?.[0]).toBe('/api/chat/conversation-1/share');
       expect(fetchCall?.[1]?.method).toBe('POST');
@@ -60,6 +65,35 @@ describe('ShareConversationButton', () => {
     expect(
       screen.getByRole('button', { name: 'Врската е копирана' }),
     ).toBeEnabled();
+    await expect(
+      screen.findByRole(
+        'button',
+        { name: STOP_SHARING_LABEL },
+        { timeout: 2_000 },
+      ),
+    ).resolves.toBeEnabled();
+  });
+
+  it('loads and revokes an existing share', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    const { ShareConversationButton } =
+      await import('@/components/chat/share-conversation-button');
+    render(<ShareConversationButton conversationId="conversation-1" />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: STOP_SHARING_LABEL }),
+    );
+
+    await waitFor(() => {
+      const revokeCall = fetchCallFor('DELETE');
+
+      expect(revokeCall?.[0]).toBe('/api/chat/conversation-1/share');
+      expect(revokeCall?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    await expect(
+      screen.findByRole('button', { name: SHARE_LABEL }),
+    ).resolves.toBeEnabled();
   });
 
   it('discards a pending share when the active conversation changes', async () => {
@@ -67,16 +101,17 @@ describe('ShareConversationButton', () => {
     const pendingResponse = new Promise<Response>((resolve) => {
       resolveShareRequest = resolve;
     });
-    vi.mocked(fetch).mockReturnValueOnce(pendingResponse);
     const { ShareConversationButton } =
       await import('@/components/chat/share-conversation-button');
     const { rerender } = render(
       <ShareConversationButton conversationId="conversation-1" />,
     );
 
+    await screen.findByRole('button', { name: SHARE_LABEL });
+    fetchMock.mockReturnValueOnce(pendingResponse);
     fireEvent.click(screen.getByRole('button', { name: SHARE_LABEL }));
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledOnce();
+      expect(fetchCallFor('POST')).toBeDefined();
     });
     rerender(<ShareConversationButton conversationId="conversation-2" />);
 
@@ -99,11 +134,12 @@ describe('ShareConversationButton', () => {
   });
 
   it('announces a failed share request', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 500 }));
     const { ShareConversationButton } =
       await import('@/components/chat/share-conversation-button');
     render(<ShareConversationButton conversationId="conversation-1" />);
 
+    await screen.findByRole('button', { name: SHARE_LABEL });
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 500 }));
     fireEvent.click(screen.getByRole('button', { name: SHARE_LABEL }));
 
     await expect(

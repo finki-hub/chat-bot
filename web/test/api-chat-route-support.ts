@@ -113,6 +113,9 @@ export const routeMocks = {
     createConversationShare: vi.fn(async (_input: StateClientInput) => ({
       shareToken: SHARE_TOKEN,
     })),
+    getConversationShareStatus: vi.fn(
+      async (_input: StateClientInput) => false,
+    ),
     loadSharedConversation: vi.fn(
       async (_input: {
         readonly shareToken: string;
@@ -122,6 +125,7 @@ export const routeMocks = {
           userId: USER_ID,
         }),
     ),
+    revokeConversationShare: vi.fn(async (_input: StateClientInput) => {}),
   },
   stateClient: {
     clearActiveStreamIfCurrent: vi.fn(async (_input: StateClientInput) => {}),
@@ -183,6 +187,8 @@ export const resetRouteMocks = (): void => {
   vi.clearAllMocks();
   routeMocks.consumedResumableStreams.length = 0;
   routeMocks.getAuthenticatedChatUserId.mockResolvedValue(USER_ID);
+  routeMocks.sharingClient.getConversationShareStatus.mockResolvedValue(false);
+  routeMocks.sharingClient.revokeConversationShare.mockResolvedValue();
   routeMocks.createChatSharingClient.mockReturnValue(routeMocks.sharingClient);
   routeMocks.createChatStateClient.mockReturnValue(routeMocks.stateClient);
   routeMocks.createChatResumableStreamContext.mockReturnValue(

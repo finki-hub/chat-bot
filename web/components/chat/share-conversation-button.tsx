@@ -1,37 +1,54 @@
 'use client';
 
-import { Check, CircleAlert, LoaderCircle, Share2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import {
+  Check,
+  CircleAlert,
+  Copy,
+  LoaderCircle,
+  Share2,
+  Unlink,
+} from 'lucide-react';
 
+import {
+  type ConversationShareState,
+  useConversationSharing,
+} from '@/components/chat/use-conversation-sharing';
 import { IconButton } from '@/components/ui/icon-controls';
 import { t } from '@/lib/i18n';
 
-type ShareStatus = 'copied' | 'failed' | 'idle' | 'pending';
+type ActiveShareState = Extract<
+  ConversationShareState,
+  { readonly status: 'revoking' | 'shared' }
+>;
 
-const labelFor = (status: ShareStatus): string => {
-  switch (status) {
-    case 'copied':
-      return t('header.shareCopied');
+const shareLabelFor = (state: ConversationShareState): string => {
+  switch (state.status) {
+    case 'checking':
+      return t('header.shareChecking');
     case 'failed':
       return t('header.shareFailed');
     case 'idle':
       return t('header.share');
     case 'pending':
       return t('header.sharePending');
+    case 'revoking':
+    case 'shared':
+      return t('header.share');
     default: {
-      const exhaustiveStatus: never = status;
-      return exhaustiveStatus;
+      const exhaustiveState: never = state;
+      return exhaustiveState;
     }
   }
 };
 
-const iconFor = (status: ShareStatus) => {
-  switch (status) {
-    case 'copied':
+const shareIconFor = (state: ConversationShareState) => {
+  switch (state.status) {
+    case 'checking':
+    case 'pending':
       return (
-        <Check
+        <LoaderCircle
           aria-hidden="true"
-          className="h-5 w-5"
+          className="h-5 w-5 animate-spin"
         />
       );
     case 'failed':
@@ -42,121 +59,131 @@ const iconFor = (status: ShareStatus) => {
         />
       );
     case 'idle':
+    case 'revoking':
+    case 'shared':
       return (
         <Share2
           aria-hidden="true"
           className="h-5 w-5"
         />
       );
-    case 'pending':
-      return (
-        <LoaderCircle
-          aria-hidden="true"
-          className="h-5 w-5 animate-spin"
-        />
-      );
     default: {
-      const exhaustiveStatus: never = status;
-      return exhaustiveStatus;
+      const exhaustiveState: never = state;
+      return exhaustiveState;
     }
   }
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+const stopLabelFor = (state: ActiveShareState): string => {
+  if (state.status === 'revoking') return t('header.shareRevoking');
+  return state.revokeFailed
+    ? t('header.shareRevokeFailed')
+    : t('header.shareStop');
+};
+
+const StopIcon = ({ state }: { readonly state: ActiveShareState }) => {
+  if (state.status === 'revoking') {
+    return (
+      <LoaderCircle
+        aria-hidden="true"
+        className="h-5 w-5 animate-spin"
+      />
+    );
+  }
+  if (state.revokeFailed) {
+    return (
+      <CircleAlert
+        aria-hidden="true"
+        className="h-5 w-5"
+      />
+    );
+  }
+  return (
+    <Unlink
+      aria-hidden="true"
+      className="h-5 w-5"
+    />
+  );
+};
+
+const ActiveShareControls = ({
+  copyShareUrl,
+  revoke,
+  state,
+}: {
+  readonly copyShareUrl: () => Promise<void>;
+  readonly revoke: () => Promise<void>;
+  readonly state: ActiveShareState;
+}) => {
+  const revoking = state.status === 'revoking';
+  const stopLabel = stopLabelFor(state);
+  const showCopy = state.status === 'shared' && state.shareUrl !== null;
+  const copyLabel =
+    state.status === 'shared' && state.copied
+      ? t('header.shareCopied')
+      : t('header.shareCopy');
+
+  return (
+    <div
+      aria-live="polite"
+      className="flex items-center gap-1"
+    >
+      {showCopy ? (
+        <IconButton
+          aria-label={copyLabel}
+          onClick={() => {
+            void copyShareUrl();
+          }}
+          title={copyLabel}
+        >
+          {state.copied ? (
+            <Check
+              aria-hidden="true"
+              className="h-5 w-5"
+            />
+          ) : (
+            <Copy
+              aria-hidden="true"
+              className="h-5 w-5"
+            />
+          )}
+        </IconButton>
+      ) : null}
+      <IconButton
+        aria-busy={revoking}
+        aria-label={stopLabel}
+        disabled={revoking}
+        onClick={() => {
+          void revoke();
+        }}
+        title={stopLabel}
+      >
+        <StopIcon state={state} />
+      </IconButton>
+    </div>
+  );
+};
 
 export const ShareConversationButton = ({
   conversationId,
 }: {
   readonly conversationId: null | string;
 }) => {
-  const [status, setStatus] = useState<ShareStatus>('idle');
-  const requestControllerRef = useRef<AbortController | null>(null);
-  const pending = status === 'pending';
-  const label = labelFor(status);
+  const { copyShareUrl, revoke, share, state } =
+    useConversationSharing(conversationId);
 
-  useEffect(() => {
-    const controller = requestControllerRef.current;
-    requestControllerRef.current = null;
-    controller?.abort();
-    setStatus('idle');
-    return () => {
-      const activeController = requestControllerRef.current;
-      requestControllerRef.current = null;
-      activeController?.abort();
-    };
-  }, [conversationId]);
+  if (state.status === 'shared' || state.status === 'revoking') {
+    return (
+      <ActiveShareControls
+        copyShareUrl={copyShareUrl}
+        revoke={revoke}
+        state={state}
+      />
+    );
+  }
 
-  useEffect(() => {
-    const timer =
-      status === 'copied'
-        ? setTimeout(() => {
-            setStatus((currentStatus) =>
-              currentStatus === 'copied' ? 'idle' : currentStatus,
-            );
-          }, 1_500)
-        : null;
-    return () => {
-      if (timer !== null) {
-        clearTimeout(timer);
-      }
-    };
-  }, [status]);
-
-  const share = async (): Promise<void> => {
-    if (conversationId === null || pending) {
-      return;
-    }
-    requestControllerRef.current?.abort();
-    const controller = new AbortController();
-    requestControllerRef.current = controller;
-    setStatus('pending');
-    try {
-      const response = await fetch(
-        `/api/chat/${encodeURIComponent(conversationId)}/share`,
-        { method: 'POST', signal: controller.signal },
-      );
-      if (requestControllerRef.current !== controller) {
-        return;
-      }
-      if (!response.ok) {
-        setStatus('failed');
-        return;
-      }
-      const body: unknown = await response.json();
-      if (!isRecord(body) || typeof body['shareToken'] !== 'string') {
-        setStatus('failed');
-        return;
-      }
-      const url = new URL(
-        `/share/${encodeURIComponent(body['shareToken'])}`,
-        location.origin,
-      ).href;
-      await navigator.clipboard.writeText(url);
-      if (requestControllerRef.current !== controller) {
-        return;
-      }
-      setStatus('copied');
-    } catch (error) {
-      if (requestControllerRef.current !== controller) {
-        return;
-      }
-      if (
-        error instanceof DOMException ||
-        error instanceof SyntaxError ||
-        error instanceof TypeError
-      ) {
-        setStatus('failed');
-        return;
-      }
-      throw error;
-    } finally {
-      if (requestControllerRef.current === controller) {
-        requestControllerRef.current = null;
-      }
-    }
-  };
-
+  const pending = state.status === 'checking' || state.status === 'pending';
+  const label = shareLabelFor(state);
   return (
     <IconButton
       aria-busy={pending}
@@ -167,7 +194,7 @@ export const ShareConversationButton = ({
       }}
       title={label}
     >
-      {iconFor(status)}
+      {shareIconFor(state)}
     </IconButton>
   );
 };

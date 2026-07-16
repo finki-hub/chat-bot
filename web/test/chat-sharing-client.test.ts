@@ -49,6 +49,74 @@ describe('chat sharing client', () => {
     );
   });
 
+  it('reads whether an owned conversation is shared', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { createChatSharingClient } =
+      await import('@/lib/chat-sharing-client');
+
+    await expect(
+      createChatSharingClient().getConversationShareStatus({
+        conversationId: CONVERSATION_ID,
+        userId: USER_ID,
+      }),
+    ).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE_URL}/chat/state/conversations/${CONVERSATION_ID}/share?user_id=${encodeURIComponent(USER_ID)}`,
+      {
+        headers: { 'x-api-key': 'test-key' },
+        method: 'GET',
+      },
+    );
+  });
+
+  it('reports an owned conversation without a share token', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response(null, { status: 204 })),
+    );
+    const { createChatSharingClient } =
+      await import('@/lib/chat-sharing-client');
+
+    await expect(
+      createChatSharingClient().getConversationShareStatus({
+        conversationId: CONVERSATION_ID,
+        userId: USER_ID,
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it('revokes an owned conversation share', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { createChatSharingClient } =
+      await import('@/lib/chat-sharing-client');
+
+    await expect(
+      createChatSharingClient().revokeConversationShare({
+        conversationId: CONVERSATION_ID,
+        userId: USER_ID,
+      }),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE_URL}/chat/state/conversations/${CONVERSATION_ID}/share`,
+      {
+        body: JSON.stringify({ [USER_ID_FIELD]: USER_ID }),
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': 'test-key',
+        },
+        method: 'DELETE',
+      },
+    );
+  });
+
   it('loads shared history without caching it', async () => {
     const body = {
       conversation: { title: 'Shared enrollment chat' },

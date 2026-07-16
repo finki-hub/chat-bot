@@ -19,14 +19,24 @@ const importPost = async (): Promise<ShareRoutePost> => {
   return route.POST;
 };
 
-const request = (): Request =>
+const importGet = async (): Promise<ShareRoutePost> => {
+  const route = await import('@/app/api/chat/[id]/share/route');
+  return route.GET;
+};
+
+const importDelete = async (): Promise<ShareRoutePost> => {
+  const route = await import('@/app/api/chat/[id]/share/route');
+  return route.DELETE;
+};
+
+const request = (method: 'DELETE' | 'GET' | 'POST'): Request =>
   new Request(`http://localhost/api/chat/${CONVERSATION_ID}/share`, {
-    method: 'POST',
+    method,
   });
 
 const context = () => ({ params: Promise.resolve({ id: CONVERSATION_ID }) });
 
-describe('POST /api/chat/[id]/share', () => {
+describe('/api/chat/[id]/share', () => {
   beforeEach(() => {
     vi.resetModules();
     resetRouteMocks();
@@ -34,7 +44,7 @@ describe('POST /api/chat/[id]/share', () => {
   });
 
   it('creates a stable share token for the authenticated owner', async () => {
-    const response = await (await importPost())(request(), context());
+    const response = await (await importPost())(request('POST'), context());
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toStrictEqual({
@@ -55,7 +65,7 @@ describe('POST /api/chat/[id]/share', () => {
       new AuthenticationRequiredError(),
     );
 
-    const response = await (await importPost())(request(), context());
+    const response = await (await importPost())(request('POST'), context());
 
     expect(response.status).toBe(401);
     expect(
@@ -69,7 +79,53 @@ describe('POST /api/chat/[id]/share', () => {
       new ChatStateRequestError(404),
     );
 
-    const response = await (await importPost())(request(), context());
+    const response = await (await importPost())(request('POST'), context());
+
+    expect(response.status).toBe(404);
+    await expect(response.text()).resolves.toBe('');
+  });
+
+  it('reports an active share for the authenticated owner', async () => {
+    routeMocks.sharingClient.getConversationShareStatus.mockResolvedValueOnce(
+      true,
+    );
+
+    const response = await (await importGet())(request('GET'), context());
+
+    expect(response.status).toBe(200);
+    expect(
+      routeMocks.sharingClient.getConversationShareStatus,
+    ).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      userId: USER_ID,
+    });
+  });
+
+  it('reports an owned conversation without an active share', async () => {
+    const response = await (await importGet())(request('GET'), context());
+
+    expect(response.status).toBe(204);
+  });
+
+  it('revokes the authenticated owner share', async () => {
+    const response = await (await importDelete())(request('DELETE'), context());
+
+    expect(response.status).toBe(204);
+    expect(
+      routeMocks.sharingClient.revokeConversationShare,
+    ).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      userId: USER_ID,
+    });
+  });
+
+  it('preserves revoke ownership failures from the chat-state API', async () => {
+    const { ChatStateRequestError } = await import('@/lib/chat-state-client');
+    routeMocks.sharingClient.revokeConversationShare.mockRejectedValueOnce(
+      new ChatStateRequestError(404),
+    );
+
+    const response = await (await importDelete())(request('DELETE'), context());
 
     expect(response.status).toBe(404);
     await expect(response.text()).resolves.toBe('');
