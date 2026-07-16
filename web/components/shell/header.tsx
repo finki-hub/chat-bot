@@ -30,7 +30,7 @@ export const Header = ({
   onToggleSidebar,
 }: HeaderProps) => (
   <header className="z-30 shrink-0 border-b border-border/60 bg-background pt-[env(safe-area-inset-top)]">
-    <div className="flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-4">
+    <div className="flex min-h-14 flex-wrap items-center gap-2 px-3 py-1.5 sm:h-14 sm:flex-nowrap sm:gap-3 sm:px-4 sm:py-0">
       <IconButton
         aria-label={t('header.toggleSidebar')}
         onClick={onToggleSidebar}
@@ -45,7 +45,7 @@ export const Header = ({
         className="hidden h-9 w-9 shrink-0 object-contain sm:block"
         src="/logo.png"
       />
-      <h1 className="min-w-0 flex-1 truncate text-base font-bold leading-tight tracking-tight sm:text-lg">
+      <h1 className="min-w-24 flex-1 truncate text-base font-bold leading-tight tracking-tight sm:min-w-0 sm:text-lg">
         {t('header.title')}
       </h1>
       <div className="ml-auto flex shrink-0 items-center gap-2">

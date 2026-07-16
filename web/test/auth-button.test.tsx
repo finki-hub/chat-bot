@@ -7,7 +7,10 @@ type MockSessionState =
   | { readonly data: null; readonly status: 'unauthenticated' }
   | {
       readonly data: {
-        readonly user: { readonly email: string; readonly name: string };
+        readonly user: {
+          readonly email?: null | string;
+          readonly name?: null | string;
+        };
       };
       readonly status: 'authenticated';
     };
@@ -40,8 +43,25 @@ describe('AuthButton', () => {
     });
 
     render(<AuthButton />);
-    fireEvent.click(screen.getByRole('button', { name: 'Одјави се' }));
+    const signOutButton = screen.getByRole('button', {
+      name: 'Одјави се: Test User',
+    });
+    fireEvent.click(signOutButton);
 
+    expect(signOutButton).toHaveTextContent('Test User');
     expect(authMocks.signOut).toHaveBeenCalledOnce();
+  });
+
+  it('uses the plain sign-out label when authenticated identity is unavailable', () => {
+    authMocks.useSession.mockReturnValue({
+      data: { user: {} },
+      status: 'authenticated',
+    });
+
+    render(<AuthButton />);
+
+    const signOutButton = screen.getByRole('button', { name: 'Одјави се' });
+
+    expect(signOutButton).toHaveTextContent('Одјави се');
   });
 });
