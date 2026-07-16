@@ -40,8 +40,12 @@ describe('AuthButton', () => {
     });
 
     render(<AuthButton />);
-    fireEvent.click(screen.getByRole('button', { name: 'Одјави се' }));
+    const signOutButton = screen.getByRole('button', {
+      name: 'Одјави се: Test User',
+    });
+    fireEvent.click(signOutButton);
 
+    expect(signOutButton).toHaveTextContent('Test User');
     expect(authMocks.signOut).toHaveBeenCalledOnce();
   });
 });

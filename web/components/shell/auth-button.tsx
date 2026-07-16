@@ -10,9 +10,12 @@ export const AuthButton = () => {
   const { data: session, status } = useSession();
 
   if (status === 'authenticated') {
+    const userLabel =
+      session.user?.name ?? session.user?.email ?? t('auth.signOut');
+
     return (
       <IconButton
-        aria-label={t('auth.signOut')}
+        aria-label={`${t('auth.signOut')}: ${userLabel}`}
         className="w-auto gap-2 px-3"
         onClick={() => {
           void signOut();
@@ -23,8 +26,8 @@ export const AuthButton = () => {
           aria-hidden="true"
           className="h-5 w-5"
         />
-        <span className="hidden max-w-32 truncate sm:inline">
-          {session.user?.name ?? session.user?.email ?? t('auth.signOut')}
+        <span className="block min-w-0 max-w-16 truncate sm:max-w-32">
+          {userLabel}
         </span>
       </IconButton>
     );
