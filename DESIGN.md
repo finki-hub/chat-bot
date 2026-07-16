@@ -34,6 +34,8 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Mobile sidebar: a modal Radix dialog that traps focus, closes on Escape or overlay interaction, and restores focus to the header trigger. Desktop retains the static complementary landmark.
 - Conversation loading state: preserve the current list/thread during transient failures and present an inline alert with a retry action. Only a confirmed missing conversation clears the selection.
 - Composer submission failure: retain the draft and show an inline retryable error; clear the draft only after the message is accepted.
+- Conversation share action: a header `IconButton` using the existing control tokens and Lucide icons. It is disabled without an active conversation and exposes distinct pending, copied, and failed states without adding a toast system.
+- Shared conversation view: a read-only shell with the standard border/background header, brand mark, conversation title, and existing thread renderer. It omits sidebar, composer, credentials, feedback, and regeneration controls.
 
 ## 6. Accessibility
 
@@ -42,9 +44,10 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Mobile header and drawer honor safe-area insets; decorative logo and GitHub shortcut are hidden below `sm` to protect the title and primary actions.
 - Modal drawers contain keyboard focus and restore it to their invoking control.
 - Disabled async actions must expose `aria-busy` when work is pending.
+- Share-state changes must update the icon button's localized accessible name so copied and failed outcomes are available without relying on color.
 - Auth failures must use `role="alert"` and include a direct recovery step. Missing provider configuration must be described as temporary unavailability without exposing server terminology.
 
 ## 7. Accepted debt
 
 - The app currently has no richer brand reference document. This file captures the existing implicit system so small sidebar actions can remain consistent without a redesign.
-- Attachments, sharing/export, message search, edit/branching, command palette, font replacement, and Streamdown bundle splitting remain deferred product/performance work.
+- Attachments, conversation export, message search, edit/branching, command palette, font replacement, and Streamdown bundle splitting remain deferred product/performance work.

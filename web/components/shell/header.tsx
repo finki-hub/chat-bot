@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { KeyRound, PanelLeft } from 'lucide-react';
 
 import { AuthButton } from '@/components/shell/auth-button';
@@ -6,6 +8,7 @@ import { IconButton, IconLink } from '@/components/ui/icon-controls';
 import { t } from '@/lib/i18n';
 
 export type HeaderProps = {
+  actions?: ReactNode;
   onOpenCredentials: () => void;
   onToggleSidebar: () => void;
 };
@@ -21,7 +24,11 @@ const GitHubIcon = () => (
   </svg>
 );
 
-export const Header = ({ onOpenCredentials, onToggleSidebar }: HeaderProps) => (
+export const Header = ({
+  actions,
+  onOpenCredentials,
+  onToggleSidebar,
+}: HeaderProps) => (
   <header className="z-30 shrink-0 border-b border-border/60 bg-background pt-[env(safe-area-inset-top)]">
     <div className="flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-4">
       <IconButton
@@ -42,6 +49,7 @@ export const Header = ({ onOpenCredentials, onToggleSidebar }: HeaderProps) => (
         {t('header.title')}
       </h1>
       <div className="ml-auto flex shrink-0 items-center gap-2">
+        {actions}
         <IconButton
           aria-label={t('header.credentials')}
           onClick={onOpenCredentials}

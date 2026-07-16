@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 import { Composer } from '@/components/chat/composer';
 import { ServiceBanner } from '@/components/chat/service-banner';
+import { ShareConversationButton } from '@/components/chat/share-conversation-button';
 import { Thread } from '@/components/chat/thread';
 import { CredentialSettingsDialog } from '@/components/shell/credential-settings-dialog';
 import { Header } from '@/components/shell/header';
@@ -141,6 +142,7 @@ export const ChatScreen = () => {
   return (
     <div className="flex h-dvh w-full flex-col">
       <Header
+        actions={<ShareConversationButton conversationId={activeId} />}
         onOpenCredentials={() => {
           setCredentialSettingsOpen(true);
         }}

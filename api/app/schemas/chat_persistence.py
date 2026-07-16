@@ -75,6 +75,10 @@ class ChatConversation(BaseModel):
     updated_at: datetime
 
 
+class ChatConversationShare(BaseModel):
+    share_token: UUID
+
+
 class ChatMessageUpsert(BaseModel):
     id: UUID
     conversation_id: UUID
