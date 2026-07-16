@@ -27,7 +27,7 @@ export const SharedChatScreen = ({
         </h1>
       </div>
     </header>
-    <main className="flex min-h-0 flex-1 flex-col">
+    <main className="flex min-h-0 flex-1 flex-col [&_p]:text-pretty">
       {messages.length === 0 ? (
         <p className="m-auto px-4 text-center text-sm text-muted-foreground">
           {t('shared.empty')}

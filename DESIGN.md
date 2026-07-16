@@ -14,6 +14,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 
 - Sidebar rows use `text-sm`; section labels use `text-xs`, uppercase, and tracking-wide.
 - Conversation titles are single-line, truncated, and left-aligned.
+- Shared conversation messages use pretty wrapping to avoid orphaning short words on narrow screens.
 - Auth copy leads with the student task and concrete study value, not authentication mechanics or server terminology. Keep the auth headline balanced at `text-4xl`, `sm:text-5xl`, and `lg:text-5xl`.
 
 ## 4. Motion
