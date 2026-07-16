@@ -11,6 +11,7 @@ export const CONVERSATION_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d21';
 export const JSON_CONTENT_TYPE = 'application/json';
 export const MODEL = 'claude-sonnet-5';
 export const RESPONSE_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d22';
+export const SHARE_TOKEN = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d23';
 export const USER_ID = 'anon-user-1';
 export const OTHER_USER_ID = 'anon-user-2';
 
@@ -89,6 +90,7 @@ export const routeMocks = {
   },
   consumedResumableStreams: [] as string[],
   createChatResumableStreamContext: vi.fn(),
+  createChatSharingClient: vi.fn(),
   createChatStateClient: vi.fn(),
   getAuthenticatedChatUserId: vi.fn(async () => USER_ID),
   resumableContext: {
@@ -106,6 +108,24 @@ export const routeMocks = {
     resumeExistingStream: vi.fn<ResumeExistingStream>(async (_streamId) =>
       sseBody('data: resumed\n\n'),
     ),
+  },
+  sharingClient: {
+    createConversationShare: vi.fn(async (_input: StateClientInput) => ({
+      shareToken: SHARE_TOKEN,
+    })),
+    getConversationShareStatus: vi.fn(
+      async (_input: StateClientInput) => false,
+    ),
+    loadSharedConversation: vi.fn(
+      async (_input: {
+        readonly shareToken: string;
+      }): Promise<LoadedConversation> =>
+        routeMocks.stateClient.loadConversation({
+          conversationId: CONVERSATION_ID,
+          userId: USER_ID,
+        }),
+    ),
+    revokeConversationShare: vi.fn(async (_input: StateClientInput) => {}),
   },
   stateClient: {
     clearActiveStreamIfCurrent: vi.fn(async (_input: StateClientInput) => {}),
@@ -167,6 +187,9 @@ export const resetRouteMocks = (): void => {
   vi.clearAllMocks();
   routeMocks.consumedResumableStreams.length = 0;
   routeMocks.getAuthenticatedChatUserId.mockResolvedValue(USER_ID);
+  routeMocks.sharingClient.getConversationShareStatus.mockResolvedValue(false);
+  routeMocks.sharingClient.revokeConversationShare.mockResolvedValue();
+  routeMocks.createChatSharingClient.mockReturnValue(routeMocks.sharingClient);
   routeMocks.createChatStateClient.mockReturnValue(routeMocks.stateClient);
   routeMocks.createChatResumableStreamContext.mockReturnValue(
     routeMocks.resumableContext,
@@ -199,6 +222,15 @@ export const installRouteMocks = (): void => {
     return {
       ...actual,
       createChatStateClient: routeMocks.createChatStateClient,
+    };
+  });
+  vi.doMock('@/lib/chat-sharing-client', async (importOriginal) => {
+    const actual =
+      await importOriginal<typeof import('@/lib/chat-sharing-client')>();
+
+    return {
+      ...actual,
+      createChatSharingClient: routeMocks.createChatSharingClient,
     };
   });
   vi.doMock('@/lib/resumable-stream-context', async (importOriginal) => {

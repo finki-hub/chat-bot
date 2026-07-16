@@ -106,11 +106,19 @@ def shutdown_posthog() -> None:
     client.shutdown()
 
 
+def _request_path_template(scope: Scope, fallback: str) -> str:
+    route = scope.get("route")
+    return getattr(route, "path", None) or fallback
+
+
 def capture_request_exception(request: Request, exc: Exception) -> None:
     """Report an unhandled request exception (path/method metadata only, redacted body)."""
     capture_exception(
         exc,
-        properties={"path": request.url.path, "method": request.method},
+        properties={
+            "path": _request_path_template(request.scope, request.url.path),
+            "method": request.method,
+        },
     )
 
 
@@ -162,13 +170,11 @@ class _RequestTrackingMiddleware:
         try:
             await self.app(scope, receive, send_wrapper)
         finally:
-            route = scope.get("route")
-            template = getattr(route, "path", None) or path
             capture(
                 safe_distinct_id(Headers(scope=scope).get("x-distinct-id"), "api"),
                 "request_completed",
                 {
-                    "route": template,
+                    "route": _request_path_template(scope, path),
                     "method": scope.get("method", ""),
                     "status_code": status_code,
                     "duration_ms": round((time.perf_counter() - start) * 1000, 1),
