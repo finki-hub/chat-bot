@@ -22,7 +22,7 @@ export const AuthButton = () => {
         onClick={() => {
           void signOut();
         }}
-        title={userLabel ?? signOutLabel}
+        title={accessibleLabel}
       >
         <LogOut
           aria-hidden="true"

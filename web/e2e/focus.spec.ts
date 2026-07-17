@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 import { installMockChatState } from './helpers/chat-state';
 import { mockModels } from './helpers/models';
@@ -30,6 +30,9 @@ const mockBackend = async (
   return server;
 };
 
+const tooltipTriggerFor = (control: Locator): Locator =>
+  control.locator('xpath=ancestor-or-self::*[@data-slot="tooltip-trigger"][1]');
+
 test('composer is focused on load and after a response finishes', async ({
   page,
 }) => {
@@ -46,4 +49,66 @@ test('composer is focused on load and after a response finishes', async ({
   await expect(input).toBeFocused();
 
   await server.close();
+});
+
+test('header controls explain their actions on hover and focus', async ({
+  page,
+}) => {
+  await page.route('**/api/auth/session', async (route) => {
+    await route.fulfill({
+      body: 'null',
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
+  await mockModels(page);
+  await installMockChatState(page, {
+    streamUrl: 'http://127.0.0.1:9/stream',
+  });
+  await page.goto('/');
+
+  const shareControl = page.getByRole('button', { name: 'Сподели разговор' });
+  const credentialsControl = page.getByRole('button', { name: 'API клучеви' });
+  const signInControl = page.getByRole('button', { name: 'Најави се' });
+  const githubControl = page.getByRole('link', {
+    name: 'GitHub репозиториум',
+  });
+  const headerTitle = page.getByRole('heading', { name: 'ФИНКИ Хаб' });
+  const tooltip = page.getByRole('tooltip');
+
+  await expect(shareControl).toBeDisabled();
+
+  const controls = [
+    {
+      control: shareControl,
+      label: 'Сподели разговор',
+    },
+    {
+      control: credentialsControl,
+      label: 'API клучеви',
+    },
+    {
+      control: signInControl,
+      label: 'Најави се',
+    },
+    {
+      control: githubControl,
+      label: 'GitHub репозиториум',
+    },
+  ];
+
+  for (const { control, label } of controls) {
+    await tooltipTriggerFor(control).hover();
+    await expect(tooltip).toHaveText(label);
+    await headerTitle.hover();
+    await expect(tooltip).toBeHidden();
+  }
+
+  for (const { control, label } of controls.slice(1)) {
+    await expect(control).toBeEnabled();
+    await control.focus();
+    await expect(tooltip).toHaveText(label);
+    await page.keyboard.press('Escape');
+    await expect(tooltip).toBeHidden();
+  }
 });
