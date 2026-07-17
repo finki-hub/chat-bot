@@ -73,6 +73,7 @@ test('header controls explain their actions on hover and focus', async ({
   const githubControl = page.getByRole('link', {
     name: 'GitHub репозиториум',
   });
+  const themeControl = page.getByRole('button', { name: 'Промени тема' });
   const headerTitle = page.getByRole('heading', { name: 'ФИНКИ Хаб' });
   const tooltip = page.getByRole('tooltip');
 
@@ -94,6 +95,10 @@ test('header controls explain their actions on hover and focus', async ({
     {
       control: githubControl,
       label: 'GitHub репозиториум',
+    },
+    {
+      control: themeControl,
+      label: 'Промени тема',
     },
   ];
 

@@ -93,6 +93,7 @@ export const ThemeToggle = () => {
           return activeTheme === 'dark' ? 'light' : 'dark';
         });
       }}
+      title={t('header.theme')}
     >
       {displayedTheme === 'dark' ? (
         <SunIcon
