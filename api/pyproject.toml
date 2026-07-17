@@ -27,7 +27,7 @@ dev = [
     "asyncpg-stubs>=0.31.3",
     "mypy>=2.3.0",
     "pytest>=9.1.1",
-    "ruff>=0.15.21",
+    "ruff>=0.15.22",
 ]
 
 [tool.mypy]
