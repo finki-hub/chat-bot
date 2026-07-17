@@ -36,6 +36,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Conversation loading state: preserve the current list/thread during transient failures and present an inline alert with a retry action. Only a confirmed missing conversation clears the selection.
 - Composer submission failure: retain the draft and show an inline retryable error; clear the draft only after the message is accepted.
 - Conversation share action: a header `IconButton` using the existing control tokens and Lucide icons. It is disabled without an active conversation and exposes distinct pending, copied, and failed states without adding a toast system.
+- Header control tooltip: compact header actions reuse the existing Radix `Tooltip` primitive below the control with a 4px offset. Tooltip copy matches the localized accessible name, updates with action state, opens on hover or keyboard focus, and remains hoverable for disabled controls through the documented wrapper pattern.
 - Shared conversation view: a read-only shell with the standard border/background header, brand mark, conversation title, and existing thread renderer. It omits sidebar, composer, credentials, feedback, and regeneration controls.
 
 ## 6. Accessibility
