@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { MyUIMessage } from '@/lib/api-types';
 
-import { AssistantMessage } from '@/components/chat/message';
+import { AssistantMessage, MessageError } from '@/components/chat/message';
 import { SearchStatus } from '@/components/chat/search-status';
 import { Thread } from '@/components/chat/thread';
 import { ResizeObserverStub } from '@/test/helpers/dom-stubs';
@@ -284,6 +284,81 @@ describe('AssistantMessage', () => {
       screen.queryByRole('button', { name: 'Обиди се повторно' }),
     ).not.toBeInTheDocument();
   });
+
+  it('renders safe sponsored quota guidance with a localized reset and actions', async () => {
+    const onManageCredentials = vi.fn<() => void>();
+    const onWait = vi.fn<() => void>();
+    const rawMessage = 'provider secret: https://attacker.invalid';
+    const user = userEvent.setup();
+
+    render(
+      <MessageError
+        errorPart={{
+          code: 'free_quota_exhausted',
+          message: rawMessage,
+          // eslint-disable-next-line camelcase -- mirrors the SSE wire contract.
+          resets_at: '2026-07-18T12:00:00Z',
+        }}
+        onManageCredentials={onManageCredentials}
+        onWait={onWait}
+      />,
+    );
+
+    const alert = screen.getByRole('alert');
+
+    expect(alert).not.toHaveTextContent(rawMessage);
+    expect(alert).not.toHaveTextContent('2026-07-18T12:00:00Z');
+    expect(alert).toHaveTextContent('Бесплатната квота е искористена.');
+
+    expect(
+      screen.getByRole('button', { name: 'Додај OpenAI API клуч' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Почекај до ресетирањето' }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Додај OpenAI API клуч' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Почекај до ресетирањето' }),
+    );
+
+    expect(onManageCredentials).toHaveBeenCalledOnce();
+    expect(onWait).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [
+      'free_tier_unavailable' as const,
+      'Бесплатниот модел е привремено недостапен.',
+    ],
+    [
+      'sponsored_request_in_progress' as const,
+      'Барањето за бесплатниот модел е веќе во тек. Почекај да заврши.',
+    ],
+  ])(
+    'renders safe guidance for %s without retry or raw backend text',
+    (code, copy) => {
+      const rawMessage = 'provider detail: do not show this';
+
+      render(
+        <MessageError
+          errorPart={{ code, message: rawMessage }}
+          onRetry={vi.fn<() => void>()}
+        />,
+      );
+
+      const alert = screen.getByRole('alert');
+
+      expect(alert).toHaveTextContent(copy);
+      expect(alert).not.toHaveTextContent(rawMessage);
+
+      expect(
+        screen.queryByRole('button', { name: 'Обиди се повторно' }),
+      ).toBeNull();
+    },
+  );
 
   it('renders a timing footnote when finished with timing metadata', () => {
     const msg: MyUIMessage = {

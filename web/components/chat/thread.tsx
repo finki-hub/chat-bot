@@ -21,8 +21,10 @@ export type ThreadProps = {
   activeError?: ErrorNotice;
   activeStatus?: StatusPart;
   messages: MyUIMessage[];
+  onManageCredentials?: () => void;
   onPickSuggestion?: (text: string) => unknown;
   onRetry?: () => void;
+  onWait?: () => void;
   renderActions?: (message: MyUIMessage) => ReactNode;
   status: 'error' | 'ready' | 'streaming' | 'submitted';
 };
@@ -77,8 +79,10 @@ export const Thread = ({
   activeError,
   activeStatus,
   messages,
+  onManageCredentials,
   onPickSuggestion,
   onRetry,
+  onWait,
   renderActions,
   status,
 }: ThreadProps) => {
@@ -135,7 +139,11 @@ export const Thread = ({
                   }
                   key={m.id}
                   message={m}
+                  onManageCredentials={
+                    isLastAssistant ? onManageCredentials : undefined
+                  }
                   onRetry={isLastAssistant ? onRetry : undefined}
+                  onWait={isLastAssistant ? onWait : undefined}
                   pending={isLastAssistant && streaming}
                   statusPart={
                     isLastAssistant && streaming ? activeStatus : undefined
@@ -156,7 +164,9 @@ export const Thread = ({
           <div className="mx-auto w-full max-w-3xl">
             <MessageError
               errorPart={activeError}
+              onManageCredentials={onManageCredentials}
               onRetry={onRetry}
+              onWait={onWait}
             />
           </div>
         ) : null}
