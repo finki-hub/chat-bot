@@ -369,8 +369,12 @@ def _log_sponsored_release_failure(task: asyncio.Task[None]) -> None:
         task.result()
     except asyncio.CancelledError:
         return
-    except Exception:
-        logger.exception("Failed to release sponsored request lease")
+    except Exception as exc:
+        logger.log(
+            logging.ERROR,
+            "Failed to release sponsored request lease error_type=%s",
+            type(exc).__name__,
+        )
 
 
 async def _instrument_stream(
@@ -781,8 +785,12 @@ async def _chat_response_stream(
                         else None
                     ),
                 )
-        except Exception:
-            logger.exception("Chat context build failed before streaming")
+        except Exception as exc:
+            logger.log(
+                logging.ERROR,
+                "Chat context build failed before streaming error_type=%s",
+                type(exc).__name__,
+            )
             links_task.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await links_task
@@ -820,8 +828,12 @@ async def _chat_response_stream(
             except asyncio.CancelledError:
                 release_task.add_done_callback(_log_sponsored_release_failure)
                 raise
-            except Exception:
-                logger.exception("Failed to release sponsored request lease")
+            except Exception as exc:
+                logger.log(
+                    logging.ERROR,
+                    "Failed to release sponsored request lease error_type=%s",
+                    type(exc).__name__,
+                )
         reset_request_timings(token)
 
 
