@@ -15,20 +15,23 @@ type RowValue = UUID | date | datetime | int | None
 
 
 class SponsoredUsageConnection(Protocol):
-    async def execute(self, query: str, *args: QueryArgument) -> str: ...
+    async def execute(self, query: str, *args: QueryArgument) -> str:
+        pass
 
     async def fetchrow(
         self,
         query: str,
         *args: QueryArgument,
-    ) -> Mapping[str, RowValue] | None: ...
+    ) -> Mapping[str, RowValue] | None:
+        pass
 
 
 type TransactionConnection = SponsoredUsageConnection | PoolConnectionProxy[Record]
 
 
 class SponsoredUsageDatabase(Protocol):
-    def transaction(self) -> AbstractAsyncContextManager[SponsoredUsageConnection]: ...
+    def transaction(self) -> AbstractAsyncContextManager[SponsoredUsageConnection]:
+        pass
 
 
 @dataclass(frozen=True, slots=True)
