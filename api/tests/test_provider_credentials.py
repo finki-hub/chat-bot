@@ -1,3 +1,4 @@
+import secrets
 from uuid import UUID
 
 import anyio
@@ -8,11 +9,27 @@ from app.api.provider_credentials import (
 )
 from app.data.chat_credentials import upsert_chat_credential
 from app.llms.models import Model
-from app.schemas.chat_credentials import ChatCredentialUpsert
+from app.llms.provider_credentials import LlmProviderCredentials
+from app.schemas.chat_credentials import ChatCredentialSecret, ChatCredentialUpsert
 from app.utils.settings import Settings
 from tests.chat_persistence_fake import FakeChatDatabase
 
 USER_ID = UUID("00000000-0000-4000-8000-000000000001")
+
+
+def test_available_providers_returns_only_configured_credentials() -> None:
+    credentials = LlmProviderCredentials(
+        google=ChatCredentialSecret(
+            provider="google",
+            api_key=secrets.token_urlsafe(),
+        ),
+        ollama=ChatCredentialSecret(
+            provider="ollama",
+            api_key=secrets.token_urlsafe(),
+        ),
+    )
+
+    assert credentials.available_providers() == frozenset({"google", "ollama"})
 
 
 def test_credential_providers_for_models_includes_retrieval_time_models() -> None:
