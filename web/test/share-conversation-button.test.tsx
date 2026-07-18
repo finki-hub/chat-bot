@@ -75,7 +75,7 @@ describe('ShareConversationButton', () => {
     ).resolves.toBeEnabled();
   });
 
-  it('restores and copies an existing share after remount', async () => {
+  it('restores and copies an existing share on initial mount', async () => {
     fetchMock.mockResolvedValueOnce(
       Response.json({ shareToken: SHARE_TOKEN }, { status: 200 }),
     );
