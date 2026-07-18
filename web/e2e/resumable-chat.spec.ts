@@ -1,5 +1,8 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import type { ModelCatalog } from '@/lib/api-types';
+
+/* eslint-disable camelcase -- catalog fixtures mirror the API wire contract. */
 import { mockModels } from './helpers/models';
 import { startChatStreamServer, type UiChunk } from './helpers/sse';
 
@@ -10,6 +13,24 @@ const FINAL_TOKEN = ' и продолжение по освежување.';
 const STOP_TOKEN = 'Делумен одговор';
 const LONG_GAP_MS = 30_000;
 const CHAT_STREAM_URL_PATTERN = /\/api\/chat\/[^/]+\/stream$/u;
+const EVIDENCE_DIR = `${process.cwd()}/../.omo/evidence/ulw/ses_08b75c4cdffe8g6tX0apGLd65d/task-12-cross-surface-sponsored-luna`;
+const SPONSORED_CATALOG: ModelCatalog = {
+  models: [
+    {
+      availability: 'sponsored',
+      id: INFERENCE_MODEL,
+      name: 'Claude Sonnet 5',
+      provider: 'anthropic',
+      sponsored_quota: {
+        limit: 5,
+        remaining: 5,
+        resets_at: '2099-01-01T12:00:00Z',
+      },
+    },
+  ],
+  source: 'live',
+  version: 1,
+};
 
 type ConversationRow = {
   readonly id: string;
@@ -68,8 +89,11 @@ const chunksForAnswer = (answer: string): UiChunk[] => [
   { type: 'finish' },
 ];
 
-const installModelRoute = async (page: Page): Promise<void> => {
-  await mockModels(page);
+const installModelRoute = async (
+  page: Page,
+  catalog: ModelCatalog = SPONSORED_CATALOG,
+): Promise<void> => {
+  await mockModels(page, { catalog });
 };
 
 const installHealthRoute = async (page: Page): Promise<void> => {
@@ -198,6 +222,11 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     });
 
     await page.goto('/');
+    await page.getByTestId('composer-model').click();
+    await expect(
+      page.getByTestId('model-free-badge-claude-sonnet-5'),
+    ).toContainText('5/5');
+    await page.keyboard.press('Escape');
     await page
       .getByTestId('composer-input')
       .fill('Резимирај ми го условот за запишување.');
@@ -231,6 +260,15 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     await expect(page.getByTestId('answer-text').last()).toContainText(
       `${FIRST_TOKEN}${FINAL_TOKEN}`,
     );
+    await page.getByTestId('composer-model').click();
+    await expect(
+      page.getByTestId('model-free-badge-claude-sonnet-5'),
+    ).toContainText('5/5');
+    await page.screenshot({
+      animations: 'disabled',
+      path: `${EVIDENCE_DIR}/sponsored-conversation-preserved.png`,
+    });
+    await page.keyboard.press('Escape');
     expect(historyRequests).toBeGreaterThan(0);
 
     await firstLegServer.close();
@@ -330,3 +368,5 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     await activeServer.close();
   });
 });
+
+/* eslint-enable camelcase -- end catalog wire fixtures. */
