@@ -43,7 +43,11 @@ const SignInPage = async ({ searchParams }: SignInPageProps) => {
   }
 
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-background text-foreground">
+    <main
+      className="relative min-h-dvh overflow-hidden bg-background text-foreground"
+      id="main-content"
+      tabIndex={-1}
+    >
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.24),transparent_34rem),linear-gradient(135deg,hsl(var(--background)),hsl(var(--muted)/0.72))]" />
       <div className="mx-auto grid min-h-dvh w-full max-w-6xl gap-8 px-6 py-8 md:grid-cols-[1.05fr_0.95fr] md:items-center md:gap-10 md:py-10 lg:px-8">
         <section className="space-y-6 md:space-y-8">

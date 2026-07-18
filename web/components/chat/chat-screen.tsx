@@ -148,7 +148,7 @@ export const ChatScreen = () => {
     <div className="flex h-dvh w-full flex-col">
       <Header onToggleSidebar={toggleSidebar} />
       <CredentialSettingsDialog
-        onOpenChange={setCredentialSettingsOpen}
+        onOpenChangeAction={setCredentialSettingsOpen}
         open={credentialSettingsOpen}
       />
       {unavailable ? <ServiceBanner /> : null}
@@ -183,7 +183,11 @@ export const ChatScreen = () => {
           open={sidebarOpen}
           synced={sidebarSynced}
         />
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main
+          className="flex min-w-0 flex-1 flex-col"
+          id="main-content"
+          tabIndex={-1}
+        >
           {activeId ? (
             <ConversationContextBar
               conversationId={activeId}
