@@ -1,3 +1,4 @@
+/* eslint-disable camelcase -- wire-contract fixture fields */
 import type { ComponentProps } from 'react';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -22,6 +23,8 @@ const OLLAMA_OPTION_NAME = /llama3\.2:latest/u;
 const OLLAMA_UNKNOWN_ID = 'qwen3:14b';
 const OLLAMA_UNKNOWN_NAME = 'qwen3:14b';
 const MODEL_SELECTOR_TEST_ID = 'composer-model';
+const LUNA_ID = 'gpt-5.6-luna';
+const LUNA_NAME = 'GPT-5.6 Luna';
 
 const MODELS: ModelDescriptor[] = [
   {
@@ -261,6 +264,34 @@ describe('Composer', () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByTestId('composer-submit')).toBeDisabled();
+  });
+
+  it('submits with sponsored Luna without an OpenAI credential', async () => {
+    const { onSubmit } = setup({
+      availableProviders: new Set(),
+      model: LUNA_ID,
+      models: [
+        {
+          availability: 'sponsored',
+          id: LUNA_ID,
+          name: LUNA_NAME,
+          provider: 'openai',
+          sponsored_quota: {
+            limit: 10,
+            remaining: 8,
+            resets_at: '2030-01-01T00:00:00Z',
+          },
+        },
+      ],
+    });
+    const textarea = screen.getByRole('textbox');
+
+    fireEvent.change(textarea, { target: { value: 'Прашање за Луна' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith('Прашање за Луна');
+    });
   });
 
   it('surfaces credential loading errors and disables model selection', () => {
