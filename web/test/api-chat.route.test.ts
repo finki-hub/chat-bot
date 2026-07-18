@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+/* eslint-disable camelcase -- fixtures mirror the Python API wire contract. */
 import {
   API_BASE_URL,
   chatRequest,
@@ -72,6 +73,8 @@ describe('POST /api/chat', () => {
         model: MODEL,
         posthogDistinctId: 'browser-distinct-id',
         posthogSessionId: 'session-test-id',
+        sponsored_quota: { limit: 1, remaining: 1 },
+        user_id: 'attacker-user-id',
       }),
       headers: { 'content-type': JSON_CONTENT_TYPE },
       method: 'POST',
@@ -88,6 +91,8 @@ describe('POST /api/chat', () => {
       inference_model?: string;
       interface?: string;
       messages: Array<{ content: string; role: string }>;
+      sponsored_quota?: unknown;
+      user_id?: string;
     };
     const out = await res.text();
 
@@ -101,6 +106,8 @@ describe('POST /api/chat', () => {
     ]);
     expect(sentBody.interface).toBe('web');
     expect(sentBody.inference_model).toBe(MODEL);
+    expect(sentBody.user_id).toBe(USER_ID);
+    expect(sentBody.sponsored_quota).toBeUndefined();
     expect(init.headers).toStrictEqual({
       'content-type': JSON_CONTENT_TYPE,
       'x-api-key': 'test-key',
@@ -411,7 +418,8 @@ describe('POST /api/chat', () => {
     const out = await res.text();
 
     expect(out).toContain('data-error');
-    expect(out).toContain('Failed to retrieve or re-rank context');
+    expect(out).toContain('Request failed');
+    expect(out).not.toContain('Failed to retrieve or re-rank context');
     expect(
       routeMocks.stateClient.clearActiveStreamIfCurrent,
     ).not.toHaveBeenCalled();
@@ -438,3 +446,5 @@ describe('POST /api/chat', () => {
     expect(routeMocks.activeChatProducers.register).not.toHaveBeenCalled();
   });
 });
+
+/* eslint-enable camelcase -- end wire-contract fixtures. */
