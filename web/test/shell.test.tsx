@@ -827,7 +827,7 @@ describe('ChatPage persistence', () => {
       screen.findByText('Стар одговор'),
     ).resolves.toBeInTheDocument();
 
-    const contextBar = screen.getByTestId('conversation-context-bar');
+    const contextBar = screen.getByTestId('chat-context-bar');
 
     expect(contextBar).toHaveTextContent('Стар разговор');
 
