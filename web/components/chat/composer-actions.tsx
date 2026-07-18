@@ -18,7 +18,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { t } from '@/lib/i18n';
-import { type ModelGroup, providerLabel } from '@/lib/model-catalog';
+import {
+  isModelAvailable,
+  isSponsoredModel,
+  type ModelGroup,
+  providerLabel,
+} from '@/lib/model-catalog';
 import { isReasoningCapableModel } from '@/lib/reasoning';
 
 export type ComposerActionsProps = {
@@ -40,6 +45,30 @@ export type ComposerActionsProps = {
 };
 
 export type ComposerStatus = 'error' | 'ready' | 'streaming' | 'submitted';
+
+const getOptionAccess = (
+  entry: ModelGroup['models'][number],
+  availableProviders: ReadonlySet<string>,
+) => {
+  const available = isModelAvailable(entry, availableProviders);
+  const sponsored = isSponsoredModel(entry);
+  const quota = entry.sponsored_quota;
+  const quotaLabel =
+    quota === undefined ? null : `${quota.remaining}/${quota.limit}`;
+  const quotaSuffix =
+    quotaLabel === null
+      ? ''
+      : `, ${t('composer.quotaRemaining')} ${quotaLabel}`;
+  let accessLabel = t('composer.apiKeyRequired');
+
+  if (sponsored) {
+    accessLabel = `${t('composer.free')}${quotaSuffix}`;
+  } else if (entry.availability === 'unavailable') {
+    accessLabel = t('composer.modelUnavailable');
+  }
+
+  return { accessLabel, available, quotaLabel, sponsored };
+};
 
 export const ComposerActions = ({
   availableProviders,
@@ -151,42 +180,63 @@ export const ComposerActions = ({
                 <SelectLabel data-testid="model-provider-label">
                   {providerLabel(group.provider)}
                 </SelectLabel>
-                {group.models.map((entry) => (
-                  <SelectItem
-                    aria-label={
-                      availableProviders.has(entry.provider)
-                        ? entry.name
-                        : `${entry.name} ${t('composer.apiKeyRequired')}`
-                    }
-                    className="data-[disabled]:opacity-75"
-                    disabled={!availableProviders.has(entry.provider)}
-                    key={entry.id}
-                    textValue={
-                      availableProviders.has(entry.provider)
-                        ? entry.name
-                        : `${entry.name} ${t('composer.apiKeyRequired')}`
-                    }
-                    value={entry.id}
-                  >
-                    <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                      <span className="truncate">{entry.name}</span>
-                      {entry.provider === 'ollama' &&
-                      typeof entry.loaded === 'boolean' ? (
-                        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                          {entry.loaded
-                            ? t('composer.modelLoaded')
-                            : t('composer.modelNotLoaded')}
-                        </span>
-                      ) : null}
-                      {availableProviders.has(entry.provider) ? null : (
-                        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                          <KeyRound aria-hidden="true" />
-                          {t('composer.apiKeyRequired')}
-                        </span>
-                      )}
-                    </span>
-                  </SelectItem>
-                ))}
+                {group.models.map((entry) => {
+                  const { accessLabel, available, quotaLabel, sponsored } =
+                    getOptionAccess(entry, availableProviders);
+                  const optionLabel =
+                    available && !sponsored
+                      ? entry.name
+                      : `${entry.name} ${accessLabel}`;
+                  const unavailable =
+                    !available && entry.availability === 'unavailable';
+
+                  return (
+                    <SelectItem
+                      aria-label={optionLabel}
+                      className="data-[disabled]:opacity-75"
+                      disabled={!available}
+                      key={entry.id}
+                      textValue={optionLabel}
+                      value={entry.id}
+                    >
+                      <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                        <span className="truncate">{entry.name}</span>
+                        {sponsored ? (
+                          <span
+                            aria-label={accessLabel}
+                            className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                            data-testid={`model-free-badge-${entry.id}`}
+                          >
+                            <span>{t('composer.free')}</span>
+                            {quotaLabel === null ? null : (
+                              <span
+                                aria-label={`${t('composer.quotaRemaining')}: ${quotaLabel}`}
+                              >
+                                {quotaLabel}
+                              </span>
+                            )}
+                          </span>
+                        ) : null}
+                        {entry.provider === 'ollama' &&
+                        typeof entry.loaded === 'boolean' ? (
+                          <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                            {entry.loaded
+                              ? t('composer.modelLoaded')
+                              : t('composer.modelNotLoaded')}
+                          </span>
+                        ) : null}
+                        {available ? null : (
+                          <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                            {unavailable ? null : (
+                              <KeyRound aria-hidden="true" />
+                            )}
+                            {accessLabel}
+                          </span>
+                        )}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
               </SelectGroup>
             ))}
           </SelectContent>
