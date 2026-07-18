@@ -149,6 +149,11 @@ def test_sponsored_luna_defaults_are_disabled_and_safe():
     assert settings.SPONSORED_REQUEST_LEASE_SECONDS == 600
 
 
+def test_sponsored_user_limit_cannot_exceed_five():
+    with pytest.raises(ValueError, match="SPONSORED_DAILY_USER_LIMIT"):
+        Settings(SPONSORED_DAILY_USER_LIMIT=6)
+
+
 def test_enabled_sponsored_luna_requires_api_key():
     with pytest.raises(ValueError, match="SPONSORED_OPENAI_API_KEY") as error:
         Settings(
