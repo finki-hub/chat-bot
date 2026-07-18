@@ -44,7 +44,8 @@ def _warn_on_insecure_defaults(current: Settings) -> None:
 
     logger.warning(
         "One or more authentication secrets are using insecure built-in defaults; "
-        "set non-default values to protect authenticated endpoints.",
+        "set non-default values to protect authenticated endpoints. Affected settings: %s",
+        ", ".join(insecure_names),
     )
 
 
