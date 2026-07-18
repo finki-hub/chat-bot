@@ -61,6 +61,10 @@ describe('coarse-pointer targets', () => {
           aria-label="Исчисти"
           size="icon-xs"
         />
+        <InputGroupButton
+          aria-label="Текстуална акција"
+          size="xs"
+        />
       </>,
     );
 
@@ -70,6 +74,9 @@ describe('coarse-pointer targets', () => {
     expect(screen.getByRole('button', { name: 'Исчисти' })).toHaveClass(
       'pointer-coarse:size-11',
     );
+    expect(
+      screen.getByRole('button', { name: 'Текстуална акција' }),
+    ).toHaveClass('pointer-coarse:h-11');
   });
 
   it('compacts composer selectors only for fine pointers', () => {
