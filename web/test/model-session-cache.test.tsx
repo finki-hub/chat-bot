@@ -156,6 +156,22 @@ describe('session-scoped model cache', () => {
     });
 
     useSessionMock.mockReturnValue({
+      data: null,
+      status: 'loading',
+      update: updateSession,
+    });
+    view.rerender(
+      <Providers>
+        <CacheProbe />
+      </Providers>,
+    );
+
+    expect(
+      queryClient?.getQueryData(['models', 'google:subject-a']),
+    ).toBeDefined();
+    expect(useUiStore.getState().model).toBe('model-from-session-a');
+
+    useSessionMock.mockReturnValue({
       data: SESSION_B,
       status: 'authenticated',
       update: updateSession,

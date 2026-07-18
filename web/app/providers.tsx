@@ -27,6 +27,9 @@ const SessionScopedModelCache = () => {
   const previousSessionKeyRef = useRef<null | string>(null);
 
   useEffect(() => {
+    if (status === 'loading') {
+      return;
+    }
     const previous = previousSessionKeyRef.current;
     if (previous !== null && previous !== sessionKey) {
       queryClient.removeQueries({
@@ -38,7 +41,7 @@ const SessionScopedModelCache = () => {
       useUiStore.getState().resetModel();
     }
     previousSessionKeyRef.current = sessionKey;
-  }, [queryClient, sessionKey]);
+  }, [queryClient, sessionKey, status]);
 
   return null;
 };
