@@ -83,11 +83,9 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
     assert meta["cost"]["output_usd"] == pytest.approx(0.005)
     assert meta["cost"]["total_usd"] == pytest.approx(0.006)
     assert props["$ai_total_cost_usd"] == pytest.approx(0.006)
-    assert props["$ai_input"] == [{"role": "user", "content": "Прашање?"}]
+    assert props["$ai_input"] == {"count": 1, "roles": ["user"]}
     assert props["$session_id"] == "session-1"
-    assert props["$ai_output_choices"] == [
-        {"role": "assistant", "content": "answer"},
-    ]
+    assert props["$ai_output_choices"] == [{"role": "assistant", "content_length": 6}]
 
 
 def test_chat_stream_records_bare_data_token_frames(monkeypatch):
@@ -98,9 +96,7 @@ def test_chat_stream_records_bare_data_token_frames(monkeypatch):
     )
 
     assert chunks[0] == "data: self-hosted answer\n\n"
-    assert props["$ai_output_choices"] == [
-        {"role": "assistant", "content": "self-hosted answer"},
-    ]
+    assert props["$ai_output_choices"] == [{"role": "assistant", "content_length": 18}]
 
 
 def test_chat_stream_records_fragmented_bare_data_token_frames(monkeypatch):
@@ -115,9 +111,7 @@ def test_chat_stream_records_fragmented_bare_data_token_frames(monkeypatch):
         " answer\n\ndata: coalesced",
         " answer\n\nevent: status\ndata: {}\n\n",
     ]
-    assert props["$ai_output_choices"] == [
-        {"role": "assistant", "content": "split answercoalesced answer"},
-    ]
+    assert props["$ai_output_choices"] == [{"role": "assistant", "content_length": 28}]
 
 
 def test_chat_request_log_fields_do_not_include_message_content():
@@ -152,7 +146,7 @@ def test_chat_request_log_fields_do_not_include_message_content():
     assert fields["history_turns"] == 2
 
 
-def test_chat_request_posthog_fields_include_message_content():
+def test_chat_request_posthog_fields_include_message_metadata_only():
     payload = ChatSchema.model_validate(
         {
             "interface": "web",
@@ -167,10 +161,9 @@ def test_chat_request_posthog_fields_include_message_content():
 
     fields = chat_api._chat_request_posthog_fields(payload)  # noqa: SLF001
 
-    assert fields["messages"] == [
-        {"role": "user", "content": "private first question"},
-        {"role": "assistant", "content": "private previous answer"},
-        {"role": "user", "content": "private latest question"},
-    ]
+    assert fields["message_count"] == 3
+    assert fields["message_roles"] == ["user", "assistant", "user"]
+    assert "messages" not in fields
+    assert "private" not in repr(fields)
     assert fields["query_len"] == len("private latest question")
     assert fields["history_turns"] == 2

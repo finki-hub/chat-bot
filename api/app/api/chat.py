@@ -3,7 +3,7 @@ import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator, AsyncIterable
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -15,27 +15,48 @@ from app.api.provider_credentials import (
     missing_mandatory_credential,
     resolve_provider_credentials,
 )
+from app.api.sponsored_access import inference_credential_for_model
 from app.data.connection import Database
 from app.data.db import get_db
+from app.data.sponsored_usage import (
+    SponsoredQuotaExceededError,
+    SponsoredRequestInProgressError,
+    admit_sponsored_request,
+    get_sponsored_usage_snapshot,
+    release_sponsored_request,
+)
 from app.llms.agents import (
     StreamObservation,
     error_event,
     meta_event,
     sources_event,
+    sponsored_error_event,
     status_event,
 )
 from app.llms.chat import handle_chat
 from app.llms.context import get_retrieved_context_with_sources
 from app.llms.link_context import get_links_context
+from app.llms.model_access import (
+    ModelAccessContext,
+    SponsoredSettings,
+    overlay_model_access,
+)
 from app.llms.model_catalog import model_catalog_service
 from app.llms.model_catalog_types import ModelCatalogResponse, OllamaCatalogModel
 from app.llms.models import model_id
 from app.llms.ollama import fetch_ollama_catalog
 from app.llms.pricing import cost_usd, is_self_hosted
+from app.llms.provider_credentials import provider_for_model
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
+from app.schemas.sponsored_access import SponsoredQuotaSnapshot
 from app.utils.auth import verify_api_key
-from app.utils.posthog_client import capture, safe_distinct_id, safe_session_id
+from app.utils.posthog_client import (
+    capture,
+    capture_sponsored_event,
+    safe_distinct_id,
+    safe_session_id,
+)
 from app.utils.settings import Settings
 from app.utils.timing import (
     RequestTimings,
@@ -56,6 +77,13 @@ _HISTORY_TURNS_FOR_RETRIEVAL = 6
 _HISTORY_TURN_MAX_CHARS = 600
 _PRE_STREAM_ERROR_MSG = (
     "Се случи грешка при подготовка на одговорот. Обидете се повторно."
+)
+_SPONSORED_UNAVAILABLE_MSG = "Бесплатниот пристап моментално не е достапен."
+_SPONSORED_QUOTA_MSG = (
+    "Бесплатната квота е искористена. Обидете се повторно по ресетирањето."
+)
+_SPONSORED_IN_PROGRESS_MSG = (
+    "Веќе имате активно спонзорирано барање. Обидете се повторно за момент."
 )
 _CREDENTIAL_PROVIDER_LABELS = {
     "openai": "OpenAI",
@@ -182,7 +210,8 @@ def _chat_messages(payload: ChatSchema) -> list[dict[str, str]]:
 def _chat_request_posthog_fields(payload: ChatSchema) -> dict[str, object]:
     return {
         **_chat_request_log_fields(payload),
-        "messages": _chat_messages(payload),
+        "message_count": len(payload.messages),
+        "message_roles": [turn.role for turn in payload.messages],
     }
 
 
@@ -218,10 +247,8 @@ def _capture_chat_response(
         "$ai_trace_id": str(response_id),
         "$ai_model": model_id(model),
         "$ai_provider": observation.provider or None,
-        "$ai_input": _chat_messages(payload),
-        "$ai_output_choices": [
-            {"role": "assistant", "content": answer_text},
-        ],
+        "$ai_input": {"count": len(payload.messages), "roles": [turn.role for turn in payload.messages]},
+        "$ai_output_choices": [{"role": "assistant", "content_length": len(answer_text)}],
         "provider": observation.provider or None,
         "is_self_hosted": is_self_hosted(model),
         "$ai_latency": (
@@ -342,6 +369,7 @@ async def _instrument_stream(
     distinct_id: str,
     session_id: str | None,
     observation: StreamObservation,
+    sponsored_mode: str | None = None,
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
     log one chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
@@ -360,6 +388,7 @@ async def _instrument_stream(
     answer_frame_buffer = ""
     marking = True
     answered = False
+    provider_failure = False
     try:
         async for chunk in body:
             timings.mark_ttft()
@@ -375,6 +404,8 @@ async def _instrument_stream(
                     answered = True
             if event_name == "reset":
                 answer_parts.clear()
+            if event_name == "error":
+                provider_failure = True
             sniffed = _sniff_tokens(chunk)
             if sniffed is not None:
                 usage = sniffed
@@ -395,6 +426,10 @@ async def _instrument_stream(
         raise
     except asyncio.CancelledError:
         outcome = "client_disconnect"
+        raise
+    except Exception:
+        outcome = "provider_error"
+        provider_failure = True
         raise
     finally:
         timings.mark_total()
@@ -431,6 +466,19 @@ async def _instrument_stream(
             answer_text="".join(answer_parts),
             session_id=session_id,
         )
+        if sponsored_mode is not None:
+            capture_sponsored_event(
+                distinct_id,
+                "sponsored_stream",
+                response_id=str(response_id),
+                mode=sponsored_mode,
+                client_interface=payload.interface,
+                outcome=outcome,
+                provider_failure=provider_failure,
+                input_tokens=(effective_usage or {}).get("input", 0),
+                output_tokens=(effective_usage or {}).get("output", 0),
+                total_tokens=(effective_usage or {}).get("total", 0),
+            )
         meta_payload = {"timing": record}
         if effective_usage is not None:
             costs = cost_usd(
@@ -479,12 +527,41 @@ async def _chat_response_stream(
         ),
         settings=request.app.state.settings,
     )
+    inference_provider = provider_for_model(payload.inference_model)
+    user_inference_credential = (
+        None
+        if credentials is None or inference_provider is None
+        else credentials.for_provider(inference_provider)
+    )
+    user_credential_rejected = (
+        inference_provider is not None
+        and credentials is not None
+        and inference_provider in credentials.rejected_providers
+    )
+    inference_resolution = inference_credential_for_model(
+        payload.inference_model,
+        user_inference_credential,
+        request.app.state.settings,
+        user_credential_rejected=user_credential_rejected,
+    )
     missing_credential = missing_mandatory_credential(
         credentials,
         inference_model=payload.inference_model,
         embeddings_model=payload.embeddings_model,
+        inference_credential=inference_resolution.credential,
     )
     if missing_credential is not None:
+        if (
+            model_id(payload.inference_model) == "gpt-5.6-luna"
+            and payload.user_id is not None
+            and missing_credential.stage == "inference"
+            and not user_credential_rejected
+        ):
+            yield sponsored_error_event(
+                "free_tier_unavailable",
+                _SPONSORED_UNAVAILABLE_MSG,
+            )
+            return
         provider_label = _CREDENTIAL_PROVIDER_LABELS[missing_credential.provider]
         yield error_event(
             "credential_required",
@@ -495,7 +572,83 @@ async def _chat_response_stream(
         return
 
     timings, token = start_request_timings()
+    sponsored_mode = (
+        "byok" if model_id(payload.inference_model) == "gpt-5.6-luna" else None
+    )
+    admitted_sponsored_user_id: UUID | None = None
     try:
+        if inference_resolution.sponsored:
+            if payload.user_id is None:
+                yield error_event(
+                    "credential_required",
+                    "Потребен е ваш OpenAI API клуч. Додајте го во поставките за провајдери.",
+                    provider="openai",
+                    stage="inference",
+                )
+                return
+            global_limit = request.app.state.settings.SPONSORED_DAILY_GLOBAL_LIMIT
+            if global_limit is None:
+                yield sponsored_error_event(
+                    "free_tier_unavailable",
+                    _SPONSORED_UNAVAILABLE_MSG,
+                )
+                return
+            try:
+                admission = await admit_sponsored_request(
+                    db,
+                    user_id=payload.user_id,
+                    request_id=response_id,
+                    user_limit=request.app.state.settings.SPONSORED_DAILY_USER_LIMIT,
+                    global_limit=global_limit,
+                    lease_ttl=timedelta(
+                        seconds=request.app.state.settings.SPONSORED_REQUEST_LEASE_SECONDS,
+                    ),
+                )
+            except SponsoredRequestInProgressError:
+                capture_sponsored_event(
+                    str(response_id),
+                    "sponsored_denied",
+                    response_id=str(response_id),
+                    mode="sponsored",
+                    client_interface=payload.interface,
+                    denial_reason="sponsored_request_in_progress",
+                    outcome="denied",
+                )
+                yield sponsored_error_event(
+                    "sponsored_request_in_progress",
+                    _SPONSORED_IN_PROGRESS_MSG,
+                )
+                return
+            except SponsoredQuotaExceededError as exc:
+                capture_sponsored_event(
+                    str(response_id),
+                    "sponsored_denied",
+                    response_id=str(response_id),
+                    mode="sponsored",
+                    client_interface=payload.interface,
+                    denial_reason="free_quota_exhausted",
+                    outcome="denied",
+                )
+                yield sponsored_error_event(
+                    "free_quota_exhausted",
+                    _SPONSORED_QUOTA_MSG,
+                    resets_at=exc.reset_at,
+                )
+                return
+            admitted_sponsored_user_id = payload.user_id
+            sponsored_mode = "sponsored"
+            capture_sponsored_event(
+                str(response_id),
+                "sponsored_admitted",
+                response_id=str(response_id),
+                mode="sponsored",
+                client_interface=payload.interface,
+                admission_reason="quota_available",
+                outcome="admitted",
+                remaining_user_requests=admission.snapshot.remaining_user_requests,
+                remaining_global_requests=admission.snapshot.remaining_global_requests,
+            )
+
         distinct_id = safe_distinct_id(
             request.headers.get("X-Distinct-Id"),
             str(response_id),
@@ -604,9 +757,15 @@ async def _chat_response_stream(
                 response = await handle_chat(
                     payload,
                     context,
-                    observation,
-                    db,
-                    credentials,
+                    observation=observation,
+                    db=db,
+                    inference_credential=inference_resolution.credential,
+                    upstream_model=inference_resolution.upstream_model,
+                    max_tokens=(
+                        min(payload.max_tokens, inference_resolution.max_output_tokens)
+                        if inference_resolution.max_output_tokens is not None
+                        else None
+                    ),
                 )
         except Exception:
             logger.exception("Chat context build failed before streaming")
@@ -625,6 +784,7 @@ async def _chat_response_stream(
             distinct_id=distinct_id,
             observation=observation,
             session_id=session_id,
+            sponsored_mode=sponsored_mode,
         )
 
         if retrieved.sources:
@@ -633,6 +793,28 @@ async def _chat_response_stream(
         async for chunk in response.body_iterator:
             yield chunk
     finally:
+        if admitted_sponsored_user_id is not None:
+            release_task = asyncio.create_task(
+                release_sponsored_request(
+                    db,
+                    user_id=admitted_sponsored_user_id,
+                    request_id=response_id,
+                ),
+            )
+            cancelled = False
+            try:
+                while not release_task.done():
+                    try:
+                        await asyncio.shield(release_task)
+                    except asyncio.CancelledError:
+                        cancelled = True
+                await release_task
+            except asyncio.CancelledError:
+                cancelled = True
+            except Exception:
+                logger.exception("Failed to release sponsored request lease")
+            if cancelled:
+                raise asyncio.CancelledError
         reset_request_timings(token)
 
 
@@ -687,13 +869,64 @@ async def list_models(
     user_id: UUID | None = None,
     db: Database = db_dep,
 ) -> ModelCatalogResponse:
+    settings: Settings = request.app.state.settings
     credentials = await resolve_provider_credentials(
         db,
         user_id=user_id,
-        providers=frozenset({"ollama"}),
-        settings=request.app.state.settings,
+        providers=frozenset({"openai", "google", "anthropic", "ollama"}),
+        settings=settings,
     )
     ollama_models: tuple[OllamaCatalogModel, ...] = ()
     if credentials is not None and credentials.ollama is not None:
         ollama_models = await fetch_ollama_catalog(credentials.ollama)
-    return await model_catalog_service.get_catalog(ollama_models)
+    usage_snapshot = None
+    global_limit = settings.SPONSORED_DAILY_GLOBAL_LIMIT
+    if (
+        user_id is not None
+        and settings.SPONSORED_LUNA_ENABLED
+        and global_limit is not None
+    ):
+        usage_snapshot = await get_sponsored_usage_snapshot(
+            db,
+            user_id=user_id,
+            user_limit=settings.SPONSORED_DAILY_USER_LIMIT,
+            global_limit=global_limit,
+        )
+
+    personal_quota = None
+    global_quota = None
+    utc_reset = datetime.now(UTC)
+    if usage_snapshot is not None:
+        personal_quota = SponsoredQuotaSnapshot(
+            limit=usage_snapshot.user_limit,
+            remaining=usage_snapshot.remaining_user_requests,
+            resets_at=usage_snapshot.reset_at,
+        )
+        global_quota = SponsoredQuotaSnapshot(
+            limit=usage_snapshot.global_limit,
+            remaining=usage_snapshot.remaining_global_requests,
+            resets_at=usage_snapshot.reset_at,
+        )
+        utc_reset = usage_snapshot.reset_at
+
+    access_context = ModelAccessContext(
+        user_has_provider=credentials is not None and credentials.openai is not None,
+        sponsored_settings=SponsoredSettings(
+            enabled=settings.SPONSORED_LUNA_ENABLED,
+            provider_configured=(
+                settings.SPONSORED_OPENAI_API_KEY is not None
+                and bool(settings.SPONSORED_OPENAI_API_KEY.get_secret_value().strip())
+            ),
+        ),
+        personal_quota=personal_quota,
+        global_quota=global_quota,
+        utc_reset=utc_reset,
+    )
+    catalog = await model_catalog_service.get_catalog(ollama_models)
+    return catalog.model_copy(
+        update={
+            "models": tuple(
+                overlay_model_access(model, access_context) for model in catalog.models
+            ),
+        },
+    )
