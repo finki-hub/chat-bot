@@ -1,7 +1,7 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import { type RefObject, useMemo, useRef, useState } from 'react';
+import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
 
@@ -11,8 +11,10 @@ import {
   replaceFinishedMessage,
 } from '@/lib/conversation-message-state';
 import { t } from '@/lib/i18n';
+import { isSponsoredModel } from '@/lib/model-catalog';
 import { buildChatTransport } from '@/lib/transport';
 import { useConversationHydration } from '@/lib/use-conversation-hydration';
+import { useModels } from '@/lib/use-models';
 import { useStreamTiming } from '@/lib/use-stream-timing';
 
 type UseConversationChatRuntimeOptions = {
@@ -42,6 +44,22 @@ export const useConversationChatRuntime = ({
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<
     null | string
   >(null);
+  const { models, refetch: refetchModels } = useModels();
+  const refetchModelsRef = useRef(refetchModels);
+  refetchModelsRef.current = refetchModels;
+  const sponsoredModelRef = useRef(false);
+  sponsoredModelRef.current = models.some(
+    (entry) => entry.id === model && isSponsoredModel(entry),
+  );
+  const sponsoredRefreshHandledRef = useRef(false);
+
+  const refreshSponsoredModels = () => {
+    if (!sponsoredModelRef.current || sponsoredRefreshHandledRef.current) {
+      return;
+    }
+    sponsoredRefreshHandledRef.current = true;
+    fireAndForget(refetchModelsRef.current());
+  };
 
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -76,6 +94,7 @@ export const useConversationChatRuntime = ({
         }
       },
       onError: () => {
+        refreshSponsoredModels();
         regeneratingMessageIdRef.current = null;
         setRegeneratingMessageId(null);
         setActiveError(
@@ -84,6 +103,9 @@ export const useConversationChatRuntime = ({
         );
       },
       onFinish: ({ isAbort, isError, message }) => {
+        if (!isAbort) {
+          refreshSponsoredModels();
+        }
         const finishedConversationId = activeId;
         setActiveStatus(undefined);
         const replacementId = regeneratingMessageIdRef.current;
@@ -131,6 +153,11 @@ export const useConversationChatRuntime = ({
       resume: activeId !== null,
       transport,
     });
+  useEffect(() => {
+    if (status === 'submitted' || status === 'streaming') {
+      sponsoredRefreshHandledRef.current = false;
+    }
+  }, [status]);
   const activeStreamConversationIdRef = useRef<null | string>(null);
   if (activeId !== null && status !== 'ready') {
     activeStreamConversationIdRef.current = activeId;
