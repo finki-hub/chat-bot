@@ -121,7 +121,7 @@ export const messages = {
   'sidebar.accountFallback': 'Сметка',
   'sidebar.accountMenu': 'Корисничко мени',
   'sidebar.clearSearch': 'Исчисти пребарување',
-  'sidebar.deleteAll': 'Избриши ги сите',
+  'sidebar.deleteAll': 'Избриши ги сите разговори',
   'sidebar.history': 'Разговори',
   'sidebar.label': 'Странична лента',
   'sidebar.loadError': 'Разговорите не можеа да се вчитаат.',
