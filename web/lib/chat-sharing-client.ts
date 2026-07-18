@@ -69,6 +69,18 @@ const parseShare = (value: unknown): ChatConversationShare => {
   return { shareToken: value[SHARE_TOKEN_FIELD] };
 };
 
+const parseShareResponse = async (
+  response: Response,
+): Promise<ChatConversationShare> => {
+  try {
+    const body: unknown = await response.json();
+    return parseShare(body);
+  } catch (error) {
+    if (error instanceof SyntaxError) throw invalidResponse();
+    throw error;
+  }
+};
+
 const parseSharedConversation = (value: unknown): SharedChatConversation => {
   if (!isRecord(value)) {
     throw invalidResponse();
@@ -107,8 +119,7 @@ export const createChatSharingClient = (): ChatSharingClient => ({
     if (!response.ok) {
       throw new ChatStateRequestError(response.status);
     }
-    const body: unknown = await response.json();
-    return parseShare(body);
+    return parseShareResponse(response);
   },
   getConversationShareStatus: async ({ conversationId, userId }) => {
     const userQuery = new URLSearchParams({ [USER_ID_FIELD]: userId });
@@ -125,8 +136,7 @@ export const createChatSharingClient = (): ChatSharingClient => ({
     if (!response.ok) {
       throw new ChatStateRequestError(response.status);
     }
-    const body: unknown = await response.json();
-    return parseShare(body);
+    return parseShareResponse(response);
   },
   loadSharedConversation: async ({ shareToken }) => {
     const response = await fetch(

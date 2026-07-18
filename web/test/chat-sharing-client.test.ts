@@ -74,6 +74,28 @@ describe('chat sharing client', () => {
     );
   });
 
+  it('reports malformed shared status bodies as bad gateway', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response('{', {
+          headers: { 'content-type': 'application/json' },
+          status: 200,
+        }),
+      ),
+    );
+    const { createChatSharingClient } =
+      await import('@/lib/chat-sharing-client');
+    const { ChatStateRequestError } = await import('@/lib/chat-state-client');
+
+    await expect(
+      createChatSharingClient().getConversationShareStatus({
+        conversationId: CONVERSATION_ID,
+        userId: USER_ID,
+      }),
+    ).rejects.toStrictEqual(new ChatStateRequestError(502));
+  });
+
   it('reports an owned conversation without a share token', async () => {
     vi.stubGlobal(
       'fetch',
