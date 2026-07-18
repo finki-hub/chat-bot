@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+/* eslint-disable camelcase -- fixtures mirror the Python SSE wire contract. */
 import { type ParsedEvent, parseProtocolV2 } from '@/lib/sse';
 
 const DONE: ParsedEvent = { type: 'done' };
 const DONE_FRAME = 'event: done\ndata: {}\n\n';
+const SAFE_ERROR_MESSAGE = 'Request failed';
 
 const token = (text: string): ParsedEvent => ({ text, type: 'token' });
 
@@ -73,15 +75,44 @@ describe('parseProtocolV2', () => {
 
   it('maps error frames to typed error events and clamps unknown codes', async () => {
     const events = await collect(
-      'event: error\ndata: {"code":"interrupted","message":"одговорот е прекинат"}\n\n',
-      'event: error\ndata: {"code":"weird","message":"boom"}\n\n',
+      'event: error\ndata: {"code":"interrupted","message":"provider secret: https://secret.invalid"}\n\n',
+      'event: error\ndata: {"code":"weird","message":"provider detail: secret"}\n\n',
       DONE_FRAME,
     );
 
     expect(events).toStrictEqual([
-      { code: 'interrupted', message: 'одговорот е прекинат', type: 'error' },
-      { code: 'agent_error', message: 'boom', type: 'error' },
+      { code: 'interrupted', message: SAFE_ERROR_MESSAGE, type: 'error' },
+      { code: 'agent_error', message: SAFE_ERROR_MESSAGE, type: 'error' },
       DONE,
+    ]);
+  });
+
+  it('preserves reset metadata only for exhausted sponsored quota errors', async () => {
+    const events = await collect(
+      'event: error\ndata: {"code":"free_quota_exhausted","message":"quota provider secret","resets_at":"2026-07-18T12:00:00Z","endpoint":"https://secret.invalid"}\n\n',
+      'event: error\ndata: {"code":"free_tier_unavailable","message":"offline provider detail","resets_at":"2026-07-18T12:00:00Z"}\n\n',
+      'event: error\ndata: {"code":"sponsored_request_in_progress","message":"busy provider detail","resets_at":"2026-07-18T12:00:00Z"}\n\n',
+      'event: error\ndata: {"code":"unknown_secret_error","message":"provider secret","resets_at":"2026-07-18T12:00:00Z"}\n\n',
+    );
+
+    expect(events).toStrictEqual([
+      {
+        code: 'free_quota_exhausted',
+        message: SAFE_ERROR_MESSAGE,
+        resets_at: '2026-07-18T12:00:00Z',
+        type: 'error',
+      },
+      {
+        code: 'free_tier_unavailable',
+        message: SAFE_ERROR_MESSAGE,
+        type: 'error',
+      },
+      {
+        code: 'sponsored_request_in_progress',
+        message: SAFE_ERROR_MESSAGE,
+        type: 'error',
+      },
+      { code: 'agent_error', message: SAFE_ERROR_MESSAGE, type: 'error' },
     ]);
   });
 
@@ -173,3 +204,5 @@ describe('parseProtocolV2', () => {
     ]);
   });
 });
+
+/* eslint-enable camelcase -- end wire-contract fixtures. */

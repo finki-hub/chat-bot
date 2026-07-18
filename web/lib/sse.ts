@@ -6,8 +6,10 @@ import type {
   RetrievedSourceLink,
 } from '@/lib/api-types';
 
+/* eslint-disable camelcase -- SSE fields mirror the Python wire contract. */
+
 export type ParsedEvent =
-  | { code: ChatErrorCode; message: string; type: 'error' }
+  | { code: ChatErrorCode; message: string; resets_at?: string; type: 'error' }
   | { diagnostics: MessageDiagnostics; type: 'meta' }
   | {
       label: string;
@@ -28,9 +30,13 @@ export type SseSource =
 
 const ERROR_CODES: ReadonlySet<ChatErrorCode> = new Set([
   'agent_error',
+  'free_quota_exhausted',
+  'free_tier_unavailable',
   'interrupted',
   'no_answer',
+  'sponsored_request_in_progress',
 ]);
+const SAFE_ERROR_MESSAGE = 'Request failed';
 
 const TRAILING_CR = /\r$/u;
 const LEADING_SPACE = /^ /u;
@@ -39,6 +45,14 @@ const toErrorCode = (value: unknown): ChatErrorCode =>
   ERROR_CODES.has(value as ChatErrorCode)
     ? (value as ChatErrorCode)
     : 'agent_error';
+
+const toResetAt = (code: ChatErrorCode, value: unknown): string | undefined => {
+  if (code !== 'free_quota_exhausted' || typeof value !== 'string') {
+    return undefined;
+  }
+
+  return value.length > 0 ? value : undefined;
+};
 
 const asString = (value: unknown): string =>
   typeof value === 'string' ? value : '';
@@ -263,12 +277,17 @@ const buildEvent = (
   switch (eventName) {
     case 'done':
       return { type: 'done' };
-    case 'error':
+    case 'error': {
+      const code = toErrorCode(obj['code']);
+      const resetsAt = toResetAt(code, obj['resets_at']);
+
       return {
-        code: toErrorCode(obj['code']),
-        message: asString(obj['message']),
+        code,
+        message: SAFE_ERROR_MESSAGE,
+        ...(resetsAt !== undefined && { resets_at: resetsAt }),
         type: 'error',
       };
+    }
     case 'meta':
       return { diagnostics: toDiagnostics(obj), type: 'meta' };
     case 'reset':
@@ -355,3 +374,5 @@ export const parseProtocolV2 = async function* (
     }
   }
 };
+
+/* eslint-enable camelcase -- end wire-contract fields. */
