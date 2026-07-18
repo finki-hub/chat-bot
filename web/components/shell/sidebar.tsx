@@ -1,15 +1,16 @@
 import { Plus, Search, Trash2, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
+import type { MaybeAsyncAction } from '@/lib/action-result';
 import type { ConversationRow } from '@/lib/conversation-types';
 
 import { ConversationList } from '@/components/shell/conversation-list';
+import { SidebarClearDialog } from '@/components/shell/sidebar-clear-dialog';
 import {
   closeSidebarOnMobile,
   getConversationFilter,
   getSidebarWidthClass,
 } from '@/components/shell/sidebar-helpers';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   InputGroup,
@@ -28,12 +29,12 @@ export type SidebarProps = {
   listError?: boolean;
   listLoading?: boolean;
   mobile?: boolean;
-  onClearAll: () => void;
+  onClearAll: MaybeAsyncAction;
   onClose: () => void;
-  onDelete: (id: string) => void;
+  onDelete: MaybeAsyncAction<[id: string]>;
   onGenerateTitle?: (id: string) => void;
   onNewChat: () => void;
-  onRename: (id: string, title: string) => void;
+  onRename: MaybeAsyncAction<[id: string, title: string]>;
   onRetryList?: () => Promise<void>;
   onSelect: (id: string) => void;
   open: boolean;
@@ -189,7 +190,7 @@ export const Sidebar = ({
       </nav>
       {conversations.length > 0 ? (
         <button
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-border/60 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border/60 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
           data-testid="delete-all"
           onClick={() => {
             setConfirmingClearAll(true);
@@ -244,14 +245,10 @@ export const Sidebar = ({
           {sidebarContent}
         </aside>
       )}
-      <ConfirmDialog
-        confirmLabel={t('conversation.delete')}
-        description={t('conversation.deleteAllDescription')}
-        destructive
+      <SidebarClearDialog
         onConfirm={onClearAll}
-        onOpenChange={setConfirmingClearAll}
+        onOpenChangeAction={setConfirmingClearAll}
         open={confirmingClearAll}
-        title={t('conversation.deleteAllTitle')}
       />
     </>
   );
