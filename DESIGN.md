@@ -29,7 +29,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Destructive row action: use destructive hover color only for delete.
 - Auth sign-in panel: card surface using `card`, `border`, `background`, `primary`, and `muted-foreground` tokens, with provider buttons that visibly change border/background on hover and use `focus-visible:ring-ring`.
 - Auth sign-in content: limit the supporting value list to 2 concise benefits so the primary action remains visible on small screens. The panel uses `Започни разговор`, and provider actions follow `Продолжи со {provider.name}`.
-- Credential settings dialog: modal card using existing `Dialog`, `Input`, and `Button` primitives. Provider rows use `border`, `card`, `muted`, and `muted-foreground` tokens, with saved state indicated by text and destructive delete action only when a credential exists.
+- Credential settings dialog: modal card using existing `Dialog`, `Input`, and `Button` primitives. Provider rows use `border`, `card`, `muted`, and `muted-foreground` tokens, with saved state indicated by text and destructive delete action only when a credential exists. Deleting a saved key opens a focused confirmation dialog; cancellation preserves the credential and confirmation is the only path that starts deletion.
 - Model selector option: group models only by provider in catalog order. Models without saved provider credentials remain visible but disabled, use `muted-foreground`, and pair a Lucide key icon with visible key-required text rather than relying on color or hover help.
 - Scrollable select menu: keep both scroll-arrow rows mounted while overflow exists so reaching a boundary never moves the popup. Show the unavailable direction with `muted-foreground` and without pointer behavior; hide both rows when the menu does not overflow.
 - Mobile sidebar: a modal Radix dialog that traps focus, closes on Escape or overlay interaction, and restores focus to the header trigger. Desktop retains the static complementary landmark.
@@ -40,18 +40,20 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Conversation context bar: a slim, non-scrolling row inside the main conversation region, directly above the message scroller. It shows the active conversation title on the left and the existing share controls on the right. It uses `background`, `border`, `foreground`, and `muted-foreground` tokens without adding a second elevated card surface.
 - Conversation share action: an `IconButton` inside the conversation context bar using the existing control tokens and Lucide icons. The bar is omitted when there is no active conversation; sharing preserves distinct pending, copied, failed, and revoke states without adding a toast system. An already-shared conversation restores its server-owned share link after reload, so copy-link and unshare controls remain available until revocation succeeds.
 - Header control tooltip: compact header actions reuse the existing Radix `Tooltip` primitive below the control with a 4px offset. Tooltip copy matches the localized accessible name, updates with action state, opens on hover or keyboard focus, and remains hoverable for disabled controls through the documented wrapper pattern.
+- Skip navigation: the root layout exposes a localized skip link as the first focusable control. It stays visually hidden until keyboard focus and targets the stable `main-content` landmark on authenticated, shared, and sign-in surfaces.
 - Shared conversation view: a read-only shell with the standard border/background header, brand mark, conversation title, and existing thread renderer. It omits sidebar, composer, credentials, feedback, and regeneration controls.
 
 ## 6. Accessibility
 
 - Every icon-only action must have an `aria-label` from `web/lib/i18n.ts`.
-- Primary mobile controls and conversation row actions expose at least 44px touch targets.
+- Primary controls, dialog actions, close controls, search clear, and conversation row actions expose at least 44px targets whenever the primary pointer is coarse. Compact desktop sizing is gated by `pointer-fine`, not viewport width, so touch tablets retain full targets.
 - Mobile header and drawer honor safe-area insets; decorative logo and GitHub shortcut are hidden below `sm` to protect the title and primary actions.
 - Modal drawers contain keyboard focus and restore it to their invoking control.
 - The account trigger exposes its expanded state through the Radix menu primitive, retains a visible focus ring, and keeps identity text available through a full accessible label when visual text truncates.
 - The account menu uses keyboard-navigable menu items, gives the sign-out item destructive text treatment, and does not rely on color alone because both actions retain visible labels and icons.
 - The main shell keeps a single message-scroll owner: the global header, conversation context bar, sidebar footer, and composer remain fixed while the thread scrolls.
 - Disabled async actions must expose `aria-busy` when work is pending.
+- Destructive credential and conversation actions require explicit confirmation before the request starts, retain recoverable context after failure, and prevent duplicate submissions while pending.
 - Share-state changes must update the icon button's localized accessible name so copied and failed outcomes are available without relying on color.
 - Auth failures must use `role="alert"` and include a direct recovery step. Missing provider configuration must be described as temporary unavailability without exposing server terminology.
 
