@@ -1,4 +1,6 @@
+import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -27,7 +29,7 @@ RESET = datetime(2026, 7, 19, tzinfo=UTC)
 def _request(current_settings):
     return SimpleNamespace(
         app=SimpleNamespace(state=SimpleNamespace(settings=current_settings)),
-        headers={},
+        headers={"X-Distinct-Id": "test-distinct-id"},
     )
 
 
@@ -109,7 +111,9 @@ async def _run_stream(
     monkeypatch.setattr(
         chat_api,
         "capture_sponsored_event",
-        lambda _distinct_id, event, **properties: captured.append((event, properties)),
+        lambda distinct_id, event, **properties: captured.append(
+            (event, {"distinct_id": distinct_id, **properties}),
+        ),
     )
 
     response_id = uuid4()
@@ -149,6 +153,9 @@ async def test_sponsored_request_admits_and_releases_exact_lease(monkeypatch):
         "sponsored_admitted",
         "sponsored_stream",
     ]
+    assert {properties["distinct_id"] for _, properties in captured} == {
+        "test-distinct-id",
+    }
     assert captured[-1][1]["input_tokens"] == 0
 
 
@@ -288,6 +295,64 @@ async def test_cancellation_releases_admitted_lease(monkeypatch):
         await consume()
     assert scope.cancelled_caught
     assert released
+
+
+@pytest.mark.anyio
+async def test_cancellation_observes_deferred_release_completion(monkeypatch):
+    release_finished = anyio.Event()
+    callback_called = anyio.Event()
+
+    async def admit(db, **kwargs):
+        return _admission(kwargs["request_id"])
+
+    async def body():
+        await anyio.sleep_forever()
+        yield "never"
+
+    async def release(db, *, user_id, request_id):
+        await anyio.lowlevel.checkpoint()
+        release_finished.set()
+
+    def observe_release(task):
+        task.result()
+        callback_called.set()
+
+    monkeypatch.setattr(
+        chat_api,
+        "_log_sponsored_release_failure",
+        observe_release,
+    )
+
+    async def consume():
+        await _run_stream(
+            monkeypatch,
+            current_settings=settings(),
+            user_credentials=credentials(openai=False),
+            admit=admit,
+            body=body,
+            release_func=release,
+        )
+
+    with anyio.move_on_after(0.1) as scope:
+        await consume()
+    assert scope.cancelled_caught
+    await release_finished.wait()
+    await callback_called.wait()
+
+
+@pytest.mark.anyio
+async def test_deferred_release_failure_is_logged(caplog):
+    async def fail_release():
+        raise RuntimeError("release failed")
+
+    task = asyncio.create_task(fail_release())
+    with pytest.raises(RuntimeError):
+        await task
+
+    with caplog.at_level(logging.ERROR, logger=chat_api.logger.name):
+        chat_api._log_sponsored_release_failure(task)  # noqa: SLF001
+
+    assert "Failed to release sponsored request lease" in caplog.text
 
 
 @pytest.mark.anyio

@@ -364,6 +364,15 @@ def _complete_sse_frames(
     return parts[:-1], parts[-1]
 
 
+def _log_sponsored_release_failure(task: asyncio.Task[None]) -> None:
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        return
+    except Exception:
+        logger.exception("Failed to release sponsored request lease")
+
+
 async def _instrument_stream(
     body: AsyncIterable[bytes | str | memoryview],
     *,
@@ -577,6 +586,10 @@ async def _chat_response_stream(
         return
 
     timings, token = start_request_timings()
+    distinct_id = safe_distinct_id(
+        request.headers.get("X-Distinct-Id"),
+        str(response_id),
+    )
     sponsored_mode = (
         "byok" if model_id(payload.inference_model) == "gpt-5.6-luna" else None
     )
@@ -611,7 +624,7 @@ async def _chat_response_stream(
                 )
             except SponsoredRequestInProgressError:
                 capture_sponsored_event(
-                    str(response_id),
+                    distinct_id,
                     "sponsored_denied",
                     response_id=str(response_id),
                     mode="sponsored",
@@ -626,7 +639,7 @@ async def _chat_response_stream(
                 return
             except SponsoredQuotaExceededError as exc:
                 capture_sponsored_event(
-                    str(response_id),
+                    distinct_id,
                     "sponsored_denied",
                     response_id=str(response_id),
                     mode="sponsored",
@@ -643,7 +656,7 @@ async def _chat_response_stream(
             admitted_sponsored_user_id = payload.user_id
             sponsored_mode = "sponsored"
             capture_sponsored_event(
-                str(response_id),
+                distinct_id,
                 "sponsored_admitted",
                 response_id=str(response_id),
                 mode="sponsored",
@@ -654,10 +667,6 @@ async def _chat_response_stream(
                 remaining_global_requests=admission.snapshot.remaining_global_requests,
             )
 
-        distinct_id = safe_distinct_id(
-            request.headers.get("X-Distinct-Id"),
-            str(response_id),
-        )
         session_id = safe_session_id(request.headers.get("X-PostHog-Session-Id"))
         record_distinct_id(distinct_id)
         observation = StreamObservation(
@@ -809,6 +818,7 @@ async def _chat_response_stream(
             try:
                 await asyncio.shield(release_task)
             except asyncio.CancelledError:
+                release_task.add_done_callback(_log_sponsored_release_failure)
                 raise
             except Exception:
                 logger.exception("Failed to release sponsored request lease")
