@@ -49,10 +49,10 @@ export const GET = async (): Promise<Response> => {
     return fallback();
   }
 
-  const catalog = parseModelCatalog(body);
-  if (catalog.source === 'error') {
+  const parsedCatalog = parseModelCatalog(body);
+  if (parsedCatalog.source === 'error') {
     return fallback();
   }
 
-  return respond(catalog, true);
+  return respond(parsedCatalog, true);
 };
