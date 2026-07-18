@@ -189,8 +189,12 @@ async def transform_query_with_google(
 
         response = await llm.ainvoke(messages)
         return content_to_text(response.content).strip()
-    except Exception:
-        logger.exception("Query transformation failed: %s. Using original query.")
+    except Exception as exc:
+        logger.warning(
+            "Google query transformation failed; using original query model=%s error_type=%s",
+            model.value,
+            type(exc).__name__,
+        )
 
         return query
 
@@ -244,9 +248,11 @@ async def stream_google_agent_response(
             media_type="text/event-stream",
         )
 
-    except Exception:
-        logger.exception(
-            "Failed to stream Google agent response. Falling back to regular response",
+    except Exception as exc:
+        logger.warning(
+            "Google agent setup failed; using regular response model=%s error_type=%s",
+            model.value,
+            type(exc).__name__,
         )
         capture_model_fallback(
             observation,
