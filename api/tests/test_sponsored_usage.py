@@ -77,7 +77,10 @@ class ScriptedDatabase:
     async def transaction(self) -> AsyncIterator[ScriptedConnection]:
         try:
             yield self.connection
-        except ScriptedFailureError, SponsoredUsageError:
+        except (
+            ScriptedFailureError,
+            SponsoredUsageError,
+        ):
             self.rolled_back = True
             raise
         else:
