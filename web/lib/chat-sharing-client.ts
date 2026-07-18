@@ -28,7 +28,7 @@ type ChatSharingClient = {
   readonly getConversationShareStatus: (input: {
     readonly conversationId: string;
     readonly userId: string;
-  }) => Promise<boolean>;
+  }) => Promise<ChatConversationShare | null>;
   readonly loadSharedConversation: (input: {
     readonly shareToken: string;
   }) => Promise<SharedChatConversation>;
@@ -120,12 +120,13 @@ export const createChatSharingClient = (): ChatSharingClient => ({
       },
     );
     if (response.status === 204) {
-      return false;
+      return null;
     }
     if (!response.ok) {
       throw new ChatStateRequestError(response.status);
     }
-    return true;
+    const body: unknown = await response.json();
+    return parseShare(body);
   },
   loadSharedConversation: async ({ shareToken }) => {
     const response = await fetch(

@@ -52,7 +52,9 @@ describe('chat sharing client', () => {
   it('reads whether an owned conversation is shared', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValue(new Response(null, { status: 200 }));
+      .mockResolvedValue(
+        Response.json({ [SHARE_TOKEN_FIELD]: SHARE_TOKEN }, { status: 200 }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     const { createChatSharingClient } =
       await import('@/lib/chat-sharing-client');
@@ -62,7 +64,7 @@ describe('chat sharing client', () => {
         conversationId: CONVERSATION_ID,
         userId: USER_ID,
       }),
-    ).resolves.toBe(true);
+    ).resolves.toStrictEqual({ shareToken: SHARE_TOKEN });
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE_URL}/chat/state/conversations/${CONVERSATION_ID}/share?user_id=${encodeURIComponent(USER_ID)}`,
       {
@@ -87,7 +89,7 @@ describe('chat sharing client', () => {
         conversationId: CONVERSATION_ID,
         userId: USER_ID,
       }),
-    ).resolves.toBe(false);
+    ).resolves.toBeNull();
   });
 
   it('revokes an owned conversation share', async () => {
