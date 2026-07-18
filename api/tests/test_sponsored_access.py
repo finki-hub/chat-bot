@@ -1,4 +1,5 @@
 import json
+import secrets
 from datetime import UTC, datetime
 
 import pytest
@@ -180,7 +181,7 @@ def test_luna_resolution_prefers_user_credential_even_when_user_key_is_rejected(
 ):
     user_credential = ChatCredentialSecret(
         provider="openai",
-        api_key="rejected-user-key",
+        api_key=secrets.token_urlsafe(),
         base_url="https://user.example/v1",
     )
     settings = Settings(
