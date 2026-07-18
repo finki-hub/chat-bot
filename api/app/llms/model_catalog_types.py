@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.sponsored_access import ModelAvailability, SponsoredQuotaSnapshot
+
 CatalogProvider = Literal["openai", "google", "anthropic", "ollama"]
 CatalogSource = Literal["live", "stale", "snapshot"]
 
@@ -72,6 +74,8 @@ class ModelDescriptor(BaseModel):
     pricing: ModelPricing | None = None
     status: str | None = None
     loaded: bool | None = None
+    availability: ModelAvailability = "byok"
+    sponsored_quota: SponsoredQuotaSnapshot | None = None
 
 
 class OllamaCatalogModel(BaseModel):
