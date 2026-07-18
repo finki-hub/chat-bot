@@ -1,8 +1,14 @@
+from dataclasses import dataclass
 from uuid import UUID
 
 from app.data.chat_persistence import ChatPersistenceDatabase
 from app.data.chat_rows import conversation_from_row, message_from_row
 from app.schemas.chat_persistence import ChatConversationWithMessages
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationShareStatus:
+    share_token: UUID | None
 
 
 async def create_conversation_share(
@@ -40,7 +46,7 @@ async def get_conversation_share_status(
     *,
     conversation_id: UUID,
     user_id: UUID,
-) -> bool | None:
+) -> ConversationShareStatus | None:
     row = await db.fetchrow(
         """
         SELECT share_token FROM chat_conversation
@@ -51,7 +57,18 @@ async def get_conversation_share_status(
     )
     if row is None:
         return None
-    return row["share_token"] is not None
+
+    share_token = row["share_token"]
+    match share_token:
+        case None:
+            return ConversationShareStatus(share_token=None)
+        case UUID() as share_token:
+            return ConversationShareStatus(share_token=share_token)
+        case str() as share_token:
+            return ConversationShareStatus(share_token=UUID(share_token))
+
+    message = f"chat_conversation share_token was invalid: {share_token!r}"
+    raise RuntimeError(message)
 
 
 async def revoke_conversation_share(
