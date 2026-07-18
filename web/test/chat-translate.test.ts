@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+/* eslint-disable camelcase -- fixtures mirror the Python SSE wire contract. */
 import type { MyUIMessage } from '@/lib/api-types';
 import type { ParsedEvent } from '@/lib/sse';
 
@@ -33,20 +34,19 @@ describe('toChatRequestBody', () => {
     };
 
     expect(toChatRequestBody(body)).toStrictEqual({
-      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
       embeddings_model: 'BAAI/bge-m3',
-      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+
       inference_model: MODEL,
       interface: 'web',
-      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+
       max_tokens: 2_048,
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
-      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+
       query_transform_mode: 'rewrite',
-      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+
       query_transform_model: 'gpt-5.4-mini',
       temperature: 0.5,
-      // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
+
       top_p: 0.9,
     });
   });
@@ -129,6 +129,8 @@ describe('toChatRequestBody', () => {
     expect(out.messages).toStrictEqual([]);
   });
 });
+
+/* eslint-enable camelcase -- end wire-contract fixtures. */
 
 class FakeWriter {
   parts: UiStreamPart[] = [];
@@ -350,6 +352,40 @@ describe('translateToUiStream', () => {
       startWith({}),
       {
         data: { code: 'no_answer', message: 'нема одговор' },
+        transient: true,
+        type: 'data-error',
+      },
+    ]);
+  });
+
+  it('forwards the approved sponsored quota reset through the UI error part', async () => {
+    const writer = new FakeWriter();
+
+    await translateToUiStream(
+      events(
+        {
+          code: 'free_quota_exhausted',
+          message: 'quota',
+          // eslint-disable-next-line camelcase -- mirrors the Python SSE wire contract.
+          resets_at: '2026-07-18T12:00:00Z',
+          type: 'error',
+        },
+        DONE,
+      ),
+      writer,
+      {},
+      ids(),
+    );
+
+    expect(writer.parts).toStrictEqual([
+      startWith({}),
+      {
+        data: {
+          code: 'free_quota_exhausted',
+          message: 'quota',
+          // eslint-disable-next-line camelcase -- mirrors the Python SSE wire contract.
+          resets_at: '2026-07-18T12:00:00Z',
+        },
         transient: true,
         type: 'data-error',
       },
