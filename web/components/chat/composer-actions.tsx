@@ -99,7 +99,7 @@ export const ComposerActions = ({
         <Button
           aria-label={t('composer.reasoning')}
           aria-pressed={reasoning}
-          className="min-h-11 w-fit shrink-0 gap-1.5 rounded-full px-3 text-xs font-medium sm:min-h-8"
+          className="min-h-11 w-fit shrink-0 gap-1.5 rounded-full px-3 text-xs font-medium sm:pointer-fine:min-h-8"
           data-testid="composer-reasoning"
           disabled={(disabled ?? false) || !isReasoningCapableModel(model)}
           onClick={() => {
@@ -122,7 +122,7 @@ export const ComposerActions = ({
         >
           <SelectTrigger
             aria-label={t('composer.model')}
-            className="min-h-11 w-fit max-w-[70vw] shrink-0 gap-1.5 rounded-full border-0 bg-transparent px-3 text-xs font-medium text-muted-foreground shadow-none hover:bg-muted hover:text-foreground sm:min-h-8 sm:max-w-[240px]"
+            className="min-h-11 w-fit max-w-[70vw] shrink-0 gap-1.5 rounded-full border-0 bg-transparent px-3 text-xs font-medium text-muted-foreground shadow-none hover:bg-muted hover:text-foreground sm:max-w-[240px] sm:pointer-fine:min-h-8"
             data-testid="composer-model"
             size="sm"
           >
@@ -194,7 +194,7 @@ export const ComposerActions = ({
       </div>
       <Button
         aria-label={isBusy ? t('composer.stop') : t('composer.send')}
-        className="size-11 shrink-0 rounded-full transition-transform active:scale-95 sm:size-9"
+        className="size-11 shrink-0 rounded-full transition-transform active:scale-95 sm:pointer-fine:size-9"
         data-testid="composer-submit"
         disabled={submitDisabled}
         onClick={onButtonClick}
