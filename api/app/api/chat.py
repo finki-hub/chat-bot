@@ -247,8 +247,13 @@ def _capture_chat_response(
         "$ai_trace_id": str(response_id),
         "$ai_model": model_id(model),
         "$ai_provider": observation.provider or None,
-        "$ai_input": {"count": len(payload.messages), "roles": [turn.role for turn in payload.messages]},
-        "$ai_output_choices": [{"role": "assistant", "content_length": len(answer_text)}],
+        "$ai_input": {
+            "count": len(payload.messages),
+            "roles": [turn.role for turn in payload.messages],
+        },
+        "$ai_output_choices": [
+            {"role": "assistant", "content_length": len(answer_text)},
+        ],
         "provider": observation.provider or None,
         "is_self_hosted": is_self_hosted(model),
         "$ai_latency": (
