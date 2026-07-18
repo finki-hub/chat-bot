@@ -518,6 +518,18 @@ describe('ChatPage persistence', () => {
     vi.unstubAllGlobals();
   });
 
+  it('keeps contextual and account actions out of the global header', async () => {
+    renderChatPage();
+
+    await expect(screen.findByRole('textbox')).resolves.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Сподели разговор' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'API клучеви' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows the unavailable banner and disables the composer when the backend is down', async () => {
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init) => {
       const url = urlOf(input);
@@ -776,6 +788,14 @@ describe('ChatPage persistence', () => {
     });
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init) => {
       const url = urlOf(input);
+      if (url.endsWith('/api/chat') && methodOf(input, init) === 'GET') {
+        return Promise.resolve(
+          jsonOk([{ id: 'cX', model: CLAUDE, title: 'Стар разговор' }]),
+        );
+      }
+      if (url.endsWith('/api/chat/cX/share')) {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
       if (url.endsWith('/api/chat/cX/history')) {
         return Promise.resolve(
           jsonOk({
@@ -806,6 +826,14 @@ describe('ChatPage persistence', () => {
     await expect(
       screen.findByText('Стар одговор'),
     ).resolves.toBeInTheDocument();
+
+    const contextBar = screen.getByTestId('chat-context-bar');
+
+    expect(contextBar).toHaveTextContent('Стар разговор');
+
+    expect(
+      within(contextBar).getByRole('button', { name: 'Сподели разговор' }),
+    ).toBeEnabled();
   });
 
   it('hydrates completed history from the server', async () => {

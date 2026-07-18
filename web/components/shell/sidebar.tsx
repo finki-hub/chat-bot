@@ -1,9 +1,14 @@
 import { Plus, Search, Trash2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import type { ConversationRow } from '@/lib/conversation-types';
 
 import { ConversationList } from '@/components/shell/conversation-list';
+import {
+  closeSidebarOnMobile,
+  getConversationFilter,
+  getSidebarWidthClass,
+} from '@/components/shell/sidebar-helpers';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -18,6 +23,7 @@ import { cn } from '@/lib/utils';
 export type SidebarProps = {
   activeId: null | string;
   conversations: ConversationRow[];
+  footer?: ReactNode;
   generatingTitleId?: null | string;
   listError?: boolean;
   listLoading?: boolean;
@@ -34,19 +40,11 @@ export type SidebarProps = {
   synced?: boolean;
 };
 
-const closeIfMobile = (onClose: () => void) => {
-  if (
-    typeof matchMedia === 'function' &&
-    matchMedia('(max-width: 767px)').matches
-  ) {
-    onClose();
-  }
-};
-
 /* eslint-disable sonarjs/cognitive-complexity -- responsive drawer, filtering, and confirmation form one navigation state machine */
 export const Sidebar = ({
   activeId,
   conversations,
+  footer,
   generatingTitleId,
   listError = false,
   listLoading = false,
@@ -84,22 +82,16 @@ export const Sidebar = ({
 
   const handleSelect = (id: string) => {
     onSelect(id);
-    closeIfMobile(onClose);
+    closeSidebarOnMobile(onClose);
   };
 
   const handleNewChat = () => {
     onNewChat();
-    closeIfMobile(onClose);
+    closeSidebarOnMobile(onClose);
   };
 
-  const term = query.trim().toLowerCase();
-  const filtered = term
-    ? conversations.filter((c) => c.title.toLowerCase().includes(term))
-    : conversations;
-  let responsiveStateClass = 'md:w-64';
-  if (synced) {
-    responsiveStateClass = open ? 'md:w-64' : 'md:w-0';
-  }
+  const { filtered, term } = getConversationFilter(conversations, query);
+  const responsiveStateClass = getSidebarWidthClass(open, synced);
 
   const sidebarContent = (
     <div className="flex h-full w-64 flex-col gap-3 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] md:py-3">
@@ -211,6 +203,7 @@ export const Sidebar = ({
           {t('sidebar.deleteAll')}
         </button>
       ) : null}
+      {footer}
     </div>
   );
 

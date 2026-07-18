@@ -16,6 +16,7 @@ const TOOL = 'search_documents';
 const ANSWER = 'Резултатите од испитите се објавуваат на https://finki.ukim.mk';
 const LINK_NAME = /finki\.ukim\.mk/u;
 const DIAGNOSTICS_LABEL = /Дијагностика/u;
+const OBSERVABLE_STAGE_GAP_MS = 1_500;
 
 test.describe('chat streaming (mocked BFF)', () => {
   test('shows the search chip, drops the preamble, renders the answer, and likes', async ({
@@ -55,7 +56,7 @@ test.describe('chat streaming (mocked BFF)', () => {
     ];
     const statusIndex = chunks.findIndex((c) => c.type === 'data-status');
     const chatServer = await startChatStreamServer({
-      gapMs: 600,
+      gapMs: OBSERVABLE_STAGE_GAP_MS,
       head: chunks.slice(0, statusIndex + 1),
       tail: chunks.slice(statusIndex + 1),
     });
@@ -143,7 +144,7 @@ test.describe('chat streaming (mocked BFF)', () => {
     // `context` stage; tail delivers the reset + answer after a gap.
     const resetIndex = chunks.findIndex((c) => c.type === 'data-reset');
     const chatServer = await startChatStreamServer({
-      gapMs: 600,
+      gapMs: OBSERVABLE_STAGE_GAP_MS,
       head: chunks.slice(0, resetIndex),
       tail: chunks.slice(resetIndex),
     });

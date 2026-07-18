@@ -7,7 +7,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 ## 2. Tokens
 
 - Color uses the existing Tailwind semantic tokens: `background`, `foreground`, `muted`, `muted-foreground`, `border`, `card`, `primary`, `destructive`, and `ring`.
-- Spacing follows the existing 4px Tailwind scale. Sidebar row controls use `gap-1`, `px-2.5`, `py-1.5`, and icon padding `p-1`. Auth cards use `p-6` on mobile and `p-8` on wider screens.
+- Spacing follows the existing 4px Tailwind scale. Sidebar row controls use `gap-1`, `px-2.5`, `py-1.5`, and icon padding `p-1`. The account trigger uses the same sidebar width with `gap-2`, `px-2`, and `py-2`. Auth cards use `p-6` on mobile and `p-8` on wider screens.
 - Radius follows existing rounded surfaces: `rounded-md` for icon controls, `rounded-lg` for sidebar rows, `rounded-xl` for larger sidebar buttons, `rounded-2xl` for auth CTAs, and `rounded-3xl` for the auth panel.
 
 ## 3. Typography
@@ -35,7 +35,10 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Mobile sidebar: a modal Radix dialog that traps focus, closes on Escape or overlay interaction, and restores focus to the header trigger. Desktop retains the static complementary landmark.
 - Conversation loading state: preserve the current list/thread during transient failures and present an inline alert with a retry action. Only a confirmed missing conversation clears the selection.
 - Composer submission failure: retain the draft and show an inline retryable error; clear the draft only after the message is accepted.
-- Conversation share action: a header `IconButton` using the existing control tokens and Lucide icons. It is disabled without an active conversation and exposes distinct pending, copied, and failed states without adding a toast system.
+- Sidebar account trigger: a full-width bottom-left button that keeps the user name and email readable, truncates long identity text, and opens upward. It uses the existing `background`, `foreground`, `muted`, `border`, and `ring` tokens with a compact hover/focus surface rather than a separate card.
+- Sidebar account menu: an existing Radix `DropdownMenu` aligned to the trigger width. It groups the API-key action above a separator and a destructive sign-out action below it. On mobile, selecting API keys closes the sidebar drawer before opening credential settings.
+- Conversation context bar: a slim, non-scrolling row inside the main conversation region, directly above the message scroller. It shows the active conversation title on the left and the existing share controls on the right. It uses `background`, `border`, `foreground`, and `muted-foreground` tokens without adding a second elevated card surface.
+- Conversation share action: an `IconButton` inside the conversation context bar using the existing control tokens and Lucide icons. The bar is omitted when there is no active conversation; sharing preserves distinct pending, copied, failed, and revoke states without adding a toast system.
 - Header control tooltip: compact header actions reuse the existing Radix `Tooltip` primitive below the control with a 4px offset. Tooltip copy matches the localized accessible name, updates with action state, opens on hover or keyboard focus, and remains hoverable for disabled controls through the documented wrapper pattern.
 - Shared conversation view: a read-only shell with the standard border/background header, brand mark, conversation title, and existing thread renderer. It omits sidebar, composer, credentials, feedback, and regeneration controls.
 
@@ -45,6 +48,9 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Primary mobile controls and conversation row actions expose at least 44px touch targets.
 - Mobile header and drawer honor safe-area insets; decorative logo and GitHub shortcut are hidden below `sm` to protect the title and primary actions.
 - Modal drawers contain keyboard focus and restore it to their invoking control.
+- The account trigger exposes its expanded state through the Radix menu primitive, retains a visible focus ring, and keeps identity text available through a full accessible label when visual text truncates.
+- The account menu uses keyboard-navigable menu items, gives the sign-out item destructive text treatment, and does not rely on color alone because both actions retain visible labels and icons.
+- The main shell keeps a single message-scroll owner: the global header, conversation context bar, sidebar footer, and composer remain fixed while the thread scrolls.
 - Disabled async actions must expose `aria-busy` when work is pending.
 - Share-state changes must update the icon button's localized accessible name so copied and failed outcomes are available without relying on color.
 - Auth failures must use `role="alert"` and include a direct recovery step. Missing provider configuration must be described as temporary unavailability without exposing server terminology.

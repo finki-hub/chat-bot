@@ -97,6 +97,17 @@ describe('CredentialSettingsDialog', () => {
     saveCredentialMock.mockResolvedValue(openaiCredential(OPENAI_BASE_URL));
   });
 
+  it('uses a localized accessible name for the close action', async () => {
+    renderDialog();
+
+    await expect(
+      screen.findByRole('button', { name: 'Затвори' }),
+    ).resolves.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Close' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('preserves a saved custom base URL when only the API key changes', async () => {
     const { queryClient } = renderDialog();
 

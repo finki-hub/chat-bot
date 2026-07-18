@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
 import { installMockChatState } from './helpers/chat-state';
 import { mockModels } from './helpers/models';
@@ -10,6 +10,20 @@ const USER_ID = '00000000-0000-4000-8000-000000000001';
 const BASE_URL_FIELD = 'base_url';
 const HAS_API_KEY_FIELD = 'has_api_key';
 const USER_ID_FIELD = 'user_id';
+const ACCOUNT_MENU_LABEL = /Корисничко мени:/u;
+
+const mockAuthenticatedSession = async (page: Page): Promise<void> => {
+  await page.route('**/api/auth/session', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        expires: '2099-01-01T00:00:00.000Z',
+        user: { email: 'student@example.com', name: 'Student' },
+      }),
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
+};
 
 const hideDevelopmentOverlay = async (
   page: Parameters<typeof mockModels>[0],
@@ -156,6 +170,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
   }) => {
     let credentialRequests = 0;
     let credentialsAvailable = false;
+    await mockAuthenticatedSession(page);
     await mockModels(page, null);
     await page.route('**/api/chat/credentials', async (route) => {
       credentialRequests += 1;
@@ -191,7 +206,8 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     await expect(trigger).toBeDisabled();
     await expect(trigger).toContainText('API клучевите се недостапни');
 
-    await page.getByRole('button', { name: 'API клучеви' }).click();
+    await page.getByRole('button', { name: ACCOUNT_MENU_LABEL }).click();
+    await page.getByRole('menuitem', { name: 'API клучеви' }).click();
     await expect(
       page.getByText('Клучевите не можеа да се вчитаат.'),
     ).toBeVisible();

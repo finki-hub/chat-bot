@@ -67,9 +67,6 @@ test('header controls explain their actions on hover and focus', async ({
   });
   await page.goto('/');
 
-  const shareControl = page.getByRole('button', { name: 'Сподели разговор' });
-  const credentialsControl = page.getByRole('button', { name: 'API клучеви' });
-  const signInControl = page.getByRole('button', { name: 'Најави се' });
   const githubControl = page.getByRole('link', {
     name: 'GitHub репозиториум',
   });
@@ -77,21 +74,15 @@ test('header controls explain their actions on hover and focus', async ({
   const headerTitle = page.getByRole('heading', { name: 'ФИНКИ Хаб' });
   const tooltip = page.getByRole('tooltip');
 
-  await expect(shareControl).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Сподели разговор' }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'API клучеви' })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole('button', { name: 'Најави се' })).toHaveCount(0);
 
   const controls = [
-    {
-      control: shareControl,
-      label: 'Сподели разговор',
-    },
-    {
-      control: credentialsControl,
-      label: 'API клучеви',
-    },
-    {
-      control: signInControl,
-      label: 'Најави се',
-    },
     {
       control: githubControl,
       label: 'GitHub репозиториум',
@@ -109,7 +100,7 @@ test('header controls explain their actions on hover and focus', async ({
     await expect(tooltip).toBeHidden();
   }
 
-  for (const { control, label } of controls.slice(1)) {
+  for (const { control, label } of controls) {
     await expect(control).toBeEnabled();
     await control.focus();
     await expect(tooltip).toHaveText(label);
