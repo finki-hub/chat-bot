@@ -89,6 +89,10 @@ export const useConversations = (
     fireAndForget(regenerate());
   }, [disabled, regenerate, setActiveError]);
 
+  const dismissError = useCallback(() => {
+    setActiveError(undefined);
+  }, [setActiveError]);
+
   const regenerateMessage = useCallback(
     (options: { messageId: string }) => {
       if (disabled) {
@@ -141,6 +145,7 @@ export const useConversations = (
     conversationListError,
     conversationListLoading,
     conversations,
+    dismissError,
     generatingTitleId,
     messages: visibleMessages,
     onClearAll: handleClearAll,

@@ -1,13 +1,19 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { MyUIMessage } from '@/lib/api-types';
+import type { ModelDescriptor, MyUIMessage } from '@/lib/api-types';
 
 import { useUiStore } from '@/lib/ui-store';
 import { useConversations } from '@/lib/use-conversations';
 
 type UseChatOptions = {
   readonly id?: string;
+  readonly onError?: (error: unknown) => void;
+  readonly onFinish?: (result: {
+    readonly isAbort: boolean;
+    readonly isError: boolean;
+    readonly message: MyUIMessage;
+  }) => void;
   readonly resume?: boolean;
 };
 
@@ -46,6 +52,15 @@ const stopChatStream =
 const chatMessages: MyUIMessage[] = [];
 const ACTIVE_CONVERSATION_ID = 'conv-active';
 const useChatOptions: UseChatOptions[] = [];
+const refetchModels = vi.fn<() => Promise<unknown>>();
+const runtimeModels: ModelDescriptor[] = [];
+
+vi.mock('@/lib/use-models', () => ({
+  useModels: () => ({
+    models: runtimeModels,
+    refetch: refetchModels,
+  }),
+}));
 
 vi.mock('@ai-sdk/react', () => ({
   useChat: (options: UseChatOptions) => {
@@ -101,6 +116,9 @@ describe('useConversations resumable streaming', () => {
     localStop.mockClear();
     refreshConversations.mockReset();
     refreshConversations.mockResolvedValue();
+    refetchModels.mockReset();
+    refetchModels.mockResolvedValue(undefined);
+    runtimeModels.length = 0;
     saveChatConversation.mockReset();
     saveChatConversation.mockResolvedValue();
     sendMessage.mockReset();
@@ -127,6 +145,60 @@ describe('useConversations resumable streaming', () => {
     expect(useChatOptions.at(-1)).toMatchObject({
       id: ACTIVE_CONVERSATION_ID,
       resume: true,
+    });
+  });
+
+  it('refreshes sponsored quota once when an error also finishes the stream', async () => {
+    runtimeModels.push({
+      availability: 'sponsored',
+      id: 'model-a',
+      name: 'Sponsored model',
+      provider: 'openai',
+    });
+    const { rerender } = renderHook(() => useConversations('model-a'));
+    chatState.status = 'streaming';
+    rerender();
+
+    const options = useChatOptions.at(-1);
+    options?.onError?.(new Error('quota exhausted'));
+    options?.onFinish?.({
+      isAbort: false,
+      isError: true,
+      message: {
+        id: 'assistant-1',
+        parts: [],
+        role: 'assistant',
+      },
+    });
+
+    await waitFor(() => {
+      expect(refetchModels).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('does not refresh sponsored quota after a BYOK-only completion', async () => {
+    runtimeModels.push({
+      availability: 'byok',
+      id: 'model-a',
+      name: 'BYOK model',
+      provider: 'openai',
+    });
+    const { rerender } = renderHook(() => useConversations('model-a'));
+    chatState.status = 'streaming';
+    rerender();
+
+    useChatOptions.at(-1)?.onFinish?.({
+      isAbort: false,
+      isError: false,
+      message: {
+        id: 'assistant-1',
+        parts: [],
+        role: 'assistant',
+      },
+    });
+
+    await waitFor(() => {
+      expect(refetchModels).not.toHaveBeenCalled();
     });
   });
 
