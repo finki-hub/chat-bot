@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from 'react';
 
 import { Composer } from '@/components/chat/composer';
 import { ConversationContextBar } from '@/components/chat/conversation-context-bar';
@@ -11,7 +17,7 @@ import { Header } from '@/components/shell/header';
 import { Sidebar } from '@/components/shell/sidebar';
 import { SidebarUserIdentity } from '@/components/shell/sidebar-user-identity';
 import { t } from '@/lib/i18n';
-import { recoverSelectedModel } from '@/lib/model-catalog';
+import { isModelAvailable, recoverSelectedModel } from '@/lib/model-catalog';
 import { isReasoningCapableModel } from '@/lib/reasoning';
 import { DEFAULT_MODEL, useUiStore } from '@/lib/ui-store';
 import { useConversations } from '@/lib/use-conversations';
@@ -48,6 +54,13 @@ export const ChatScreen = () => {
   const [sidebarSynced, setSidebarSynced] = useState(false);
   const [desktopSidebar, setDesktopSidebar] = useState(false);
   const [credentialSettingsOpen, setCredentialSettingsOpen] = useState(false);
+
+  const openCredentialSettings = useCallback(() => {
+    if (!desktopSidebar) {
+      setSidebarOpen(false);
+    }
+    setCredentialSettingsOpen(true);
+  }, [desktopSidebar, setSidebarOpen]);
 
   const { unavailable } = useHealth();
 
@@ -89,17 +102,13 @@ export const ChatScreen = () => {
     [credentials],
   );
   const availableModels = useMemo(
-    () => modelList.filter((entry) => availableProviders.has(entry.provider)),
+    () =>
+      modelList.filter((entry) => isModelAvailable(entry, availableProviders)),
     [availableProviders, modelList],
   );
 
   useEffect(() => {
-    if (
-      modelsLoading ||
-      credentialsLoading ||
-      modelsError ||
-      availableModels.length === 0
-    ) {
+    if (modelsLoading || modelsError || availableModels.length === 0) {
       return;
     }
     const recovered = recoverSelectedModel(
@@ -110,14 +119,7 @@ export const ChatScreen = () => {
     if (recovered !== model) {
       setModel(recovered);
     }
-  }, [
-    availableModels,
-    credentialsLoading,
-    modelsLoading,
-    modelsError,
-    model,
-    setModel,
-  ]);
+  }, [availableModels, modelsLoading, modelsError, model, setModel]);
   const {
     activeError,
     activeId,
@@ -125,6 +127,7 @@ export const ChatScreen = () => {
     conversationListError,
     conversationListLoading,
     conversations,
+    dismissError,
     generatingTitleId,
     messages,
     onClearAll,
@@ -159,10 +162,7 @@ export const ChatScreen = () => {
           footer={
             <SidebarUserIdentity
               onOpenCredentials={() => {
-                if (!desktopSidebar) {
-                  setSidebarOpen(false);
-                }
-                setCredentialSettingsOpen(true);
+                openCredentialSettings();
               }}
             />
           }
@@ -194,8 +194,10 @@ export const ChatScreen = () => {
             activeError={activeError}
             activeStatus={activeStatus}
             messages={messages}
+            onManageCredentials={openCredentialSettings}
             onPickSuggestion={unavailable ? undefined : submitMessage}
             onRetry={unavailable ? undefined : retry}
+            onWait={dismissError}
             renderActions={renderActions}
             status={status}
           />

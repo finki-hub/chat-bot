@@ -38,6 +38,13 @@ vi.mock('@/lib/use-conversation-hydration', () => ({
   useConversationHydration: () => false,
 }));
 
+vi.mock('@/lib/use-models', () => ({
+  useModels: () => ({
+    models: [],
+    refetch: () => Promise.resolve(),
+  }),
+}));
+
 vi.mock('@/lib/use-conversation-list', () => ({
   useConversationList: () => ({
     conversations: [],
