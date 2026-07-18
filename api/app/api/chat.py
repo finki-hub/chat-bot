@@ -907,7 +907,11 @@ async def list_models(
         utc_reset = usage_snapshot.reset_at
 
     access_context = ModelAccessContext(
-        user_has_provider=credentials is not None and credentials.openai is not None,
+        available_providers=(
+            credentials.available_providers()
+            if credentials is not None
+            else frozenset()
+        ),
         sponsored_settings=SponsoredSettings(
             enabled=settings.SPONSORED_LUNA_ENABLED,
             provider_configured=(

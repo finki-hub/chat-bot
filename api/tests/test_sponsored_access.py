@@ -11,7 +11,12 @@ from app.llms.model_access import (
     SponsoredSettings,
     overlay_model_access,
 )
-from app.llms.model_catalog_types import ExecutionPolicy, ModelDescriptor
+from app.llms.model_catalog_types import (
+    CatalogProvider,
+    ExecutionPolicy,
+    ModelDescriptor,
+)
+from app.llms.provider_credentials import ProviderName
 from app.schemas.chat_credentials import ChatCredentialSecret
 from app.schemas.sponsored_access import (
     SPONSORED_ERROR_CODES,
@@ -23,10 +28,13 @@ from app.utils.settings import Settings
 RESET = datetime(2026, 7, 19, tzinfo=UTC)
 
 
-def _descriptor(model_id: str = "gpt-5.6-luna") -> ModelDescriptor:
+def _descriptor(
+    model_id: str = "gpt-5.6-luna",
+    provider: CatalogProvider = "openai",
+) -> ModelDescriptor:
     return ModelDescriptor(
         id=model_id,
-        provider="openai",
+        provider=provider,
         name=model_id,
         execution=ExecutionPolicy(
             reasoning=True,
@@ -39,14 +47,14 @@ def _descriptor(model_id: str = "gpt-5.6-luna") -> ModelDescriptor:
 
 def _context(
     *,
-    user_has_provider: bool,
+    available_providers: frozenset[ProviderName] = frozenset(),
     sponsored_enabled: bool = True,
     provider_configured: bool = True,
     personal_remaining: int = 4,
     global_remaining: int = 10,
 ) -> ModelAccessContext:
     return ModelAccessContext(
-        user_has_provider=user_has_provider,
+        available_providers=available_providers,
         sponsored_settings=SponsoredSettings(
             enabled=sponsored_enabled,
             provider_configured=provider_configured,
@@ -87,11 +95,17 @@ def test_legacy_model_descriptor_payload_parses_without_access_fields() -> None:
 @pytest.mark.parametrize(
     ("context", "expected"),
     [
-        (_context(user_has_provider=True), "both"),
-        (_context(user_has_provider=True, sponsored_enabled=False), "byok"),
-        (_context(user_has_provider=False), "sponsored"),
+        (_context(available_providers=frozenset({"openai"})), "both"),
         (
-            _context(user_has_provider=False, global_remaining=0),
+            _context(
+                available_providers=frozenset({"openai"}),
+                sponsored_enabled=False,
+            ),
+            "byok",
+        ),
+        (_context(), "sponsored"),
+        (
+            _context(global_remaining=0),
             "unavailable",
         ),
     ],
@@ -108,18 +122,45 @@ def test_luna_overlay_covers_all_availability_states(
 def test_non_luna_overlay_never_grants_sponsored_access() -> None:
     resolved = overlay_model_access(
         _descriptor("gpt-5.6-sol"),
-        _context(user_has_provider=False),
+        _context(),
     )
 
     assert resolved.availability == "unavailable"
     assert resolved.sponsored_quota is None
 
 
+@pytest.mark.parametrize(
+    ("provider", "available_providers", "expected"),
+    [
+        ("openai", frozenset({"openai"}), "byok"),
+        ("google", frozenset({"google"}), "byok"),
+        ("anthropic", frozenset({"anthropic"}), "byok"),
+        ("ollama", frozenset({"ollama"}), "byok"),
+        ("ollama", frozenset({"openai"}), "unavailable"),
+    ],
+)
+def test_non_luna_overlay_uses_descriptor_provider(
+    provider: CatalogProvider,
+    available_providers: frozenset[ProviderName],
+    expected: str,
+) -> None:
+    resolved = overlay_model_access(
+        _descriptor("provider-model", provider),
+        _context(available_providers=available_providers),
+    )
+
+    assert resolved.availability == expected
+    assert resolved.sponsored_quota is None
+
+
 def test_overlay_is_user_specific_without_mutating_global_descriptor() -> None:
     base = _descriptor()
 
-    byok_user = overlay_model_access(base, _context(user_has_provider=True))
-    sponsored_user = overlay_model_access(base, _context(user_has_provider=False))
+    byok_user = overlay_model_access(
+        base,
+        _context(available_providers=frozenset({"openai"})),
+    )
+    sponsored_user = overlay_model_access(base, _context())
 
     assert base.availability == "byok"
     assert base.sponsored_quota is None

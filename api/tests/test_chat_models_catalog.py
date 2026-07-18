@@ -92,7 +92,7 @@ def test_models_endpoint_preserves_ollama_enrichment_and_read_only_usage(
         "pricing": None,
         "status": None,
         "loaded": True,
-        "availability": "unavailable",
+        "availability": "byok",
         "sponsored_quota": None,
     }
 

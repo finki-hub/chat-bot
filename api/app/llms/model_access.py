@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from typing import Final
 
 from app.llms.model_catalog_types import ModelDescriptor
+from app.llms.provider_credentials import ProviderName
 from app.schemas.sponsored_access import (
     ModelAvailability,
     SponsoredAccessValidationError,
@@ -24,7 +25,7 @@ class SponsoredSettings:
 class ModelAccessContext:
     """User-specific access inputs kept outside the globally cached catalog."""
 
-    user_has_provider: bool
+    available_providers: frozenset[ProviderName]
     sponsored_settings: SponsoredSettings
     personal_quota: SponsoredQuotaSnapshot | None
     global_quota: SponsoredQuotaSnapshot | None
@@ -63,7 +64,7 @@ def _display_quota(context: ModelAccessContext) -> SponsoredQuotaSnapshot | None
 
 
 def _luna_availability(context: ModelAccessContext) -> ModelAvailability:
-    has_byok = context.user_has_provider
+    has_byok = "openai" in context.available_providers
     has_sponsored = _sponsored_has_capacity(context)
     if has_byok and has_sponsored:
         return "both"
@@ -81,7 +82,9 @@ def overlay_model_access(
     """Overlay one user's access state without mutating the base descriptor."""
     if descriptor.id != LUNA_MODEL_ID:
         availability: ModelAvailability = (
-            "byok" if context.user_has_provider else "unavailable"
+            "byok"
+            if descriptor.provider in context.available_providers
+            else "unavailable"
         )
         return descriptor.model_copy(
             update={"availability": availability, "sponsored_quota": None},
