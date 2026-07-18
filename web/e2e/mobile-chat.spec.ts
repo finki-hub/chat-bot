@@ -12,6 +12,7 @@ const DEFAULT_SESSION_USER = {
   email: 'student@example.com',
   name: 'Student',
 } as const satisfies MockSessionUser;
+const SIDEBAR_TOGGLE_LABEL = 'Прикажи/сокриј странична лента';
 const STREAM_URL = 'http://127.0.0.1:9/stream';
 
 const mockSession = async (
@@ -47,7 +48,7 @@ test('mobile drawer traps focus, closes with Escape, and restores the trigger', 
   await page.goto('/');
 
   const trigger = page.getByRole('button', {
-    name: 'Прикажи/сокриј странична лента',
+    name: SIDEBAR_TOGGLE_LABEL,
   });
   await trigger.click();
 
@@ -75,9 +76,7 @@ test('mobile primary controls meet the 44px touch target minimum', async ({
   await page.goto('/');
 
   const controls = [
-    page.getByRole('button', { name: 'Прикажи/сокриј странична лента' }),
-    page.getByRole('button', { name: 'API клучеви' }),
-    page.getByRole('button', { name: 'Одјави се: Student' }),
+    page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }),
     page.getByRole('button', { name: 'Промени тема' }),
     page.getByTestId('composer-submit'),
   ];
@@ -87,9 +86,19 @@ test('mobile primary controls meet the 44px touch target minimum', async ({
     expect(box?.height).toBeGreaterThanOrEqual(44);
     expect(box?.width).toBeGreaterThanOrEqual(44);
   }
+
+  await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
+  const drawer = page.getByRole('dialog', { name: 'Странична лента' });
+  const accountTrigger = drawer.getByRole('button', {
+    name: 'Корисничко мени: Student, student@example.com',
+  });
+  const triggerBox = await accountTrigger.boundingBox();
+
+  expect(triggerBox?.height).toBeGreaterThanOrEqual(44);
+  expect(triggerBox?.width).toBeGreaterThanOrEqual(44);
 });
 
-test('mobile authenticated header shows the current user name', async ({
+test('mobile keeps account actions in the profile menu and opens credentials after closing the drawer', async ({
   page,
 }) => {
   await page.setViewportSize({ height: 812, width: 375 });
@@ -98,16 +107,30 @@ test('mobile authenticated header shows the current user name', async ({
   await installMockChatState(page, { streamUrl: STREAM_URL });
   await page.goto('/');
 
-  const signOutButton = page.getByRole('button', {
-    name: 'Одјави се: Student',
+  await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
+  const drawer = page.getByRole('dialog', { name: 'Странична лента' });
+  const accountTrigger = drawer.getByRole('button', {
+    name: 'Корисничко мени: Student, student@example.com',
   });
-  await expect(signOutButton.getByText('Student')).toBeVisible();
 
-  const box = await signOutButton.boundingBox();
-  expect(box?.width).toBeGreaterThan(box?.height ?? Infinity);
+  await expect(accountTrigger).toContainText('Student');
+  await expect(accountTrigger).toContainText('student@example.com');
+  await accountTrigger.click();
+  await expect(page.getByRole('menuitem', { name: 'Одјави се' })).toBeVisible();
+  await page.getByRole('menuitem', { name: 'API клучеви' }).click();
+
+  await expect(drawer).toBeHidden();
+  const credentialsDialog = page.getByRole('dialog', {
+    name: 'Лични API клучеви',
+  });
+  await expect(credentialsDialog).toBeVisible();
+  await expect(page.getByRole('button', { name: 'API клучеви' })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole('button', { name: 'Одјави се' })).toHaveCount(0);
 });
 
-test('mobile authenticated header truncates long names without overflowing', async ({
+test('mobile drawer truncates long authenticated names without overflowing', async ({
   page,
 }) => {
   const name = 'Student With An Exceptionally Long Display Name';
@@ -117,11 +140,9 @@ test('mobile authenticated header truncates long names without overflowing', asy
   await installMockChatState(page, { streamUrl: STREAM_URL });
   await page.goto('/');
 
-  const signOutButton = page.getByRole('button', {
-    name: `Одјави се: ${name}`,
-  });
-  const label = signOutButton.getByText(name);
-  const title = page.getByRole('heading', { name: 'ФИНКИ Хаб' });
+  await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
+  const identity = page.getByTestId('sidebar-user-identity');
+  const label = identity.getByText(name);
   await expect(label).toBeVisible();
   await expect(label).toHaveCSS('overflow', 'hidden');
   await expect(label).toHaveCSS('text-overflow', 'ellipsis');
@@ -131,19 +152,13 @@ test('mobile authenticated header truncates long names without overflowing', asy
       label.evaluate((element) => element.scrollWidth > element.clientWidth),
     )
     .toBe(true);
-  await expect
-    .poll(async () =>
-      title.evaluate((element) => element.scrollWidth <= element.clientWidth),
-    )
-    .toBe(true);
-
-  const box = await signOutButton.boundingBox();
+  const box = await identity.boundingBox();
   expect((box?.x ?? Infinity) + (box?.width ?? Infinity)).toBeLessThanOrEqual(
     320,
   );
 });
 
-test('mobile authenticated header shows the full sign-out label without identity', async ({
+test('mobile keeps the account menu available when authenticated identity is unavailable', async ({
   page,
 }) => {
   await page.setViewportSize({ height: 812, width: 320 });
@@ -152,21 +167,20 @@ test('mobile authenticated header shows the full sign-out label without identity
   await installMockChatState(page, { streamUrl: STREAM_URL });
   await page.goto('/');
 
-  const signOutButton = page.getByRole('button', {
-    exact: true,
-    name: 'Одјави се',
+  await expect(page.getByRole('button', { name: 'Одјави се' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'API клучеви' })).toHaveCount(
+    0,
+  );
+
+  await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
+  const accountTrigger = page.getByRole('button', {
+    name: 'Корисничко мени: Сметка',
   });
-  const label = signOutButton.getByText('Одјави се');
 
-  await expect(label).toBeVisible();
-  await expect
-    .poll(async () =>
-      label.evaluate((element) => element.scrollWidth <= element.clientWidth),
-    )
-    .toBe(true);
-
-  const box = await signOutButton.boundingBox();
-
-  expect(box?.height).toBeGreaterThanOrEqual(44);
-  expect(box?.width).toBeGreaterThanOrEqual(44);
+  await expect(accountTrigger).toContainText('Сметка');
+  await accountTrigger.click();
+  await expect(
+    page.getByRole('menuitem', { name: 'API клучеви' }),
+  ).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Одјави се' })).toBeVisible();
 });
