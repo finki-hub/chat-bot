@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+/* eslint-disable camelcase -- fixtures mirror the Python catalog wire contract. */
 import type { ModelDescriptor } from '@/lib/api-types';
 
 import {
   CURATED_MODEL_DESCRIPTORS,
   groupModelsByProvider,
+  isModelAvailable,
+  isSponsoredModel,
   parseModelCatalog,
   providerLabel,
   recoverSelectedModel,
@@ -15,11 +18,13 @@ const GOOGLE = 'google';
 const ANTHROPIC = 'anthropic';
 const OLLAMA = 'ollama';
 const LIVE = 'live';
+const GPT = 'gpt-5.4';
+const LUNA = 'gpt-5.6-luna';
 
 const EXPECTED_CURATED_IDS = [
   'gpt-5.6-sol',
   'gpt-5.6-terra',
-  'gpt-5.6-luna',
+  LUNA,
   'gpt-5.5',
   'gpt-5.4',
   'gpt-5.4-mini',
@@ -35,7 +40,6 @@ const EXPECTED_CURATED_IDS = [
   'qwen3:14b-q4_K_M',
 ];
 
-const GPT = 'gpt-5.4';
 const GPT_TERRA = 'gpt-5.6-terra';
 const GPT_MINI = 'gpt-5.4-mini';
 const GPT_MINI_NAME = 'GPT-5.4 Mini';
@@ -110,6 +114,67 @@ describe('parseModelCatalog', () => {
       loaded: true,
       provider: OLLAMA,
     });
+  });
+
+  it('preserves approved sponsored access metadata and strips secret fields', () => {
+    const catalog = parseModelCatalog({
+      models: [
+        {
+          api_key: 'do-not-forward',
+          availability: 'sponsored',
+          base_url: 'https://sponsor.invalid',
+          endpoint: 'https://sponsor.invalid/v1',
+          id: LUNA,
+          name: 'GPT-5.6 Luna',
+          provider: OPENAI,
+          sponsored_quota: {
+            limit: 10,
+            remaining: 7,
+            resets_at: '2026-07-18T12:00:00Z',
+          },
+        },
+      ],
+      source: LIVE,
+      version: 1,
+    });
+
+    expect(catalog.models).toStrictEqual([
+      {
+        availability: 'sponsored',
+        id: 'gpt-5.6-luna',
+        name: 'GPT-5.6 Luna',
+        provider: OPENAI,
+        sponsored_quota: {
+          limit: 10,
+          remaining: 7,
+          resets_at: '2026-07-18T12:00:00Z',
+        },
+      },
+    ]);
+  });
+
+  it('drops malformed sponsored metadata without inferring sponsored access', () => {
+    const catalog = parseModelCatalog({
+      models: [
+        {
+          availability: 'sponsored-by-secret',
+          id: GPT_MINI,
+          name: GPT_MINI_NAME,
+          provider: OPENAI,
+          sponsored_quota: {
+            limit: 2,
+            remaining: 3,
+            resets_at: 'not-a-reset',
+          },
+        },
+      ],
+      source: LIVE,
+      version: 1,
+    });
+
+    expect(catalog.models).toStrictEqual([
+      { id: GPT_MINI, name: GPT_MINI_NAME, provider: OPENAI },
+    ]);
   });
 
   it('preserves an unknown Ollama loaded status', () => {
@@ -262,6 +327,50 @@ describe('groupModelsByProvider', () => {
   });
 });
 
+describe('model access predicates', () => {
+  const openAiCredentials = new Set([OPENAI]);
+  const noCredentials = new Set<string>();
+
+  it('uses provider credentials for legacy descriptors with no availability', () => {
+    const legacy = descriptor(GPT_MINI, OPENAI);
+
+    expect(isModelAvailable(legacy, openAiCredentials)).toBe(true);
+    expect(isModelAvailable(legacy, noCredentials)).toBe(false);
+    expect(isSponsoredModel(legacy)).toBe(false);
+  });
+
+  it.each(['sponsored', 'both'] as const)(
+    'allows %s models without provider credentials',
+    (availability) => {
+      const model = { ...descriptor(LUNA, OPENAI), availability };
+
+      expect(isModelAvailable(model, noCredentials)).toBe(true);
+      expect(isSponsoredModel(model)).toBe(true);
+    },
+  );
+
+  it('requires BYOK credentials and blocks explicitly unavailable models', () => {
+    expect(
+      isModelAvailable(
+        { ...descriptor(GPT_MINI, OPENAI), availability: 'byok' },
+        noCredentials,
+      ),
+    ).toBe(false);
+    expect(
+      isModelAvailable(
+        { ...descriptor(GPT_MINI, OPENAI), availability: 'byok' },
+        openAiCredentials,
+      ),
+    ).toBe(true);
+    expect(
+      isModelAvailable(
+        { ...descriptor(LUNA, OPENAI), availability: 'unavailable' },
+        openAiCredentials,
+      ),
+    ).toBe(false);
+  });
+});
+
 describe('recoverSelectedModel', () => {
   const { models } = parseModelCatalog(typedCatalog());
 
@@ -294,3 +403,5 @@ describe('providerLabel', () => {
     expect(providerLabel('BAAI')).toBe('BAAI');
   });
 });
+
+/* eslint-enable camelcase -- end wire-contract fixtures. */
