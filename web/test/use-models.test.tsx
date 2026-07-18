@@ -1,8 +1,20 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useModels } from '@/lib/use-models';
+
+type AnonymousSession = {
+  readonly data: null;
+  readonly status: 'unauthenticated';
+  readonly update: () => Promise<null>;
+};
+
+const authMocks = vi.hoisted(() => ({
+  useSession: vi.fn<() => AnonymousSession>(),
+}));
+
+vi.mock('next-auth/react', () => authMocks);
 
 const ModelsProbe = () => {
   const { isError, models } = useModels();
@@ -13,7 +25,19 @@ const ModelsProbe = () => {
   );
 };
 
+const noSession = {
+  data: null,
+  status: 'unauthenticated',
+  update: () => Promise.resolve(null),
+} satisfies AnonymousSession;
+
 describe('useModels', () => {
+  beforeEach(() => {
+    authMocks.useSession.mockReturnValue({
+      ...noSession,
+    });
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
