@@ -4,12 +4,15 @@ import logging
 import time
 from collections.abc import AsyncGenerator, Generator
 from dataclasses import dataclass, field
+from datetime import datetime
+from typing import assert_never
 
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk, BaseMessage
 from langgraph.graph.state import CompiledStateGraph
 
 from app.llms.retrieval_result import RetrievalSourcePayload
+from app.schemas.sponsored_access import SafeErrorDetails, SponsoredErrorCode
 from app.utils.posthog_client import capture
 
 logger = logging.getLogger(__name__)
@@ -47,6 +50,25 @@ def status_event(*, stage: str, tool: str | None = None) -> str:
 
 def error_event(code: str, message: str, **details: str) -> str:
     return _sse("error", {"code": code, "message": message, **details})
+
+
+def sponsored_error_event(
+    code: SponsoredErrorCode,
+    message: str,
+    *,
+    resets_at: datetime | None = None,
+) -> str:
+    """Emit a sponsored error while exposing only its approved reset metadata."""
+    match code:
+        case "free_quota_exhausted":
+            reset = SafeErrorDetails(resets_at=resets_at).sse_reset()
+            if reset is None:
+                return error_event(code, message)
+            return error_event(code, message, resets_at=reset)
+        case "free_tier_unavailable" | "sponsored_request_in_progress":
+            return error_event(code, message)
+        case unreachable:
+            assert_never(unreachable)
 
 
 def meta_event(payload: dict[str, object]) -> str:

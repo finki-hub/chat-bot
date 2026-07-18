@@ -107,6 +107,59 @@ def test_claude_sonnet_5_is_a_supported_anthropic_chat_model():
     assert model in REASONING_CAPABLE_MODELS
 
 
+def test_stream_openai_route_receives_direct_sponsored_credential_and_override(
+    monkeypatch,
+) -> None:
+    captured: list[tuple[ChatCredentialSecret | None, str | None]] = []
+
+    async def fake_stream_openai_agent_response(
+        user_prompt: str,
+        routed_model: Model,
+        *,
+        system_prompt: str,
+        history: list[BaseMessage] | None = None,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        reasoning: bool = False,
+        observation: StreamObservation | None = None,
+        credential: ChatCredentialSecret | None = None,
+        upstream_model: str | None = None,
+    ) -> StreamingResponse:
+        captured.append((credential, upstream_model))
+
+        async def empty_body() -> AsyncIterator[bytes]:
+            if False:
+                yield b""
+
+        return StreamingResponse(empty_body(), media_type="text/event-stream")
+
+    monkeypatch.setattr(
+        streams,
+        "stream_openai_agent_response",
+        fake_stream_openai_agent_response,
+    )
+    credential = ChatCredentialSecret(provider="openai", api_key="sponsored-key")
+
+    async def route_response() -> StreamingResponse:
+        return await streams.stream_response_with_agent(
+            "test",
+            Model.GPT_5_6_LUNA,
+            system_prompt="system",
+            history=[],
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=1024,
+            interface="discord",
+            credential=credential,
+            upstream_model="upstream-luna",
+        )
+
+    anyio.run(route_response)
+
+    assert captured == [(credential, "upstream-luna")]
+
+
 def test_curated_defaults_and_embedding_policy() -> None:
     values = {model.value for model in ACTIVE_EMBEDDING_MODELS}
 
