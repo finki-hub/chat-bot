@@ -347,7 +347,7 @@ async def test_deferred_release_failure_is_logged(caplog):
 
     task = asyncio.create_task(fail_release())
     with pytest.raises(RuntimeError):
-        await task
+        _ = await task
 
     with caplog.at_level(logging.ERROR, logger=chat_api.logger.name):
         chat_api._log_sponsored_release_failure(task)  # noqa: SLF001
