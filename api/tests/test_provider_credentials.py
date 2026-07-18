@@ -108,6 +108,7 @@ def test_resolve_provider_credentials_invalidates_requested_corrupted_credential
         # Then: the provider is treated as unavailable so callers can request a new key.
         assert credentials is not None
         assert credentials.google is None
+        assert credentials.rejected_providers == frozenset({"google"})
 
     anyio.run(run_resolution)
 
