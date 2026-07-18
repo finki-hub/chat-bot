@@ -6,6 +6,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    SecretStr,
     StringConstraints,
     field_validator,
     model_validator,
@@ -47,6 +48,25 @@ def _canonical_byok_base_url(value: str) -> str | None:
     port = f":{parsed_port}" if parsed_port is not None else ""
     path = parsed.path.rstrip("/")
     return f"https://{hostname}{port}{path}"
+
+
+def _canonical_sponsored_base_url(value: str) -> str | None:
+    try:
+        parsed = urlsplit(value.strip())
+        hostname = parsed.hostname
+        if parsed.scheme.lower() != "https" or hostname is None:
+            return None
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            return None
+        parsed_port = parsed.port
+    except ValueError:
+        return None
+
+    hostname = hostname.lower().rstrip(".")
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    port = f":{parsed_port}" if parsed_port is not None else ""
+    path = parsed.path.rstrip("/")
+    return f"https://{host}{port}{path}"
 
 
 class McpServerSettings(BaseModel):
@@ -97,6 +117,15 @@ class Settings(BaseSettings):
 
     BYOK_ALLOWED_BASE_URLS: str = ""
 
+    SPONSORED_LUNA_ENABLED: bool = False
+    SPONSORED_OPENAI_API_KEY: SecretStr | None = None
+    SPONSORED_OPENAI_BASE_URL: str | None = None
+    SPONSORED_LUNA_UPSTREAM_MODEL: NonBlankString = "gpt-5.6-luna"
+    SPONSORED_DAILY_USER_LIMIT: int = Field(default=5, gt=0)
+    SPONSORED_DAILY_GLOBAL_LIMIT: int | None = Field(default=None, gt=0)
+    SPONSORED_MAX_OUTPUT_TOKENS: int = Field(default=1024, gt=0)
+    SPONSORED_REQUEST_LEASE_SECONDS: int = Field(default=600, gt=0)
+
     POSTHOG_KEY: str = ""
     POSTHOG_HOST: str = "https://eu.i.posthog.com"
 
@@ -123,6 +152,21 @@ class Settings(BaseSettings):
             raise ValueError(msg)
         return self
 
+    @model_validator(mode="after")
+    def validate_sponsored_luna_settings(self) -> Self:
+        if not self.SPONSORED_LUNA_ENABLED:
+            return self
+        if (
+            self.SPONSORED_OPENAI_API_KEY is None
+            or not self.SPONSORED_OPENAI_API_KEY.get_secret_value().strip()
+        ):
+            msg = "SPONSORED_OPENAI_API_KEY is required when SPONSORED_LUNA_ENABLED is true"
+            raise ValueError(msg)
+        if self.SPONSORED_DAILY_GLOBAL_LIMIT is None:
+            msg = "SPONSORED_DAILY_GLOBAL_LIMIT is required when SPONSORED_LUNA_ENABLED is true"
+            raise ValueError(msg)
+        return self
+
     @field_validator("MCP_HTTP_URLS", "MCP_SSE_URLS", mode="before")
     @classmethod
     def parse_comma_separated(cls, v: object) -> str:
@@ -134,6 +178,20 @@ class Settings(BaseSettings):
     def parse_byok_base_urls(cls, v: object) -> str:
         """Normalise the BYOK custom endpoint allowlist to comma-separated URLs."""
         return str(v).strip() if v else ""
+
+    @field_validator("SPONSORED_OPENAI_BASE_URL", mode="before")
+    @classmethod
+    def parse_sponsored_base_url(cls, v: str | None) -> str | None:
+        if v is None or not v.strip():
+            return None
+        canonical = _canonical_sponsored_base_url(v)
+        if canonical is None:
+            msg = (
+                "SPONSORED_OPENAI_BASE_URL must be an HTTPS URL without credentials, "
+                "query parameters, or fragments"
+            )
+            raise ValueError(msg)
+        return canonical
 
     def insecure_secret_names(self) -> list[str]:
         insecure_names: list[str] = []
@@ -149,6 +207,11 @@ class Settings(BaseSettings):
             _MCP_API_KEY_DEFAULT,
         ):
             insecure_names.append("MCP_API_KEY")
+        if self.SPONSORED_LUNA_ENABLED and (
+            self.SPONSORED_OPENAI_API_KEY is None
+            or not self.SPONSORED_OPENAI_API_KEY.get_secret_value().strip()
+        ):
+            insecure_names.append("SPONSORED_OPENAI_API_KEY")
         insecure_names.extend(
             f"MCP_SERVERS.{server.name}.api_key"
             for server in self.MCP_SERVERS

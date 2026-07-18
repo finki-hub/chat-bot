@@ -134,3 +134,90 @@ def test_database_pool_min_size_cannot_exceed_max_size():
             DATABASE_POOL_MAX_SIZE=1,
             DATABASE_POOL_MIN_SIZE=2,
         )
+
+
+def test_sponsored_luna_defaults_are_disabled_and_safe():
+    settings = Settings(SPONSORED_LUNA_ENABLED=False)
+
+    assert settings.SPONSORED_LUNA_ENABLED is False
+    assert settings.SPONSORED_OPENAI_API_KEY is None
+    assert settings.SPONSORED_OPENAI_BASE_URL is None
+    assert settings.SPONSORED_LUNA_UPSTREAM_MODEL == "gpt-5.6-luna"
+    assert settings.SPONSORED_DAILY_USER_LIMIT == 5
+    assert settings.SPONSORED_DAILY_GLOBAL_LIMIT is None
+    assert settings.SPONSORED_MAX_OUTPUT_TOKENS == 1024
+    assert settings.SPONSORED_REQUEST_LEASE_SECONDS == 600
+
+
+def test_enabled_sponsored_luna_requires_api_key():
+    with pytest.raises(ValueError, match="SPONSORED_OPENAI_API_KEY") as error:
+        Settings(
+            SPONSORED_LUNA_ENABLED=True,
+            SPONSORED_DAILY_GLOBAL_LIMIT=10,
+        )
+
+    assert "sponsored-secret" not in str(error.value)
+
+
+def test_enabled_sponsored_luna_requires_positive_global_limit():
+    with pytest.raises(ValueError, match="SPONSORED_DAILY_GLOBAL_LIMIT"):
+        Settings(
+            SPONSORED_LUNA_ENABLED=True,
+            SPONSORED_OPENAI_API_KEY="sponsored-secret",
+        )
+
+
+def test_sponsored_luna_valid_key_uses_default_endpoint_and_masks_secret():
+    settings = Settings(
+        SPONSORED_LUNA_ENABLED=True,
+        SPONSORED_OPENAI_API_KEY="sponsored-secret",
+        SPONSORED_DAILY_GLOBAL_LIMIT=10,
+    )
+
+    assert settings.SPONSORED_OPENAI_API_KEY is not None
+    assert str(settings.SPONSORED_OPENAI_API_KEY) == "**********"
+    assert "sponsored-secret" not in repr(settings)
+
+
+def test_sponsored_base_url_is_normalized():
+    settings = Settings(
+        SPONSORED_LUNA_ENABLED=True,
+        SPONSORED_OPENAI_API_KEY="sponsored-secret",
+        SPONSORED_OPENAI_BASE_URL=" HTTPS://Example.COM/v1/ ",
+        SPONSORED_DAILY_GLOBAL_LIMIT=10,
+    )
+
+    assert settings.SPONSORED_OPENAI_BASE_URL == "https://example.com/v1"
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://example.com/v1",
+        "https:///v1",
+        "https://user:password@example.com/v1",
+        "https://example.com/v1?key=value",
+        "https://example.com/v1#fragment",
+    ],
+)
+def test_sponsored_base_url_rejects_unsafe_endpoints(base_url: str):
+    with pytest.raises(ValueError, match="SPONSORED_OPENAI_BASE_URL"):
+        Settings(SPONSORED_OPENAI_BASE_URL=base_url)
+
+
+def test_compose_forwards_sponsored_luna_settings():
+    expected_settings = (
+        "SPONSORED_LUNA_ENABLED",
+        "SPONSORED_OPENAI_API_KEY",
+        "SPONSORED_OPENAI_BASE_URL",
+        "SPONSORED_LUNA_UPSTREAM_MODEL",
+        "SPONSORED_DAILY_USER_LIMIT",
+        "SPONSORED_DAILY_GLOBAL_LIMIT",
+        "SPONSORED_MAX_OUTPUT_TOKENS",
+        "SPONSORED_REQUEST_LEASE_SECONDS",
+    )
+
+    for compose_file in ("compose.yaml", "compose.prod.yaml"):
+        compose = (REPO_ROOT / compose_file).read_text()
+        for setting_name in expected_settings:
+            assert f"{setting_name}:" in compose
