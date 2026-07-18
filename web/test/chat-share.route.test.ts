@@ -86,13 +86,16 @@ describe('/api/chat/[id]/share', () => {
   });
 
   it('reports an active share for the authenticated owner', async () => {
-    routeMocks.sharingClient.getConversationShareStatus.mockResolvedValueOnce(
-      true,
-    );
+    routeMocks.sharingClient.getConversationShareStatus.mockResolvedValueOnce({
+      shareToken: SHARE_TOKEN,
+    });
 
     const response = await (await importGet())(request('GET'), context());
 
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toStrictEqual({
+      shareToken: SHARE_TOKEN,
+    });
     expect(
       routeMocks.sharingClient.getConversationShareStatus,
     ).toHaveBeenCalledWith({

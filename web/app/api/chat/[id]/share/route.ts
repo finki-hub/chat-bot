@@ -44,11 +44,11 @@ export const GET = async (
   const { id: conversationId } = await params;
   try {
     const userId = await getAuthenticatedChatUserId();
-    const shared = await createChatSharingClient().getConversationShareStatus({
+    const share = await createChatSharingClient().getConversationShareStatus({
       conversationId,
       userId,
     });
-    return empty(shared ? 200 : 204);
+    return share === null ? empty(204) : Response.json(share);
   } catch (error) {
     if (error instanceof AuthenticationRequiredError) {
       return empty(401);
