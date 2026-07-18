@@ -33,6 +33,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { t } from '@/lib/i18n';
 import { CREDENTIALS_QUERY_KEY, useCredentials } from '@/lib/use-credentials';
+import { useModels } from '@/lib/use-models';
 
 type CredentialSettingsDialogProps = {
   readonly onOpenChange: (open: boolean) => void;
@@ -60,6 +61,7 @@ export const CredentialSettingsDialog = ({
     isLoading: loading,
     refetch,
   } = useCredentials();
+  const { refetch: refetchModels } = useModels();
   const [forms, setForms] = useState<FormState>(EMPTY_FORMS);
   const [busyProvider, setBusyProvider] =
     useState<ChatCredentialProvider | null>(null);
@@ -119,6 +121,7 @@ export const CredentialSettingsDialog = ({
         ],
       );
       await queryClient.invalidateQueries({ queryKey: CREDENTIALS_QUERY_KEY });
+      await refetchModels();
       setForms((current) => ({
         ...current,
         [provider]: { apiKey: '', baseUrl: credential.base_url ?? '' },
@@ -153,6 +156,7 @@ export const CredentialSettingsDialog = ({
           ),
       );
       await queryClient.invalidateQueries({ queryKey: CREDENTIALS_QUERY_KEY });
+      await refetchModels();
       setForms((current) => ({
         ...current,
         [provider]: EMPTY_FORMS[provider],

@@ -66,12 +66,22 @@ const { deleteCredentialMock, loadCredentialsMock, saveCredentialMock } =
         (input: SaveCredentialInput) => Promise<ChatCredentialPublic | null>
       >(),
   }));
+const refetchModelsMock = vi.hoisted(() => vi.fn<() => Promise<unknown>>());
 
 vi.mock('@/components/shell/credential-settings-client', () => ({
   CredentialBaseUrlRejectedError: class extends Error {},
   deleteCredential: deleteCredentialMock,
   loadCredentials: loadCredentialsMock,
   saveCredential: saveCredentialMock,
+}));
+
+vi.mock('@/lib/use-models', () => ({
+  getModelsSessionKey: () => 'anonymous',
+  useModels: () => ({ refetch: refetchModelsMock }),
+}));
+
+vi.mock('next-auth/react', () => ({
+  useSession: () => ({ data: null, status: 'unauthenticated' }),
 }));
 
 const renderDialog = () => {
@@ -95,6 +105,7 @@ describe('CredentialSettingsDialog', () => {
     deleteCredentialMock.mockResolvedValue(true);
     loadCredentialsMock.mockResolvedValue([openaiCredential(OPENAI_BASE_URL)]);
     saveCredentialMock.mockResolvedValue(openaiCredential(OPENAI_BASE_URL));
+    refetchModelsMock.mockResolvedValue({});
   });
 
   it('uses a localized accessible name for the close action', async () => {
@@ -132,6 +143,7 @@ describe('CredentialSettingsDialog', () => {
       openaiCredential(OPENAI_BASE_URL),
     ]);
     expect(loadCredentialsMock).toHaveBeenCalledTimes(2);
+    expect(refetchModelsMock).toHaveBeenCalledOnce();
   });
 
   it('clears a saved custom base URL when the credential is deleted', async () => {
@@ -152,6 +164,7 @@ describe('CredentialSettingsDialog', () => {
 
     expect(queryClient.getQueryData(CREDENTIALS_QUERY_KEY)).toStrictEqual([]);
     expect(loadCredentialsMock).toHaveBeenCalledTimes(2);
+    expect(refetchModelsMock).toHaveBeenCalledOnce();
   });
 
   it('replaces stale cached providers with the authoritative list after save', async () => {
