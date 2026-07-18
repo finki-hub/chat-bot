@@ -9,8 +9,8 @@ from app.llms.google import stream_google_agent_response
 from app.llms.models import REASONING_CAPABLE_MODELS, ChatModel, Model, model_id
 from app.llms.ollama import stream_ollama_agent_response
 from app.llms.openai import stream_openai_agent_response
-from app.llms.provider_credentials import LlmProviderCredentials
 from app.schemas.chat import ChatInterface
+from app.schemas.chat_credentials import ChatCredentialSecret
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,8 @@ async def stream_response_with_agent(
     reasoning: bool = False,
     observation: StreamObservation | None = None,
     interface: ChatInterface,
-    credentials: LlmProviderCredentials | None = None,
+    credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> StreamingResponse:
     logger.info(
         "Streaming response with agent for user prompt length: '%d' "
@@ -62,7 +63,7 @@ async def stream_response_with_agent(
             max_tokens=max_tokens,
             reasoning=reasoning,
             observation=observation,
-            credential=None if credentials is None else credentials.ollama,
+            credential=credential,
         )
 
     match model:
@@ -78,7 +79,7 @@ async def stream_response_with_agent(
                 max_tokens=max_tokens,
                 reasoning=reasoning,
                 observation=observation,
-                credential=None if credentials is None else credentials.ollama,
+                credential=credential,
             )
 
         case (
@@ -101,7 +102,8 @@ async def stream_response_with_agent(
                 max_tokens=max_tokens,
                 reasoning=reasoning,
                 observation=observation,
-                credential=None if credentials is None else credentials.openai,
+                credential=credential,
+                upstream_model=upstream_model,
             )
 
         case (
@@ -120,7 +122,7 @@ async def stream_response_with_agent(
                 max_tokens=max_tokens,
                 reasoning=reasoning,
                 observation=observation,
-                credential=None if credentials is None else credentials.google,
+                credential=credential,
             )
 
         case Model.CLAUDE_OPUS_4_8 | Model.CLAUDE_SONNET_5 | Model.CLAUDE_HAIKU_4_5:
@@ -135,7 +137,7 @@ async def stream_response_with_agent(
                 max_tokens=max_tokens,
                 reasoning=reasoning,
                 observation=observation,
-                credential=None if credentials is None else credentials.anthropic,
+                credential=credential,
             )
 
         case _:
