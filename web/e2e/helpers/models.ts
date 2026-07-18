@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-import type { ChatCredentialProvider } from '@/lib/api-types';
+import type { ChatCredentialProvider, ModelCatalog } from '@/lib/api-types';
 
 import { CURATED_MODEL_DESCRIPTORS } from '@/lib/model-catalog';
 
@@ -21,15 +21,42 @@ export const MODEL_CATALOG = {
   version: 1,
 };
 
+type MockModelsInput =
+  | MockModelsOptions
+  | null
+  | readonly ChatCredentialProvider[];
+
+type MockModelsOptions = {
+  readonly catalog?: (() => ModelCatalog) | ModelCatalog;
+  readonly credentialProviders?:
+    | (() => readonly ChatCredentialProvider[])
+    | null
+    | readonly ChatCredentialProvider[];
+  readonly onModelsRequest?: () => void;
+};
+
+const isMockModelsOptions = (
+  input: MockModelsInput,
+): input is MockModelsOptions => input !== null && !Array.isArray(input);
+
 export const mockModels = async (
   page: Page,
-  credentialProviders:
-    | null
-    | readonly ChatCredentialProvider[] = DEFAULT_CREDENTIAL_PROVIDERS,
+  input: MockModelsInput = DEFAULT_CREDENTIAL_PROVIDERS,
 ): Promise<void> => {
+  const catalog = isMockModelsOptions(input)
+    ? (input.catalog ?? MODEL_CATALOG)
+    : MODEL_CATALOG;
+  const credentialProviders = isMockModelsOptions(input)
+    ? (input.credentialProviders ?? DEFAULT_CREDENTIAL_PROVIDERS)
+    : input;
+  const onModelsRequest = isMockModelsOptions(input)
+    ? input.onModelsRequest
+    : undefined;
+
   await page.route('**/api/models', async (route) => {
+    onModelsRequest?.();
     await route.fulfill({
-      body: JSON.stringify(MODEL_CATALOG),
+      body: JSON.stringify(typeof catalog === 'function' ? catalog() : catalog),
       contentType: 'application/json',
       status: 200,
     });
@@ -38,9 +65,13 @@ export const mockModels = async (
     return;
   }
   await page.route('**/api/chat/credentials', async (route) => {
+    const providers =
+      typeof credentialProviders === 'function'
+        ? credentialProviders()
+        : credentialProviders;
     await route.fulfill({
       body: JSON.stringify(
-        credentialProviders.map((provider) => ({
+        providers.map((provider) => ({
           [BASE_URL_FIELD]: null,
           [HAS_API_KEY_FIELD]: true,
           provider,

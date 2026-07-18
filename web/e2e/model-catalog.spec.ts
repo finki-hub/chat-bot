@@ -1,5 +1,9 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import type { ModelCatalog } from '@/lib/api-types';
+
+/* eslint-disable camelcase -- fixtures mirror the API wire contract. */
+/* eslint-disable sonarjs/no-duplicate-string -- repeated selectors define the E2E surface. */
 import { installMockChatState } from './helpers/chat-state';
 import { mockModels } from './helpers/models';
 
@@ -11,6 +15,32 @@ const BASE_URL_FIELD = 'base_url';
 const HAS_API_KEY_FIELD = 'has_api_key';
 const USER_ID_FIELD = 'user_id';
 const ACCOUNT_MENU_LABEL = /Корисничко мени:/u;
+const LUNA_ID = 'gpt-5.6-luna';
+const LUNA_NAME = 'GPT-5.6 Luna';
+const EMPTY_JSON = '{}';
+const LUNA_OPTION_PATTERN = /GPT-5\.6 Luna/u;
+const EVIDENCE_DIR = `${process.cwd()}/../.omo/evidence/ulw/ses_08b75c4cdffe8g6tX0apGLd65d/task-12-cross-surface-sponsored-luna`;
+
+const lunaCatalog = (
+  remaining: number,
+  availability: 'both' | 'byok' | 'sponsored' = 'sponsored',
+): ModelCatalog => ({
+  models: [
+    {
+      availability,
+      id: LUNA_ID,
+      name: LUNA_NAME,
+      provider: 'openai',
+      sponsored_quota: {
+        limit: 5,
+        remaining,
+        resets_at: '2099-01-01T12:00:00Z',
+      },
+    },
+  ],
+  source: 'live',
+  version: 1,
+});
 
 const mockAuthenticatedSession = async (page: Page): Promise<void> => {
   await page.route('**/api/auth/session', async (route) => {
@@ -18,6 +48,27 @@ const mockAuthenticatedSession = async (page: Page): Promise<void> => {
       body: JSON.stringify({
         expires: '2099-01-01T00:00:00.000Z',
         user: { email: 'student@example.com', name: 'Student' },
+      }),
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
+};
+
+const mockSessionFor = async (
+  page: Page,
+  providerSubject: string,
+): Promise<void> => {
+  await page.route('**/api/auth/session', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        expires: '2099-01-01T00:00:00.000Z',
+        user: {
+          email: `${providerSubject}@example.com`,
+          name: providerSubject,
+          provider: 'github',
+          providerSubject,
+        },
       }),
       contentType: 'application/json',
       status: 200,
@@ -40,7 +91,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     await mockModels(page);
     await page.route('**/api/health', async (route) => {
       await route.fulfill({
-        body: '{}',
+        body: EMPTY_JSON,
         contentType: 'application/json',
         status: 200,
       });
@@ -125,7 +176,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     await mockModels(page, ['anthropic']);
     await page.route('**/api/health', async (route) => {
       await route.fulfill({
-        body: '{}',
+        body: EMPTY_JSON,
         contentType: 'application/json',
         status: 200,
       });
@@ -188,12 +239,12 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
               contentType: 'application/json',
               status: 200,
             }
-          : { body: '{}', contentType: 'application/json', status: 503 },
+          : { body: EMPTY_JSON, contentType: 'application/json', status: 503 },
       );
     });
     await page.route('**/api/health', async (route) => {
       await route.fulfill({
-        body: '{}',
+        body: EMPTY_JSON,
         contentType: 'application/json',
         status: 200,
       });
@@ -224,4 +275,182 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     ).toBeHidden();
     expect(credentialRequests).toBeGreaterThan(1);
   });
+
+  test('renders the sponsored badge and updates the quota from five to zero', async ({
+    page,
+  }) => {
+    let catalog = lunaCatalog(5);
+    await mockModels(page, {
+      catalog: () => catalog,
+      credentialProviders: [],
+    });
+    await page.route('**/api/health', async (route) => {
+      await route.fulfill({
+        body: EMPTY_JSON,
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
+    const streamUrl = 'http://127.0.0.1:9/sponsored-quota';
+    await installMockChatState(page, {
+      onCreate: () => {
+        catalog = lunaCatalog(0);
+      },
+      streamUrl,
+    });
+
+    await page.goto('/');
+    const trigger = page.getByTestId('composer-model');
+    await expect(trigger).toContainText(LUNA_NAME);
+    await trigger.click();
+
+    const badge = page.getByTestId(`model-free-badge-${LUNA_ID}`);
+    await expect(badge).toContainText('Бесплатно');
+    await expect(badge).toContainText('5/5');
+    await page.screenshot({
+      animations: 'disabled',
+      path: `${EVIDENCE_DIR}/sponsored-quota-five.png`,
+    });
+    await page.keyboard.press('Escape');
+
+    await page.getByTestId('composer-input').fill('Провери квота');
+    await page.getByTestId('composer-submit').click();
+    await expect
+      .poll(() => catalog.models[0]?.sponsored_quota?.remaining)
+      .toBe(0);
+
+    await trigger.click();
+    await expect(badge).toContainText('0/5');
+    await page.screenshot({
+      animations: 'disabled',
+      path: `${EVIDENCE_DIR}/sponsored-quota-zero.png`,
+    });
+  });
+
+  test('refreshes sponsored availability after credentials change without a reload', async ({
+    page,
+  }) => {
+    let catalog = lunaCatalog(5, 'byok');
+    let credentialProviders: readonly ['openai'] | readonly [] = [];
+    let modelRequests = 0;
+    await mockSessionFor(page, 'credential-refresh');
+    await mockModels(page, {
+      catalog: () => catalog,
+      credentialProviders: () => credentialProviders,
+      onModelsRequest: () => {
+        modelRequests += 1;
+      },
+    });
+    await page.route('**/api/chat/credentials', async (route) => {
+      if (route.request().method() === 'PUT') {
+        catalog = lunaCatalog(5, 'both');
+        credentialProviders = ['openai'];
+        await route.fulfill({
+          body: JSON.stringify({
+            base_url: null,
+            has_api_key: true,
+            provider: 'openai',
+            user_id: 'credential-refresh',
+          }),
+          contentType: 'application/json',
+          status: 200,
+        });
+        return;
+      }
+      await route.fallback();
+    });
+    await page.route('**/api/health', async (route) => {
+      await route.fulfill({
+        body: EMPTY_JSON,
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
+    await installMockChatState(page, {
+      streamUrl: 'http://127.0.0.1:9/credentials',
+    });
+
+    await page.goto('/');
+    await expect(page.getByTestId('composer-model')).toContainText('Модел');
+    await page.getByTestId('composer-model').click();
+    const unavailable = page.getByRole('option', { name: LUNA_OPTION_PATTERN });
+    await expect(unavailable).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('button', { name: ACCOUNT_MENU_LABEL }).click();
+    await page.getByRole('menuitem', { name: 'API клучеви' }).click();
+    await page.getByLabel('OpenAI API key').fill('sk-test-refresh');
+    await page.getByRole('button', { name: 'Зачувај' }).first().click();
+
+    await expect.poll(() => modelRequests).toBeGreaterThan(1);
+    await expect(
+      page.getByRole('dialog', { name: 'Лични API клучеви' }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Откажи' }).click();
+    await page.getByTestId('composer-model').click();
+    await expect(page.getByTestId(`model-free-badge-${LUNA_ID}`)).toContainText(
+      '5/5',
+    );
+  });
+
+  test('does not reuse sponsored quota between authenticated session subjects', async ({
+    page,
+  }) => {
+    let sessionUser = 'session-a';
+    let catalog = lunaCatalog(5);
+    let modelRequests = 0;
+    await page.route('**/api/auth/session', async (route) => {
+      await route.fulfill({
+        body: JSON.stringify({
+          expires: '2099-01-01T00:00:00.000Z',
+          user: {
+            email: `${sessionUser}@example.com`,
+            name: sessionUser,
+            provider: 'github',
+            providerSubject: sessionUser,
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
+    await mockModels(page, {
+      catalog: () => catalog,
+      credentialProviders: [],
+      onModelsRequest: () => {
+        modelRequests += 1;
+        if (sessionUser === 'session-b') {
+          catalog = lunaCatalog(4);
+        }
+      },
+    });
+    await page.route('**/api/health', async (route) => {
+      await route.fulfill({
+        body: EMPTY_JSON,
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
+    await installMockChatState(page, {
+      streamUrl: 'http://127.0.0.1:9/session',
+    });
+
+    await page.goto('/');
+    await page.getByTestId('composer-model').click();
+    await expect(page.getByTestId(`model-free-badge-${LUNA_ID}`)).toContainText(
+      '5/5',
+    );
+    await page.keyboard.press('Escape');
+
+    sessionUser = 'session-b';
+    await page.reload();
+    await expect.poll(() => modelRequests).toBeGreaterThan(1);
+    await page.getByTestId('composer-model').click();
+    await expect(page.getByTestId(`model-free-badge-${LUNA_ID}`)).toContainText(
+      '4/5',
+    );
+  });
 });
+
+/* eslint-enable camelcase -- end catalog wire fixtures. */
+/* eslint-enable sonarjs/no-duplicate-string -- end repeated E2E selectors. */
