@@ -49,6 +49,7 @@ class LlmProviderCredentials:
     google: ChatCredentialSecret | None = None
     anthropic: ChatCredentialSecret | None = None
     ollama: ChatCredentialSecret | None = None
+    rejected_providers: frozenset[ProviderName] = frozenset()
 
     def for_provider(self, provider: ProviderName) -> ChatCredentialSecret | None:
         match provider:

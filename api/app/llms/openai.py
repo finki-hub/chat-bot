@@ -49,6 +49,7 @@ def get_openai_llm(
     *,
     reasoning: bool = False,
     credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> ChatOpenAI:
     """
     Return a user-scoped ChatOpenAI instance for the specified model and parameters.
@@ -77,7 +78,7 @@ def get_openai_llm(
 
     credential = require_provider_credential("openai", credential)
     return ChatOpenAI(
-        model=model.value,
+        model=model.value if upstream_model is None else upstream_model,
         api_key=SecretStr(credential.api_key),
         base_url=credential.base_url or None,
         temperature=temperature,
@@ -138,6 +139,7 @@ def stream_openai_response(
     max_tokens: int,
     reasoning: bool = False,
     credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from the specified OpenAI model using the provided user prompt and system prompt.
@@ -156,6 +158,7 @@ def stream_openai_response(
         max_tokens,
         reasoning=reasoning,
         credential=credential,
+        upstream_model=upstream_model,
     )
 
     messages = build_agent_messages(system_prompt, history or [], user_prompt)
@@ -179,6 +182,7 @@ async def stream_openai_agent_response(
     reasoning: bool = False,
     observation: StreamObservation | None = None,
     credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from an OpenAI agent with MCP tools.
@@ -198,6 +202,7 @@ async def stream_openai_agent_response(
             max_tokens,
             reasoning=reasoning,
             credential=credential,
+            upstream_model=upstream_model,
         )
 
         tools = await get_agent_tools()
@@ -236,6 +241,7 @@ async def stream_openai_agent_response(
             top_p=top_p,
             max_tokens=max_tokens,
             credential=credential,
+            upstream_model=upstream_model,
         )
 
 
