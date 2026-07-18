@@ -221,9 +221,11 @@ async def stream_openai_agent_response(
             media_type="text/event-stream",
         )
 
-    except Exception:
-        logger.exception(
-            "Failed to stream OpenAI agent response. Falling back to regular response",
+    except Exception as exc:
+        logger.warning(
+            "OpenAI agent setup failed; using regular response model=%s error_type=%s",
+            model.value,
+            type(exc).__name__,
         )
         capture_model_fallback(
             observation,
@@ -282,7 +284,11 @@ async def transform_query_with_openai(
 
         response = await llm.ainvoke(messages)
         return content_to_text(response.content).strip()
-    except Exception:
-        logger.exception("Query transformation failed; using the original query.")
+    except Exception as exc:
+        logger.warning(
+            "OpenAI query transformation failed; using original query model=%s error_type=%s",
+            model.value,
+            type(exc).__name__,
+        )
 
         return query
