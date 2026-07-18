@@ -3,12 +3,14 @@
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 import { Composer } from '@/components/chat/composer';
+import { ConversationContextBar } from '@/components/chat/conversation-context-bar';
 import { ServiceBanner } from '@/components/chat/service-banner';
-import { ShareConversationButton } from '@/components/chat/share-conversation-button';
 import { Thread } from '@/components/chat/thread';
 import { CredentialSettingsDialog } from '@/components/shell/credential-settings-dialog';
 import { Header } from '@/components/shell/header';
 import { Sidebar } from '@/components/shell/sidebar';
+import { SidebarUserIdentity } from '@/components/shell/sidebar-user-identity';
+import { t } from '@/lib/i18n';
 import { recoverSelectedModel } from '@/lib/model-catalog';
 import { isReasoningCapableModel } from '@/lib/reasoning';
 import { DEFAULT_MODEL, useUiStore } from '@/lib/ui-store';
@@ -138,16 +140,13 @@ export const ChatScreen = () => {
     status,
     submitMessage,
   } = useConversations(model, unavailable, reasoningActive);
+  const activeConversationTitle =
+    conversations.find((conversation) => conversation.id === activeId)?.title ??
+    t('conversation.untitled');
 
   return (
     <div className="flex h-dvh w-full flex-col">
-      <Header
-        actions={<ShareConversationButton conversationId={activeId} />}
-        onOpenCredentials={() => {
-          setCredentialSettingsOpen(true);
-        }}
-        onToggleSidebar={toggleSidebar}
-      />
+      <Header onToggleSidebar={toggleSidebar} />
       <CredentialSettingsDialog
         onOpenChange={setCredentialSettingsOpen}
         open={credentialSettingsOpen}
@@ -157,6 +156,16 @@ export const ChatScreen = () => {
         <Sidebar
           activeId={activeId}
           conversations={conversations}
+          footer={
+            <SidebarUserIdentity
+              onOpenCredentials={() => {
+                if (!desktopSidebar) {
+                  setSidebarOpen(false);
+                }
+                setCredentialSettingsOpen(true);
+              }}
+            />
+          }
           generatingTitleId={generatingTitleId}
           listError={conversationListError}
           listLoading={conversationListLoading}
@@ -175,6 +184,12 @@ export const ChatScreen = () => {
           synced={sidebarSynced}
         />
         <main className="flex min-w-0 flex-1 flex-col">
+          {activeId ? (
+            <ConversationContextBar
+              conversationId={activeId}
+              title={activeConversationTitle}
+            />
+          ) : null}
           <Thread
             activeError={activeError}
             activeStatus={activeStatus}
