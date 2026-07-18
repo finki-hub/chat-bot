@@ -158,7 +158,9 @@ export const ChatScreen = () => {
           conversations={conversations}
           footer={
             <SidebarUserIdentity
-              onOpenCredentials={() => {
+              hasConversations={conversations.length > 0}
+              onClearAll={onClearAll}
+              onOpenCredentialsAction={() => {
                 if (!desktopSidebar) {
                   setSidebarOpen(false);
                 }
@@ -170,7 +172,6 @@ export const ChatScreen = () => {
           listError={conversationListError}
           listLoading={conversationListLoading}
           mobile={sidebarSynced && !desktopSidebar}
-          onClearAll={onClearAll}
           onClose={() => {
             setSidebarOpen(false);
           }}

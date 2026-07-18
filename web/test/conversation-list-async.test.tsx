@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ConversationRow } from '@/lib/conversation-types';
 
 import { ConversationList } from '@/components/shell/conversation-list';
-import { Sidebar } from '@/components/shell/sidebar';
+import { SidebarClearDialog } from '@/components/shell/sidebar-clear-dialog';
 
 const conversation: ConversationRow = {
   id: 'conversation-1',
@@ -206,19 +206,12 @@ describe('Sidebar async actions', () => {
       Promise.resolve(false),
     );
     render(
-      <Sidebar
-        activeId={null}
-        conversations={[conversation]}
-        onClearAll={onClearAll}
-        onClose={noop()}
-        onDelete={noop()}
-        onNewChat={noop()}
-        onRename={noop()}
-        onSelect={noop()}
+      <SidebarClearDialog
+        onConfirm={onClearAll}
+        onOpenChangeAction={noop()}
         open
       />,
     );
-    fireEvent.click(screen.getByTestId('delete-all'));
     const dialog = await screen.findByRole('dialog', {
       name: 'Избриши ги сите разговори?',
     });
