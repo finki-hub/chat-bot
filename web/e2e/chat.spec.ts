@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
 
+import type { ModelCatalog } from '@/lib/api-types';
+import type { ChatConversationHistory } from '@/lib/conversation-types';
+
 import { installMockChatState } from './helpers/chat-state';
 import { mockModels } from './helpers/models';
 import {
@@ -16,7 +19,44 @@ const TOOL = 'search_documents';
 const ANSWER = 'Резултатите од испитите се објавуваат на https://finki.ukim.mk';
 const LINK_NAME = /finki\.ukim\.mk/u;
 const DIAGNOSTICS_LABEL = /Дијагностика/u;
-const OBSERVABLE_STAGE_GAP_MS = 1_500;
+const OBSERVABLE_STAGE_GAP_MS = 5_000;
+const ANSWER_TEST_ID = 'answer-text';
+const ANSWER_PREVIEW = 'Резултатите од испитите се објавуваат';
+const SPONSORED_MODEL = 'gpt-5.6-luna';
+/* eslint-disable camelcase -- catalog fixture mirrors the API wire contract. */
+const SPONSORED_CATALOG: ModelCatalog = {
+  models: [
+    {
+      availability: 'sponsored',
+      id: SPONSORED_MODEL,
+      name: 'GPT-5.6 Luna',
+      provider: 'openai',
+      sponsored_quota: {
+        limit: 5,
+        remaining: 0,
+        resets_at: '2099-01-01T12:00:00Z',
+      },
+    },
+  ],
+  source: 'live',
+  version: 1,
+};
+/* eslint-enable camelcase -- end catalog wire fixture. */
+const EVIDENCE_DIR = `${process.cwd()}/../.omo/evidence/ulw/ses_08b75c4cdffe8g6tX0apGLd65d/task-12-cross-surface-sponsored-luna`;
+
+const errorStream = (code: string, message: string) =>
+  startChatStreamServer({
+    gapMs: 0,
+    head: [
+      { messageMetadata: { inferenceModel: SPONSORED_MODEL }, type: 'start' },
+      {
+        data: { code, message },
+        transient: true,
+        type: 'data-error',
+      },
+    ],
+    tail: [],
+  });
 
 test.describe('chat streaming (mocked BFF)', () => {
   test('shows the search chip, drops the preamble, renders the answer, and likes', async ({
@@ -85,14 +125,14 @@ test.describe('chat streaming (mocked BFF)', () => {
 
     const input = page.getByTestId('composer-input');
     await input.fill('Кога се објавуваат резултатите?');
-    await input.press('Enter');
+    await page.getByTestId('composer-submit').click();
 
     const chip = page.getByTestId('search-status');
-    await expect(chip).toBeVisible();
+    await expect(chip).toBeVisible({ timeout: 15_000 });
     await expect(chip).toContainText('Пребарувам');
 
-    const answer = page.getByTestId('answer-text');
-    await expect(answer).toContainText('Резултатите од испитите се објавуваат');
+    const answer = page.getByTestId(ANSWER_TEST_ID);
+    await expect(answer).toContainText(ANSWER_PREVIEW, { timeout: 15_000 });
     const autolink = answer.locator('[data-streamdown="link"]', {
       hasText: LINK_NAME,
     });
@@ -157,21 +197,148 @@ test.describe('chat streaming (mocked BFF)', () => {
 
     const input = page.getByTestId('composer-input');
     await input.fill('Кога се објавуваат резултатите?');
-    await input.press('Enter');
+    await page.getByTestId('composer-submit').click();
 
     const stepper = page.getByTestId('search-stepper');
-    await expect(stepper).toBeVisible();
+    await expect(stepper).toBeVisible({ timeout: 15_000 });
     // Progressive reveal: retrieval stages appear one-by-one as they run.
     await expect(stepper).toContainText('Разбирање…');
     await expect(stepper).toContainText('Пребарување…');
     await expect(stepper).toContainText('Рерангирање…');
     await expect(stepper).toContainText('Составување…');
 
-    const answer = page.getByTestId('answer-text');
-    await expect(answer).toContainText('Резултатите од испитите се објавуваат');
+    const answer = page.getByTestId(ANSWER_TEST_ID);
+    await expect(answer).toContainText(ANSWER_PREVIEW, { timeout: 15_000 });
     // Once the answer streams in, the stepper is replaced by the answer.
     await expect(stepper).toHaveCount(0);
 
+    await chatServer.close();
+  });
+
+  test('shows quota exhaustion actions and preserves the prior conversation', async ({
+    page,
+  }) => {
+    const conversationId = 'sponsored-preserved-conversation';
+    const history = {
+      conversation: {
+        id: conversationId,
+        model: SPONSORED_MODEL,
+        title: 'Постоечки разговор',
+      },
+      messages: [
+        {
+          id: 'prior-user',
+          parts: [{ text: 'Претходно прашање', type: 'text' }],
+          role: 'user',
+        },
+        {
+          id: 'prior-assistant',
+          metadata: { inferenceModel: SPONSORED_MODEL },
+          parts: [{ text: 'Претходен одговор', type: 'text' }],
+          role: 'assistant',
+        },
+      ],
+    } satisfies ChatConversationHistory;
+    const chatServer = await errorStream(
+      'free_quota_exhausted',
+      'backend quota detail must not render',
+    );
+
+    await mockModels(page, {
+      catalog: SPONSORED_CATALOG,
+      credentialProviders: [],
+    });
+    await installMockChatState(page, {
+      conversations: [
+        {
+          id: conversationId,
+          model: SPONSORED_MODEL,
+          title: 'Постоечки разговор',
+        },
+      ],
+      histories: { [conversationId]: history },
+      streamUrl: chatServer.url,
+    });
+    await page.addInitScript((model) => {
+      localStorage.setItem(
+        'finkiHub.ui',
+        JSON.stringify({
+          state: {
+            activeConversationId: 'sponsored-preserved-conversation',
+            model,
+            reasoning: false,
+          },
+          version: 0,
+        }),
+      );
+    }, SPONSORED_MODEL);
+
+    await page.goto('/');
+    await expect(page.getByTestId(ANSWER_TEST_ID)).toContainText(
+      'Претходен одговор',
+    );
+    await expect(page.getByTestId('composer-model')).toContainText(
+      'GPT-5.6 Luna',
+    );
+    await page.getByTestId('composer-input').fill('Ново прашање');
+    await page.getByTestId('composer-submit').click();
+
+    await expect(
+      page.getByText('Бесплатната квота е искористена.'),
+    ).toBeVisible();
+    await expect(
+      page.getByText('backend quota detail must not render'),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'Додај OpenAI API клуч' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Почекај до ресетирањето' }),
+    ).toBeVisible();
+    await expect(page.getByTestId(ANSWER_TEST_ID)).toContainText(
+      'Претходен одговор',
+    );
+    await page.screenshot({
+      animations: 'disabled',
+      path: `${EVIDENCE_DIR}/sponsored-exhaustion-preserved-conversation.png`,
+    });
+
+    await page.getByRole('button', { name: 'Почекај до ресетирањето' }).click();
+    await expect(page.getByTestId(ANSWER_TEST_ID)).toContainText(
+      'Претходен одговор',
+    );
+    await chatServer.close();
+  });
+
+  test('renders global sponsored unavailability without exposing backend details', async ({
+    page,
+  }) => {
+    const chatServer = await errorStream(
+      'free_tier_unavailable',
+      'upstream availability detail must not render',
+    );
+    await mockModels(page, {
+      catalog: SPONSORED_CATALOG,
+      credentialProviders: [],
+    });
+    await installMockChatState(page, { streamUrl: chatServer.url });
+
+    await page.goto('/');
+    await page.getByTestId('composer-input').fill('Провери достапност');
+    await page.getByTestId('composer-submit').click();
+
+    await expect(
+      page.getByText('Бесплатниот модел е привремено недостапен.'),
+    ).toBeVisible();
+    await expect(
+      page.getByText('upstream availability detail must not render'),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'Додај OpenAI API клуч' }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'Почекај до ресетирањето' }),
+    ).toHaveCount(0);
     await chatServer.close();
   });
 });

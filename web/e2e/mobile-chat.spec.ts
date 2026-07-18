@@ -1,5 +1,8 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import type { ModelCatalog } from '@/lib/api-types';
+
+/* eslint-disable camelcase -- catalog fixtures mirror the API wire contract. */
 import { installMockChatState } from './helpers/chat-state';
 import { mockModels } from './helpers/models';
 
@@ -14,6 +17,25 @@ const DEFAULT_SESSION_USER = {
 } as const satisfies MockSessionUser;
 const SIDEBAR_TOGGLE_LABEL = 'Прикажи/сокриј странична лента';
 const STREAM_URL = 'http://127.0.0.1:9/stream';
+const SPONSORED_MODEL = 'gpt-5.6-luna';
+const SPONSORED_CATALOG: ModelCatalog = {
+  models: [
+    {
+      availability: 'sponsored',
+      id: SPONSORED_MODEL,
+      name: 'GPT-5.6 Luna',
+      provider: 'openai',
+      sponsored_quota: {
+        limit: 5,
+        remaining: 3,
+        resets_at: '2099-01-01T12:00:00Z',
+      },
+    },
+  ],
+  source: 'live',
+  version: 1,
+};
+const EVIDENCE_DIR = `${process.cwd()}/../.omo/evidence/ulw/ses_08b75c4cdffe8g6tX0apGLd65d/task-12-cross-surface-sponsored-luna`;
 
 const mockSession = async (
   page: Page,
@@ -184,3 +206,31 @@ test('mobile keeps the account menu available when authenticated identity is una
   ).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Одјави се' })).toBeVisible();
 });
+
+test('mobile model selector exposes the sponsored badge and remaining quota', async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 812, width: 375 });
+  await mockSession(page);
+  await mockModels(page, {
+    catalog: SPONSORED_CATALOG,
+    credentialProviders: [],
+  });
+  await installMockChatState(page, { streamUrl: STREAM_URL });
+  await page.goto('/');
+
+  const trigger = page.getByTestId('composer-model');
+  await expect(trigger).toContainText('GPT-5.6 Luna');
+  await trigger.click();
+
+  await expect(page.getByTestId('model-provider-label')).toHaveText('OpenAI');
+  const badge = page.getByTestId(`model-free-badge-${SPONSORED_MODEL}`);
+  await expect(badge).toContainText('Бесплатно');
+  await expect(badge).toContainText('3/5');
+  await page.screenshot({
+    animations: 'disabled',
+    path: `${EVIDENCE_DIR}/sponsored-selector-mobile.png`,
+  });
+});
+
+/* eslint-enable camelcase -- end catalog wire fixtures. */
