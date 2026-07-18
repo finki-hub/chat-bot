@@ -1,6 +1,7 @@
 import { LoaderCircle, Pencil, Trash2, WandSparkles } from 'lucide-react';
 import { useState } from 'react';
 
+import type { MaybeAsyncAction } from '@/lib/action-result';
 import type { ConversationRow } from '@/lib/conversation-types';
 
 import { Button } from '@/components/ui/button';
@@ -13,15 +14,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+import { fireAndForget } from '@/lib/async';
 import { t } from '@/lib/i18n';
 
 export type ConversationListProps = {
   activeId: null | string;
   conversations: ConversationRow[];
   generatingTitleId?: null | string;
-  onDelete: (id: string) => void;
+  onDelete: MaybeAsyncAction<[id: string]>;
   onGenerateTitle?: (id: string) => void;
-  onRename: (id: string, title: string) => void;
+  onRename: MaybeAsyncAction<[id: string, title: string]>;
   onSelect: (id: string) => void;
 };
 
@@ -38,30 +41,40 @@ export const ConversationList = ({
     null,
   );
   const [renameValue, setRenameValue] = useState('');
+  const [renameFailed, setRenameFailed] = useState(false);
+  const [renamePending, setRenamePending] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ConversationRow | null>(
     null,
   );
   const isGeneratingAnyTitle = generatingTitleId !== null;
 
   const openRename = (conversation: ConversationRow) => {
+    setRenameFailed(false);
     setRenameTarget(conversation);
     setRenameValue(conversation.title);
   };
 
-  const submitRename = () => {
+  const submitRename = async (): Promise<void> => {
     const next = renameValue.trim();
-    if (renameTarget && next.length > 0) {
-      onRename(renameTarget.id, next);
+    if (renamePending || renameTarget === null || next.length === 0) {
+      return;
     }
-    setRenameTarget(null);
+    setRenameFailed(false);
+    setRenamePending(true);
+    try {
+      const renamed = await onRename(renameTarget.id, next);
+      if (renamed === false) {
+        setRenameFailed(true);
+        return;
+      }
+      setRenameTarget(null);
+    } finally {
+      setRenamePending(false);
+    }
   };
 
-  const confirmDelete = () => {
-    if (pendingDelete) {
-      onDelete(pendingDelete.id);
-    }
-    setPendingDelete(null);
-  };
+  const confirmDelete = () =>
+    pendingDelete === null ? undefined : onDelete(pendingDelete.id);
 
   return (
     <>
@@ -79,7 +92,7 @@ export const ConversationList = ({
               key={c.id}
             >
               <button
-                className="min-h-11 flex-1 truncate rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:min-h-0"
+                className="min-h-11 flex-1 truncate rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:pointer-fine:min-h-0"
                 onClick={() => {
                   onSelect(c.id);
                 }}
@@ -88,14 +101,14 @@ export const ConversationList = ({
                 {c.title}
               </button>
               <span
-                className="flex items-center gap-1 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
+                className="flex items-center gap-1 opacity-100 transition-opacity duration-150 sm:pointer-fine:opacity-0 sm:pointer-fine:group-focus-within:opacity-100 sm:pointer-fine:group-hover:opacity-100"
                 data-testid="row-actions"
               >
                 {onGenerateTitle ? (
                   <button
                     aria-busy={isGeneratingTitle || undefined}
                     aria-label={t('conversation.generateTitle')}
-                    className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60 sm:size-6"
+                    className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60 sm:pointer-fine:size-6"
                     disabled={isGeneratingAnyTitle}
                     onClick={() => {
                       onGenerateTitle(c.id);
@@ -117,7 +130,7 @@ export const ConversationList = ({
                 ) : null}
                 <button
                   aria-label={t('conversation.rename')}
-                  className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 sm:size-6"
+                  className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 sm:pointer-fine:size-6"
                   onClick={() => {
                     openRename(c);
                   }}
@@ -130,7 +143,7 @@ export const ConversationList = ({
                 </button>
                 <button
                   aria-label={t('conversation.delete')}
-                  className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring/50 sm:size-6"
+                  className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring/50 sm:pointer-fine:size-6"
                   onClick={() => {
                     setPendingDelete(c);
                   }}
@@ -149,7 +162,7 @@ export const ConversationList = ({
 
       <Dialog
         onOpenChange={(open) => {
-          if (!open) {
+          if (!open && !renamePending) {
             setRenameTarget(null);
           }
         }}
@@ -165,21 +178,33 @@ export const ConversationList = ({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              submitRename();
+              fireAndForget(submitRename());
             }}
           >
             <Input
               aria-label={t('conversation.renamePrompt')}
               autoComplete="off"
+              disabled={renamePending}
               name="conversation-title"
               onChange={(e) => {
+                setRenameFailed(false);
                 setRenameValue(e.target.value);
               }}
               value={renameValue}
             />
+            {renameFailed ? (
+              <p
+                className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                role="alert"
+              >
+                {t('conversation.renameError')}
+              </p>
+            ) : null}
             <DialogFooter className="mt-4">
               <Button
+                disabled={renamePending}
                 onClick={() => {
+                  setRenameFailed(false);
                   setRenameTarget(null);
                 }}
                 type="button"
@@ -188,10 +213,12 @@ export const ConversationList = ({
                 {t('common.cancel')}
               </Button>
               <Button
+                aria-busy={renamePending || undefined}
                 data-testid="confirm-rename"
-                disabled={renameValue.trim().length === 0}
+                disabled={renamePending || renameValue.trim().length === 0}
                 type="submit"
               >
+                {renamePending ? <Spinner aria-hidden="true" /> : null}
                 {t('common.save')}
               </Button>
             </DialogFooter>
@@ -203,6 +230,7 @@ export const ConversationList = ({
         confirmLabel={t('conversation.delete')}
         description={t('conversation.deleteDescription')}
         destructive
+        errorMessage={t('conversation.deleteError')}
         onConfirm={confirmDelete}
         onOpenChange={(open) => {
           if (!open) {
