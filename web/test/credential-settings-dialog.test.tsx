@@ -81,7 +81,7 @@ const renderDialog = () => {
   const view = render(
     <QueryClientProvider client={queryClient}>
       <CredentialSettingsDialog
-        onOpenChange={vi.fn<(open: boolean) => void>()}
+        onOpenChangeAction={vi.fn<(open: boolean) => void>()}
         open
       />
     </QueryClientProvider>,
@@ -145,6 +145,14 @@ describe('CredentialSettingsDialog', () => {
     expect(baseUrlInput).toHaveValue(OPENAI_BASE_URL);
 
     fireEvent.click(screen.getByRole('button', { name: 'Избриши' }));
+
+    const confirmation = await screen.findByRole('dialog', {
+      name: 'Избриши клуч',
+    });
+
+    expect(deleteCredentialMock).not.toHaveBeenCalled();
+
+    fireEvent.click(within(confirmation).getByTestId('confirm-action'));
 
     await waitFor(() => {
       expect(baseUrlInput).toHaveValue('');
@@ -213,9 +221,9 @@ describe('CredentialSettingsDialog', () => {
     fireEvent.change(keyInput, { target: { value: REPLACEMENT_KEY } });
     fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
 
-    await expect(
-      screen.findByText('Клучот не можеше да се зачува.'),
-    ).resolves.toBeInTheDocument();
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      'Клучот не можеше да се зачува.',
+    );
     expect(
       screen.queryByText('Клучевите не можеа да се вчитаат.'),
     ).not.toBeInTheDocument();

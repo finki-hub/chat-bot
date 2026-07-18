@@ -55,6 +55,7 @@ export const CredentialProviderForm = ({
         {credential === undefined ? null : (
           <Button
             aria-busy={busy || undefined}
+            className="pointer-coarse:min-h-11"
             disabled={busy}
             onClick={onDelete}
             size="sm"
@@ -88,6 +89,7 @@ export const CredentialProviderForm = ({
         />
         <Button
           aria-busy={busy || undefined}
+          className="pointer-coarse:min-h-11"
           disabled={busy || form.apiKey.trim().length === 0}
           type="submit"
         >
