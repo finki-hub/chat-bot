@@ -806,20 +806,12 @@ async def _chat_response_stream(
                     request_id=response_id,
                 ),
             )
-            cancelled = False
             try:
-                while not release_task.done():
-                    try:
-                        await asyncio.shield(release_task)
-                    except asyncio.CancelledError:
-                        cancelled = True
-                await release_task
+                await asyncio.shield(release_task)
             except asyncio.CancelledError:
-                cancelled = True
+                raise
             except Exception:
                 logger.exception("Failed to release sponsored request lease")
-            if cancelled:
-                raise asyncio.CancelledError
         reset_request_timings(token)
 
 
