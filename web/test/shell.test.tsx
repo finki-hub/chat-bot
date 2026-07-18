@@ -335,6 +335,15 @@ describe('Sidebar', () => {
     expect(onClearAll).toHaveBeenCalledOnce();
   });
 
+  it('uses the larger delete-all target only for coarse pointers', () => {
+    renderSidebar();
+
+    const clearAllButton = screen.getByTestId('delete-all');
+
+    expect(clearAllButton).toHaveClass('pointer-coarse:min-h-11');
+    expect(clearAllButton).not.toHaveClass('min-h-11');
+  });
+
   it('hides the delete-all button when there are no conversations', () => {
     render(
       <Sidebar

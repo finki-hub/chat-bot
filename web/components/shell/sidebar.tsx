@@ -190,7 +190,7 @@ export const Sidebar = ({
       </nav>
       {conversations.length > 0 ? (
         <button
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border/60 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-border/60 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive pointer-coarse:min-h-11"
           data-testid="delete-all"
           onClick={() => {
             setConfirmingClearAll(true);
