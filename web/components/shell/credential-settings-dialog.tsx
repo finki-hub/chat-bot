@@ -63,6 +63,7 @@ export const CredentialSettingsDialog = ({
   const [error, setError] = useState<null | string>(null);
   useEffect(() => {
     if (!open) {
+      setCredentialToDelete(null);
       return;
     }
     const loadedForms: FormState = { ...EMPTY_FORMS };

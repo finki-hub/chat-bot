@@ -162,6 +162,32 @@ describe('CredentialSettingsDialog', () => {
     expect(loadCredentialsMock).toHaveBeenCalledTimes(2);
   });
 
+  it('closes credential deletion when settings close externally', async () => {
+    const { queryClient, rerender } = renderDialog();
+
+    await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+    fireEvent.click(screen.getByRole('button', { name: 'Избриши' }));
+
+    await expect(
+      screen.findByRole('dialog', { name: 'Избриши клуч' }),
+    ).resolves.toBeInTheDocument();
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <CredentialSettingsDialog
+          onOpenChangeAction={vi.fn<(open: boolean) => void>()}
+          open={false}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: 'Избриши клуч' }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it('replaces stale cached providers with the authoritative list after save', async () => {
     loadCredentialsMock
       .mockResolvedValueOnce([
