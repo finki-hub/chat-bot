@@ -8,6 +8,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const SHARE_LABEL = 'Сподели разговор';
+const COPY_LINK_LABEL = 'Копирај ја врската';
 const STOP_SHARING_LABEL = 'Прекини споделување';
 const SHARE_TOKEN = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d23';
 const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
@@ -44,6 +45,26 @@ describe('ShareConversationButton', () => {
     expect(screen.getByRole('button', { name: SHARE_LABEL })).toBeDisabled();
   });
 
+  it('matches the header spacing for active share controls', async () => {
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ shareToken: SHARE_TOKEN }, { status: 200 }),
+    );
+    const { ShareConversationButton } =
+      await import('@/components/chat/share-conversation-button');
+    render(<ShareConversationButton conversationId="conversation-1" />);
+
+    const copyButton = await screen.findByRole('button', {
+      name: COPY_LINK_LABEL,
+    });
+    const activeControls = copyButton.closest('[aria-live="polite"]');
+
+    if (activeControls === null) {
+      throw new TypeError('active share controls were not rendered');
+    }
+
+    expect(activeControls).toHaveClass('gap-2');
+  });
+
   it('creates a share and copies its absolute URL', async () => {
     const { ShareConversationButton } =
       await import('@/components/chat/share-conversation-button');
@@ -74,8 +95,33 @@ describe('ShareConversationButton', () => {
     ).resolves.toBeEnabled();
   });
 
+  it('restores and copies an existing share on initial mount', async () => {
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ shareToken: SHARE_TOKEN }, { status: 200 }),
+    );
+    const { ShareConversationButton } =
+      await import('@/components/chat/share-conversation-button');
+    render(<ShareConversationButton conversationId="conversation-1" />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: COPY_LINK_LABEL }),
+    );
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        `http://localhost:3000/share/${SHARE_TOKEN}`,
+      );
+    });
+
+    expect(
+      screen.getByRole('button', { name: STOP_SHARING_LABEL }),
+    ).toBeEnabled();
+  });
+
   it('loads and revokes an existing share', async () => {
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ shareToken: SHARE_TOKEN }, { status: 200 }),
+    );
     const { ShareConversationButton } =
       await import('@/components/chat/share-conversation-button');
     render(<ShareConversationButton conversationId="conversation-1" />);

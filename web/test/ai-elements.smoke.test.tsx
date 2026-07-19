@@ -84,7 +84,7 @@ describe('ai-elements smoke', () => {
 
     expect(
       screen.getByRole('button', { name: 'Скролувај до најновата порака' }),
-    ).toBeInTheDocument();
+    ).toHaveClass('pointer-coarse:size-11');
   });
 
   it('uses instant scrolling when reduced motion is requested', async () => {

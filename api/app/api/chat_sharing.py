@@ -58,24 +58,27 @@ async def create_conversation_share_state(
 @router.get(
     "/conversations/{conversation_id}/share",
     status_code=status.HTTP_200_OK,
-    response_model=None,
+    response_model=ChatConversationShare,
+    responses={
+        status.HTTP_204_NO_CONTENT: {"description": "Conversation is not shared"},
+    },
     operation_id="getChatStateConversationShareStatus",
 )
 async def get_conversation_share_status_state(
     conversation_id: UUID,
     user_id: UserIdQuery,
     db: ChatPersistenceDatabase = db_dep,
-) -> Response:
-    is_shared = await get_conversation_share_status(
+) -> ChatConversationShare | Response:
+    share_status = await get_conversation_share_status(
         db,
         conversation_id=conversation_id,
         user_id=user_id,
     )
-    if is_shared is None:
+    if share_status is None:
         raise _not_found()
-    return Response(
-        status_code=(status.HTTP_200_OK if is_shared else status.HTTP_204_NO_CONTENT),
-    )
+    if share_status.share_token is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return ChatConversationShare(share_token=share_status.share_token)
 
 
 @router.delete(

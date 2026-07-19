@@ -158,7 +158,7 @@ def test_owner_reads_shared_conversation_status() -> None:
     client = _client(SharingFakeChatDatabase())
     conversation_id = uuid4()
     _create_conversation(client, conversation_id)
-    _share_conversation(client, conversation_id)
+    share_token = _share_conversation(client, conversation_id)
 
     # When: the owner checks whether it is shared.
     response = client.get(
@@ -167,9 +167,9 @@ def test_owner_reads_shared_conversation_status() -> None:
         params={"user_id": OWNER_ID},
     )
 
-    # Then: the API reports an active share.
+    # Then: the API returns the persisted token needed to rebuild the share URL.
     assert response.status_code == 200
-    assert response.content == b""
+    assert response.json() == {"share_token": share_token}
 
 
 def test_owner_revokes_share_link() -> None:

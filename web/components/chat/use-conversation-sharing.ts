@@ -18,6 +18,14 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isAbortError = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'AbortError';
 
+const shareUrlFromResponseBody = (body: unknown): null | string => {
+  if (!isRecord(body) || typeof body['shareToken'] !== 'string') return null;
+  return new URL(
+    `/share/${encodeURIComponent(body['shareToken'])}`,
+    location.origin,
+  ).href;
+};
+
 export const useConversationSharing = (conversationId: null | string) => {
   const [state, setState] = useState<ConversationShareState>({
     status: 'idle',
@@ -42,12 +50,19 @@ export const useConversationSharing = (conversationId: null | string) => {
           );
           if (requestControllerRef.current !== controller) return;
           if (response.status === 200) {
-            setState({
-              copied: false,
-              revokeFailed: false,
-              shareUrl: null,
-              status: 'shared',
-            });
+            const shareUrl = shareUrlFromResponseBody(await response.json());
+            if (requestControllerRef.current === controller) {
+              setState(
+                shareUrl === null
+                  ? { status: 'failed' }
+                  : {
+                      copied: false,
+                      revokeFailed: false,
+                      shareUrl,
+                      status: 'shared',
+                    },
+              );
+            }
             return;
           }
           setState({ status: response.status === 204 ? 'idle' : 'failed' });
@@ -114,14 +129,11 @@ export const useConversationSharing = (conversationId: null | string) => {
         return;
       }
       const body: unknown = await response.json();
-      if (!isRecord(body) || typeof body['shareToken'] !== 'string') {
+      const shareUrl = shareUrlFromResponseBody(body);
+      if (shareUrl === null) {
         setState({ status: 'failed' });
         return;
       }
-      const shareUrl = new URL(
-        `/share/${encodeURIComponent(body['shareToken'])}`,
-        location.origin,
-      ).href;
       let copiedShare = false;
       try {
         await navigator.clipboard.writeText(shareUrl);

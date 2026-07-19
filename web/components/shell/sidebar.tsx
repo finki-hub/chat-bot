@@ -1,6 +1,7 @@
-import { Plus, Search, Trash2, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
+import type { MaybeAsyncAction } from '@/lib/action-result';
 import type { ConversationRow } from '@/lib/conversation-types';
 
 import { ConversationList } from '@/components/shell/conversation-list';
@@ -9,7 +10,6 @@ import {
   getConversationFilter,
   getSidebarWidthClass,
 } from '@/components/shell/sidebar-helpers';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   InputGroup,
@@ -28,12 +28,11 @@ export type SidebarProps = {
   listError?: boolean;
   listLoading?: boolean;
   mobile?: boolean;
-  onClearAll: () => void;
   onClose: () => void;
-  onDelete: (id: string) => void;
+  onDelete: MaybeAsyncAction<[id: string]>;
   onGenerateTitle?: (id: string) => void;
   onNewChat: () => void;
-  onRename: (id: string, title: string) => void;
+  onRename: MaybeAsyncAction<[id: string, title: string]>;
   onRetryList?: () => Promise<void>;
   onSelect: (id: string) => void;
   open: boolean;
@@ -49,7 +48,6 @@ export const Sidebar = ({
   listError = false,
   listLoading = false,
   mobile = false,
-  onClearAll,
   onClose,
   onDelete,
   onGenerateTitle,
@@ -60,7 +58,6 @@ export const Sidebar = ({
   open,
   synced = true,
 }: SidebarProps) => {
-  const [confirmingClearAll, setConfirmingClearAll] = useState(false);
   const [query, setQuery] = useState('');
   const mobileTriggerRef = useRef<HTMLElement | null>(null);
 
@@ -114,7 +111,7 @@ export const Sidebar = ({
           <p className="text-destructive">{t('sidebar.loadError')}</p>
           {onRetryList ? (
             <button
-              className="mt-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11"
               onClick={() => {
                 void onRetryList();
               }}
@@ -187,73 +184,44 @@ export const Sidebar = ({
           />
         )}
       </nav>
-      {conversations.length > 0 ? (
-        <button
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-border/60 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-          data-testid="delete-all"
-          onClick={() => {
-            setConfirmingClearAll(true);
-          }}
-          type="button"
-        >
-          <Trash2
-            aria-hidden="true"
-            className="size-4"
-          />
-          {t('sidebar.deleteAll')}
-        </button>
-      ) : null}
       {footer}
     </div>
   );
 
-  return (
-    <>
-      {mobile ? (
-        <Dialog
-          onOpenChange={(nextOpen) => {
-            if (!nextOpen) {
-              onClose();
-            }
-          }}
-          open={open}
-        >
-          <DialogContent
-            aria-describedby={undefined}
-            className="left-0 top-0 h-dvh w-64 max-w-none translate-x-0 translate-y-0 gap-0 rounded-none border-y-0 border-l-0 p-0"
-            showCloseButton={false}
-          >
-            <DialogTitle className="sr-only">{t('sidebar.label')}</DialogTitle>
-            {sidebarContent}
-          </DialogContent>
-        </Dialog>
-      ) : (
-        <aside
-          aria-hidden={synced ? !open : undefined}
-          aria-label={t('sidebar.label')}
-          className={cn(
-            'static z-auto w-64 shrink-0 overflow-hidden border-r border-border/60 bg-muted/30',
-            synced
-              ? 'transition-[width] duration-300 ease-in-out'
-              : 'transition-none',
-            responsiveStateClass,
-          )}
-          data-collapsed={synced ? !open : undefined}
-          inert={synced && !open}
-        >
-          {sidebarContent}
-        </aside>
+  return mobile ? (
+    <Dialog
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          onClose();
+        }
+      }}
+      open={open}
+    >
+      <DialogContent
+        aria-describedby={undefined}
+        className="left-0 top-0 h-dvh w-64 max-w-none translate-x-0 translate-y-0 gap-0 rounded-none border-y-0 border-l-0 p-0"
+        showCloseButton={false}
+      >
+        <DialogTitle className="sr-only">{t('sidebar.label')}</DialogTitle>
+        {sidebarContent}
+      </DialogContent>
+    </Dialog>
+  ) : (
+    <aside
+      aria-hidden={synced ? !open : undefined}
+      aria-label={t('sidebar.label')}
+      className={cn(
+        'static z-auto w-64 shrink-0 overflow-hidden border-r border-border/60 bg-muted/30',
+        synced
+          ? 'transition-[width] duration-300 ease-in-out'
+          : 'transition-none',
+        responsiveStateClass,
       )}
-      <ConfirmDialog
-        confirmLabel={t('conversation.delete')}
-        description={t('conversation.deleteAllDescription')}
-        destructive
-        onConfirm={onClearAll}
-        onOpenChange={setConfirmingClearAll}
-        open={confirmingClearAll}
-        title={t('conversation.deleteAllTitle')}
-      />
-    </>
+      data-collapsed={synced ? !open : undefined}
+      inert={synced && !open}
+    >
+      {sidebarContent}
+    </aside>
   );
 };
 /* eslint-enable sonarjs/cognitive-complexity -- restore the rule after the navigation state machine */

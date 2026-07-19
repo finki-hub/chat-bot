@@ -35,7 +35,9 @@ describe('ConversationList accessibility', () => {
     const item = screen.getByTestId('conversation-c1');
     const actions = within(item).getByTestId('row-actions');
 
-    expect(actions).toHaveClass('sm:group-focus-within:opacity-100');
+    expect(actions).toHaveClass(
+      'sm:pointer-fine:group-focus-within:opacity-100',
+    );
   });
 
   it('gives mobile conversation controls 44px touch targets', () => {
@@ -54,15 +56,22 @@ describe('ConversationList accessibility', () => {
 
     expect(
       within(item).getByRole('button', { name: 'Прв разговор' }),
-    ).toHaveClass('min-h-11');
+    ).toHaveClass('min-h-11', 'sm:pointer-fine:min-h-0');
     expect(
       within(item).getByRole('button', { name: 'Генерирај име' }),
     ).toHaveClass('size-11');
     expect(
+      within(item).getByRole('button', { name: 'Генерирај име' }),
+    ).toHaveClass('sm:pointer-fine:size-6');
+    expect(
       within(item).getByRole('button', { name: 'Преименувај' }),
     ).toHaveClass('size-11');
+    expect(
+      within(item).getByRole('button', { name: 'Преименувај' }),
+    ).toHaveClass('sm:pointer-fine:size-6');
     expect(within(item).getByRole('button', { name: 'Избриши' })).toHaveClass(
       'size-11',
+      'sm:pointer-fine:size-6',
     );
   });
 

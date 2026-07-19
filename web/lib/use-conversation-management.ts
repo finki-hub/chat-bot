@@ -1,5 +1,3 @@
-'use client';
-
 import {
   type Dispatch,
   type RefObject,
@@ -20,6 +18,7 @@ import {
   deleteChatConversation,
   DeleteChatConversationError,
   saveChatConversation,
+  StopChatStreamError,
 } from '@/lib/transport';
 
 type UseConversationManagementOptions = {
@@ -194,19 +193,43 @@ export const useConversationManagement = ({
   );
 
   const handleDelete = useCallback(
-    (id: string) => {
-      fireAndForget(deleteConversationEverywhere(id));
+    async (id: string): Promise<boolean> => {
+      try {
+        await deleteConversationEverywhere(id);
+        return true;
+      } catch (error) {
+        if (
+          error instanceof DeleteChatConversationError ||
+          error instanceof StopChatStreamError ||
+          error instanceof TypeError
+        ) {
+          return false;
+        }
+        throw error;
+      }
     },
     [deleteConversationEverywhere],
   );
 
-  const handleClearAll = useCallback(async () => {
-    if (status !== 'ready') {
-      await handleStop();
+  const handleClearAll = useCallback(async (): Promise<boolean> => {
+    try {
+      if (status !== 'ready') {
+        await handleStop();
+      }
+      await clearChatConversations();
+      resetActiveConversation();
+      await refreshConversations();
+      return true;
+    } catch (error) {
+      if (
+        error instanceof ChatConversationRequestError ||
+        error instanceof StopChatStreamError ||
+        error instanceof TypeError
+      ) {
+        return false;
+      }
+      throw error;
     }
-    await clearChatConversations();
-    resetActiveConversation();
-    await refreshConversations();
   }, [handleStop, refreshConversations, resetActiveConversation, status]);
 
   const submitMessage = useCallback(
@@ -215,9 +238,20 @@ export const useConversationManagement = ({
   );
 
   const handleRename = useCallback(
-    async (id: string, title: string) => {
-      await saveChatConversation({ id, title });
-      await refreshConversations();
+    async (id: string, title: string): Promise<boolean> => {
+      try {
+        await saveChatConversation({ id, title });
+        await refreshConversations();
+        return true;
+      } catch (error) {
+        if (
+          error instanceof ChatConversationRequestError ||
+          error instanceof TypeError
+        ) {
+          return false;
+        }
+        throw error;
+      }
     },
     [refreshConversations],
   );

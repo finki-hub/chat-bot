@@ -30,16 +30,17 @@ export type ThreadProps = {
 };
 
 const SUGGESTIONS = [
-  'Колку кредити ми требаат за да се запишам во наредна година?',
-  'Колку изнесува школарината за една учебна година?',
+  'Колку кредити ми требаат за да се запишам во наредна година?',
+  'Колку изнесува школарината за една учебна година?',
   'Колку пати можам да полагам еден испит?',
   'Кои се условите за дипломирање?',
 ] as const;
 
+const NON_BREAKING_SPACE = ' ';
 const STAGGER = ['stagger-1', 'stagger-2', 'stagger-3', 'stagger-4'];
 
 const CHIP =
-  'group rounded-xl border border-border bg-card/60 px-4 py-3 text-left text-sm text-foreground/90 shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:fill-mode-both';
+  'group rounded-xl border border-border bg-card/60 px-4 py-3 text-left text-pretty text-sm text-foreground/90 shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:fill-mode-both';
 
 const Welcome = ({ onPick }: { onPick?: (text: string) => void }) => (
   <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-6 py-12 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:slide-in-from-bottom-4 motion-safe:duration-700">
@@ -60,10 +61,11 @@ const Welcome = ({ onPick }: { onPick?: (text: string) => void }) => (
       <div className="grid w-full grid-cols-1 gap-2.5 sm:grid-cols-2">
         {SUGGESTIONS.map((s, i) => (
           <button
+            aria-label={s.replaceAll(NON_BREAKING_SPACE, ' ')}
             className={`${CHIP} ${STAGGER[i] ?? ''}`}
             key={s}
             onClick={() => {
-              onPick(s);
+              onPick(s.replaceAll(NON_BREAKING_SPACE, ' '));
             }}
             type="button"
           >
