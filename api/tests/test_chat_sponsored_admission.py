@@ -33,12 +33,21 @@ def _request(current_settings):
     )
 
 
-def _payload(user_id: UUID | None = USER_ID):
+def _payload(
+    user_id: UUID | None = USER_ID,
+    inference_model: Model = Model.GPT_5_6_LUNA,
+):
+    query_transform_model = (
+        Model.GEMINI_3_5_FLASH
+        if inference_model == Model.GEMINI_3_5_FLASH
+        else Model.GPT_5_4_MINI
+    )
     return chat_api.ChatSchema.model_validate(
         {
             "user_id": user_id,
             "interface": "web",
-            "inference_model": Model.GPT_5_6_LUNA,
+            "inference_model": inference_model,
+            "query_transform_model": query_transform_model,
             "messages": [{"role": "user", "content": "Question"}],
         },
     )
@@ -73,6 +82,7 @@ async def _run_stream(
     body=_body,
     release_func=None,
     handle_func=None,
+    inference_model: Model = Model.GPT_5_6_LUNA,
 ):
     released: list[tuple[UUID, UUID]] = []
     captured: list[tuple[str, dict[str, object]]] = []
@@ -121,7 +131,7 @@ async def _run_stream(
     chunks = [
         str(chunk)
         async for chunk in chat_api._chat_response_stream(  # noqa: SLF001
-            _payload(),
+            _payload(inference_model=inference_model),
             _request(current_settings),
             database,
             response_id,
@@ -131,7 +141,26 @@ async def _run_stream(
 
 
 @pytest.mark.anyio
-async def test_sponsored_request_admits_and_releases_exact_lease(monkeypatch):
+@pytest.mark.parametrize(
+    ("current_settings", "user_credentials", "inference_model"),
+    [
+        (settings(), credentials(openai=False), Model.GPT_5_6_LUNA),
+        (
+            settings(
+                sponsored_model_id="gemini-3.5-flash",
+                sponsored_provider="google",
+            ),
+            credentials(openai=False),
+            Model.GEMINI_3_5_FLASH,
+        ),
+    ],
+)
+async def test_sponsored_request_admits_and_releases_exact_lease(
+    monkeypatch,
+    current_settings,
+    user_credentials,
+    inference_model: Model,
+):
     calls: list[dict[str, object]] = []
 
     async def admit(db, **kwargs):
@@ -140,9 +169,10 @@ async def test_sponsored_request_admits_and_releases_exact_lease(monkeypatch):
 
     chunks, released, captured, response_id = await _run_stream(
         monkeypatch,
-        current_settings=settings(),
-        user_credentials=credentials(openai=False),
+        current_settings=current_settings,
+        user_credentials=user_credentials,
         admit=admit,
+        inference_model=inference_model,
     )
 
     assert any('"text":"answer"' in chunk for chunk in chunks)

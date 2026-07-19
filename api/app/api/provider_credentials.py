@@ -150,7 +150,7 @@ def missing_mandatory_credential(
             sponsored_inference = (
                 stage == "inference"
                 and inference_credential is not None
-                and provider == "openai"
+                and provider == inference_credential.provider
             )
             missing_user_credential = credentials is None or (
                 credentials.for_provider(provider) is None

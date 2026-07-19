@@ -15,7 +15,7 @@ from app.api.provider_credentials import (
     missing_mandatory_credential,
     resolve_provider_credentials,
 )
-from app.api.sponsored_access import inference_credential_for_model
+from app.api.sponsored_access import resolve_sponsored_inference
 from app.data.connection import Database
 from app.data.db import get_db
 from app.data.sponsored_usage import (
@@ -533,6 +533,8 @@ async def _chat_response_stream(
         "Received chat request: %s",
         json.dumps(_chat_request_log_fields(payload), sort_keys=True),
     )
+    settings: Settings = request.app.state.settings
+    sponsored_model_id = settings.SPONSORED_MODEL_ID
 
     history_text = _history_for_retrieval(payload)
     credentials = await resolve_provider_credentials(
@@ -543,7 +545,7 @@ async def _chat_response_stream(
             payload.inference_model,
             payload.query_transform_model,
         ),
-        settings=request.app.state.settings,
+        settings=settings,
     )
     inference_provider = provider_for_model(payload.inference_model)
     user_inference_credential = (
@@ -556,10 +558,10 @@ async def _chat_response_stream(
         and credentials is not None
         and inference_provider in credentials.rejected_providers
     )
-    inference_resolution = inference_credential_for_model(
+    inference_resolution = resolve_sponsored_inference(
         payload.inference_model,
         user_inference_credential,
-        request.app.state.settings,
+        settings,
         user_credential_rejected=user_credential_rejected,
     )
     missing_credential = missing_mandatory_credential(
@@ -570,7 +572,7 @@ async def _chat_response_stream(
     )
     if missing_credential is not None:
         if (
-            model_id(payload.inference_model) == "gpt-5.6-luna"
+            model_id(payload.inference_model) == sponsored_model_id
             and payload.user_id is not None
             and missing_credential.stage == "inference"
             and not user_credential_rejected
@@ -595,7 +597,7 @@ async def _chat_response_stream(
         str(response_id),
     )
     sponsored_mode = (
-        "byok" if model_id(payload.inference_model) == "gpt-5.6-luna" else None
+        "byok" if model_id(payload.inference_model) == sponsored_model_id else None
     )
     admitted_sponsored_user_id: UUID | None = None
     try:
@@ -603,12 +605,12 @@ async def _chat_response_stream(
             if payload.user_id is None:
                 yield error_event(
                     "credential_required",
-                    "Потребен е ваш OpenAI API клуч. Додајте го во поставките за провајдери.",
-                    provider="openai",
+                    f"Потребен е ваш {_CREDENTIAL_PROVIDER_LABELS[settings.SPONSORED_MODEL_PROVIDER]} API клуч. Додајте го во поставките за провајдери.",
+                    provider=settings.SPONSORED_MODEL_PROVIDER,
                     stage="inference",
                 )
                 return
-            global_limit = request.app.state.settings.SPONSORED_DAILY_GLOBAL_LIMIT
+            global_limit = settings.SPONSORED_DAILY_GLOBAL_LIMIT
             if global_limit is None:
                 yield sponsored_error_event(
                     "free_tier_unavailable",
@@ -620,10 +622,10 @@ async def _chat_response_stream(
                     db,
                     user_id=payload.user_id,
                     request_id=response_id,
-                    user_limit=request.app.state.settings.SPONSORED_DAILY_USER_LIMIT,
+                    user_limit=settings.SPONSORED_DAILY_USER_LIMIT,
                     global_limit=global_limit,
                     lease_ttl=timedelta(
-                        seconds=request.app.state.settings.SPONSORED_REQUEST_LEASE_SECONDS,
+                        seconds=settings.SPONSORED_REQUEST_LEASE_SECONDS,
                     ),
                 )
             except SponsoredRequestInProgressError:
@@ -902,7 +904,7 @@ async def list_models(
     global_limit = settings.SPONSORED_DAILY_GLOBAL_LIMIT
     if (
         user_id is not None
-        and settings.SPONSORED_LUNA_ENABLED
+        and settings.SPONSORED_MODEL_ENABLED
         and global_limit is not None
     ):
         usage_snapshot = await get_sponsored_usage_snapshot(
@@ -938,12 +940,14 @@ async def list_models(
             credentials.rejected_providers if credentials is not None else frozenset()
         ),
         sponsored_settings=SponsoredSettings(
-            enabled=settings.SPONSORED_LUNA_ENABLED,
+            enabled=settings.SPONSORED_MODEL_ENABLED,
             provider_configured=(
-                settings.SPONSORED_OPENAI_API_KEY is not None
-                and bool(settings.SPONSORED_OPENAI_API_KEY.get_secret_value().strip())
+                settings.SPONSORED_MODEL_API_KEY is not None
+                and bool(settings.SPONSORED_MODEL_API_KEY.get_secret_value().strip())
             ),
         ),
+        sponsored_model_id=settings.SPONSORED_MODEL_ID,
+        sponsored_provider=settings.SPONSORED_MODEL_PROVIDER,
         personal_quota=personal_quota,
         global_quota=global_quota,
         utc_reset=utc_reset,
