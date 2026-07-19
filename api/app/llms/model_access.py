@@ -15,8 +15,6 @@ LUNA_MODEL_ID: Final = "gpt-5.6-luna"
 
 @dataclass(frozen=True, slots=True)
 class SponsoredSettings:
-    """Non-secret sponsored-access settings needed for catalog availability."""
-
     enabled: bool
     provider_configured: bool = True
 
@@ -85,7 +83,6 @@ def overlay_model_access(
     descriptor: ModelDescriptor,
     context: ModelAccessContext,
 ) -> ModelDescriptor:
-    """Overlay one user's access state without mutating the base descriptor."""
     if descriptor.id != LUNA_MODEL_ID:
         availability: ModelAvailability = (
             "byok"

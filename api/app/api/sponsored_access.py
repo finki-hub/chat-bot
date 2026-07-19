@@ -10,8 +10,6 @@ _SPONSORED_OUTPUT_TOKEN_HARD_CAP: Final = 1024
 
 @dataclass(frozen=True, slots=True)
 class LunaInferenceResolution:
-    """Selected Luna inference credential and sponsored-only client options."""
-
     credential: ChatCredentialSecret | None
     sponsored: bool
     upstream_model: str | None = None
@@ -24,7 +22,6 @@ def resolve_luna_inference(
     *,
     user_credential_rejected: bool = False,
 ) -> LunaInferenceResolution:
-    """Select a user OpenAI key before constructing a sponsored Luna credential."""
     if user_credential is not None or user_credential_rejected:
         return LunaInferenceResolution(credential=user_credential, sponsored=False)
 
@@ -54,7 +51,6 @@ def inference_credential_for_model(
     *,
     user_credential_rejected: bool = False,
 ) -> LunaInferenceResolution:
-    """Resolve inference credentials while limiting sponsorship to the Luna model."""
     match model:
         case Model.GPT_5_6_LUNA:
             return resolve_luna_inference(

@@ -55,7 +55,6 @@ class SponsoredQuotaSnapshot(BaseModel):
         return self
 
     def sse_reset(self) -> str:
-        """Return the reset timestamp in the canonical SSE representation."""
         return self.resets_at.isoformat().replace("+00:00", "Z")
 
 
@@ -78,7 +77,6 @@ class SafeErrorDetails(BaseModel):
         return value.astimezone(UTC)
 
     def sse_reset(self) -> str | None:
-        """Return the approved reset field, or no metadata when no reset exists."""
         if self.resets_at is None:
             return None
         return self.resets_at.isoformat().replace("+00:00", "Z")
