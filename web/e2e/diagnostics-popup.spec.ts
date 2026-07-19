@@ -48,105 +48,108 @@ test('keeps complete diagnostics reachable inside a small viewport', async ({
     tail: chunks.slice(-1),
   });
 
-  await page.route('**/api/health', async (route) => {
-    await route.fulfill({
-      body: JSON.stringify({ ok: true }),
-      contentType: 'application/json',
-      status: 200,
+  try {
+    await page.route('**/api/health', async (route) => {
+      await route.fulfill({
+        body: JSON.stringify({ ok: true }),
+        contentType: 'application/json',
+        status: 200,
+      });
     });
-  });
-  await mockModels(page);
-  await page.route('**/api/chat/*/stream', async (route) => {
-    await route.fulfill({ status: 204 });
-  });
-  await installMockChatState(page, { streamUrl: chatServer.url });
-  await page.goto('/');
-  const input = page.getByTestId('composer-input');
-  const submit = page.getByTestId('composer-submit');
-  await input.fill('Кога се објавуваат резултатите?');
-  const resumeResponsePromise = page.waitForResponse((response) =>
-    new URL(response.url()).pathname.endsWith('/stream'),
-  );
-  await submit.click();
-  const resumeResponse = await resumeResponsePromise;
-  expect(resumeResponse.status()).toBe(204);
-  await expect(page.getByTestId('answer-text')).toContainText(
-    'Резултатите од испитите се објавуваат',
-  );
-  await expect(submit).toHaveAccessibleName('Испрати');
-  await expect(
-    page.getByText('Се случи неочекувана грешка. Обидете се повторно.', {
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await page.getByRole('button', { name: DIAGNOSTICS_LABEL }).focus();
-  const diagnosticsPopup = page.locator('[data-slot="hover-card-content"]');
-  const waitForPopupAnimation = async () => {
-    await diagnosticsPopup.evaluate(async (element) => {
-      await Promise.all(
-        element.getAnimations().map((animation) => animation.finished),
-      );
+    await mockModels(page);
+    await page.route('**/api/chat/*/stream', async (route) => {
+      await route.fulfill({ status: 204 });
     });
-  };
-  await expect(diagnosticsPopup).toBeVisible();
-  await waitForPopupAnimation();
-  await expect
-    .poll(() =>
-      diagnosticsPopup.evaluate(
-        (element) => element.scrollHeight > element.clientHeight,
-      ),
-    )
-    .toBe(true);
-
-  await page.keyboard.press('PageDown');
-  await expect
-    .poll(() => diagnosticsPopup.evaluate((element) => element.scrollTop))
-    .toBeGreaterThan(0);
-
-  await page.keyboard.press('End');
-  await expect
-    .poll(() =>
-      diagnosticsPopup.evaluate(
-        (element) =>
-          element.scrollTop + element.clientHeight >= element.scrollHeight - 1,
-      ),
-    )
-    .toBe(true);
-
-  await expect
-    .poll(() =>
-      diagnosticsPopup.evaluate((element) => {
-        const bounds = element.getBoundingClientRect();
-
-        return [
-          ...(bounds.left < 15 ? [`left=${bounds.left}`] : []),
-          ...(bounds.right > 305 ? [`right=${bounds.right}`] : []),
-          ...(bounds.top < 15 ? [`top=${bounds.top}`] : []),
-          ...(bounds.bottom > 345 ? [`bottom=${bounds.bottom}`] : []),
-        ];
+    await installMockChatState(page, { streamUrl: chatServer.url });
+    await page.goto('/');
+    const input = page.getByTestId('composer-input');
+    const submit = page.getByTestId('composer-submit');
+    await input.fill('Кога се објавуваат резултатите?');
+    const resumeResponsePromise = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.endsWith('/stream'),
+    );
+    await submit.click();
+    const resumeResponse = await resumeResponsePromise;
+    expect(resumeResponse.status()).toBe(204);
+    await expect(page.getByTestId('answer-text')).toContainText(
+      'Резултатите од испитите се објавуваат',
+    );
+    await expect(submit).toHaveAccessibleName('Испрати');
+    await expect(
+      page.getByText('Се случи неочекувана грешка. Обидете се повторно.', {
+        exact: true,
       }),
-    )
-    .toEqual([]);
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: DIAGNOSTICS_LABEL }).focus();
+    const diagnosticsPopup = page.locator('[data-slot="hover-card-content"]');
+    const waitForPopupAnimation = async () => {
+      await diagnosticsPopup.evaluate(async (element) => {
+        await Promise.all(
+          element.getAnimations().map((animation) => animation.finished),
+        );
+      });
+    };
+    await expect(diagnosticsPopup).toBeVisible();
+    await waitForPopupAnimation();
+    await expect
+      .poll(() =>
+        diagnosticsPopup.evaluate(
+          (element) => element.scrollHeight > element.clientHeight,
+        ),
+      )
+      .toBe(true);
 
-  await page.setViewportSize({ height: 800, width: 240 });
-  await input.focus();
-  await page.getByRole('button', { name: DIAGNOSTICS_LABEL }).focus();
-  await expect(diagnosticsPopup).toBeVisible();
-  await waitForPopupAnimation();
-  await expect
-    .poll(() =>
-      diagnosticsPopup.evaluate((element) => {
-        const bounds = element.getBoundingClientRect();
+    await page.keyboard.press('PageDown');
+    await expect
+      .poll(() => diagnosticsPopup.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
 
-        return [
-          ...(bounds.left < 15 ? [`left=${bounds.left}`] : []),
-          ...(bounds.right > 225 ? [`right=${bounds.right}`] : []),
-          ...(bounds.top < 15 ? [`top=${bounds.top}`] : []),
-          ...(bounds.bottom > 785 ? [`bottom=${bounds.bottom}`] : []),
-        ];
-      }),
-    )
-    .toEqual([]);
+    await page.keyboard.press('End');
+    await expect
+      .poll(() =>
+        diagnosticsPopup.evaluate(
+          (element) =>
+            element.scrollTop + element.clientHeight >=
+            element.scrollHeight - 1,
+        ),
+      )
+      .toBe(true);
 
-  await chatServer.close();
+    await expect
+      .poll(() =>
+        diagnosticsPopup.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+
+          return [
+            ...(bounds.left < 15 ? [`left=${bounds.left}`] : []),
+            ...(bounds.right > 305 ? [`right=${bounds.right}`] : []),
+            ...(bounds.top < 15 ? [`top=${bounds.top}`] : []),
+            ...(bounds.bottom > 345 ? [`bottom=${bounds.bottom}`] : []),
+          ];
+        }),
+      )
+      .toEqual([]);
+
+    await page.setViewportSize({ height: 800, width: 240 });
+    await input.focus();
+    await page.getByRole('button', { name: DIAGNOSTICS_LABEL }).focus();
+    await expect(diagnosticsPopup).toBeVisible();
+    await waitForPopupAnimation();
+    await expect
+      .poll(() =>
+        diagnosticsPopup.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+
+          return [
+            ...(bounds.left < 15 ? [`left=${bounds.left}`] : []),
+            ...(bounds.right > 225 ? [`right=${bounds.right}`] : []),
+            ...(bounds.top < 15 ? [`top=${bounds.top}`] : []),
+            ...(bounds.bottom > 785 ? [`bottom=${bounds.bottom}`] : []),
+          ];
+        }),
+      )
+      .toEqual([]);
+  } finally {
+    await chatServer.close();
+  }
 });
