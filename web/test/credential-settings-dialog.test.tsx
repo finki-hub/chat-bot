@@ -81,7 +81,7 @@ const renderDialog = () => {
   const view = render(
     <QueryClientProvider client={queryClient}>
       <CredentialSettingsDialog
-        onOpenChange={vi.fn<(open: boolean) => void>()}
+        onOpenChangeAction={vi.fn<(open: boolean) => void>()}
         open
       />
     </QueryClientProvider>,
@@ -146,12 +146,46 @@ describe('CredentialSettingsDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Избриши' }));
 
+    const confirmation = await screen.findByRole('dialog', {
+      name: 'Избриши клуч',
+    });
+
+    expect(deleteCredentialMock).not.toHaveBeenCalled();
+
+    fireEvent.click(within(confirmation).getByTestId('confirm-action'));
+
     await waitFor(() => {
       expect(baseUrlInput).toHaveValue('');
     });
 
     expect(queryClient.getQueryData(CREDENTIALS_QUERY_KEY)).toStrictEqual([]);
     expect(loadCredentialsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('closes credential deletion when settings close externally', async () => {
+    const { queryClient, rerender } = renderDialog();
+
+    await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+    fireEvent.click(screen.getByRole('button', { name: 'Избриши' }));
+
+    await expect(
+      screen.findByRole('dialog', { name: 'Избриши клуч' }),
+    ).resolves.toBeInTheDocument();
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <CredentialSettingsDialog
+          onOpenChangeAction={vi.fn<(open: boolean) => void>()}
+          open={false}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: 'Избриши клуч' }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it('replaces stale cached providers with the authoritative list after save', async () => {
@@ -213,9 +247,9 @@ describe('CredentialSettingsDialog', () => {
     fireEvent.change(keyInput, { target: { value: REPLACEMENT_KEY } });
     fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
 
-    await expect(
-      screen.findByText('Клучот не можеше да се зачува.'),
-    ).resolves.toBeInTheDocument();
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      'Клучот не можеше да се зачува.',
+    );
     expect(
       screen.queryByText('Клучевите не можеа да се вчитаат.'),
     ).not.toBeInTheDocument();

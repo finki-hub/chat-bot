@@ -31,14 +31,17 @@ export const messages = {
   'conversation.delete': 'Избриши',
   'conversation.deleteAllDescription':
     'Сите разговори и историја ќе бидат трајно избришани.',
+  'conversation.deleteAllError': 'Разговорите не можеа да се избришат.',
   'conversation.deleteAllTitle': 'Избриши ги сите разговори?',
   'conversation.deleteDescription':
     'Ова дејство е трајно и не може да се врати.',
+  'conversation.deleteError': 'Разговорот не можеше да се избрише.',
   'conversation.deleteTitle': 'Избриши разговор?',
   'conversation.generateTitle': 'Генерирај име',
   'conversation.historyLoadError':
     'Разговорот не можеше да се вчита. Обидете се повторно.',
   'conversation.rename': 'Преименувај',
+  'conversation.renameError': 'Разговорот не можеше да се преименува.',
   'conversation.renamePrompt': 'Ново име на разговорот',
   'conversation.renameTitle': 'Преименувај разговор',
   'conversation.scrollToLatest': 'Скролувај до најновата порака',
@@ -78,6 +81,7 @@ export const messages = {
   'link.confirmDescription': 'Ќе ја отворите следнава надворешна врска:',
   'link.confirmTitle': 'Отвори надворешна врска?',
   'link.open': 'Отвори',
+  'navigation.skipToContent': 'Прескокни до содржината',
   'notFound.description': 'Страницата што ја барате не постои.',
   'notFound.home': 'Назад кон почетната',
   'notFound.title': 'Страницата не е најдена',
@@ -102,6 +106,8 @@ export const messages = {
   'settings.credentialsError': 'Клучевите не можеа да се вчитаат.',
   'settings.credentialsTitle': 'Лични API клучеви',
   'settings.deleteCredential': 'Избриши клуч',
+  'settings.deleteCredentialDescription':
+    'Зачуваниот клуч ќе биде отстранет и ќе треба повторно да го внесеш за да го користиш провајдерот.',
   'settings.keyPlaceholder': 'Внеси API клуч',
   'settings.noCredential': 'Не е зачуван клуч',
   'settings.provider.anthropic': 'Anthropic',
@@ -115,7 +121,7 @@ export const messages = {
   'sidebar.accountFallback': 'Сметка',
   'sidebar.accountMenu': 'Корисничко мени',
   'sidebar.clearSearch': 'Исчисти пребарување',
-  'sidebar.deleteAll': 'Избриши ги сите',
+  'sidebar.deleteAll': 'Избриши ги сите разговори',
   'sidebar.history': 'Разговори',
   'sidebar.label': 'Странична лента',
   'sidebar.loadError': 'Разговорите не можеа да се вчитаат.',

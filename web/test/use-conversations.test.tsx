@@ -11,27 +11,39 @@ type UseChatOptions = {
   readonly resume?: boolean;
 };
 
-const { ChatConversationRequestError, DeleteChatConversationError } =
-  vi.hoisted(() => ({
-    ChatConversationRequestError: class MockChatConversationRequestError extends Error {
-      readonly status: number;
+const {
+  ChatConversationRequestError,
+  DeleteChatConversationError,
+  StopChatStreamError,
+} = vi.hoisted(() => ({
+  ChatConversationRequestError: class MockChatConversationRequestError extends Error {
+    readonly status: number;
 
-      constructor(status: number) {
-        super('Chat conversation request failed');
-        this.name = 'ChatConversationRequestError';
-        this.status = status;
-      }
-    },
-    DeleteChatConversationError: class MockDeleteChatConversationError extends Error {
-      readonly status: number;
+    constructor(status: number) {
+      super('Chat conversation request failed');
+      this.name = 'ChatConversationRequestError';
+      this.status = status;
+    }
+  },
+  DeleteChatConversationError: class MockDeleteChatConversationError extends Error {
+    readonly status: number;
 
-      constructor(status: number) {
-        super('Delete chat conversation failed');
-        this.name = 'DeleteChatConversationError';
-        this.status = status;
-      }
-    },
-  }));
+    constructor(status: number) {
+      super('Delete chat conversation failed');
+      this.name = 'DeleteChatConversationError';
+      this.status = status;
+    }
+  },
+  StopChatStreamError: class MockStopChatStreamError extends Error {
+    readonly status: number;
+
+    constructor(status: number) {
+      super('Stop chat stream failed');
+      this.name = 'StopChatStreamError';
+      this.status = status;
+    }
+  },
+}));
 
 const chatState = { status: 'ready' };
 
@@ -77,6 +89,7 @@ vi.mock('@/lib/transport', () => ({
   saveChatConversation: () => saveChatConversation(),
   stopChatStream: (id: string, snapshot?: unknown) =>
     stopChatStream(id, snapshot),
+  StopChatStreamError,
 }));
 
 vi.mock('@/lib/use-conversation-hydration', () => ({
@@ -282,7 +295,7 @@ describe('useConversations resumable streaming', () => {
     const { result } = renderHook(() => useConversations('model-a'));
 
     act(() => {
-      result.current.onDelete('conv-delete');
+      void result.current.onDelete('conv-delete');
     });
 
     await waitFor(() => {
@@ -312,7 +325,7 @@ describe('useConversations resumable streaming', () => {
     const { result } = renderHook(() => useConversations('model-a'));
 
     act(() => {
-      result.current.onDelete(activeConversationId);
+      void result.current.onDelete(activeConversationId);
     });
 
     await waitFor(() => {
@@ -320,6 +333,21 @@ describe('useConversations resumable streaming', () => {
     });
 
     expect(calls).toStrictEqual(['stop-local', 'stop-server', 'delete-server']);
+  });
+
+  it('returns false when stopping the active stream fails before deletion', async () => {
+    useUiStore.setState({ activeConversationId: ACTIVE_CONVERSATION_ID });
+    chatState.status = 'streaming';
+    stopChatStream.mockRejectedValueOnce(new StopChatStreamError(503));
+    const { result } = renderHook(() => useConversations('model-a'));
+    let deleted = true;
+
+    await act(async () => {
+      deleted = await result.current.onDelete(ACTIVE_CONVERSATION_ID);
+    });
+
+    expect(deleted).toBe(false);
+    expect(deleteChatConversation).not.toHaveBeenCalled();
   });
 
   it('stops the active stream before clearing all conversations', async () => {
@@ -347,6 +375,21 @@ describe('useConversations resumable streaming', () => {
     expect(useUiStore.getState().activeConversationId).toBeNull();
   });
 
+  it('returns false when stopping the active stream fails before clearing', async () => {
+    useUiStore.setState({ activeConversationId: ACTIVE_CONVERSATION_ID });
+    chatState.status = 'streaming';
+    stopChatStream.mockRejectedValueOnce(new StopChatStreamError(503));
+    const { result } = renderHook(() => useConversations('model-a'));
+    let cleared = true;
+
+    await act(async () => {
+      cleared = await result.current.onClearAll();
+    });
+
+    expect(cleared).toBe(false);
+    expect(clearChatConversations).not.toHaveBeenCalled();
+  });
+
   it('keeps a newly selected conversation when active delete finishes later', async () => {
     const activeConversationId = ACTIVE_CONVERSATION_ID;
     useUiStore.setState({ activeConversationId });
@@ -360,7 +403,7 @@ describe('useConversations resumable streaming', () => {
     const { result } = renderHook(() => useConversations('model-a'));
 
     act(() => {
-      result.current.onDelete(activeConversationId);
+      void result.current.onDelete(activeConversationId);
     });
 
     await waitFor(() => {
@@ -394,7 +437,7 @@ describe('useConversations resumable streaming', () => {
     const { result } = renderHook(() => useConversations('model-a'));
 
     act(() => {
-      result.current.onDelete('conv-local-only');
+      void result.current.onDelete('conv-local-only');
     });
 
     await waitFor(() => {

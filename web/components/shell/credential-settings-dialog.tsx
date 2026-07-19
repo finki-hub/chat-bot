@@ -8,6 +8,7 @@ import type {
   ChatCredentialPublic,
 } from '@/lib/api-types';
 
+import { CredentialDeleteDialog } from '@/components/shell/credential-delete-dialog';
 import { CredentialProviderForm } from '@/components/shell/credential-provider-form';
 import {
   CredentialBaseUrlRejectedError,
@@ -21,6 +22,7 @@ import {
   type ProviderForm,
   PROVIDERS,
 } from '@/components/shell/credential-settings-data';
+import { CredentialSettingsStatus } from '@/components/shell/credential-settings-status';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -30,27 +32,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Spinner } from '@/components/ui/spinner';
 import { t } from '@/lib/i18n';
 import { CREDENTIALS_QUERY_KEY, useCredentials } from '@/lib/use-credentials';
 
 type CredentialSettingsDialogProps = {
-  readonly onOpenChange: (open: boolean) => void;
+  readonly onOpenChangeAction: (open: boolean) => void;
   readonly open: boolean;
 };
-
-const CREDENTIALS_ERROR_KEY = 'settings.credentialsError' satisfies Parameters<
-  typeof t
->[0];
-
-const credentialsError = (): string => t(CREDENTIALS_ERROR_KEY);
 
 const providerList: readonly ProviderConfig[] = PROVIDERS;
 
 type FormState = Record<ChatCredentialProvider, ProviderForm>;
 
 export const CredentialSettingsDialog = ({
-  onOpenChange,
+  onOpenChangeAction,
   open,
 }: CredentialSettingsDialogProps) => {
   const queryClient = useQueryClient();
@@ -63,9 +58,12 @@ export const CredentialSettingsDialog = ({
   const [forms, setForms] = useState<FormState>(EMPTY_FORMS);
   const [busyProvider, setBusyProvider] =
     useState<ChatCredentialProvider | null>(null);
+  const [credentialToDelete, setCredentialToDelete] =
+    useState<ChatCredentialProvider | null>(null);
   const [error, setError] = useState<null | string>(null);
   useEffect(() => {
     if (!open) {
+      setCredentialToDelete(null);
       return;
     }
     const loadedForms: FormState = { ...EMPTY_FORMS };
@@ -136,14 +134,16 @@ export const CredentialSettingsDialog = ({
     }
   };
 
-  const deleteProvider = async (provider: ChatCredentialProvider) => {
+  const deleteProvider = async (
+    provider: ChatCredentialProvider,
+  ): Promise<boolean> => {
     setBusyProvider(provider);
     setError(null);
     try {
       const deleted = await deleteCredential(provider);
       if (!deleted) {
         setError(t('settings.credentialDeleteError'));
-        return;
+        return false;
       }
       queryClient.setQueryData<null | readonly ChatCredentialPublic[]>(
         CREDENTIALS_QUERY_KEY,
@@ -157,95 +157,94 @@ export const CredentialSettingsDialog = ({
         ...current,
         [provider]: EMPTY_FORMS[provider],
       }));
+      return true;
     } catch (error_) {
       if (!(error_ instanceof TypeError)) {
         throw error_;
       }
       setError(t('settings.credentialDeleteError'));
+      return false;
     } finally {
       setBusyProvider(null);
     }
   };
 
   return (
-    <Dialog
-      onOpenChange={onOpenChange}
-      open={open}
-    >
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{t('settings.credentialsTitle')}</DialogTitle>
-          <DialogDescription>
-            {t('settings.credentialsDescription')}
-          </DialogDescription>
-        </DialogHeader>
-        {loading ? (
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-            <Spinner aria-hidden="true" />
-            {t('composer.modelsLoading')}
-          </div>
-        ) : null}
-        {!loading && credentialsLoadError ? (
-          <div
-            className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
-            role="alert"
-          >
-            <p>{credentialsError()}</p>
+    <>
+      <Dialog
+        onOpenChange={onOpenChangeAction}
+        open={open}
+      >
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t('settings.credentialsTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('settings.credentialsDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <CredentialSettingsStatus
+            loadError={credentialsLoadError}
+            loading={loading}
+            onRetryAction={() => {
+              void refetch();
+            }}
+          />
+          {!loading && !credentialsLoadError ? (
+            <div className="flex flex-col gap-3">
+              {providerList.map(({ labelKey, provider }) => {
+                const credential = saved[provider];
+                const busy = busyProvider === provider;
+                return (
+                  <CredentialProviderForm
+                    busy={busy}
+                    credential={credential}
+                    form={forms[provider]}
+                    key={provider}
+                    label={t(labelKey)}
+                    onDelete={() => {
+                      setCredentialToDelete(provider);
+                    }}
+                    onFieldChange={(field, value) => {
+                      updateForm(provider, field, value);
+                    }}
+                    onSubmit={(event) => {
+                      void saveProvider(event, provider);
+                    }}
+                  />
+                );
+              })}
+            </div>
+          ) : null}
+          {error === null ? null : (
+            <p
+              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              role="alert"
+            >
+              {error}
+            </p>
+          )}
+          <DialogFooter>
             <Button
               onClick={() => {
-                void refetch();
+                onOpenChangeAction(false);
               }}
-              size="sm"
               type="button"
               variant="outline"
             >
-              {t('error.retry')}
+              {t('common.cancel')}
             </Button>
-          </div>
-        ) : null}
-        {!loading && !credentialsLoadError ? (
-          <div className="flex flex-col gap-3">
-            {providerList.map(({ labelKey, provider }) => {
-              const credential = saved[provider];
-              const busy = busyProvider === provider;
-              return (
-                <CredentialProviderForm
-                  busy={busy}
-                  credential={credential}
-                  form={forms[provider]}
-                  key={provider}
-                  label={t(labelKey)}
-                  onDelete={() => {
-                    void deleteProvider(provider);
-                  }}
-                  onFieldChange={(field, value) => {
-                    updateForm(provider, field, value);
-                  }}
-                  onSubmit={(event) => {
-                    void saveProvider(event, provider);
-                  }}
-                />
-              );
-            })}
-          </div>
-        ) : null}
-        {error === null ? null : (
-          <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-          </p>
-        )}
-        <DialogFooter>
-          <Button
-            onClick={() => {
-              onOpenChange(false);
-            }}
-            type="button"
-            variant="outline"
-          >
-            {t('common.cancel')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <CredentialDeleteDialog
+        onConfirm={deleteProvider}
+        onOpenChange={(isDeleteOpen) => {
+          if (!isDeleteOpen) {
+            setCredentialToDelete(null);
+          }
+        }}
+        provider={credentialToDelete}
+      />
+    </>
   );
 };

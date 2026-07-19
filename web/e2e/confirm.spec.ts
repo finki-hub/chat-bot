@@ -5,6 +5,7 @@ import { mockModels } from './helpers/models';
 import { startChatStreamServer, type UiChunk } from './helpers/sse';
 
 const MODEL = 'claude-sonnet-5';
+const ACCOUNT_MENU_NAME_PATTERN = /Корисничко мени:/u;
 
 const answer = (text: string): UiChunk[] => [
   {
@@ -104,6 +105,16 @@ test('delete-all clears the entire history after confirmation', async ({
   page,
 }) => {
   const server = await mockBackend(page, answer('Готово.'));
+  await page.route('**/api/auth/session', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        expires: '2099-01-01T00:00:00.000Z',
+        user: { email: 'student@example.com', name: 'Student' },
+      }),
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
   await page.goto('/');
   await send(page, 'Прашање');
   await expect(page.getByTestId('answer-text')).toContainText('Готово');
@@ -111,7 +122,10 @@ test('delete-all clears the entire history after confirmation', async ({
   const items = page.locator('[data-testid^="conversation-"]');
   await expect(items).toHaveCount(1);
 
-  await page.getByTestId('delete-all').click();
+  await page.getByRole('button', { name: ACCOUNT_MENU_NAME_PATTERN }).click();
+  await page
+    .getByRole('menuitem', { name: 'Избриши ги сите разговори' })
+    .click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('Избриши ги сите разговори?');
 

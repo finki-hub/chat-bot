@@ -70,7 +70,6 @@ const renderSidebar = (conversations: ConversationRow[] = rows) =>
     <Sidebar
       activeId={null}
       conversations={conversations}
-      onClearAll={noop()}
       onClose={noop()}
       onDelete={noop()}
       onNewChat={noop()}
@@ -270,7 +269,6 @@ describe('Sidebar', () => {
       <Sidebar
         activeId="c1"
         conversations={rows}
-        onClearAll={noop()}
         onClose={noop()}
         onDelete={noop()}
         onNewChat={onNewChat}
@@ -292,7 +290,6 @@ describe('Sidebar', () => {
       <Sidebar
         activeId={null}
         conversations={rows}
-        onClearAll={noop()}
         onClose={noop()}
         onDelete={noop()}
         onNewChat={noop()}
@@ -307,50 +304,6 @@ describe('Sidebar', () => {
     expect(aside).toHaveAttribute('data-collapsed', 'true');
     expect(aside).toHaveAttribute('aria-hidden', 'true');
     expect(aside).toHaveAttribute('inert');
-  });
-
-  it('clears all conversations after confirmation', async () => {
-    const onClearAll = vi.fn<() => void>();
-    const user = userEvent.setup();
-    render(
-      <Sidebar
-        activeId="c1"
-        conversations={rows}
-        onClearAll={onClearAll}
-        onClose={noop()}
-        onDelete={noop()}
-        onNewChat={noop()}
-        onRename={noop()}
-        onSelect={noop()}
-        open
-      />,
-    );
-
-    await user.click(screen.getByTestId('delete-all'));
-
-    expect(onClearAll).not.toHaveBeenCalled();
-
-    await user.click(screen.getByTestId('confirm-action'));
-
-    expect(onClearAll).toHaveBeenCalledOnce();
-  });
-
-  it('hides the delete-all button when there are no conversations', () => {
-    render(
-      <Sidebar
-        activeId={null}
-        conversations={[]}
-        onClearAll={noop()}
-        onClose={noop()}
-        onDelete={noop()}
-        onNewChat={noop()}
-        onRename={noop()}
-        onSelect={noop()}
-        open
-      />,
-    );
-
-    expect(screen.queryByTestId('delete-all')).not.toBeInTheDocument();
   });
 
   it('filters the conversation list to substring matches as the user types', () => {

@@ -24,10 +24,13 @@ const authMocks = vi.hoisted(() => ({
 
 vi.mock('next-auth/react', () => authMocks);
 
+const USER_EMAIL = 'user@example.com';
+const USER_NAME = 'Test User';
+const ACCOUNT_MENU_NAME = `Корисничко мени: ${USER_NAME}, ${USER_EMAIL}`;
+
 const baseProps = {
   activeId: null,
   conversations: [],
-  onClearAll: vi.fn<() => void>(),
   onClose: vi.fn<() => void>(),
   onDelete: vi.fn<(id: string) => void>(),
   onNewChat: vi.fn<() => void>(),
@@ -49,7 +52,13 @@ describe('Sidebar conversation loading', () => {
     render(
       <Sidebar
         {...baseProps}
-        footer={<SidebarUserIdentity onOpenCredentials={vi.fn<() => void>()} />}
+        footer={
+          <SidebarUserIdentity
+            hasConversations={false}
+            onClearAll={vi.fn<() => void>()}
+            onOpenCredentialsAction={vi.fn<() => void>()}
+          />
+        }
         mobile
       />,
     );
@@ -63,14 +72,20 @@ describe('Sidebar conversation loading', () => {
     const onOpenCredentials = vi.fn<() => void>();
     const user = userEvent.setup();
     authMocks.useSession.mockReturnValue({
-      data: { user: { email: 'user@example.com', name: 'Test User' } },
+      data: { user: { email: USER_EMAIL, name: USER_NAME } },
       status: 'authenticated',
     });
 
     render(
       <Sidebar
         {...baseProps}
-        footer={<SidebarUserIdentity onOpenCredentials={onOpenCredentials} />}
+        footer={
+          <SidebarUserIdentity
+            hasConversations={false}
+            onClearAll={vi.fn<() => void>()}
+            onOpenCredentialsAction={onOpenCredentials}
+          />
+        }
         mobile
       />,
     );
@@ -78,12 +93,12 @@ describe('Sidebar conversation loading', () => {
     const drawer = screen.getByRole('dialog', { name: 'Странична лента' });
     const identity = within(drawer).getByTestId('sidebar-user-identity');
 
-    expect(identity).toHaveTextContent('Test User');
-    expect(identity).toHaveTextContent('user@example.com');
+    expect(identity).toHaveTextContent(USER_NAME);
+    expect(identity).toHaveTextContent(USER_EMAIL);
 
     await user.click(
       within(drawer).getByRole('button', {
-        name: 'Корисничко мени: Test User, user@example.com',
+        name: ACCOUNT_MENU_NAME,
       }),
     );
     await user.click(screen.getByRole('menuitem', { name: 'API клучеви' }));
@@ -92,7 +107,7 @@ describe('Sidebar conversation loading', () => {
 
     await user.click(
       within(drawer).getByRole('button', {
-        name: 'Корисничко мени: Test User, user@example.com',
+        name: ACCOUNT_MENU_NAME,
       }),
     );
     await user.click(screen.getByRole('menuitem', { name: 'Одјави се' }));
@@ -102,19 +117,25 @@ describe('Sidebar conversation loading', () => {
 
   it('uses email as the sidebar identity fallback', () => {
     authMocks.useSession.mockReturnValue({
-      data: { user: { email: 'user@example.com', name: null } },
+      data: { user: { email: USER_EMAIL, name: null } },
       status: 'authenticated',
     });
 
     render(
       <Sidebar
         {...baseProps}
-        footer={<SidebarUserIdentity onOpenCredentials={vi.fn<() => void>()} />}
+        footer={
+          <SidebarUserIdentity
+            hasConversations={false}
+            onClearAll={vi.fn<() => void>()}
+            onOpenCredentialsAction={vi.fn<() => void>()}
+          />
+        }
       />,
     );
 
     expect(screen.getByTestId('sidebar-user-identity')).toHaveTextContent(
-      'user@example.com',
+      USER_EMAIL,
     );
   });
 
@@ -127,7 +148,13 @@ describe('Sidebar conversation loading', () => {
     render(
       <Sidebar
         {...baseProps}
-        footer={<SidebarUserIdentity onOpenCredentials={vi.fn<() => void>()} />}
+        footer={
+          <SidebarUserIdentity
+            hasConversations={false}
+            onClearAll={vi.fn<() => void>()}
+            onOpenCredentialsAction={vi.fn<() => void>()}
+          />
+        }
       />,
     );
 
@@ -157,7 +184,11 @@ describe('Sidebar conversation loading', () => {
       'Разговорите не можеа да се вчитаат.',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Обиди се повторно' }));
+    const retry = screen.getByRole('button', { name: 'Обиди се повторно' });
+
+    expect(retry).toHaveClass('pointer-coarse:min-h-11');
+
+    fireEvent.click(retry);
 
     expect(onRetry).toHaveBeenCalledOnce();
   });

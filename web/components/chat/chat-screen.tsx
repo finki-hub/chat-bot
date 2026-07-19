@@ -148,7 +148,7 @@ export const ChatScreen = () => {
     <div className="flex h-dvh w-full flex-col">
       <Header onToggleSidebar={toggleSidebar} />
       <CredentialSettingsDialog
-        onOpenChange={setCredentialSettingsOpen}
+        onOpenChangeAction={setCredentialSettingsOpen}
         open={credentialSettingsOpen}
       />
       {unavailable ? <ServiceBanner /> : null}
@@ -158,7 +158,9 @@ export const ChatScreen = () => {
           conversations={conversations}
           footer={
             <SidebarUserIdentity
-              onOpenCredentials={() => {
+              hasConversations={conversations.length > 0}
+              onClearAll={onClearAll}
+              onOpenCredentialsAction={() => {
                 if (!desktopSidebar) {
                   setSidebarOpen(false);
                 }
@@ -170,7 +172,6 @@ export const ChatScreen = () => {
           listError={conversationListError}
           listLoading={conversationListLoading}
           mobile={sidebarSynced && !desktopSidebar}
-          onClearAll={onClearAll}
           onClose={() => {
             setSidebarOpen(false);
           }}
@@ -183,7 +184,11 @@ export const ChatScreen = () => {
           open={sidebarOpen}
           synced={sidebarSynced}
         />
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main
+          className="flex min-w-0 flex-1 flex-col"
+          id="main-content"
+          tabIndex={-1}
+        >
           {activeId ? (
             <ConversationContextBar
               conversationId={activeId}

@@ -126,7 +126,7 @@ const ActiveShareControls = ({
   return (
     <div
       aria-live="polite"
-      className="flex items-center gap-1"
+      className="flex items-center gap-2"
     >
       {showCopy ? (
         <IconButton
