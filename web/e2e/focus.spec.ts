@@ -51,6 +51,51 @@ test('composer is focused on load and after a response finishes', async ({
   await server.close();
 });
 
+test('answer actions explain their actions on hover and focus', async ({
+  page,
+}) => {
+  await page.route('**/api/health', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ ok: true }),
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
+  const server = await mockBackend(page);
+  await page.goto('/');
+
+  const input = page.getByTestId('composer-input');
+  await input.fill('Прашање');
+  await input.press('Enter');
+  await expect(page.getByTestId('answer-text')).toContainText('Готово');
+
+  const answer = page.getByTestId('answer-text');
+  const actions = page.getByTestId('answer-actions');
+  const tooltip = page.getByRole('tooltip');
+  const controls = ['Копирај', 'Регенерирај', 'Допаѓа', 'Не допаѓа'].map(
+    (label) => ({
+      control: actions.getByRole('button', { exact: true, name: label }),
+      label,
+    }),
+  );
+
+  for (const { control, label } of controls) {
+    await tooltipTriggerFor(control).hover();
+    await expect(tooltip).toHaveText(label);
+    await answer.hover();
+    await expect(tooltip).toBeHidden();
+  }
+
+  for (const { control, label } of controls) {
+    await control.focus();
+    await expect(tooltip).toHaveText(label);
+    await page.keyboard.press('Escape');
+    await expect(tooltip).toBeHidden();
+  }
+
+  await server.close();
+});
+
 test('header controls explain their actions on hover and focus', async ({
   page,
 }) => {
