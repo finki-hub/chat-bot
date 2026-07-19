@@ -260,79 +260,83 @@ test.describe('chat streaming (mocked BFF)', () => {
       'free_quota_exhausted',
       'backend quota detail must not render',
     );
-
-    await page.route('**/api/health', async (route) => {
-      await route.fulfill({
-        body: '{}',
-        contentType: 'application/json',
-        status: 200,
+    try {
+      await page.route('**/api/health', async (route) => {
+        await route.fulfill({
+          body: '{}',
+          contentType: 'application/json',
+          status: 200,
+        });
       });
-    });
-    await page.route('**/api/auth/session', async (route) => {
-      await route.fulfill({
-        body: JSON.stringify({
-          expires: '2099-01-01T00:00:00.000Z',
-          user: { email: 'student@example.com', name: 'Student' },
-        }),
-        contentType: 'application/json',
-        status: 200,
+      await page.route('**/api/auth/session', async (route) => {
+        await route.fulfill({
+          body: JSON.stringify({
+            expires: '2099-01-01T00:00:00.000Z',
+            user: { email: 'student@example.com', name: 'Student' },
+          }),
+          contentType: 'application/json',
+          status: 200,
+        });
       });
-    });
-    await mockModels(page, {
-      catalog: SPONSORED_CATALOG,
-      credentialProviders: [],
-    });
-    await installMockChatState(page, {
-      conversations: [
-        {
-          id: conversationId,
-          model: SPONSORED_MODEL,
-          title: 'Постоечки разговор',
-        },
-      ],
-      histories: { [conversationId]: history },
-      streamUrl: chatServer.url,
-    });
-    await page.goto('/');
-    await page
-      .getByRole('button', { name: 'Прикажи/сокриј странична лента' })
-      .click();
-    await page
-      .getByRole('button', { exact: true, name: 'Постоечки разговор' })
-      .click();
-    await expect(page.getByText('Претходен одговор')).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.getByTestId('composer-model')).toContainText(
-      'Gemini 3.5 Flash',
-    );
-    await expect(page.getByTestId('composer-input')).toBeEnabled();
-    await page.getByTestId('composer-input').fill('Ново прашање');
-    await page.getByTestId('composer-submit').click();
+      await mockModels(page, {
+        catalog: SPONSORED_CATALOG,
+        credentialProviders: [],
+      });
+      await installMockChatState(page, {
+        conversations: [
+          {
+            id: conversationId,
+            model: SPONSORED_MODEL,
+            title: 'Постоечки разговор',
+          },
+        ],
+        histories: { [conversationId]: history },
+        streamUrl: chatServer.url,
+      });
+      await page.goto('/');
+      await page
+        .getByRole('button', { name: 'Прикажи/сокриј странична лента' })
+        .click();
+      await page
+        .getByRole('button', { exact: true, name: 'Постоечки разговор' })
+        .click();
+      await expect(page.getByText('Претходен одговор')).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(page.getByTestId('composer-model')).toContainText(
+        'Gemini 3.5 Flash',
+      );
+      await expect(page.getByTestId('composer-input')).toBeEnabled();
+      await page.getByTestId('composer-input').fill('Ново прашање');
+      await page.getByTestId('composer-submit').click();
 
-    await expect(
-      page.getByText('Бесплатната квота е искористена.'),
-    ).toBeVisible();
-    await expect(
-      page.getByText('backend quota detail must not render'),
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole('button', { name: 'Додај API клуч' }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: 'Почекај до ресетирањето' }),
-    ).toBeVisible();
-    await expect(page.getByText('Претходен одговор')).toBeVisible();
-    await page.screenshot({
-      animations: 'disabled',
-      path: testInfo.outputPath(
-        'sponsored-exhaustion-preserved-conversation.png',
-      ),
-    });
+      await expect(
+        page.getByText('Бесплатната квота е искористена.'),
+      ).toBeVisible();
+      await expect(
+        page.getByText('backend quota detail must not render'),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: 'Додај API клуч' }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Почекај до ресетирањето' }),
+      ).toBeVisible();
+      await expect(page.getByText('Претходен одговор')).toBeVisible();
+      await page.screenshot({
+        animations: 'disabled',
+        path: testInfo.outputPath(
+          'sponsored-exhaustion-preserved-conversation.png',
+        ),
+      });
 
-    await page.getByRole('button', { name: 'Почекај до ресетирањето' }).click();
-    await expect(page.getByText('Претходен одговор')).toBeVisible();
-    await chatServer.close();
+      await page
+        .getByRole('button', { name: 'Почекај до ресетирањето' })
+        .click();
+      await expect(page.getByText('Претходен одговор')).toBeVisible();
+    } finally {
+      await chatServer.close();
+    }
   });
 
   test('renders global sponsored unavailability without exposing backend details', async ({
