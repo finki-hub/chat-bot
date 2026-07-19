@@ -15,7 +15,7 @@ from app.main import make_app
 from app.schemas.chat_credentials import ChatCredentialSecret
 from app.utils.settings import Settings
 
-LUNA_ID = "gpt-5.6-luna"
+SPONSORED_ID = "gpt-5.6-luna"
 OTHER_MODEL_ID = "gpt-5.6-sol"
 USER_WITH_KEY = UUID("00000000-0000-4000-8000-000000000001")
 USER_WITHOUT_KEY = UUID("00000000-0000-4000-8000-000000000002")
@@ -80,7 +80,7 @@ def base_catalog() -> ModelCatalogResponse:
         source="live",
         models=(
             ModelDescriptor(
-                id=LUNA_ID,
+                id=SPONSORED_ID,
                 provider="openai",
                 name="Luna",
                 execution=execution,
@@ -89,6 +89,12 @@ def base_catalog() -> ModelCatalogResponse:
                 id=OTHER_MODEL_ID,
                 provider="openai",
                 name="Sol",
+                execution=execution,
+            ),
+            ModelDescriptor(
+                id="gemini-3.5-flash",
+                provider="google",
+                name="Gemini 3.5 Flash",
                 execution=execution,
             ),
         ),
@@ -137,13 +143,20 @@ def usage_snapshot(
     )
 
 
-def settings(*, enabled: bool = True) -> Settings:
+def settings(
+    *,
+    enabled: bool = True,
+    sponsored_model_id: str = SPONSORED_ID,
+    sponsored_provider: str = "openai",
+) -> Settings:
     return Settings(
         API_KEY="test-api-key",
         CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
         MCP_API_KEY="test-mcp-key",
-        SPONSORED_LUNA_ENABLED=enabled,
-        SPONSORED_OPENAI_API_KEY="sponsored-secret" if enabled else None,
+        SPONSORED_MODEL_ENABLED=enabled,
+        SPONSORED_MODEL_ID=sponsored_model_id,
+        SPONSORED_MODEL_PROVIDER=sponsored_provider,
+        SPONSORED_MODEL_API_KEY="sponsored-secret" if enabled else None,
         SPONSORED_DAILY_GLOBAL_LIMIT=10 if enabled else None,
     )
 

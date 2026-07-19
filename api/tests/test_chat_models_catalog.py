@@ -6,7 +6,7 @@ from app.llms.provider_credentials import LlmProviderCredentials
 from app.schemas.chat_credentials import ChatCredentialSecret
 from app.utils.settings import Settings
 from tests.chat_models_access_support import (
-    LUNA_ID,
+    SPONSORED_ID,
     USER_WITHOUT_KEY,
     StubCatalogService,
     base_catalog,
@@ -136,6 +136,8 @@ def test_models_endpoint_does_not_read_sponsored_usage_when_tier_disabled(
         )
 
     assert response.status_code == 200
-    luna = next(model for model in response.json()["models"] if model["id"] == LUNA_ID)
-    assert luna["availability"] == "unavailable"
-    assert luna["sponsored_quota"] is None
+    sponsored = next(
+        model for model in response.json()["models"] if model["id"] == SPONSORED_ID
+    )
+    assert sponsored["availability"] == "unavailable"
+    assert sponsored["sponsored_quota"] is None
