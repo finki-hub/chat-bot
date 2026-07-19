@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 
 import { posthog } from 'posthog-js';
 
-import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
+import type { FeedbackSelection, MyUIMessage } from '@/lib/api-types';
 
 import { AnswerActions } from '@/components/chat/answer-actions';
 import { hasText } from '@/lib/message-parts';
@@ -12,7 +12,7 @@ import { hasText } from '@/lib/message-parts';
 export type AnswerActionsContext = {
   disabled: boolean;
   messages: MyUIMessage[];
-  onVote: (messageId: string, vote: FeedbackType) => void;
+  onVote: (messageId: string, vote: FeedbackSelection) => void;
   regenerate: (options: { messageId: string }) => void;
   status: ChatStatus;
 };
