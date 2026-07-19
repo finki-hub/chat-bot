@@ -1,5 +1,5 @@
 import { Clock3 } from 'lucide-react';
-import { type ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
 
@@ -215,6 +215,8 @@ const MessageTiming = ({
   responseId?: string;
   timing: Timing;
 }) => {
+  const diagnosticsContentRef = useRef<HTMLDivElement>(null);
+
   if (timing === undefined) {
     return null;
   }
@@ -247,6 +249,36 @@ const MessageTiming = ({
           aria-label={triggerLabel}
           className={`${FOOTNOTE_CLASS} cursor-help rounded-md hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
           data-testid="message-timing"
+          onKeyDown={(event) => {
+            const content = diagnosticsContentRef.current;
+            if (content === null) {
+              return;
+            }
+
+            switch (event.key) {
+              case 'ArrowDown':
+                content.scrollBy({ top: content.clientHeight / 4 });
+                break;
+              case 'ArrowUp':
+                content.scrollBy({ top: -content.clientHeight / 4 });
+                break;
+              case 'End':
+                content.scrollTo({ top: content.scrollHeight });
+                break;
+              case 'Home':
+                content.scrollTo({ top: 0 });
+                break;
+              case 'PageDown':
+                content.scrollBy({ top: content.clientHeight });
+                break;
+              case 'PageUp':
+                content.scrollBy({ top: -content.clientHeight });
+                break;
+              default:
+                return;
+            }
+            event.preventDefault();
+          }}
           type="button"
         >
           <TimingSummary timing={timing} />
@@ -254,8 +286,9 @@ const MessageTiming = ({
       </HoverCardTrigger>
       <HoverCardContent
         align="start"
-        className="max-h-[var(--radix-hover-card-content-available-height)] w-auto min-w-56 max-w-[min(20rem,var(--radix-hover-card-content-available-width))] overflow-y-auto overscroll-contain"
+        className="max-h-[var(--radix-hover-card-content-available-height)] w-auto min-w-[min(14rem,var(--radix-hover-card-content-available-width))] max-w-[min(20rem,var(--radix-hover-card-content-available-width))] overflow-y-auto overscroll-contain"
         collisionPadding={16}
+        ref={diagnosticsContentRef}
       >
         <DiagnosticsCard
           diagnostics={diagnostics}
