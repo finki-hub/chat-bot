@@ -305,40 +305,43 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
       ],
       tail: [],
     });
-    await installMockChatState(page, {
-      onCreate: () => {
-        catalog = lunaCatalog(0);
-      },
-      streamUrl: chatServer.url,
-    });
+    try {
+      await installMockChatState(page, {
+        onCreate: () => {
+          catalog = lunaCatalog(0);
+        },
+        streamUrl: chatServer.url,
+      });
 
-    await page.goto('/');
-    const trigger = page.getByTestId('composer-model');
-    await expect(trigger).toContainText(LUNA_NAME);
-    await trigger.click();
+      await page.goto('/');
+      const trigger = page.getByTestId('composer-model');
+      await expect(trigger).toContainText(LUNA_NAME);
+      await trigger.click();
 
-    const badge = page.getByTestId(`model-free-badge-${LUNA_ID}`);
-    await expect(badge).toContainText('Бесплатно');
-    await expect(badge).toContainText('5/5');
-    await page.screenshot({
-      animations: 'disabled',
-      path: testInfo.outputPath('sponsored-quota-five.png'),
-    });
-    await page.keyboard.press('Escape');
+      const badge = page.getByTestId(`model-free-badge-${LUNA_ID}`);
+      await expect(badge).toContainText('Бесплатно');
+      await expect(badge).toContainText('5/5');
+      await page.screenshot({
+        animations: 'disabled',
+        path: testInfo.outputPath('sponsored-quota-five.png'),
+      });
+      await page.keyboard.press('Escape');
 
-    await page.getByTestId('composer-input').fill('Провери квота');
-    await page.getByTestId('composer-submit').click();
-    await expect
-      .poll(() => catalog.models[0]?.sponsored_quota?.remaining)
-      .toBe(0);
+      await page.getByTestId('composer-input').fill('Провери квота');
+      await page.getByTestId('composer-submit').click();
+      await expect
+        .poll(() => catalog.models[0]?.sponsored_quota?.remaining)
+        .toBe(0);
 
-    await trigger.click();
-    await expect(badge).toContainText('0/5');
-    await page.screenshot({
-      animations: 'disabled',
-      path: testInfo.outputPath('sponsored-quota-zero.png'),
-    });
-    await chatServer.close();
+      await trigger.click();
+      await expect(badge).toContainText('0/5');
+      await page.screenshot({
+        animations: 'disabled',
+        path: testInfo.outputPath('sponsored-quota-zero.png'),
+      });
+    } finally {
+      await chatServer.close();
+    }
   });
 
   test('refreshes sponsored availability after credentials change without a reload', async ({
