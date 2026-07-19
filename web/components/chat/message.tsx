@@ -309,7 +309,7 @@ const SponsoredQuotaError = ({
             onClick={onManageCredentials}
             type="button"
           >
-            {t('error.sponsoredManageCredentials')}
+            {t('error.manageCredentials')}
           </button>
         ) : null}
         {onWait ? (

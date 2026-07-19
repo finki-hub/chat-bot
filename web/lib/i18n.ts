@@ -72,7 +72,6 @@ export const messages = {
   'error.retry': 'Обиди се повторно',
   'error.sponsoredConcurrent':
     'Барањето за бесплатниот модел е веќе во тек. Почекај да заврши.',
-  'error.sponsoredManageCredentials': 'Додај OpenAI API клуч',
   'error.sponsoredQuota': 'Бесплатната квота е искористена.',
   'error.sponsoredQuotaReset': 'Повторно ќе биде достапно на',
   'error.sponsoredUnavailable': 'Бесплатниот модел е привремено недостапен.',
