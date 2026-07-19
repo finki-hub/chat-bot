@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-stream_file=${1:?Usage: verify-sponsored-luna-preflight.sh STREAM_FILE}
+stream_file=${1:?Usage: verify-sponsored-model-preflight.sh STREAM_FILE}
 
 if grep -q '^event: error' "$stream_file"; then
   exit 1

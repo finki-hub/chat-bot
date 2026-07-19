@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-VERIFY_SCRIPT = REPO_ROOT / "scripts" / "verify-sponsored-luna-preflight.sh"
+VERIFY_SCRIPT = REPO_ROOT / "scripts" / "verify-sponsored-model-preflight.sh"
 
 
 @pytest.mark.parametrize(
