@@ -22,7 +22,7 @@ It's highly recommended to do this in Docker.
 To run the chat bot:
 
 1. Download [`compose.prod.yaml`](./compose.prod.yaml)
-2. Download [`.env.sample`](.env.sample), rename it to `.env`, and set the required values. At minimum, set a non-default `API_KEY` before exposing the service. Sponsored Luna remains disabled unless its separate rollout settings are deliberately configured; never use `API_KEY` as its provider credential. If you configure MCP servers, set non-default per-server `api_key` values in `MCP_SERVERS`.
+2. Download [`.env.sample`](.env.sample), rename it to `.env`, and set the required values. At minimum, set a non-default `API_KEY` before exposing the service. The sponsored model remains disabled unless its separate rollout settings are deliberately configured; never use `API_KEY` as its provider credential. If you configure MCP servers, set non-default per-server `api_key` values in `MCP_SERVERS`.
 3. Run `docker compose -f compose.prod.yaml up -d`
 
 The API runs on port `8880`, the GPU API on `8888`, and the web front-end on `3000`. This also brings up a `pgAdmin` instance on port `5555` by default.
@@ -33,7 +33,7 @@ Requires Python 3.14 (`>=3.14,<3.15`) and [`uv`](https://github.com/astral-sh/uv
 
 1. Clone the repository: `git clone https://github.com/finki-hub/chat-bot.git`
 2. Install dependencies: in each directory (`api` and `gpu-api`), run `uv sync`
-3. Prepare env. variables by copying `.env.sample` to `.env`. The sample database values work for local Docker, but set `API_KEY` to use authenticated write/feedback endpoints. OpenAI, Google, Anthropic, and Ollama models use per-user credentials saved from the web settings dialog; sponsored Luna is a separate, disabled-by-default server feature.
+3. Prepare env. variables by copying `.env.sample` to `.env`. The sample database values work for local Docker, but set `API_KEY` to use authenticated write/feedback endpoints. OpenAI, Google, Anthropic, and Ollama models use per-user credentials saved from the web settings dialog; the sponsored model is a separate, disabled-by-default server feature.
 4. Run it: `docker compose up -d`. Unlike production, the dev compose builds the `api`, `gpu-api` and `web` images locally from source (it does not pull from ghcr), so the first run builds the containers. The per-directory `uv sync` from step 2 is for local/IDE tooling only — the containers build their own environment.
 
 This also brings up the API Swagger UI (OpenAPI docs) at `localhost:8880/docs`, the GPU API docs at `localhost:8888/docs`, and pgAdmin at `localhost:5550`.
@@ -62,7 +62,7 @@ The root [`.env.sample`](.env.sample) contains the main variables used by the Do
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT` - used by the database service and by the API `DATABASE_URL`
 - `DATABASE_POOL_MIN_SIZE`, `DATABASE_POOL_MAX_SIZE` - asyncpg pool sizing per API worker
 - `GPU_API_URL` - API-to-GPU-API base URL; Docker defaults to `http://gpu-api:8888`
-- OpenAI, Google, Anthropic, and Ollama models are BYOK-only and do not use deployment credentials, except for the explicitly isolated sponsored Luna path below. Ollama defaults to `https://ollama.com`; custom Ollama endpoints must be HTTPS and allowed by `BYOK_ALLOWED_BASE_URLS`.
+- OpenAI, Google, Anthropic, and Ollama models are BYOK-only and do not use deployment credentials, except for the explicitly isolated sponsored model path below. Ollama defaults to `https://ollama.com`; custom Ollama endpoints must be HTTPS and allowed by `BYOK_ALLOWED_BASE_URLS`.
 - `RESUMABLE_STREAM_REDIS_URL` - server-only Redis/Valkey URL used by the web BFF for resumable chat streams
 - `RERANKER_MIN_SCORE`, `SOURCE_RERANKER_MIN_SCORE`, `CHAT_HISTORY_MAX_TURNS` - retrieval and chat tuning
 
@@ -135,8 +135,8 @@ curl --fail-with-body --no-buffer --silent --show-error \
   -H "x-api-key: ${API_KEY}" \
   -H 'content-type: application/json' \
   --data '{"user_id":"00000000-0000-4000-8000-000000000016","interface":"web","inference_model":"gpt-5.6-luna","query_transform_mode":"raw","messages":[{"role":"user","content":"deployment preflight"}],"max_tokens":1024}' \
-  "${CHATBOT_URL:-http://127.0.0.1:8880}/chat/" | tee /tmp/sponsored-luna-preflight.sse
-/bin/sh scripts/verify-sponsored-model-preflight.sh /tmp/sponsored-luna-preflight.sse
+  "${CHATBOT_URL:-http://127.0.0.1:8880}/chat/" | tee /tmp/sponsored-model-preflight.sse
+/bin/sh scripts/verify-sponsored-model-preflight.sh /tmp/sponsored-model-preflight.sse
 ```
 
 Do not run that command with placeholder credentials and do not report live

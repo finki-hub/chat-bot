@@ -266,7 +266,7 @@ describe('Composer', () => {
     expect(screen.getByTestId('composer-submit')).toBeDisabled();
   });
 
-  it('submits with sponsored Luna without an OpenAI credential', async () => {
+  it('submits with a sponsored model without its provider credential', async () => {
     const { onSubmit } = setup({
       availableProviders: new Set(),
       model: LUNA_ID,

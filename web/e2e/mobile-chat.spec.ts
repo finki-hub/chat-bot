@@ -35,8 +35,6 @@ const SPONSORED_CATALOG: ModelCatalog = {
   source: 'live',
   version: 1,
 };
-const EVIDENCE_DIR = `${process.cwd()}/../.omo/evidence/ulw/ses_08b75c4cdffe8g6tX0apGLd65d/task-12-cross-surface-sponsored-luna`;
-
 const mockSession = async (
   page: Page,
   user: MockSessionUser = DEFAULT_SESSION_USER,
@@ -209,7 +207,7 @@ test('mobile keeps the account menu available when authenticated identity is una
 
 test('mobile model selector exposes the sponsored badge and remaining quota', async ({
   page,
-}) => {
+}, testInfo) => {
   await page.setViewportSize({ height: 812, width: 375 });
   await mockSession(page);
   await mockModels(page, {
@@ -229,7 +227,7 @@ test('mobile model selector exposes the sponsored badge and remaining quota', as
   await expect(badge).toContainText('3/5');
   await page.screenshot({
     animations: 'disabled',
-    path: `${EVIDENCE_DIR}/sponsored-selector-mobile.png`,
+    path: testInfo.outputPath('sponsored-selector-mobile.png'),
   });
 });
 

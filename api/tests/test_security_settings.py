@@ -151,7 +151,7 @@ def test_sponsored_model_defaults_are_disabled_and_safe():
     assert settings.SPONSORED_REQUEST_LEASE_SECONDS == 600
 
 
-def test_disabled_sponsored_luna_treats_blank_global_limit_as_unset(monkeypatch):
+def test_disabled_sponsored_model_treats_blank_global_limit_as_unset(monkeypatch):
     monkeypatch.setenv("SPONSORED_DAILY_GLOBAL_LIMIT", "")
 
     settings = Settings(SPONSORED_MODEL_ENABLED=False)

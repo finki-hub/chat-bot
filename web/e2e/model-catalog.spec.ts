@@ -6,6 +6,7 @@ import type { ModelCatalog } from '@/lib/api-types';
 /* eslint-disable sonarjs/no-duplicate-string -- repeated selectors define the E2E surface. */
 import { installMockChatState } from './helpers/chat-state';
 import { mockModels } from './helpers/models';
+import { startChatStreamServer } from './helpers/sse';
 
 const STORAGE_KEY = 'finkiHub.ui';
 // A model id that is no longer served by the catalog, to exercise stale recovery.
@@ -19,8 +20,6 @@ const LUNA_ID = 'gpt-5.6-luna';
 const LUNA_NAME = 'GPT-5.6 Luna';
 const EMPTY_JSON = '{}';
 const LUNA_OPTION_PATTERN = /GPT-5\.6 Luna/u;
-const EVIDENCE_DIR = `${process.cwd()}/../.omo/evidence/ulw/ses_08b75c4cdffe8g6tX0apGLd65d/task-12-cross-surface-sponsored-luna`;
-
 const lunaCatalog = (
   remaining: number,
   availability: 'both' | 'byok' | 'sponsored' = 'sponsored',
@@ -278,7 +277,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
 
   test('renders the sponsored badge and updates the quota from five to zero', async ({
     page,
-  }) => {
+  }, testInfo) => {
     let catalog = lunaCatalog(5);
     await mockModels(page, {
       catalog: () => catalog,
@@ -291,40 +290,58 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
         status: 200,
       });
     });
-    const streamUrl = 'http://127.0.0.1:9/sponsored-quota';
-    await installMockChatState(page, {
-      onCreate: () => {
-        catalog = lunaCatalog(0);
-      },
-      streamUrl,
+    const chatServer = await startChatStreamServer({
+      gapMs: 0,
+      head: [
+        { messageMetadata: { inferenceModel: LUNA_ID }, type: 'start' },
+        { id: 'sponsored-answer', type: 'text-start' },
+        {
+          delta: 'Квотата е ажурирана.',
+          id: 'sponsored-answer',
+          type: 'text-delta',
+        },
+        { id: 'sponsored-answer', type: 'text-end' },
+        { type: 'finish' },
+      ],
+      tail: [],
     });
+    try {
+      await installMockChatState(page, {
+        onCreate: () => {
+          catalog = lunaCatalog(0);
+        },
+        streamUrl: chatServer.url,
+      });
 
-    await page.goto('/');
-    const trigger = page.getByTestId('composer-model');
-    await expect(trigger).toContainText(LUNA_NAME);
-    await trigger.click();
+      await page.goto('/');
+      const trigger = page.getByTestId('composer-model');
+      await expect(trigger).toContainText(LUNA_NAME);
+      await trigger.click();
 
-    const badge = page.getByTestId(`model-free-badge-${LUNA_ID}`);
-    await expect(badge).toContainText('Бесплатно');
-    await expect(badge).toContainText('5/5');
-    await page.screenshot({
-      animations: 'disabled',
-      path: `${EVIDENCE_DIR}/sponsored-quota-five.png`,
-    });
-    await page.keyboard.press('Escape');
+      const badge = page.getByTestId(`model-free-badge-${LUNA_ID}`);
+      await expect(badge).toContainText('Бесплатно');
+      await expect(badge).toContainText('5/5');
+      await page.screenshot({
+        animations: 'disabled',
+        path: testInfo.outputPath('sponsored-quota-five.png'),
+      });
+      await page.keyboard.press('Escape');
 
-    await page.getByTestId('composer-input').fill('Провери квота');
-    await page.getByTestId('composer-submit').click();
-    await expect
-      .poll(() => catalog.models[0]?.sponsored_quota?.remaining)
-      .toBe(0);
+      await page.getByTestId('composer-input').fill('Провери квота');
+      await page.getByTestId('composer-submit').click();
+      await expect
+        .poll(() => catalog.models[0]?.sponsored_quota?.remaining)
+        .toBe(0);
 
-    await trigger.click();
-    await expect(badge).toContainText('0/5');
-    await page.screenshot({
-      animations: 'disabled',
-      path: `${EVIDENCE_DIR}/sponsored-quota-zero.png`,
-    });
+      await trigger.click();
+      await expect(badge).toContainText('0/5');
+      await page.screenshot({
+        animations: 'disabled',
+        path: testInfo.outputPath('sponsored-quota-zero.png'),
+      });
+    } finally {
+      await chatServer.close();
+    }
   });
 
   test('refreshes sponsored availability after credentials change without a reload', async ({
