@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from 'react';
 
-import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
+import type { FeedbackSelection, MyUIMessage } from '@/lib/api-types';
 
 import { fireAndForget } from '@/lib/async';
 import { renderAnswerActions } from '@/lib/conversation-actions';
@@ -111,7 +111,7 @@ export const useConversations = (
   );
 
   const recordFeedback = useCallback(
-    (messageId: string, vote: FeedbackType) => {
+    (messageId: string, vote: FeedbackSelection) => {
       setMessages(applyFeedback(messageId, vote));
     },
     [setMessages],

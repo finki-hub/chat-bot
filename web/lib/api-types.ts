@@ -107,6 +107,21 @@ export type FeedbackClientPayload = {
   readonly responseId: string;
 };
 
+export type FeedbackRetractionAck = {
+  readonly feedback_type: null;
+  readonly response_id: string;
+};
+
+export type FeedbackRetractionClientPayload = {
+  readonly responseId: string;
+};
+
+export type FeedbackRetractionSchema = {
+  readonly client: 'web';
+  readonly response_id: string;
+  readonly user_id: string;
+};
+
 export type FeedbackSchema = {
   answer_text?: string;
   channel_id?: string;
@@ -121,6 +136,7 @@ export type FeedbackSchema = {
   response_id: string;
   user_id: string;
 };
+export type FeedbackSelection = FeedbackType | null;
 export type FeedbackType = 'dislike' | 'like';
 
 // Every field is optional: a `meta` frame carries only part of it (timing vs tokens),

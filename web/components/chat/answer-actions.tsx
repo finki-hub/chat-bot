@@ -1,8 +1,12 @@
 import { Check, Copy, RotateCcw, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { posthog } from 'posthog-js';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
-import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
+import type {
+  FeedbackSelection,
+  FeedbackType,
+  MyUIMessage,
+} from '@/lib/api-types';
 
 import { ControlTooltip } from '@/components/ui/icon-controls';
 import { t } from '@/lib/i18n';
@@ -12,7 +16,7 @@ import { cn } from '@/lib/utils';
 export type AnswerActionsProps = {
   message: MyUIMessage;
   onRegenerate?: () => void;
-  onVote?: (vote: FeedbackType) => void;
+  onVote?: (vote: FeedbackSelection) => void;
   pending?: boolean;
   regenerateDisabled?: boolean;
 };
@@ -32,12 +36,15 @@ export const AnswerActions = ({
   const [vote, setVote] = useState<FeedbackType | null>(
     message.metadata?.feedback ?? null,
   );
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const feedbackPendingRef = useRef(false);
 
   if (!responseId) {
     return null;
   }
 
   const text = lastText(message) ?? '';
+  const votingDisabled = pending || submittingFeedback;
 
   const copy = async (): Promise<void> => {
     await navigator.clipboard.writeText(text);
@@ -54,27 +61,36 @@ export const AnswerActions = ({
   };
 
   const sendFeedback = async (feedbackType: FeedbackType): Promise<void> => {
-    if (pending) {
+    const pendingRequest = feedbackPendingRef;
+    if (pending || pendingRequest.current) {
       return;
     }
+    pendingRequest.current = true;
+    setSubmittingFeedback(true);
     const previous = vote;
-    setVote(feedbackType);
+    const nextVote: FeedbackSelection =
+      vote === feedbackType ? null : feedbackType;
+    setVote(nextVote);
     try {
       const res = await fetch('/api/feedback', {
-        body: JSON.stringify({
-          feedbackType,
-          responseId,
-        }),
+        body: JSON.stringify(
+          nextVote === null
+            ? { responseId }
+            : { feedbackType: nextVote, responseId },
+        ),
         headers: { 'content-type': 'application/json' },
-        method: 'POST',
+        method: nextVote === null ? 'DELETE' : 'POST',
       });
       if (!res.ok) {
         setVote(previous);
         return;
       }
-      onVote?.(feedbackType);
+      onVote?.(nextVote);
     } catch {
       setVote(previous);
+    } finally {
+      pendingRequest.current = false;
+      setSubmittingFeedback(false);
     }
   };
 
@@ -129,6 +145,7 @@ export const AnswerActions = ({
         label={t('actions.like')}
       >
         <button
+          aria-busy={submittingFeedback || undefined}
           aria-label={t('actions.like')}
           aria-pressed={vote === 'like'}
           className={cn(
@@ -137,7 +154,7 @@ export const AnswerActions = ({
               'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground',
           )}
           data-testid="like-button"
-          disabled={pending}
+          disabled={votingDisabled}
           onClick={() => {
             void sendFeedback('like');
           }}
@@ -154,6 +171,7 @@ export const AnswerActions = ({
         label={t('actions.dislike')}
       >
         <button
+          aria-busy={submittingFeedback || undefined}
           aria-label={t('actions.dislike')}
           aria-pressed={vote === 'dislike'}
           className={cn(
@@ -162,7 +180,7 @@ export const AnswerActions = ({
               'bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:text-destructive-foreground',
           )}
           data-testid="dislike-button"
-          disabled={pending}
+          disabled={votingDisabled}
           onClick={() => {
             void sendFeedback('dislike');
           }}

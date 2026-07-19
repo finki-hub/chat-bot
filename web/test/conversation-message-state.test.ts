@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { MyUIMessage } from '@/lib/api-types';
 
-import { replaceFinishedMessage } from '@/lib/conversation-message-state';
+import {
+  applyFeedback,
+  replaceFinishedMessage,
+} from '@/lib/conversation-message-state';
 
 const assistantMessage = (
   id: string,
@@ -37,5 +40,25 @@ describe('replaceFinishedMessage', () => {
       { text: 'new complete', type: 'text' },
     ]);
     expect(next.at(1)?.metadata?.responseId).toBe('resp-1');
+  });
+});
+
+describe('applyFeedback', () => {
+  it('removes only the feedback metadata when the vote is cleared', () => {
+    const message: MyUIMessage = {
+      ...assistantMessage('a1', 'resp-1', 'Одговор'),
+      metadata: {
+        feedback: 'like',
+        inferenceModel: 'claude-sonnet-5',
+        responseId: 'resp-1',
+      },
+    };
+
+    const [updated] = applyFeedback('a1', null)([message]);
+
+    expect(updated?.metadata).toStrictEqual({
+      inferenceModel: 'claude-sonnet-5',
+      responseId: 'resp-1',
+    });
   });
 });

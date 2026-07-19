@@ -70,3 +70,30 @@ class FeedbackAckSchema(BaseModel):
         examples=["like"],
         description="The recorded rating after the upsert.",
     )
+
+
+class FeedbackRetractionSchema(BaseModel):
+    response_id: UUID = Field(
+        examples=["3fa85f64-5717-4562-b3fc-2c963f66afa6"],
+        description="Canonical id of the response whose feedback should be removed.",
+    )
+    client: Literal["web"] = Field(
+        examples=["web"],
+        description="The authenticated web client retracting its feedback.",
+    )
+    user_id: str = Field(
+        min_length=1,
+        examples=["198249751001563136"],
+        description="Id of the web user retracting feedback.",
+    )
+
+
+class FeedbackRetractionAckSchema(BaseModel):
+    response_id: UUID = Field(
+        examples=["3fa85f64-5717-4562-b3fc-2c963f66afa6"],
+        description="The response whose feedback was removed.",
+    )
+    feedback_type: None = Field(
+        default=None,
+        description="The resulting empty feedback state.",
+    )

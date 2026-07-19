@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AnswerActionsProps } from '@/components/chat/answer-actions';
-import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
+import type { FeedbackSelection, MyUIMessage } from '@/lib/api-types';
 
 import {
   type ChatStatus,
@@ -30,7 +30,7 @@ const renderFor = (
   return renderAnswerActions({
     disabled,
     messages: [message],
-    onVote: vi.fn<(messageId: string, vote: FeedbackType) => void>(),
+    onVote: vi.fn<(messageId: string, vote: FeedbackSelection) => void>(),
     regenerate: vi.fn<(options: { messageId: string }) => void>(),
     status,
   })(message) as ReactElement<AnswerActionsProps>;
@@ -72,7 +72,7 @@ describe('renderAnswerActions', () => {
     const node = renderAnswerActions({
       disabled: false,
       messages: [message],
-      onVote: vi.fn<(messageId: string, vote: FeedbackType) => void>(),
+      onVote: vi.fn<(messageId: string, vote: FeedbackSelection) => void>(),
       regenerate: vi.fn<(options: { messageId: string }) => void>(),
       status: 'ready',
     })(message);

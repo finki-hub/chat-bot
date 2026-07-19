@@ -19,7 +19,7 @@ const DIAGNOSTICS_LABEL = /Дијагностика/u;
 const OBSERVABLE_STAGE_GAP_MS = 1_500;
 
 test.describe('chat streaming (mocked BFF)', () => {
-  test('shows the search chip, drops the preamble, renders the answer, and likes', async ({
+  test('shows the search chip, drops the preamble, renders the answer, and toggles like feedback', async ({
     page,
   }) => {
     const chatChunks = toolRunChunks({
@@ -65,13 +65,20 @@ test.describe('chat streaming (mocked BFF)', () => {
 
     await installMockChatState(page, { streamUrl: chatServer.url });
 
-    let feedbackBody: null | Record<string, unknown> = null;
+    const feedbackRequests: Array<{
+      readonly body: Record<string, unknown>;
+      readonly method: string;
+    }> = [];
     await page.route('**/api/feedback', async (route) => {
-      feedbackBody = route.request().postDataJSON() as Record<string, unknown>;
+      const request = route.request();
+      feedbackRequests.push({
+        body: request.postDataJSON() as Record<string, unknown>,
+        method: request.method(),
+      });
       await route.fulfill({
         body: JSON.stringify({
           /* eslint-disable camelcase -- snake_case mirrors the FeedbackAck wire contract */
-          feedback_type: 'like',
+          feedback_type: request.method() === 'DELETE' ? null : 'like',
           id: RESPONSE_ID,
           response_id: RESPONSE_ID,
           /* eslint-enable camelcase -- re-enable past the wire-shaped ack */
@@ -120,12 +127,26 @@ test.describe('chat streaming (mocked BFF)', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByText('trace ID')).toHaveCount(0);
 
-    await page.getByTestId('like-button').click();
-    await expect.poll(() => feedbackBody).not.toBeNull();
-    expect(feedbackBody).toMatchObject({
-      feedbackType: 'like',
-      responseId: RESPONSE_ID,
-    });
+    const like = page.getByTestId('like-button');
+    await like.click();
+    await expect(like).toHaveAttribute('aria-pressed', 'true');
+    await like.click();
+    await expect(like).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => feedbackRequests).toHaveLength(2);
+    expect(feedbackRequests).toStrictEqual([
+      {
+        body: { feedbackType: 'like', responseId: RESPONSE_ID },
+        method: 'POST',
+      },
+      {
+        body: { responseId: RESPONSE_ID },
+        method: 'DELETE',
+      },
+    ]);
+    await expect(page.getByTestId('dislike-button')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
 
     await chatServer.close();
   });
