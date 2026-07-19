@@ -125,6 +125,7 @@ const closeServer = (server: Server): Promise<void> =>
     server.close(() => {
       resolve();
     });
+    server.closeAllConnections();
   });
 
 export const startChatStreamServer = (opts: {
