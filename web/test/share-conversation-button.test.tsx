@@ -45,6 +45,26 @@ describe('ShareConversationButton', () => {
     expect(screen.getByRole('button', { name: SHARE_LABEL })).toBeDisabled();
   });
 
+  it('matches the header spacing for active share controls', async () => {
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ shareToken: SHARE_TOKEN }, { status: 200 }),
+    );
+    const { ShareConversationButton } =
+      await import('@/components/chat/share-conversation-button');
+    render(<ShareConversationButton conversationId="conversation-1" />);
+
+    const copyButton = await screen.findByRole('button', {
+      name: COPY_LINK_LABEL,
+    });
+    const activeControls = copyButton.closest('[aria-live="polite"]');
+
+    if (activeControls === null) {
+      throw new TypeError('active share controls were not rendered');
+    }
+
+    expect(activeControls).toHaveClass('gap-2');
+  });
+
   it('creates a share and copies its absolute URL', async () => {
     const { ShareConversationButton } =
       await import('@/components/chat/share-conversation-button');
