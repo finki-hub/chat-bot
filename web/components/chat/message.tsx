@@ -286,7 +286,7 @@ const MessageTiming = ({
       </HoverCardTrigger>
       <HoverCardContent
         align="start"
-        className="max-h-[var(--radix-hover-card-content-available-height)] w-auto min-w-[min(14rem,var(--radix-hover-card-content-available-width))] max-w-[min(20rem,var(--radix-hover-card-content-available-width))] overflow-y-auto overscroll-contain"
+        className="max-h-(--radix-hover-card-content-available-height) w-auto min-w-[min(14rem,var(--radix-hover-card-content-available-width))] max-w-[min(20rem,var(--radix-hover-card-content-available-width))] overflow-y-auto overscroll-contain"
         collisionPadding={16}
         ref={diagnosticsContentRef}
       >
