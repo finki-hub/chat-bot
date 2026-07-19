@@ -22,20 +22,29 @@ from tests.chat_models_access_support import (
 
 
 @pytest.mark.parametrize(
-    ("user_id", "has_key", "personal_remaining", "global_remaining", "expected"),
+    (
+        "user_id",
+        "has_key",
+        "credential_rejected",
+        "personal_remaining",
+        "global_remaining",
+        "expected",
+    ),
     [
-        (USER_WITH_KEY, True, 5, 10, "both"),
-        (USER_WITHOUT_KEY, False, 5, 10, "sponsored"),
-        (USER_WITH_KEY, True, 0, 10, "byok"),
-        (USER_WITHOUT_KEY, False, 0, 10, "unavailable"),
-        (USER_WITH_KEY, True, 5, 0, "byok"),
-        (USER_WITHOUT_KEY, False, 5, 0, "unavailable"),
+        (USER_WITH_KEY, True, False, 5, 10, "both"),
+        (USER_WITHOUT_KEY, False, False, 5, 10, "sponsored"),
+        (USER_WITHOUT_KEY, False, True, 5, 10, "unavailable"),
+        (USER_WITH_KEY, True, False, 0, 10, "byok"),
+        (USER_WITHOUT_KEY, False, False, 0, 10, "unavailable"),
+        (USER_WITH_KEY, True, False, 5, 0, "byok"),
+        (USER_WITHOUT_KEY, False, False, 5, 0, "unavailable"),
     ],
 )
 def test_models_endpoint_overlays_user_and_sponsored_capacity(
     monkeypatch,
     user_id: UUID,
     has_key: bool,
+    credential_rejected: bool,
     personal_remaining: int,
     global_remaining: int,
     expected: str,
@@ -53,7 +62,12 @@ def test_models_endpoint_overlays_user_and_sponsored_capacity(
     ) -> LlmProviderCredentials:
         assert providers == frozenset({"openai", "google", "anthropic", "ollama"})
         assert settings.SPONSORED_LUNA_ENABLED
-        return credentials(openai=has_key)
+        return LlmProviderCredentials(
+            openai=credentials(openai=has_key).openai,
+            rejected_providers=(
+                frozenset({"openai"}) if credential_rejected else frozenset()
+            ),
+        )
 
     async def read_snapshot(
         db,
@@ -92,11 +106,14 @@ def test_models_endpoint_overlays_user_and_sponsored_capacity(
     assert luna["availability"] == expected
     assert body["version"] == base.version
     assert body["source"] == base.source
-    assert luna["sponsored_quota"] == {
-        "limit": 5,
-        "remaining": personal_remaining,
-        "resets_at": "2026-07-19T00:00:00Z",
-    }
+    if credential_rejected:
+        assert luna["sponsored_quota"] is None
+    else:
+        assert luna["sponsored_quota"] == {
+            "limit": 5,
+            "remaining": personal_remaining,
+            "resets_at": "2026-07-19T00:00:00Z",
+        }
     assert USER_CREDENTIAL not in response.text
     assert BASE_URL not in response.text
     assert base.models[0].availability == "byok"

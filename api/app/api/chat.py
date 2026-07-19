@@ -934,6 +934,9 @@ async def list_models(
             if credentials is not None
             else frozenset()
         ),
+        rejected_providers=(
+            credentials.rejected_providers if credentials is not None else frozenset()
+        ),
         sponsored_settings=SponsoredSettings(
             enabled=settings.SPONSORED_LUNA_ENABLED,
             provider_configured=(

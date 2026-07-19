@@ -30,6 +30,7 @@ class ModelAccessContext:
     personal_quota: SponsoredQuotaSnapshot | None
     global_quota: SponsoredQuotaSnapshot | None
     utc_reset: datetime
+    rejected_providers: frozenset[ProviderName] = frozenset()
 
 
 def _utc(value: datetime) -> datetime:
@@ -48,6 +49,7 @@ def _sponsored_has_capacity(context: ModelAccessContext) -> bool:
     global_quota = context.global_quota
     return (
         _sponsored_configured(context)
+        and "openai" not in context.rejected_providers
         and personal is not None
         and global_quota is not None
         and personal.remaining > 0
@@ -56,7 +58,11 @@ def _sponsored_has_capacity(context: ModelAccessContext) -> bool:
 
 
 def _display_quota(context: ModelAccessContext) -> SponsoredQuotaSnapshot | None:
-    if not _sponsored_configured(context) or context.personal_quota is None:
+    if (
+        not _sponsored_configured(context)
+        or "openai" in context.rejected_providers
+        or context.personal_quota is None
+    ):
         return None
     return context.personal_quota.model_copy(
         update={"resets_at": _utc(context.utc_reset)},
