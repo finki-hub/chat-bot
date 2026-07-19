@@ -25,7 +25,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 ## 5. Components
 
 - Sidebar conversation row: selectable title button plus compact row-action icon buttons that reveal on hover/focus for desktop and stay visible on mobile.
-- Row action button: Lucide icon, `size-3.5`, semantic aria label, focus-visible ring, muted default color, stronger hover color matching the action intent.
+- Row action button: Lucide icon, `size-3.5`, semantic aria label, focus-visible ring, muted default color, stronger hover color matching the action intent, and the existing Radix tooltip using the same localized label on hover or keyboard focus.
 - Destructive row action: use destructive hover color only for delete.
 - Auth sign-in panel: card surface using `card`, `border`, `background`, `primary`, and `muted-foreground` tokens, with provider buttons that visibly change border/background on hover and use `focus-visible:ring-ring`.
 - Auth sign-in content: limit the supporting value list to 2 concise benefits so the primary action remains visible on small screens. The panel uses `Започни разговор`, and provider actions follow `Продолжи со {provider.name}`.
