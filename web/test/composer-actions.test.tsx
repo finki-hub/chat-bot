@@ -13,9 +13,19 @@ import {
 const LUNA_ID = 'gpt-5.6-luna';
 const LUNA_NAME = 'GPT-5.6 Luna';
 const LUNA_OPTION_NAME = /GPT-5\.6 Luna.*Бесплатно/u;
+const GEMINI_ID = 'gemini-3.5-flash';
+const GEMINI_NAME = 'Gemini 3.5 Flash';
+const GEMINI_OPTION_NAME = /Gemini 3\.5 Flash.*Бесплатно/u;
+
+const DEFAULT_MODEL = {
+  id: LUNA_ID,
+  name: LUNA_NAME,
+  provider: 'openai',
+} as const;
 
 const createProps = (
   availability: NonNullable<ModelDescriptor['availability']>,
+  model: Pick<ModelDescriptor, 'id' | 'name' | 'provider'> = DEFAULT_MODEL,
 ): ComposerActionsProps => ({
   availableProviders: new Set(),
   groups: [
@@ -23,9 +33,9 @@ const createProps = (
       models: [
         {
           availability,
-          id: LUNA_ID,
-          name: LUNA_NAME,
-          provider: 'openai',
+          id: model.id,
+          name: model.name,
+          provider: model.provider,
           sponsored_quota: {
             limit: 10,
             remaining: 8,
@@ -33,11 +43,11 @@ const createProps = (
           },
         },
       ],
-      provider: 'openai',
+      provider: model.provider,
     },
   ],
   isBusy: false,
-  model: LUNA_ID,
+  model: model.id,
   modelPlaceholder: 'Модел',
   modelSelectDisabled: false,
   onButtonClick: vi.fn<() => void>(),
@@ -96,5 +106,28 @@ describe('ComposerActions Luna availability', () => {
 
     expect(props.onModelChange).toHaveBeenCalledWith(LUNA_ID);
     expect(screen.queryByText('8/10')).not.toBeInTheDocument();
+  });
+
+  it('renders a non-Luna sponsored fixture with a generic manage-credentials label', async () => {
+    render(
+      <ComposerActions
+        {...createProps('sponsored', {
+          id: GEMINI_ID,
+          name: GEMINI_NAME,
+          provider: 'google',
+        })}
+      />,
+    );
+    const user = userEvent.setup();
+
+    await user.click(screen.getByTestId('composer-model'));
+
+    const option = await screen.findByRole('option', {
+      name: GEMINI_OPTION_NAME,
+    });
+
+    expect(option).toHaveTextContent('Бесплатно');
+    expect(option).not.toHaveTextContent('Luna');
+    expect(option).not.toHaveTextContent('OpenAI');
   });
 });

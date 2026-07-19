@@ -345,15 +345,13 @@ describe('AssistantMessage', () => {
     expect(alert).toHaveTextContent('Бесплатната квота е искористена.');
 
     expect(
-      screen.getByRole('button', { name: 'Додај OpenAI API клуч' }),
+      screen.getByRole('button', { name: 'Додај API клуч' }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Почекај до ресетирањето' }),
     ).toBeInTheDocument();
 
-    await user.click(
-      screen.getByRole('button', { name: 'Додај OpenAI API клуч' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Додај API клуч' }));
     await user.click(
       screen.getByRole('button', { name: 'Почекај до ресетирањето' }),
     );

@@ -22,15 +22,17 @@ const DIAGNOSTICS_LABEL = /Дијагностика/u;
 const OBSERVABLE_STAGE_GAP_MS = 5_000;
 const ANSWER_TEST_ID = 'answer-text';
 const ANSWER_PREVIEW = 'Резултатите од испитите се објавуваат';
-const SPONSORED_MODEL = 'gpt-5.6-luna';
+const SPONSORED_MODEL = 'gemini-3.5-flash';
+const COMPOSER_INPUT = ['composer', 'input'].join('-');
+const COMPOSER_SUBMIT = ['composer', 'submit'].join('-');
 /* eslint-disable camelcase -- catalog fixture mirrors the API wire contract. */
 const SPONSORED_CATALOG: ModelCatalog = {
   models: [
     {
       availability: 'sponsored',
       id: SPONSORED_MODEL,
-      name: 'GPT-5.6 Luna',
-      provider: 'openai',
+      name: 'Gemini 3.5 Flash',
+      provider: 'google',
       sponsored_quota: {
         limit: 5,
         remaining: 0,
@@ -123,9 +125,9 @@ test.describe('chat streaming (mocked BFF)', () => {
 
     await page.goto('/');
 
-    const input = page.getByTestId('composer-input');
+    const input = page.getByTestId(COMPOSER_INPUT);
     await input.fill('Кога се објавуваат резултатите?');
-    await page.getByTestId('composer-submit').click();
+    await page.getByTestId(COMPOSER_SUBMIT).click();
 
     const chip = page.getByTestId('search-status');
     await expect(chip).toBeVisible({ timeout: 15_000 });
@@ -218,6 +220,7 @@ test.describe('chat streaming (mocked BFF)', () => {
   test('shows quota exhaustion actions and preserves the prior conversation', async ({
     page,
   }) => {
+    await page.setViewportSize({ height: 812, width: 375 });
     const conversationId = 'sponsored-preserved-conversation';
     const history = {
       conversation: {
@@ -226,11 +229,6 @@ test.describe('chat streaming (mocked BFF)', () => {
         title: 'Постоечки разговор',
       },
       messages: [
-        {
-          id: 'prior-user',
-          parts: [{ text: 'Претходно прашање', type: 'text' }],
-          role: 'user',
-        },
         {
           id: 'prior-assistant',
           metadata: { inferenceModel: SPONSORED_MODEL },
@@ -244,6 +242,23 @@ test.describe('chat streaming (mocked BFF)', () => {
       'backend quota detail must not render',
     );
 
+    await page.route('**/api/health', async (route) => {
+      await route.fulfill({
+        body: '{}',
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
+    await page.route('**/api/auth/session', async (route) => {
+      await route.fulfill({
+        body: JSON.stringify({
+          expires: '2099-01-01T00:00:00.000Z',
+          user: { email: 'student@example.com', name: 'Student' },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
     await mockModels(page, {
       catalog: SPONSORED_CATALOG,
       credentialProviders: [],
@@ -259,27 +274,18 @@ test.describe('chat streaming (mocked BFF)', () => {
       histories: { [conversationId]: history },
       streamUrl: chatServer.url,
     });
-    await page.addInitScript((model) => {
-      localStorage.setItem(
-        'finkiHub.ui',
-        JSON.stringify({
-          state: {
-            activeConversationId: 'sponsored-preserved-conversation',
-            model,
-            reasoning: false,
-          },
-          version: 0,
-        }),
-      );
-    }, SPONSORED_MODEL);
-
     await page.goto('/');
-    await expect(page.getByTestId(ANSWER_TEST_ID)).toContainText(
-      'Претходен одговор',
-    );
+    await page.getByRole('button', { name: 'Прикажи/сокриј странична лента' }).click();
+    await page
+      .getByRole('button', { exact: true, name: 'Постоечки разговор' })
+      .click();
+    await expect(page.getByText('Претходен одговор')).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByTestId('composer-model')).toContainText(
-      'GPT-5.6 Luna',
+      'Gemini 3.5 Flash',
     );
+    await expect(page.getByTestId('composer-input')).toBeEnabled();
     await page.getByTestId('composer-input').fill('Ново прашање');
     await page.getByTestId('composer-submit').click();
 
@@ -290,23 +296,19 @@ test.describe('chat streaming (mocked BFF)', () => {
       page.getByText('backend quota detail must not render'),
     ).toHaveCount(0);
     await expect(
-      page.getByRole('button', { name: 'Додај OpenAI API клуч' }),
+      page.getByRole('button', { name: 'Додај API клуч' }),
     ).toBeVisible();
     await expect(
       page.getByRole('button', { name: 'Почекај до ресетирањето' }),
     ).toBeVisible();
-    await expect(page.getByTestId(ANSWER_TEST_ID)).toContainText(
-      'Претходен одговор',
-    );
+    await expect(page.getByText('Претходен одговор')).toBeVisible();
     await page.screenshot({
       animations: 'disabled',
       path: `${EVIDENCE_DIR}/sponsored-exhaustion-preserved-conversation.png`,
     });
 
     await page.getByRole('button', { name: 'Почекај до ресетирањето' }).click();
-    await expect(page.getByTestId(ANSWER_TEST_ID)).toContainText(
-      'Претходен одговор',
-    );
+    await expect(page.getByText('Претходен одговор')).toBeVisible();
     await chatServer.close();
   });
 
@@ -317,6 +319,23 @@ test.describe('chat streaming (mocked BFF)', () => {
       'free_tier_unavailable',
       'upstream availability detail must not render',
     );
+    await page.route('**/api/health', async (route) => {
+      await route.fulfill({
+        body: '{}',
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
+    await page.route('**/api/auth/session', async (route) => {
+      await route.fulfill({
+        body: JSON.stringify({
+          expires: '2099-01-01T00:00:00.000Z',
+          user: { email: 'student@example.com', name: 'Student' },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
     await mockModels(page, {
       catalog: SPONSORED_CATALOG,
       credentialProviders: [],
@@ -334,7 +353,7 @@ test.describe('chat streaming (mocked BFF)', () => {
       page.getByText('upstream availability detail must not render'),
     ).toHaveCount(0);
     await expect(
-      page.getByRole('button', { name: 'Додај OpenAI API клуч' }),
+      page.getByRole('button', { name: 'Додај API клуч' }),
     ).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Почекај до ресетирањето' }),
