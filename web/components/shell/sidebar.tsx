@@ -111,7 +111,7 @@ export const Sidebar = ({
           <p className="text-destructive">{t('sidebar.loadError')}</p>
           {onRetryList ? (
             <button
-              className="mt-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11"
               onClick={() => {
                 void onRetryList();
               }}

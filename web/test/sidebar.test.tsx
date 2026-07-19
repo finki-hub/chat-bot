@@ -184,7 +184,11 @@ describe('Sidebar conversation loading', () => {
       'Разговорите не можеа да се вчитаат.',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Обиди се повторно' }));
+    const retry = screen.getByRole('button', { name: 'Обиди се повторно' });
+
+    expect(retry).toHaveClass('pointer-coarse:min-h-11');
+
+    fireEvent.click(retry);
 
     expect(onRetry).toHaveBeenCalledOnce();
   });
