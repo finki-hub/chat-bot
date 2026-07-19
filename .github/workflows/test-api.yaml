@@ -18,19 +18,20 @@ jobs:
       sync-args: --frozen
       pytest-args: -q
 
-  sponsored-usage-postgres:
+  postgres-integration:
+    name: PostgreSQL integration
     runs-on: ubuntu-latest
     services:
       postgres:
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_DB: sponsored_usage_test
+          POSTGRES_DB: api_test
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d sponsored_usage_test"
+          --health-cmd "pg_isready -U postgres -d api_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
@@ -39,7 +40,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen
         working-directory: ./api
-      - run: uv run pytest tests/integration/test_sponsored_usage_postgres.py -q
+      - run: uv run pytest tests/integration -q
         working-directory: ./api
         env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sponsored_usage_test
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/api_test
