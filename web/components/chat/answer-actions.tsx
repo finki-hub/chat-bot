@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
 
+import { ControlTooltip } from '@/components/ui/icon-controls';
 import { t } from '@/lib/i18n';
 import { lastText } from '@/lib/message-parts';
 import { cn } from '@/lib/utils';
@@ -82,80 +83,97 @@ export const AnswerActions = ({
       className="flex items-center gap-1"
       data-testid="answer-actions"
     >
-      <button
-        aria-label={t('actions.copy')}
-        className={BTN}
-        onClick={() => {
-          void copy();
-        }}
-        type="button"
-      >
-        {copied ? (
-          <Check
-            aria-hidden="true"
-            className="size-4"
-          />
-        ) : (
-          <Copy
-            aria-hidden="true"
-            className="size-4"
-          />
-        )}
-      </button>
-      {onRegenerate ? (
+      <ControlTooltip label={t('actions.copy')}>
         <button
-          aria-label={t('actions.regenerate')}
+          aria-label={t('actions.copy')}
           className={BTN}
-          disabled={regenerateDisabled}
-          onClick={onRegenerate}
+          onClick={() => {
+            void copy();
+          }}
           type="button"
         >
-          <RotateCcw
+          {copied ? (
+            <Check
+              aria-hidden="true"
+              className="size-4"
+            />
+          ) : (
+            <Copy
+              aria-hidden="true"
+              className="size-4"
+            />
+          )}
+        </button>
+      </ControlTooltip>
+      {onRegenerate ? (
+        <ControlTooltip
+          disabled={regenerateDisabled}
+          label={t('actions.regenerate')}
+        >
+          <button
+            aria-label={t('actions.regenerate')}
+            className={BTN}
+            disabled={regenerateDisabled}
+            onClick={onRegenerate}
+            type="button"
+          >
+            <RotateCcw
+              aria-hidden="true"
+              className="size-4"
+            />
+          </button>
+        </ControlTooltip>
+      ) : null}
+      <ControlTooltip
+        disabled={pending}
+        label={t('actions.like')}
+      >
+        <button
+          aria-label={t('actions.like')}
+          aria-pressed={vote === 'like'}
+          className={cn(
+            BTN,
+            vote === 'like' &&
+              'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground',
+          )}
+          data-testid="like-button"
+          disabled={pending}
+          onClick={() => {
+            void sendFeedback('like');
+          }}
+          type="button"
+        >
+          <ThumbsUp
             aria-hidden="true"
-            className="size-4"
+            className={cn('size-4', vote === 'like' && 'fill-current')}
           />
         </button>
-      ) : null}
-      <button
-        aria-label={t('actions.like')}
-        aria-pressed={vote === 'like'}
-        className={cn(
-          BTN,
-          vote === 'like' &&
-            'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground',
-        )}
-        data-testid="like-button"
+      </ControlTooltip>
+      <ControlTooltip
         disabled={pending}
-        onClick={() => {
-          void sendFeedback('like');
-        }}
-        type="button"
+        label={t('actions.dislike')}
       >
-        <ThumbsUp
-          aria-hidden="true"
-          className={cn('size-4', vote === 'like' && 'fill-current')}
-        />
-      </button>
-      <button
-        aria-label={t('actions.dislike')}
-        aria-pressed={vote === 'dislike'}
-        className={cn(
-          BTN,
-          vote === 'dislike' &&
-            'bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:text-destructive-foreground',
-        )}
-        data-testid="dislike-button"
-        disabled={pending}
-        onClick={() => {
-          void sendFeedback('dislike');
-        }}
-        type="button"
-      >
-        <ThumbsDown
-          aria-hidden="true"
-          className={cn('size-4', vote === 'dislike' && 'fill-current')}
-        />
-      </button>
+        <button
+          aria-label={t('actions.dislike')}
+          aria-pressed={vote === 'dislike'}
+          className={cn(
+            BTN,
+            vote === 'dislike' &&
+              'bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:text-destructive-foreground',
+          )}
+          data-testid="dislike-button"
+          disabled={pending}
+          onClick={() => {
+            void sendFeedback('dislike');
+          }}
+          type="button"
+        >
+          <ThumbsDown
+            aria-hidden="true"
+            className={cn('size-4', vote === 'dislike' && 'fill-current')}
+          />
+        </button>
+      </ControlTooltip>
     </div>
   );
 };
