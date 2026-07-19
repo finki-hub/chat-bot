@@ -132,7 +132,7 @@ curl --fail-with-body --no-buffer --silent --show-error \
   -H 'content-type: application/json' \
   --data '{"user_id":"00000000-0000-4000-8000-000000000016","interface":"web","inference_model":"gpt-5.6-luna","query_transform_mode":"raw","messages":[{"role":"user","content":"deployment preflight"}],"max_tokens":1024}' \
   "${CHATBOT_URL:-http://127.0.0.1:8880}/chat/" | tee /tmp/sponsored-luna-preflight.sse
-grep -q 'event: done' /tmp/sponsored-luna-preflight.sse
+/bin/sh scripts/verify-sponsored-luna-preflight.sh /tmp/sponsored-luna-preflight.sse
 ```
 
 Do not run that command with placeholder credentials and do not report live
