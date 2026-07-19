@@ -340,6 +340,22 @@ export const MessageError = ({
   let content: ReactNode;
 
   switch (errorPart.code) {
+    case 'credential_required':
+      content = (
+        <div className="flex flex-col gap-2">
+          <p className="text-destructive">{t('error.credentialRequired')}</p>
+          {onManageCredentials ? (
+            <button
+              className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={onManageCredentials}
+              type="button"
+            >
+              {t('error.manageCredentials')}
+            </button>
+          ) : null}
+        </div>
+      );
+      break;
     case 'free_quota_exhausted':
       content = (
         <SponsoredQuotaError
@@ -359,6 +375,9 @@ export const MessageError = ({
         <p className="text-muted-foreground">{t('error.interrupted')}</p>
       );
       break;
+    case 'no_answer':
+      content = <p className="text-destructive">{t('error.noAnswer')}</p>;
+      break;
     case 'sponsored_request_in_progress':
       content = (
         <p className="text-destructive">{t('error.sponsoredConcurrent')}</p>
@@ -367,7 +386,7 @@ export const MessageError = ({
     default:
       content = (
         <div className="flex flex-col gap-2">
-          <p className="text-destructive">{errorPart.message}</p>
+          <p className="text-destructive">{t('error.description')}</p>
           {onRetry ? (
             <button
               className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

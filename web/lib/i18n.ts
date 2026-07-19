@@ -63,8 +63,12 @@ export const messages = {
   'diagnostics.tokensTotal': 'токени (вкупно)',
   'diagnostics.topDistance': 'најблиска дистанца',
   'diagnostics.traceId': 'trace ID',
+  'error.credentialRequired': 'За избраниот модел е потребен API клуч.',
   'error.description': 'Се случи неочекувана грешка. Обидете се повторно.',
   'error.interrupted': 'Одговорот е прекинат.',
+  'error.manageCredentials': 'Додај API клуч',
+  'error.noAnswer':
+    'Не е пронајден одговор. Обидете се да го преформулирате прашањето.',
   'error.retry': 'Обиди се повторно',
   'error.sponsoredConcurrent':
     'Барањето за бесплатниот модел е веќе во тек. Почекај да заврши.',

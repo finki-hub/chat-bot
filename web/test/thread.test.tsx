@@ -247,22 +247,56 @@ describe('AssistantMessage', () => {
     expect(screen.getByText('Генерирање…')).toBeInTheDocument();
   });
 
-  it('renders a Retry button for a non-interrupted error', () => {
+  it('renders safe generic guidance and Retry for an agent error', () => {
     const onRetry = vi.fn<() => void>();
     const msg = assistantWithParts([]);
+    const rawMessage = 'provider secret: https://secret.invalid';
+
     render(
       <AssistantMessage
-        errorPart={{ code: 'agent_error', message: 'Се случи грешка.' }}
+        errorPart={{ code: 'agent_error', message: rawMessage }}
         message={msg}
         onRetry={onRetry}
       />,
     );
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Се случи грешка.');
+    const alert = screen.getByRole('alert');
+
+    expect(alert).toHaveTextContent(
+      'Се случи неочекувана грешка. Обидете се повторно.',
+    );
+    expect(alert).not.toHaveTextContent(rawMessage);
 
     screen.getByRole('button', { name: 'Обиди се повторно' }).click();
 
     expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it('renders safe credential guidance and opens credential management', async () => {
+    const onManageCredentials = vi.fn<() => void>();
+    const rawMessage = 'provider detail: leaked credential state';
+    const user = userEvent.setup();
+
+    render(
+      <MessageError
+        errorPart={{ code: 'credential_required', message: rawMessage }}
+        onManageCredentials={onManageCredentials}
+        onRetry={vi.fn<() => void>()}
+      />,
+    );
+
+    const alert = screen.getByRole('alert');
+
+    expect(alert).toHaveTextContent('За избраниот модел е потребен API клуч.');
+    expect(alert).not.toHaveTextContent(rawMessage);
+
+    expect(
+      screen.queryByRole('button', { name: 'Обиди се повторно' }),
+    ).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Додај API клуч' }));
+
+    expect(onManageCredentials).toHaveBeenCalledOnce();
   });
 
   it('shows a soft notice (no Retry) for an interrupted error', () => {
@@ -336,6 +370,10 @@ describe('AssistantMessage', () => {
     [
       'sponsored_request_in_progress' as const,
       'Барањето за бесплатниот модел е веќе во тек. Почекај да заврши.',
+    ],
+    [
+      'no_answer' as const,
+      'Не е пронајден одговор. Обидете се да го преформулирате прашањето.',
     ],
   ])(
     'renders safe guidance for %s without retry or raw backend text',
@@ -623,7 +661,10 @@ describe('Thread', () => {
       {
         id: 'a1',
         metadata: {
-          error: { code: 'agent_error', message: 'Се случи грешка.' },
+          error: {
+            code: 'agent_error',
+            message: 'provider secret: persisted detail',
+          },
         },
         parts: [],
         role: 'assistant',
@@ -636,7 +677,12 @@ describe('Thread', () => {
       />,
     );
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Се случи грешка.');
+    const alert = screen.getByRole('alert');
+
+    expect(alert).toHaveTextContent(
+      'Се случи неочекувана грешка. Обидете се повторно.',
+    );
+    expect(alert).not.toHaveTextContent('provider secret: persisted detail');
   });
 
   it('prefers the live error over a stale persisted one on the last message', () => {
@@ -644,7 +690,9 @@ describe('Thread', () => {
       userMessage('прашање'),
       {
         id: 'a1',
-        metadata: { error: { code: 'agent_error', message: 'Стара грешка.' } },
+        metadata: {
+          error: { code: 'no_answer', message: 'Стара грешка.' },
+        },
         parts: [],
         role: 'assistant',
       },
@@ -657,7 +705,12 @@ describe('Thread', () => {
       />,
     );
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Грешка во живо.');
+    const alert = screen.getByRole('alert');
+
+    expect(alert).toHaveTextContent(
+      'Се случи неочекувана грешка. Обидете се повторно.',
+    );
+    expect(alert).not.toHaveTextContent('Не е пронајден одговор.');
   });
 
   it('shows a typing indicator while awaiting the assistant reply', () => {
