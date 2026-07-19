@@ -27,6 +27,13 @@ const mockBackend = async (
     head: chunks.slice(0, 1),
     tail: chunks.slice(1),
   });
+  await page.route('**/api/health', async (route) => {
+    await route.fulfill({
+      body: '{}',
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
   await mockModels(page);
   await installMockChatState(page, { streamUrl: server.url });
   return server;
@@ -35,7 +42,9 @@ const mockBackend = async (
 const send = async (page: Page, text: string): Promise<void> => {
   const input = page.getByTestId('composer-input');
   await input.fill(text);
-  await input.press('Enter');
+  const submit = page.getByTestId('composer-submit');
+  await expect(submit).toBeEnabled();
+  await submit.click();
 };
 
 test('clicking a link opens the shared confirmation modal', async ({
