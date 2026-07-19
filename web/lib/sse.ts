@@ -30,6 +30,7 @@ export type SseSource =
 
 const ERROR_CODES: ReadonlySet<ChatErrorCode> = new Set([
   'agent_error',
+  'credential_required',
   'free_quota_exhausted',
   'free_tier_unavailable',
   'interrupted',

@@ -76,12 +76,18 @@ describe('parseProtocolV2', () => {
   it('maps error frames to typed error events and clamps unknown codes', async () => {
     const events = await collect(
       'event: error\ndata: {"code":"interrupted","message":"provider secret: https://secret.invalid"}\n\n',
+      'event: error\ndata: {"code":"credential_required","message":"provider detail: secret"}\n\n',
       'event: error\ndata: {"code":"weird","message":"provider detail: secret"}\n\n',
       DONE_FRAME,
     );
 
     expect(events).toStrictEqual([
       { code: 'interrupted', message: SAFE_ERROR_MESSAGE, type: 'error' },
+      {
+        code: 'credential_required',
+        message: SAFE_ERROR_MESSAGE,
+        type: 'error',
+      },
       { code: 'agent_error', message: SAFE_ERROR_MESSAGE, type: 'error' },
       DONE,
     ]);

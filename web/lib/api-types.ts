@@ -100,6 +100,7 @@ export const MAX_CHARS_PER_TURN = 2_000;
 
 export type ChatErrorCode =
   | 'agent_error'
+  | 'credential_required'
   | 'free_quota_exhausted'
   | 'free_tier_unavailable'
   | 'interrupted'
