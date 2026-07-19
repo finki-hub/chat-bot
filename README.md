@@ -84,27 +84,29 @@ The compose files also support optional variables that are not listed in `.env.s
 
 The standalone web app reads `API_BASE_URL`, `CHAT_API_KEY`, `RESUMABLE_STREAM_REDIS_URL`, `AUTH_URL`, `AUTH_SECRET`, and any configured OAuth provider credentials from `web/.env.local`. Optional web-facing variables include `SITE_URL`, `NEXT_PUBLIC_POSTHOG_KEY`, and `NEXT_PUBLIC_POSTHOG_HOST`.
 
-### Sponsored Luna rollout
+### Sponsored model rollout
 
-Sponsored Luna is an API-only, server-side fallback for users who do not have a
-personal OpenAI credential. A user's BYOK credential always wins and does not
-consume sponsored quota. The feature is disabled by default; when disabled, no
-sponsored provider request or quota admission is attempted and BYOK behavior is
-unchanged.
+The sponsored model is an API-only, server-side fallback for users who do not
+have a personal BYOK credential. A user's BYOK credential always wins and does
+not consume sponsored quota. The feature is disabled by default; when disabled,
+no sponsored provider request or quota admission is attempted and BYOK behavior
+is unchanged.
 
 | Setting | Default | Meaning and security requirement |
 | --- | --- | --- |
-| `SPONSORED_LUNA_ENABLED` | `false` | Kill switch. Keep `false` until the release gate below passes. |
-| `SPONSORED_OPENAI_API_KEY` | empty | Dedicated provider secret for sponsored inference. It must not be copied from or substituted with `API_KEY`, a user BYOK key, or a Discord secret. |
-| `SPONSORED_OPENAI_BASE_URL` | empty | Optional dedicated HTTPS OpenAI-compatible endpoint for sponsored inference only. It is canonicalized and validated separately from `BYOK_ALLOWED_BASE_URLS`; it must not be used as a user endpoint allowlist. |
-| `SPONSORED_LUNA_UPSTREAM_MODEL` | `gpt-5.6-luna` | Upstream model name sent to the provider; it may differ from the public catalog ID. |
+| `SPONSORED_MODEL_ENABLED` | `false` | Kill switch. Keep `false` until the release gate below passes. |
+| `SPONSORED_MODEL_ID` | `gpt-5.6-luna` | Public catalog model ID for the sponsored profile. |
+| `SPONSORED_MODEL_PROVIDER` | `openai` | Provider name for the sponsored profile. |
+| `SPONSORED_MODEL_API_KEY` | empty | Dedicated provider secret for sponsored inference. It must not be copied from or substituted with `API_KEY`, a user BYOK key, or a Discord secret. |
+| `SPONSORED_MODEL_BASE_URL` | empty | Optional dedicated HTTPS OpenAI-compatible endpoint for sponsored inference only. It is canonicalized and validated separately from `BYOK_ALLOWED_BASE_URLS`; it must not be used as a user endpoint allowlist. |
+| `SPONSORED_MODEL_UPSTREAM_MODEL` | empty | Upstream model name sent to the provider; it may differ from the public catalog ID. |
 | `SPONSORED_DAILY_USER_LIMIT` | `5` | Maximum five sponsored requests per user per UTC calendar day by default. BYOK requests are not counted. |
 | `SPONSORED_DAILY_GLOBAL_LIMIT` | empty | Required positive global sponsored-request cap when enabled. Leaving it empty is fail-closed and is valid only while the feature is disabled. |
 | `SPONSORED_MAX_OUTPUT_TOKENS` | `1024` | Sponsored output-token request; runtime hard-clamps it to 1024 even if a larger value is supplied. |
 | `SPONSORED_REQUEST_LEASE_SECONDS` | `600` | Active-request lease duration. A second concurrent sponsored request for the same user is rejected until the lease expires or is released. |
 
 The user and global counters use UTC dates and reset at the next UTC midnight.
-The sponsored OpenAI client is streaming-enabled and requests usage metadata;
+The sponsored model client is streaming-enabled and requests usage metadata;
 provider keys, URLs, prompts, and raw provider errors must never be logged or
 forwarded to clients. Only the API service receives the `SPONSORED_*` variables;
 the web container and Discord bot do not need them.
@@ -120,24 +122,26 @@ set -eu
 set -a
 . ./.env
 set +a
-test "${SPONSORED_LUNA_ENABLED:-false}" = "true"
-test -n "${SPONSORED_OPENAI_API_KEY:-}"
-test -n "${SPONSORED_OPENAI_BASE_URL:-}"
-test -n "${SPONSORED_LUNA_UPSTREAM_MODEL:-}"
+test "${SPONSORED_MODEL_ENABLED:-false}" = "true"
+test -n "${SPONSORED_MODEL_ID:-}"
+test -n "${SPONSORED_MODEL_PROVIDER:-}"
+test -n "${SPONSORED_MODEL_API_KEY:-}"
+test -n "${SPONSORED_MODEL_BASE_URL:-}"
+test -n "${SPONSORED_MODEL_UPSTREAM_MODEL:-}"
 test "${SPONSORED_DAILY_GLOBAL_LIMIT:-0}" -gt 0
-case "${SPONSORED_OPENAI_BASE_URL}" in https://*) ;; *) exit 1 ;; esac
+case "${SPONSORED_MODEL_BASE_URL}" in https://*) ;; *) exit 1 ;; esac
 docker compose --env-file .env -f compose.prod.yaml config --quiet
 curl --fail-with-body --no-buffer --silent --show-error \
   -H "x-api-key: ${API_KEY}" \
   -H 'content-type: application/json' \
   --data '{"user_id":"00000000-0000-4000-8000-000000000016","interface":"web","inference_model":"gpt-5.6-luna","query_transform_mode":"raw","messages":[{"role":"user","content":"deployment preflight"}],"max_tokens":1024}' \
   "${CHATBOT_URL:-http://127.0.0.1:8880}/chat/" | tee /tmp/sponsored-luna-preflight.sse
-/bin/sh scripts/verify-sponsored-luna-preflight.sh /tmp/sponsored-luna-preflight.sse
+/bin/sh scripts/verify-sponsored-model-preflight.sh /tmp/sponsored-luna-preflight.sse
 ```
 
 Do not run that command with placeholder credentials and do not report live
 enablement as successful without the real provider response. If real provider
-credentials are unavailable, keep `SPONSORED_LUNA_ENABLED=false`; the command
+credentials are unavailable, keep `SPONSORED_MODEL_ENABLED=false`; the command
 above remains a release gate, not a claimed live test.
 
 ## Local Checks
