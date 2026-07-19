@@ -77,6 +77,7 @@ describe('parseProtocolV2', () => {
     const events = await collect(
       'event: error\ndata: {"code":"interrupted","message":"provider secret: https://secret.invalid"}\n\n',
       'event: error\ndata: {"code":"credential_required","message":"provider detail: secret"}\n\n',
+      'event: error\ndata: {"code":"no_answer","message":"retrieval detail: secret"}\n\n',
       'event: error\ndata: {"code":"weird","message":"provider detail: secret"}\n\n',
       DONE_FRAME,
     );
@@ -88,6 +89,7 @@ describe('parseProtocolV2', () => {
         message: SAFE_ERROR_MESSAGE,
         type: 'error',
       },
+      { code: 'no_answer', message: SAFE_ERROR_MESSAGE, type: 'error' },
       { code: 'agent_error', message: SAFE_ERROR_MESSAGE, type: 'error' },
       DONE,
     ]);
