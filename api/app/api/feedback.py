@@ -5,11 +5,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.data.connection import Database
 from app.data.db import get_db
 from app.data.feedback import (
-    server_owned_web_feedback,
-    set_web_chat_message_feedback,
+    retract_web_feedback,
     upsert_feedback,
+    upsert_web_feedback,
 )
-from app.schemas.feedback import FeedbackAckSchema, FeedbackSchema
+from app.schemas.feedback import (
+    FeedbackAckSchema,
+    FeedbackRetractionAckSchema,
+    FeedbackRetractionSchema,
+    FeedbackSchema,
+)
 from app.utils.auth import verify_api_key
 from app.utils.posthog_client import capture
 
@@ -47,27 +52,18 @@ async def submit_feedback(
     db: Database = db_dep,
 ) -> FeedbackAckSchema:
     feedback = payload
+    ack: FeedbackAckSchema | None
     if payload.client == "web":
-        owned = await server_owned_web_feedback(db, payload)
-        if owned is None:
+        stored = await upsert_web_feedback(db, payload)
+        if stored is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Response not found",
             )
-        updated = await set_web_chat_message_feedback(
-            db,
-            feedback_type=payload.feedback_type,
-            response_id=payload.response_id,
-            user_id=payload.user_id,
-        )
-        if not updated:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Response not found",
-            )
-        feedback = owned
-
-    ack = await upsert_feedback(db, feedback)
+        feedback = stored.feedback
+        ack = stored.ack
+    else:
+        ack = await upsert_feedback(db, feedback)
 
     if ack is None:
         raise HTTPException(
@@ -96,3 +92,50 @@ async def submit_feedback(
     )
 
     return ack
+
+
+@router.delete(
+    "/feedback",
+    summary="Retract response feedback",
+    description="Remove the authenticated web user's feedback for an owned response.",
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Invalid or missing API Key",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Response not found",
+        },
+    },
+    dependencies=[api_key_dep],
+    operation_id="retractFeedback",
+)
+async def retract_feedback(
+    payload: FeedbackRetractionSchema,
+    db: Database = db_dep,
+) -> FeedbackRetractionAckSchema:
+    retracted = await retract_web_feedback(
+        db,
+        response_id=payload.response_id,
+        user_id=payload.user_id,
+    )
+    if not retracted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Response not found",
+        )
+
+    capture(
+        payload.user_id,
+        "chat_feedback_retracted",
+        {
+            "response_id": str(payload.response_id),
+            "client": payload.client,
+        },
+    )
+    logger.info(
+        "Retracted feedback from %s for response %s",
+        payload.client,
+        payload.response_id,
+    )
+    return FeedbackRetractionAckSchema(response_id=payload.response_id)
