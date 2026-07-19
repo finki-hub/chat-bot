@@ -108,3 +108,42 @@ test('header controls explain their actions on hover and focus', async ({
     await expect(tooltip).toBeHidden();
   }
 });
+
+test('sidebar conversation actions explain their actions on hover and focus', async ({
+  page,
+}) => {
+  await mockModels(page);
+  await installMockChatState(page, {
+    conversations: [
+      {
+        id: 'c1',
+        model: MODEL,
+        title: 'Прв разговор',
+      },
+    ],
+    streamUrl: 'http://127.0.0.1:9/stream',
+  });
+  await page.goto('/');
+
+  const item = page.getByTestId('conversation-c1');
+  const conversationTitle = item.getByRole('button', { name: 'Прв разговор' });
+  const tooltip = page.getByRole('tooltip');
+  const controls = ['Генерирај име', 'Преименувај', 'Избриши'].map((label) => ({
+    control: item.getByRole('button', { name: label }),
+    label,
+  }));
+
+  for (const { control, label } of controls) {
+    await tooltipTriggerFor(control).hover();
+    await expect(tooltip).toHaveText(label);
+    await conversationTitle.hover();
+    await expect(tooltip).toBeHidden();
+  }
+
+  for (const { control, label } of controls) {
+    await control.focus();
+    await expect(tooltip).toHaveText(label);
+    await page.keyboard.press('Escape');
+    await expect(tooltip).toBeHidden();
+  }
+});
