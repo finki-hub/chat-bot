@@ -13,6 +13,9 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings
 
+from app.llms.models import CHAT_MODEL_ORDER, Model
+from app.llms.provider_credentials import ProviderName, provider_for_model
+
 _API_KEY_DEFAULT: Final[str] = "your_api_key_here"
 _MCP_API_KEY_DEFAULT: Final[str] = "SystemPass"
 _CREDENTIAL_ENCRYPTION_KEY_DEFAULT: Final[str] = "your_byok_encryption_key_here"
@@ -117,10 +120,12 @@ class Settings(BaseSettings):
 
     BYOK_ALLOWED_BASE_URLS: str = ""
 
-    SPONSORED_LUNA_ENABLED: bool = False
-    SPONSORED_OPENAI_API_KEY: SecretStr | None = None
-    SPONSORED_OPENAI_BASE_URL: str | None = None
-    SPONSORED_LUNA_UPSTREAM_MODEL: NonBlankString = "gpt-5.6-luna"
+    SPONSORED_MODEL_ENABLED: bool = False
+    SPONSORED_MODEL_ID: NonBlankString = "gpt-5.6-luna"
+    SPONSORED_MODEL_PROVIDER: ProviderName = "openai"
+    SPONSORED_MODEL_API_KEY: SecretStr | None = None
+    SPONSORED_MODEL_BASE_URL: str | None = None
+    SPONSORED_MODEL_UPSTREAM_MODEL: str = ""
     SPONSORED_DAILY_USER_LIMIT: int = Field(default=5, gt=0, le=5)
     SPONSORED_DAILY_GLOBAL_LIMIT: int | None = Field(default=None, gt=0)
     SPONSORED_MAX_OUTPUT_TOKENS: int = Field(default=1024, gt=0)
@@ -153,17 +158,32 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def validate_sponsored_luna_settings(self) -> Self:
-        if not self.SPONSORED_LUNA_ENABLED:
+    def validate_sponsored_model_settings(self) -> Self:
+        if not self.SPONSORED_MODEL_ENABLED:
             return self
         if (
-            self.SPONSORED_OPENAI_API_KEY is None
-            or not self.SPONSORED_OPENAI_API_KEY.get_secret_value().strip()
+            self.SPONSORED_MODEL_API_KEY is None
+            or not self.SPONSORED_MODEL_API_KEY.get_secret_value().strip()
         ):
-            msg = "SPONSORED_OPENAI_API_KEY is required when SPONSORED_LUNA_ENABLED is true"
+            msg = "SPONSORED_MODEL_API_KEY is required when SPONSORED_MODEL_ENABLED is true"
             raise ValueError(msg)
         if self.SPONSORED_DAILY_GLOBAL_LIMIT is None:
-            msg = "SPONSORED_DAILY_GLOBAL_LIMIT is required when SPONSORED_LUNA_ENABLED is true"
+            msg = "SPONSORED_DAILY_GLOBAL_LIMIT is required when SPONSORED_MODEL_ENABLED is true"
+            raise ValueError(msg)
+        try:
+            model = Model(self.SPONSORED_MODEL_ID)
+        except ValueError:
+            msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
+            raise ValueError(msg) from None
+        if model not in frozenset(CHAT_MODEL_ORDER):
+            msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
+            raise ValueError(msg)
+        derived_provider = provider_for_model(model)
+        if derived_provider == "ollama":
+            msg = "SPONSORED_MODEL_PROVIDER=ollama is rejected"
+            raise ValueError(msg)
+        if derived_provider != self.SPONSORED_MODEL_PROVIDER:
+            msg = "SPONSORED_MODEL_PROVIDER must match provider derived from SPONSORED_MODEL_ID"
             raise ValueError(msg)
         return self
 
@@ -189,7 +209,7 @@ class Settings(BaseSettings):
             return None
         return value
 
-    @field_validator("SPONSORED_OPENAI_BASE_URL", mode="before")
+    @field_validator("SPONSORED_MODEL_BASE_URL", mode="before")
     @classmethod
     def parse_sponsored_base_url(cls, v: str | None) -> str | None:
         if v is None or not v.strip():
@@ -197,7 +217,7 @@ class Settings(BaseSettings):
         canonical = _canonical_sponsored_base_url(v)
         if canonical is None:
             msg = (
-                "SPONSORED_OPENAI_BASE_URL must be an HTTPS URL without credentials, "
+                "SPONSORED_MODEL_BASE_URL must be an HTTPS URL without credentials, "
                 "query parameters, or fragments"
             )
             raise ValueError(msg)
@@ -217,11 +237,11 @@ class Settings(BaseSettings):
             _MCP_API_KEY_DEFAULT,
         ):
             insecure_names.append("MCP_API_KEY")
-        if self.SPONSORED_LUNA_ENABLED and (
-            self.SPONSORED_OPENAI_API_KEY is None
-            or not self.SPONSORED_OPENAI_API_KEY.get_secret_value().strip()
+        if self.SPONSORED_MODEL_ENABLED and (
+            self.SPONSORED_MODEL_API_KEY is None
+            or not self.SPONSORED_MODEL_API_KEY.get_secret_value().strip()
         ):
-            insecure_names.append("SPONSORED_OPENAI_API_KEY")
+            insecure_names.append("SPONSORED_MODEL_API_KEY")
         insecure_names.extend(
             f"MCP_SERVERS.{server.name}.api_key"
             for server in self.MCP_SERVERS
