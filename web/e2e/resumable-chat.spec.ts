@@ -117,160 +117,162 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
       head: chunksForAnswer(FIRST_TOKEN).slice(0, 3),
       tail: [],
     });
-    let conversationId: null | string = null;
-    let historyRequests = 0;
-    let resumeRequests = 0;
-    let allowResumeReplay = false;
-    let allowServerHistory = false;
-    const conversations: ConversationRow[] = [];
+    try {
+      let conversationId: null | string = null;
+      let historyRequests = 0;
+      let resumeRequests = 0;
+      let allowResumeReplay = false;
+      let allowServerHistory = false;
+      const conversations: ConversationRow[] = [];
 
-    await page.route('**/api/chat', async (route) => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({
-          body: JSON.stringify(conversations),
-          contentType: 'application/json',
-          status: 200,
-        });
-        return;
-      }
-      conversationId = parseConversationId(route.request().postData());
-      await route.fulfill({
-        headers: { location: firstLegServer.url },
-        status: 307,
-      });
-    });
-    await page.route('**/api/chat/*', async (route) => {
-      if (route.request().method() === 'PATCH') {
-        conversationId = conversationIdFrom(route.request().url());
-        if (
-          conversations.every(
-            (conversation) => conversation.id !== conversationId,
-          )
-        ) {
-          conversations.unshift({
-            id: conversationId,
-            model: INFERENCE_MODEL,
-            title: 'Резимирај ми го условот за запишување.',
+      await page.route('**/api/chat', async (route) => {
+        if (route.request().method() === 'GET') {
+          await route.fulfill({
+            body: JSON.stringify(conversations),
+            contentType: 'application/json',
+            status: 200,
           });
+          return;
         }
-        await route.fulfill({ status: 204 });
-        return;
-      }
-      await route.fallback();
-    });
-    await page.route('**/api/chat/*/stream', async (route) => {
-      resumeRequests += 1;
-      if (!allowResumeReplay) {
-        await route.fulfill({ status: 204 });
-        return;
-      }
-      allowResumeReplay = false;
-      const body = chunksForAnswer(`${FIRST_TOKEN}${FINAL_TOKEN}`)
-        .map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`)
-        .join('');
-      await route.fulfill({
-        body: `${body}data: [DONE]\n\n`,
-        contentType: 'text/event-stream',
-        headers: { 'x-vercel-ai-ui-message-stream': 'v1' },
-        status: 200,
-      });
-    });
-    await page.route('**/api/chat/*/history', async (route) => {
-      historyRequests += 1;
-      if (!allowServerHistory) {
+        conversationId = parseConversationId(route.request().postData());
         await route.fulfill({
-          body: emptyHistoryBody(conversationId),
+          headers: { location: firstLegServer.url },
+          status: 307,
+        });
+      });
+      await page.route('**/api/chat/*', async (route) => {
+        if (route.request().method() === 'PATCH') {
+          conversationId = conversationIdFrom(route.request().url());
+          if (
+            conversations.every(
+              (conversation) => conversation.id !== conversationId,
+            )
+          ) {
+            conversations.unshift({
+              id: conversationId,
+              model: INFERENCE_MODEL,
+              title: 'Резимирај ми го условот за запишување.',
+            });
+          }
+          await route.fulfill({ status: 204 });
+          return;
+        }
+        await route.fallback();
+      });
+      await page.route('**/api/chat/*/stream', async (route) => {
+        resumeRequests += 1;
+        if (!allowResumeReplay) {
+          await route.fulfill({ status: 204 });
+          return;
+        }
+        allowResumeReplay = false;
+        const body = chunksForAnswer(`${FIRST_TOKEN}${FINAL_TOKEN}`)
+          .map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`)
+          .join('');
+        await route.fulfill({
+          body: `${body}data: [DONE]\n\n`,
+          contentType: 'text/event-stream',
+          headers: { 'x-vercel-ai-ui-message-stream': 'v1' },
+          status: 200,
+        });
+      });
+      await page.route('**/api/chat/*/history', async (route) => {
+        historyRequests += 1;
+        if (!allowServerHistory) {
+          await route.fulfill({
+            body: emptyHistoryBody(conversationId),
+            contentType: 'application/json',
+            status: 200,
+          });
+          return;
+        }
+        await route.fulfill({
+          body: JSON.stringify({
+            conversation: {
+              id: conversationId,
+              model: INFERENCE_MODEL,
+              title: 'Резимирај ми го условот за запишување.',
+            },
+            messages: [
+              {
+                id: 'u-history',
+                metadata: {},
+                parts: [
+                  {
+                    text: 'Резимирај ми го условот за запишување.',
+                    type: 'text',
+                  },
+                ],
+                role: 'user',
+              },
+              {
+                id: 'a-history',
+                metadata: {
+                  inferenceModel: INFERENCE_MODEL,
+                  responseId: RESPONSE_ID,
+                },
+                parts: [{ text: `${FIRST_TOKEN}${FINAL_TOKEN}`, type: 'text' }],
+                role: 'assistant',
+              },
+            ],
+          }),
           contentType: 'application/json',
           status: 200,
         });
-        return;
-      }
-      await route.fulfill({
-        body: JSON.stringify({
-          conversation: {
-            id: conversationId,
-            model: INFERENCE_MODEL,
-            title: 'Резимирај ми го условот за запишување.',
-          },
-          messages: [
-            {
-              id: 'u-history',
-              metadata: {},
-              parts: [
-                {
-                  text: 'Резимирај ми го условот за запишување.',
-                  type: 'text',
-                },
-              ],
-              role: 'user',
-            },
-            {
-              id: 'a-history',
-              metadata: {
-                inferenceModel: INFERENCE_MODEL,
-                responseId: RESPONSE_ID,
-              },
-              parts: [{ text: `${FIRST_TOKEN}${FINAL_TOKEN}`, type: 'text' }],
-              role: 'assistant',
-            },
-          ],
-        }),
-        contentType: 'application/json',
-        status: 200,
       });
-    });
 
-    await page.goto('/');
-    await page.getByTestId('composer-model').click();
-    await expect(
-      page.getByTestId('model-free-badge-claude-sonnet-5'),
-    ).toContainText('5/5');
-    await page.keyboard.press('Escape');
-    await page
-      .getByTestId('composer-input')
-      .fill('Резимирај ми го условот за запишување.');
-    await page.getByTestId('composer-input').press('Enter');
-    await expect(page.getByTestId('answer-text')).toContainText(FIRST_TOKEN);
+      await page.goto('/');
+      await page.getByTestId('composer-model').click();
+      await expect(
+        page.getByTestId('model-free-badge-claude-sonnet-5'),
+      ).toContainText('5/5');
+      await page.keyboard.press('Escape');
+      await page
+        .getByTestId('composer-input')
+        .fill('Резимирај ми го условот за запишување.');
+      await page.getByTestId('composer-input').press('Enter');
+      await expect(page.getByTestId('answer-text')).toContainText(FIRST_TOKEN);
 
-    // When: the browser refreshes mid-generation and reconnects to the same chat.
-    allowResumeReplay = true;
-    const resumeResponse = page.waitForResponse(
-      (response) =>
-        CHAT_STREAM_URL_PATTERN.test(response.url()) &&
-        response.status() === 200,
-    );
-    await page.reload();
+      // When: the browser refreshes mid-generation and reconnects to the same chat.
+      allowResumeReplay = true;
+      const resumeResponse = page.waitForResponse(
+        (response) =>
+          CHAT_STREAM_URL_PATTERN.test(response.url()) &&
+          response.status() === 200,
+      );
+      await page.reload();
 
-    // Then: the UI consumes the resumed SSE and can reload the final answer from server history.
-    const resumed = await resumeResponse;
-    expect(resumed.status()).toBe(200);
-    await expect(page.getByTestId('answer-text').last()).toContainText(
-      `${FIRST_TOKEN}${FINAL_TOKEN}`,
-    );
-    expect(resumeRequests).toBeGreaterThan(0);
-    expect(conversationId).not.toBeNull();
+      // Then: the UI consumes the resumed SSE and can reload the final answer from server history.
+      const resumed = await resumeResponse;
+      expect(resumed.status()).toBe(200);
+      await expect(page.getByTestId('answer-text').last()).toContainText(
+        `${FIRST_TOKEN}${FINAL_TOKEN}`,
+      );
+      expect(resumeRequests).toBeGreaterThan(0);
+      expect(conversationId).not.toBeNull();
 
-    await page.unroute('**/api/chat/*/stream');
-    await page.route('**/api/chat/*/stream', async (route) => {
-      await route.fulfill({ status: 204 });
-    });
-    allowServerHistory = true;
-    await page.reload();
-    await expect(page.getByTestId('answer-text').last()).toContainText(
-      `${FIRST_TOKEN}${FINAL_TOKEN}`,
-    );
-    await page.getByTestId('composer-model').click();
-    await expect(
-      page.getByTestId('model-free-badge-claude-sonnet-5'),
-    ).toContainText('5/5');
-    await page.screenshot({
-      animations: 'disabled',
-      path: testInfo.outputPath('sponsored-conversation-preserved.png'),
-    });
-    await page.keyboard.press('Escape');
-    expect(historyRequests).toBeGreaterThan(0);
-
-    await firstLegServer.close();
+      await page.unroute('**/api/chat/*/stream');
+      await page.route('**/api/chat/*/stream', async (route) => {
+        await route.fulfill({ status: 204 });
+      });
+      allowServerHistory = true;
+      await page.reload();
+      await expect(page.getByTestId('answer-text').last()).toContainText(
+        `${FIRST_TOKEN}${FINAL_TOKEN}`,
+      );
+      await page.getByTestId('composer-model').click();
+      await expect(
+        page.getByTestId('model-free-badge-claude-sonnet-5'),
+      ).toContainText('5/5');
+      await page.screenshot({
+        animations: 'disabled',
+        path: testInfo.outputPath('sponsored-conversation-preserved.png'),
+      });
+      await page.keyboard.press('Escape');
+      expect(historyRequests).toBeGreaterThan(0);
+    } finally {
+      await firstLegServer.close();
+    }
   });
 
   test('explicit stop prevents a later refresh from resuming the stream', async ({
