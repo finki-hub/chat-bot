@@ -87,4 +87,4 @@ const IconLink = ({
   );
 };
 
-export { IconButton, IconLink };
+export { ControlTooltip, IconButton, IconLink };
