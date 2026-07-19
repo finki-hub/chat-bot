@@ -12,7 +12,7 @@ from app.constants.defaults import (
     DEFAULT_INFERENCE_MODEL,
     DEFAULT_QUERY_TRANSFORM_MODEL,
 )
-from app.llms import streams
+from app.llms import anthropic, google, streams
 from app.llms.agents import StreamObservation
 from app.llms.models import (
     ACTIVE_EMBEDDING_MODELS,
@@ -160,6 +160,212 @@ def test_stream_openai_route_receives_direct_sponsored_credential_and_override(
     assert captured == [(credential, "upstream-luna")]
 
 
+def test_stream_google_route_receives_upstream_model(monkeypatch) -> None:
+    captured: list[tuple[ChatCredentialSecret | None, str | None]] = []
+
+    async def fake_stream_google_agent_response(
+        user_prompt: str,
+        routed_model: Model,
+        *,
+        system_prompt: str,
+        history: list[BaseMessage] | None = None,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        reasoning: bool = False,
+        observation: StreamObservation | None = None,
+        credential: ChatCredentialSecret | None = None,
+        upstream_model: str | None = None,
+    ) -> StreamingResponse:
+        captured.append((credential, upstream_model))
+
+        async def empty_body() -> AsyncIterator[bytes]:
+            if False:
+                yield b""
+
+        return StreamingResponse(empty_body(), media_type="text/event-stream")
+
+    monkeypatch.setattr(
+        streams,
+        "stream_google_agent_response",
+        fake_stream_google_agent_response,
+    )
+    credential = ChatCredentialSecret(provider="google", api_key="sponsored-key")
+
+    async def route_response() -> StreamingResponse:
+        return await streams.stream_response_with_agent(
+            "test",
+            Model.GEMINI_3_5_FLASH,
+            system_prompt="system",
+            history=[],
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=1024,
+            interface="discord",
+            credential=credential,
+            upstream_model="upstream-gemini",
+        )
+
+    anyio.run(route_response)
+
+    assert captured == [(credential, "upstream-gemini")]
+
+
+def test_google_agent_fallback_receives_upstream_model(monkeypatch) -> None:
+    captured: list[tuple[ChatCredentialSecret | None, str | None]] = []
+
+    async def fail_get_agent_tools() -> list[object]:
+        msg = "agent tools unavailable"
+        raise RuntimeError(msg)
+
+    def fake_stream_google_response(
+        user_prompt: str,
+        routed_model: Model,
+        *,
+        system_prompt: str,
+        history: list[BaseMessage] | None = None,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        reasoning: bool = False,
+        credential: ChatCredentialSecret | None = None,
+        upstream_model: str | None = None,
+    ) -> StreamingResponse:
+        captured.append((credential, upstream_model))
+
+        async def empty_body() -> AsyncIterator[bytes]:
+            if False:
+                yield b""
+
+        return StreamingResponse(empty_body(), media_type="text/event-stream")
+
+    monkeypatch.setattr(google, "get_agent_tools", fail_get_agent_tools)
+    monkeypatch.setattr(google, "stream_google_response", fake_stream_google_response)
+    credential = ChatCredentialSecret(provider="google", api_key="sponsored-key")
+
+    async def route_response() -> StreamingResponse:
+        return await google.stream_google_agent_response(
+            "test",
+            Model.GEMINI_3_5_FLASH,
+            system_prompt="system",
+            history=[],
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=1024,
+            credential=credential,
+            upstream_model="upstream-gemini",
+        )
+
+    anyio.run(route_response)
+
+    assert captured == [(credential, "upstream-gemini")]
+
+
+def test_stream_anthropic_route_receives_upstream_model(monkeypatch) -> None:
+    captured: list[tuple[ChatCredentialSecret | None, str | None]] = []
+
+    async def fake_stream_anthropic_agent_response(
+        user_prompt: str,
+        routed_model: Model,
+        *,
+        system_prompt: str,
+        history: list[BaseMessage] | None = None,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        reasoning: bool = False,
+        observation: StreamObservation | None = None,
+        credential: ChatCredentialSecret | None = None,
+        upstream_model: str | None = None,
+    ) -> StreamingResponse:
+        captured.append((credential, upstream_model))
+
+        async def empty_body() -> AsyncIterator[bytes]:
+            if False:
+                yield b""
+
+        return StreamingResponse(empty_body(), media_type="text/event-stream")
+
+    monkeypatch.setattr(
+        streams,
+        "stream_anthropic_agent_response",
+        fake_stream_anthropic_agent_response,
+    )
+    credential = ChatCredentialSecret(provider="anthropic", api_key="sponsored-key")
+
+    async def route_response() -> StreamingResponse:
+        return await streams.stream_response_with_agent(
+            "test",
+            Model.CLAUDE_HAIKU_4_5,
+            system_prompt="system",
+            history=[],
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=1024,
+            interface="discord",
+            credential=credential,
+            upstream_model="upstream-claude",
+        )
+
+    anyio.run(route_response)
+
+    assert captured == [(credential, "upstream-claude")]
+
+
+def test_anthropic_agent_fallback_receives_upstream_model(monkeypatch) -> None:
+    captured: list[tuple[ChatCredentialSecret | None, str | None]] = []
+
+    async def fail_get_agent_tools() -> list[object]:
+        msg = "agent tools unavailable"
+        raise RuntimeError(msg)
+
+    def fake_stream_anthropic_response(
+        user_prompt: str,
+        routed_model: Model,
+        *,
+        system_prompt: str,
+        history: list[BaseMessage] | None = None,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        reasoning: bool = False,
+        credential: ChatCredentialSecret | None = None,
+        upstream_model: str | None = None,
+    ) -> StreamingResponse:
+        captured.append((credential, upstream_model))
+
+        async def empty_body() -> AsyncIterator[bytes]:
+            if False:
+                yield b""
+
+        return StreamingResponse(empty_body(), media_type="text/event-stream")
+
+    monkeypatch.setattr(anthropic, "get_agent_tools", fail_get_agent_tools)
+    monkeypatch.setattr(
+        anthropic,
+        "stream_anthropic_response",
+        fake_stream_anthropic_response,
+    )
+    credential = ChatCredentialSecret(provider="anthropic", api_key="sponsored-key")
+
+    async def route_response() -> StreamingResponse:
+        return await anthropic.stream_anthropic_agent_response(
+            "test",
+            Model.CLAUDE_HAIKU_4_5,
+            system_prompt="system",
+            history=[],
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=1024,
+            credential=credential,
+            upstream_model="upstream-claude",
+        )
+
+    anyio.run(route_response)
+
+    assert captured == [(credential, "upstream-claude")]
+
+
 def test_curated_defaults_and_embedding_policy() -> None:
     values = {model.value for model in ACTIVE_EMBEDDING_MODELS}
 
@@ -225,6 +431,7 @@ def test_claude_sonnet_5_routes_to_anthropic(monkeypatch):
         reasoning: bool = False,
         observation: StreamObservation | None = None,
         credential: ChatCredentialSecret | None = None,
+        upstream_model: str | None = None,
     ) -> StreamingResponse:
         async def empty_body() -> AsyncIterator[bytes]:
             if False:

@@ -56,6 +56,7 @@ def get_anthropic_llm(
     *,
     reasoning: bool = False,
     credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> ChatAnthropic:
     """
     Return a user-scoped ChatAnthropic instance for the specified model and parameters.
@@ -81,7 +82,7 @@ def get_anthropic_llm(
     )
     credential = require_provider_credential("anthropic", credential)
     return ChatAnthropic(
-        model=model.value,  # type: ignore[call-arg]
+        model=model.value if upstream_model is None else upstream_model,  # type: ignore[call-arg]
         api_key=SecretStr(credential.api_key),
         base_url=credential.base_url or None,
         temperature=temperature_arg,
@@ -101,6 +102,7 @@ def stream_anthropic_response(
     max_tokens: int,
     reasoning: bool = False,
     credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from the specified Anthropic model using the provided prompts.
@@ -120,6 +122,7 @@ def stream_anthropic_response(
         max_tokens,
         reasoning=reasoning,
         credential=credential,
+        upstream_model=upstream_model,
     )
     prompt_messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
@@ -189,6 +192,7 @@ async def stream_anthropic_agent_response(
     reasoning: bool = False,
     observation: StreamObservation | None = None,
     credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from an Anthropic agent with MCP tools.
@@ -208,6 +212,7 @@ async def stream_anthropic_agent_response(
             max_tokens,
             reasoning=reasoning,
             credential=credential,
+            upstream_model=upstream_model,
         )
 
         tools = await get_agent_tools()
@@ -248,4 +253,5 @@ async def stream_anthropic_agent_response(
             top_p=top_p,
             max_tokens=max_tokens,
             credential=credential,
+            upstream_model=upstream_model,
         )

@@ -49,6 +49,7 @@ def get_google_llm(
     *,
     reasoning: bool = False,
     credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> ChatGoogleGenerativeAI:
     client_kwargs: dict[str, object] = {}
     if reasoning:
@@ -56,7 +57,7 @@ def get_google_llm(
         client_kwargs["thinking_level"] = "medium"
     credential = require_provider_credential("google", credential)
     return ChatGoogleGenerativeAI(
-        model=model.value,
+        model=model.value if upstream_model is None else upstream_model,
         google_api_key=credential.api_key,
         base_url=credential.base_url or None,
         temperature=temperature,
@@ -123,6 +124,7 @@ def stream_google_response(
     max_tokens: int,
     reasoning: bool = False,
     credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from the specified Google model using the provided prompts.
@@ -142,6 +144,7 @@ def stream_google_response(
         max_tokens,
         reasoning=reasoning,
         credential=credential,
+        upstream_model=upstream_model,
     )
     prompt_messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
@@ -211,6 +214,7 @@ async def stream_google_agent_response(
     reasoning: bool = False,
     observation: StreamObservation | None = None,
     credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from a Google agent with MCP tools.
@@ -230,6 +234,7 @@ async def stream_google_agent_response(
             max_tokens,
             reasoning=reasoning,
             credential=credential,
+            upstream_model=upstream_model,
         )
 
         tools = await get_agent_tools()
@@ -270,4 +275,5 @@ async def stream_google_agent_response(
             top_p=top_p,
             max_tokens=max_tokens,
             credential=credential,
+            upstream_model=upstream_model,
         )
