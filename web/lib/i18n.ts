@@ -1,7 +1,7 @@
 export const messages = {
   'actions.copy': 'Копирај',
-  'actions.dislike': 'Не допаѓа',
-  'actions.like': 'Допаѓа',
+  'actions.dislike': 'Не ми се допаѓа',
+  'actions.like': 'Ми се допаѓа',
   'actions.regenerate': 'Регенерирај',
   'app.title': 'ФИНКИ Хаб',
   'auth.signIn': 'Најави се',

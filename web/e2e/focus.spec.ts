@@ -72,12 +72,15 @@ test('answer actions explain their actions on hover and focus', async ({
   const answer = page.getByTestId('answer-text');
   const actions = page.getByTestId('answer-actions');
   const tooltip = page.getByRole('tooltip');
-  const controls = ['Копирај', 'Регенерирај', 'Допаѓа', 'Не допаѓа'].map(
-    (label) => ({
-      control: actions.getByRole('button', { exact: true, name: label }),
-      label,
-    }),
-  );
+  const controls = [
+    'Копирај',
+    'Регенерирај',
+    'Ми се допаѓа',
+    'Не ми се допаѓа',
+  ].map((label) => ({
+    control: actions.getByRole('button', { exact: true, name: label }),
+    label,
+  }));
 
   for (const { control, label } of controls) {
     await tooltipTriggerFor(control).hover();

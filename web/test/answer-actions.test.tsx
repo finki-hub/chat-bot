@@ -25,6 +25,7 @@ const ack = Response.json(
 );
 
 const PRESSED = 'aria-pressed';
+const LIKE_LABEL = 'Ми се допаѓа';
 
 const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
 
@@ -60,7 +61,7 @@ describe('AnswerActions', () => {
 describe('AnswerActions feedback', () => {
   it('posts a like to /api/feedback with only the response id and vote', async () => {
     render(<AnswerActions message={assistant('resp-9', 'Готов одговор')} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Допаѓа' }));
+    fireEvent.click(screen.getByRole('button', { name: LIKE_LABEL }));
 
     const fetchMock = fetch as unknown as ReturnType<
       typeof vi.fn<typeof fetch>
@@ -81,7 +82,7 @@ describe('AnswerActions feedback', () => {
 
   it('posts a dislike and marks it as pressed', async () => {
     render(<AnswerActions message={assistant('resp-9')} />);
-    const dislike = screen.getByRole('button', { name: 'Не допаѓа' });
+    const dislike = screen.getByRole('button', { name: 'Не ми се допаѓа' });
     fireEvent.click(dislike);
 
     await waitFor(() => {
@@ -101,7 +102,7 @@ describe('AnswerActions feedback', () => {
 
   it('marks the like button with selected action colors once pressed', async () => {
     render(<AnswerActions message={assistant('resp-9')} />);
-    const like = screen.getByRole('button', { name: 'Допаѓа' });
+    const like = screen.getByRole('button', { name: LIKE_LABEL });
     fireEvent.click(like);
 
     await waitFor(() => {
@@ -120,7 +121,7 @@ describe('AnswerActions feedback', () => {
     };
     render(<AnswerActions message={message} />);
 
-    expect(screen.getByRole('button', { name: 'Допаѓа' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: LIKE_LABEL })).toHaveAttribute(
       PRESSED,
       'true',
     );
@@ -134,7 +135,7 @@ describe('AnswerActions feedback', () => {
         onVote={onVote}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Допаѓа' }));
+    fireEvent.click(screen.getByRole('button', { name: LIKE_LABEL }));
 
     await waitFor(() => {
       expect(onVote).toHaveBeenCalledWith('like');
@@ -155,7 +156,7 @@ describe('AnswerActions feedback', () => {
         onVote={onVote}
       />,
     );
-    const like = screen.getByRole('button', { name: 'Допаѓа' });
+    const like = screen.getByRole('button', { name: LIKE_LABEL });
     fireEvent.click(like);
 
     await waitFor(() => {
@@ -174,7 +175,7 @@ describe('AnswerActions feedback', () => {
         pending
       />,
     );
-    const like = screen.getByRole('button', { name: 'Допаѓа' });
+    const like = screen.getByRole('button', { name: LIKE_LABEL });
     fireEvent.click(like);
 
     expect(like).toBeDisabled();
