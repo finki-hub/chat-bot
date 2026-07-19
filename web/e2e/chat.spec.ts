@@ -275,7 +275,9 @@ test.describe('chat streaming (mocked BFF)', () => {
       streamUrl: chatServer.url,
     });
     await page.goto('/');
-    await page.getByRole('button', { name: 'Прикажи/сокриј странична лента' }).click();
+    await page
+      .getByRole('button', { name: 'Прикажи/сокриј странична лента' })
+      .click();
     await page
       .getByRole('button', { exact: true, name: 'Постоечки разговор' })
       .click();
