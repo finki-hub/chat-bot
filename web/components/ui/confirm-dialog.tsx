@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -39,12 +39,24 @@ export const ConfirmDialog = ({
 }: ConfirmDialogProps) => {
   const [failed, setFailed] = useState(false);
   const [pending, setPending] = useState(false);
+  const closeCycleRef = useRef(0);
+
+  useEffect(() => {
+    if (!open) {
+      closeCycleRef.current += 1;
+      setFailed(false);
+    }
+  }, [open]);
 
   const confirm = async (): Promise<void> => {
+    const closeCycle = closeCycleRef.current;
     setFailed(false);
     setPending(true);
     try {
       const confirmed = await onConfirm();
+      if (closeCycle !== closeCycleRef.current) {
+        return;
+      }
       if (confirmed === false) {
         setFailed(true);
         return;
