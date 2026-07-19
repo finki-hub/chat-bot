@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.api.sponsored_access import resolve_luna_inference
+from app.api.sponsored_access import resolve_sponsored_inference
 from app.llms.agents import sponsored_error_event
 from app.llms.model_access import (
     ModelAccessContext,
@@ -52,9 +52,13 @@ def _context(
     provider_configured: bool = True,
     personal_remaining: int = 4,
     global_remaining: int = 10,
+    sponsored_model_id: str | None = "gpt-5.6-luna",
+    sponsored_provider: ProviderName | None = "openai",
 ) -> ModelAccessContext:
     return ModelAccessContext(
         available_providers=available_providers,
+        sponsored_model_id=sponsored_model_id,
+        sponsored_provider=sponsored_provider,
         sponsored_settings=SponsoredSettings(
             enabled=sponsored_enabled,
             provider_configured=provider_configured,
@@ -110,7 +114,7 @@ def test_legacy_model_descriptor_payload_parses_without_access_fields() -> None:
         ),
     ],
 )
-def test_luna_overlay_covers_all_availability_states(
+def test_sponsored_overlay_covers_all_availability_states(
     context: ModelAccessContext,
     expected: str,
 ) -> None:
@@ -217,7 +221,7 @@ def test_sponsored_error_event_uses_error_event_shape_and_safe_reset() -> None:
     )
 
 
-def test_luna_resolution_prefers_user_credential_even_when_user_key_is_rejected() -> (
+def test_sponsored_resolution_prefers_user_credential_even_when_user_key_is_rejected() -> (
     None
 ):
     user_credential = ChatCredentialSecret(
@@ -226,31 +230,36 @@ def test_luna_resolution_prefers_user_credential_even_when_user_key_is_rejected(
         base_url="https://user.example/v1",
     )
     settings = Settings(
-        SPONSORED_LUNA_ENABLED=True,
-        SPONSORED_OPENAI_API_KEY="sponsored-key",
-        SPONSORED_OPENAI_BASE_URL="HTTPS://Sponsored.EXAMPLE/v1/",
-        SPONSORED_LUNA_UPSTREAM_MODEL="upstream-luna",
+        SPONSORED_MODEL_ENABLED=True,
+        SPONSORED_MODEL_API_KEY="sponsored-key",
+        SPONSORED_MODEL_BASE_URL="HTTPS://Sponsored.EXAMPLE/v1/",
+        SPONSORED_MODEL_UPSTREAM_MODEL="upstream-luna",
         SPONSORED_DAILY_GLOBAL_LIMIT=10,
     )
 
-    resolved = resolve_luna_inference(user_credential, settings)
+    resolved = resolve_sponsored_inference(
+        "gpt-5.6-luna",
+        user_credential,
+        settings,
+        user_credential_rejected=True,
+    )
 
     assert resolved.credential == user_credential
     assert resolved.sponsored is False
     assert resolved.upstream_model is None
 
 
-def test_luna_resolution_builds_inference_only_sponsored_credential() -> None:
+def test_sponsored_resolution_builds_inference_only_sponsored_credential() -> None:
     settings = Settings(
-        SPONSORED_LUNA_ENABLED=True,
-        SPONSORED_OPENAI_API_KEY="sponsored-key",
-        SPONSORED_OPENAI_BASE_URL="HTTPS://Sponsored.EXAMPLE/v1/",
-        SPONSORED_LUNA_UPSTREAM_MODEL="upstream-luna",
+        SPONSORED_MODEL_ENABLED=True,
+        SPONSORED_MODEL_API_KEY="sponsored-key",
+        SPONSORED_MODEL_BASE_URL="HTTPS://Sponsored.EXAMPLE/v1/",
+        SPONSORED_MODEL_UPSTREAM_MODEL="upstream-luna",
         SPONSORED_MAX_OUTPUT_TOKENS=1024,
         SPONSORED_DAILY_GLOBAL_LIMIT=10,
     )
 
-    resolved = resolve_luna_inference(None, settings)
+    resolved = resolve_sponsored_inference("gpt-5.6-luna", None, settings)
 
     assert resolved.credential == ChatCredentialSecret(
         provider="openai",
@@ -262,14 +271,15 @@ def test_luna_resolution_builds_inference_only_sponsored_credential() -> None:
     assert resolved.max_output_tokens == 1024
 
 
-def test_luna_resolution_does_not_sponsor_a_rejected_user_credential() -> None:
+def test_sponsored_resolution_does_not_sponsor_a_rejected_user_credential() -> None:
     settings = Settings(
-        SPONSORED_LUNA_ENABLED=True,
-        SPONSORED_OPENAI_API_KEY="sponsored-key",
+        SPONSORED_MODEL_ENABLED=True,
+        SPONSORED_MODEL_API_KEY="sponsored-key",
         SPONSORED_DAILY_GLOBAL_LIMIT=10,
     )
 
-    resolved = resolve_luna_inference(
+    resolved = resolve_sponsored_inference(
+        "gpt-5.6-luna",
         None,
         settings,
         user_credential_rejected=True,
@@ -277,3 +287,42 @@ def test_luna_resolution_does_not_sponsor_a_rejected_user_credential() -> None:
 
     assert resolved.credential is None
     assert resolved.sponsored is False
+
+
+def test_sponsored_resolution_targets_only_configured_model_id() -> None:
+    user_credential = ChatCredentialSecret(provider="google", api_key="user-key")
+    settings = Settings(
+        SPONSORED_MODEL_ENABLED=True,
+        SPONSORED_MODEL_ID="gpt-5.6-luna",
+        SPONSORED_MODEL_PROVIDER="openai",
+        SPONSORED_MODEL_API_KEY="sponsored-key",
+        SPONSORED_DAILY_GLOBAL_LIMIT=10,
+    )
+
+    resolved = resolve_sponsored_inference(
+        "gemini-3.5-flash",
+        user_credential,
+        settings,
+    )
+
+    assert resolved.credential == user_credential
+    assert resolved.sponsored is False
+    assert resolved.upstream_model is None
+
+
+def test_sponsored_resolution_uses_configured_provider_for_credential_secret() -> None:
+    settings = Settings(
+        SPONSORED_MODEL_ENABLED=True,
+        SPONSORED_MODEL_ID="gemini-3.5-flash",
+        SPONSORED_MODEL_PROVIDER="google",
+        SPONSORED_MODEL_API_KEY="sponsored-key",
+        SPONSORED_DAILY_GLOBAL_LIMIT=10,
+    )
+
+    resolved = resolve_sponsored_inference("gemini-3.5-flash", None, settings)
+
+    assert resolved.credential == ChatCredentialSecret(
+        provider="google",
+        api_key="sponsored-key",
+    )
+    assert resolved.sponsored is True
