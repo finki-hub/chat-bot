@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { MaybeAsyncAction } from '@/lib/action-result';
 import type { ConversationRow } from '@/lib/conversation-types';
 
+import { ConversationActionTooltip } from '@/components/shell/conversation-action-tooltip';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
@@ -105,55 +106,64 @@ export const ConversationList = ({
                 data-testid="row-actions"
               >
                 {onGenerateTitle ? (
-                  <button
-                    aria-busy={isGeneratingTitle || undefined}
-                    aria-label={t('conversation.generateTitle')}
-                    className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60 sm:pointer-fine:size-6"
+                  <ConversationActionTooltip
                     disabled={isGeneratingAnyTitle}
+                    label={t('conversation.generateTitle')}
+                  >
+                    <button
+                      aria-busy={isGeneratingTitle || undefined}
+                      aria-label={t('conversation.generateTitle')}
+                      className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60 sm:pointer-fine:size-6"
+                      disabled={isGeneratingAnyTitle}
+                      onClick={() => {
+                        onGenerateTitle(c.id);
+                      }}
+                      type="button"
+                    >
+                      {isGeneratingTitle ? (
+                        <LoaderCircle
+                          aria-hidden="true"
+                          className="size-3.5 animate-spin"
+                        />
+                      ) : (
+                        <WandSparkles
+                          aria-hidden="true"
+                          className="size-3.5"
+                        />
+                      )}
+                    </button>
+                  </ConversationActionTooltip>
+                ) : null}
+                <ConversationActionTooltip label={t('conversation.rename')}>
+                  <button
+                    aria-label={t('conversation.rename')}
+                    className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 sm:pointer-fine:size-6"
                     onClick={() => {
-                      onGenerateTitle(c.id);
+                      openRename(c);
                     }}
                     type="button"
                   >
-                    {isGeneratingTitle ? (
-                      <LoaderCircle
-                        aria-hidden="true"
-                        className="size-3.5 animate-spin"
-                      />
-                    ) : (
-                      <WandSparkles
-                        aria-hidden="true"
-                        className="size-3.5"
-                      />
-                    )}
+                    <Pencil
+                      aria-hidden="true"
+                      className="size-3.5"
+                    />
                   </button>
-                ) : null}
-                <button
-                  aria-label={t('conversation.rename')}
-                  className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 sm:pointer-fine:size-6"
-                  onClick={() => {
-                    openRename(c);
-                  }}
-                  type="button"
-                >
-                  <Pencil
-                    aria-hidden="true"
-                    className="size-3.5"
-                  />
-                </button>
-                <button
-                  aria-label={t('conversation.delete')}
-                  className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring/50 sm:pointer-fine:size-6"
-                  onClick={() => {
-                    setPendingDelete(c);
-                  }}
-                  type="button"
-                >
-                  <Trash2
-                    aria-hidden="true"
-                    className="size-3.5"
-                  />
-                </button>
+                </ConversationActionTooltip>
+                <ConversationActionTooltip label={t('conversation.delete')}>
+                  <button
+                    aria-label={t('conversation.delete')}
+                    className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring/50 sm:pointer-fine:size-6"
+                    onClick={() => {
+                      setPendingDelete(c);
+                    }}
+                    type="button"
+                  >
+                    <Trash2
+                      aria-hidden="true"
+                      className="size-3.5"
+                    />
+                  </button>
+                </ConversationActionTooltip>
               </span>
             </li>
           );
