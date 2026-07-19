@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { FeedbackType, MyUIMessage } from '@/lib/api-types';
+import type { FeedbackSelection, MyUIMessage } from '@/lib/api-types';
 
 import { AnswerActions } from '@/components/chat/answer-actions';
 import { createMemoryStorage } from '@/test/helpers/dom-stubs';
@@ -128,7 +128,7 @@ describe('AnswerActions feedback', () => {
   });
 
   it('reports the vote to onVote once the request succeeds', async () => {
-    const onVote = vi.fn<(vote: FeedbackType) => void>();
+    const onVote = vi.fn<(vote: FeedbackSelection) => void>();
     render(
       <AnswerActions
         message={assistant('resp-9')}
@@ -149,7 +149,7 @@ describe('AnswerActions feedback', () => {
         .fn<typeof fetch>()
         .mockResolvedValue(new Response('{}', { status: 500 })),
     );
-    const onVote = vi.fn<(vote: FeedbackType) => void>();
+    const onVote = vi.fn<(vote: FeedbackSelection) => void>();
     render(
       <AnswerActions
         message={assistant('resp-9')}
@@ -167,7 +167,7 @@ describe('AnswerActions feedback', () => {
   });
 
   it('disables voting while the answer is still streaming', () => {
-    const onVote = vi.fn<(vote: FeedbackType) => void>();
+    const onVote = vi.fn<(vote: FeedbackSelection) => void>();
     render(
       <AnswerActions
         message={assistant('resp-9')}
