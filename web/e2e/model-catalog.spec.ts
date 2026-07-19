@@ -6,6 +6,7 @@ import type { ModelCatalog } from '@/lib/api-types';
 /* eslint-disable sonarjs/no-duplicate-string -- repeated selectors define the E2E surface. */
 import { installMockChatState } from './helpers/chat-state';
 import { mockModels } from './helpers/models';
+import { startChatStreamServer } from './helpers/sse';
 
 const STORAGE_KEY = 'finkiHub.ui';
 // A model id that is no longer served by the catalog, to exercise stale recovery.
@@ -19,8 +20,6 @@ const LUNA_ID = 'gpt-5.6-luna';
 const LUNA_NAME = 'GPT-5.6 Luna';
 const EMPTY_JSON = '{}';
 const LUNA_OPTION_PATTERN = /GPT-5\.6 Luna/u;
-const EVIDENCE_DIR = `${process.cwd()}/../.omo/evidence/ulw/ses_08b75c4cdffe8g6tX0apGLd65d/task-12-cross-surface-sponsored-luna`;
-
 const lunaCatalog = (
   remaining: number,
   availability: 'both' | 'byok' | 'sponsored' = 'sponsored',
@@ -278,7 +277,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
 
   test('renders the sponsored badge and updates the quota from five to zero', async ({
     page,
-  }) => {
+  }, testInfo) => {
     let catalog = lunaCatalog(5);
     await mockModels(page, {
       catalog: () => catalog,
@@ -291,12 +290,26 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
         status: 200,
       });
     });
-    const streamUrl = 'http://127.0.0.1:9/sponsored-quota';
+    const chatServer = await startChatStreamServer({
+      gapMs: 0,
+      head: [
+        { messageMetadata: { inferenceModel: LUNA_ID }, type: 'start' },
+        { id: 'sponsored-answer', type: 'text-start' },
+        {
+          delta: 'Квотата е ажурирана.',
+          id: 'sponsored-answer',
+          type: 'text-delta',
+        },
+        { id: 'sponsored-answer', type: 'text-end' },
+        { type: 'finish' },
+      ],
+      tail: [],
+    });
     await installMockChatState(page, {
       onCreate: () => {
         catalog = lunaCatalog(0);
       },
-      streamUrl,
+      streamUrl: chatServer.url,
     });
 
     await page.goto('/');
@@ -309,7 +322,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     await expect(badge).toContainText('5/5');
     await page.screenshot({
       animations: 'disabled',
-      path: `${EVIDENCE_DIR}/sponsored-quota-five.png`,
+      path: testInfo.outputPath('sponsored-quota-five.png'),
     });
     await page.keyboard.press('Escape');
 
@@ -323,8 +336,9 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     await expect(badge).toContainText('0/5');
     await page.screenshot({
       animations: 'disabled',
-      path: `${EVIDENCE_DIR}/sponsored-quota-zero.png`,
+      path: testInfo.outputPath('sponsored-quota-zero.png'),
     });
+    await chatServer.close();
   });
 
   test('refreshes sponsored availability after credentials change without a reload', async ({

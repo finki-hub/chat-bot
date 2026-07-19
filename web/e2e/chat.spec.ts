@@ -44,8 +44,6 @@ const SPONSORED_CATALOG: ModelCatalog = {
   version: 1,
 };
 /* eslint-enable camelcase -- end catalog wire fixture. */
-const EVIDENCE_DIR = `${process.cwd()}/../.omo/evidence/ulw/ses_08b75c4cdffe8g6tX0apGLd65d/task-12-cross-surface-sponsored-luna`;
-
 const errorStream = (code: string, message: string) =>
   startChatStreamServer({
     gapMs: 0,
@@ -240,7 +238,7 @@ test.describe('chat streaming (mocked BFF)', () => {
 
   test('shows quota exhaustion actions and preserves the prior conversation', async ({
     page,
-  }) => {
+  }, testInfo) => {
     await page.setViewportSize({ height: 812, width: 375 });
     const conversationId = 'sponsored-preserved-conversation';
     const history = {
@@ -327,7 +325,9 @@ test.describe('chat streaming (mocked BFF)', () => {
     await expect(page.getByText('Претходен одговор')).toBeVisible();
     await page.screenshot({
       animations: 'disabled',
-      path: `${EVIDENCE_DIR}/sponsored-exhaustion-preserved-conversation.png`,
+      path: testInfo.outputPath(
+        'sponsored-exhaustion-preserved-conversation.png',
+      ),
     });
 
     await page.getByRole('button', { name: 'Почекај до ресетирањето' }).click();

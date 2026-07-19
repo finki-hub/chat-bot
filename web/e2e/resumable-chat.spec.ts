@@ -13,7 +13,6 @@ const FINAL_TOKEN = ' и продолжение по освежување.';
 const STOP_TOKEN = 'Делумен одговор';
 const LONG_GAP_MS = 30_000;
 const CHAT_STREAM_URL_PATTERN = /\/api\/chat\/[^/]+\/stream$/u;
-const EVIDENCE_DIR = `${process.cwd()}/../.omo/evidence/ulw/ses_08b75c4cdffe8g6tX0apGLd65d/task-12-cross-surface-sponsored-luna`;
 const SPONSORED_CATALOG: ModelCatalog = {
   models: [
     {
@@ -109,7 +108,7 @@ const installHealthRoute = async (page: Page): Promise<void> => {
 test.describe('resumable chat lifecycle (mocked BFF)', () => {
   test('resumes after refresh and persists the completed assistant response', async ({
     page,
-  }) => {
+  }, testInfo) => {
     // Given: the initial POST emits one token slowly while the resume endpoint can replay the full stream.
     await installHealthRoute(page);
     await installModelRoute(page);
@@ -266,7 +265,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     ).toContainText('5/5');
     await page.screenshot({
       animations: 'disabled',
-      path: `${EVIDENCE_DIR}/sponsored-conversation-preserved.png`,
+      path: testInfo.outputPath('sponsored-conversation-preserved.png'),
     });
     await page.keyboard.press('Escape');
     expect(historyRequests).toBeGreaterThan(0);
