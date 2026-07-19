@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+/* eslint-disable camelcase -- fixtures mirror the Python API wire contract. */
 import { GET } from '@/app/api/models/route';
 
 vi.mock('@/lib/env', () => ({
@@ -62,12 +63,21 @@ describe('GET /api/models', () => {
     const upstream = {
       models: [
         {
+          api_key: 'do-not-forward',
+          availability: 'sponsored',
+          base_url: 'https://sponsor.invalid',
           description: 'Balanced OpenAI model.',
+          endpoint: 'https://sponsor.invalid/v1',
           execution: { reasoning: true },
           id: GPT_MINI,
           name: GPT_MINI_NAME,
           pricing: { input: 0.75, output: 4.5 },
           provider: OPENAI,
+          sponsored_quota: {
+            limit: 10,
+            remaining: 7,
+            resets_at: '2026-07-18T12:00:00Z',
+          },
         },
         { ...claudeSonnet, loaded: false },
         {
@@ -103,10 +113,16 @@ describe('GET /api/models', () => {
     await expect(res.json()).resolves.toStrictEqual({
       models: [
         {
+          availability: 'sponsored',
           description: 'Balanced OpenAI model.',
           id: GPT_MINI,
           name: GPT_MINI_NAME,
           provider: OPENAI,
+          sponsored_quota: {
+            limit: 10,
+            remaining: 7,
+            resets_at: '2026-07-18T12:00:00Z',
+          },
         },
         { ...claudeSonnet, loaded: false },
         {
@@ -217,3 +233,5 @@ describe('GET /api/models', () => {
     });
   });
 });
+
+/* eslint-enable camelcase -- end wire-contract fixtures. */

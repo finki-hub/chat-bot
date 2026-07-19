@@ -49,6 +49,20 @@ class LlmProviderCredentials:
     google: ChatCredentialSecret | None = None
     anthropic: ChatCredentialSecret | None = None
     ollama: ChatCredentialSecret | None = None
+    rejected_providers: frozenset[ProviderName] = frozenset()
+
+    def available_providers(self) -> frozenset[ProviderName]:
+        providers: tuple[ProviderName, ...] = (
+            "openai",
+            "google",
+            "anthropic",
+            "ollama",
+        )
+        return frozenset(
+            provider
+            for provider in providers
+            if self.for_provider(provider) is not None
+        )
 
     def for_provider(self, provider: ProviderName) -> ChatCredentialSecret | None:
         match provider:

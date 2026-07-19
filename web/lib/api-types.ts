@@ -32,13 +32,12 @@ export type ChatRequestBody = {
   inference_model?: ModelId;
   interface: ChatInterface;
   max_tokens?: number;
-  messages: ConversationTurn[];
+  messages: readonly ConversationTurn[];
   query_transform_mode?: QueryTransformMode;
   query_transform_model?: ModelId;
   reasoning?: boolean;
   temperature?: number;
   top_p?: number;
-  user_id?: string;
 };
 
 export type ChatTitleClientPayload = {
@@ -65,6 +64,8 @@ export type ConversationTurn = {
   role: ConversationRole;
 };
 
+export type ModelAvailability = 'both' | 'byok' | 'sponsored' | 'unavailable';
+
 export type ModelCatalog = {
   readonly models: readonly ModelDescriptor[];
   readonly source: CatalogSource;
@@ -74,11 +75,13 @@ export type ModelCatalog = {
 // `provider` is a `CatalogProvider` for typed catalogs; for legacy string[] responses
 // it is a best-effort bucket inferred from the id, so it stays a plain string.
 export type ModelDescriptor = {
+  readonly availability?: ModelAvailability;
   readonly description?: string;
   readonly id: ModelId;
   readonly loaded?: boolean | null;
   readonly name: string;
   readonly provider: string;
+  readonly sponsored_quota?: SponsoredQuota;
 };
 
 // eslint-disable-next-line sonarjs/redundant-type-aliases -- semantic alias for the public wire contract; consumers reference ModelId, not bare string
@@ -86,15 +89,32 @@ export type ModelId = string;
 
 export type QueryTransformMode = 'hyde' | 'raw' | 'rewrite' | 'rewrite_hyde';
 
+export type SponsoredQuota = {
+  readonly limit: number;
+  readonly remaining: number;
+  readonly resets_at: string;
+};
+
 export const MAX_MESSAGES = 10;
 export const MAX_CHARS_PER_TURN = 2_000;
 
-export type ChatErrorCode = 'agent_error' | 'interrupted' | 'no_answer';
+export type ChatErrorCode =
+  | 'agent_error'
+  | 'credential_required'
+  | 'free_quota_exhausted'
+  | 'free_tier_unavailable'
+  | 'interrupted'
+  | 'no_answer'
+  | 'sponsored_request_in_progress';
 
 // A user-facing error: the live transient `error` part, the persisted metadata, and
 // the in-memory active error all share this shape (`code` is looser than ChatErrorCode
 // because it also carries transport codes like 'network'/'pre_stream').
-export type ErrorNotice = { code: string; message: string };
+export type ErrorNotice = {
+  code: string;
+  message: string;
+  resets_at?: string;
+};
 
 export type FeedbackAck = {
   feedback_type: FeedbackType;
@@ -177,8 +197,9 @@ export type ProtocolV2Event =
   | { data: Record<string, never>; event: 'reset' }
   | {
       data: {
-        code: 'agent_error' | 'interrupted' | 'no_answer';
+        code: ChatErrorCode;
         message: string;
+        resets_at?: string;
       };
       event: 'error';
     }

@@ -87,9 +87,10 @@ async def retrieve_similar_diplomas(
             selected.append(_to_retrieved(candidates[idx], item["score"]))
             if len(selected) >= top_k:
                 break
-    except Exception:
-        logger.exception(
-            "Diploma reranking call failed. Using vector search order as a fallback",
+    except Exception as exc:
+        logger.warning(
+            "Diploma reranking failed; using vector order error_type=%s",
+            type(exc).__name__,
         )
         return [_to_retrieved(d, None) for d in candidates[:top_k]]
 

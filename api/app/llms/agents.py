@@ -4,12 +4,15 @@ import logging
 import time
 from collections.abc import AsyncGenerator, Generator
 from dataclasses import dataclass, field
+from datetime import datetime
+from typing import assert_never
 
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk, BaseMessage
 from langgraph.graph.state import CompiledStateGraph
 
 from app.llms.retrieval_result import RetrievalSourcePayload
+from app.schemas.sponsored_access import SafeErrorDetails, SponsoredErrorCode
 from app.utils.posthog_client import capture
 
 logger = logging.getLogger(__name__)
@@ -47,6 +50,25 @@ def status_event(*, stage: str, tool: str | None = None) -> str:
 
 def error_event(code: str, message: str, **details: str) -> str:
     return _sse("error", {"code": code, "message": message, **details})
+
+
+def sponsored_error_event(
+    code: SponsoredErrorCode,
+    message: str,
+    *,
+    resets_at: datetime | None = None,
+) -> str:
+    """Emit a sponsored error while exposing only its approved reset metadata."""
+    match code:
+        case "free_quota_exhausted":
+            reset = SafeErrorDetails(resets_at=resets_at).sse_reset()
+            if reset is None:
+                return error_event(code, message)
+            return error_event(code, message, resets_at=reset)
+        case "free_tier_unavailable" | "sponsored_request_in_progress":
+            return error_event(code, message)
+        case unreachable:
+            assert_never(unreachable)
 
 
 def meta_event(payload: dict[str, object]) -> str:
@@ -194,8 +216,12 @@ def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
             if not streamed:
                 yield error_event("no_answer", _NO_ANSWER_MSG)
             yield DONE_EVENT
-        except Exception:
-            logger.exception("Error while streaming the sync token generator")
+        except Exception as exc:
+            logger.log(
+                logging.ERROR,
+                "Sync token streaming failed error_type=%s",
+                type(exc).__name__,
+            )
             yield (
                 error_event("interrupted", _INTERRUPTED_MSG)
                 if streamed
@@ -402,11 +428,17 @@ async def create_agent_token_generator(
         yield DONE_EVENT
 
     except Exception as exc:
-        logger.exception("Agent error occurred during streaming")
+        status_code = _error_status_code(exc)
+        logger.log(
+            logging.ERROR,
+            "Agent streaming failed error_type=%s status_code=%s",
+            type(exc).__name__,
+            status_code,
+        )
         capture_model_error(
             observation,
             error_type=type(exc).__name__,
-            status_code=_error_status_code(exc),
+            status_code=status_code,
         )
         # Tokens already streamed: a fresh "try again" would contradict the partial answer.
         if streamed_text:

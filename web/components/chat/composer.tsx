@@ -14,7 +14,11 @@ import {
   type ComposerStatus,
 } from '@/components/chat/composer-actions';
 import { t } from '@/lib/i18n';
-import { groupModelsByProvider } from '@/lib/model-catalog';
+import {
+  groupModelsByProvider,
+  isModelAvailable,
+  isSponsoredModel,
+} from '@/lib/model-catalog';
 
 export type ComposerProps = {
   availableProviders: ReadonlySet<string>;
@@ -58,19 +62,20 @@ export const Composer = ({
   const selectedModel = models.find((entry) => entry.id === model);
   const selectedModelAvailable =
     selectedModel !== undefined &&
-    availableProviders.has(selectedModel.provider);
+    isModelAvailable(selectedModel, availableProviders);
+  const hasSponsoredAccess = models.some(isSponsoredModel);
   const modelSelectDisabled =
     (disabled ?? false) ||
     modelsLoading === true ||
-    credentialsError === true ||
-    credentialsLoading ||
+    (credentialsError === true && !hasSponsoredAccess) ||
+    (credentialsLoading && !hasSponsoredAccess) ||
     noModels;
   let modelPlaceholder = t('composer.model');
   if (modelsLoading === true) {
     modelPlaceholder = t('composer.modelsLoading');
   } else if (modelsError === true) {
     modelPlaceholder = t('composer.modelsError');
-  } else if (credentialsError === true) {
+  } else if (credentialsError === true && !hasSponsoredAccess) {
     modelPlaceholder = t('composer.credentialsError');
   }
 
@@ -204,7 +209,7 @@ export const Composer = ({
             showModelPlaceholder={
               modelsLoading === true ||
               modelsError === true ||
-              credentialsError === true
+              (credentialsError === true && !hasSponsoredAccess)
             }
             status={status}
             submitDisabled={

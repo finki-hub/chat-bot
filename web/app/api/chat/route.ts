@@ -1,7 +1,11 @@
 import { createUIMessageStream, createUIMessageStreamResponse } from 'ai';
 import { after } from 'next/server';
 
-import type { ConversationTurn, MyUIMessage } from '@/lib/api-types';
+import type {
+  ChatRequestBody,
+  ConversationTurn,
+  MyUIMessage,
+} from '@/lib/api-types';
 
 import {
   AuthenticationRequiredError,
@@ -54,15 +58,7 @@ type ResumableChatClientBody = ChatClientBody & {
   readonly id?: string;
 };
 
-const readDetail = async (response: Response): Promise<string> => {
-  try {
-    const body = (await response.json()) as { detail?: string };
-
-    return body.detail ?? 'Request failed';
-  } catch {
-    return 'Request failed';
-  }
-};
+const readDetail = (): string => 'Request failed';
 
 const errorResponse = (meta: UiStreamMeta, code: string, message: string) => {
   const stream = createUIMessageStream<MyUIMessage>({
@@ -268,12 +264,13 @@ export const POST = async (req: Request): Promise<Response> => {
     });
     const upstreamController = new AbortController();
 
+    const upstreamPayload = {
+      ...chatBody,
+      messages: upstreamMessages,
+      [USER_ID_FIELD]: userId,
+    } satisfies ChatRequestBody & { user_id: string };
     const upstream = await fetch(`${API_BASE_URL}/chat/`, {
-      body: JSON.stringify({
-        ...chatBody,
-        messages: upstreamMessages,
-        [USER_ID_FIELD]: userId,
-      }),
+      body: JSON.stringify(upstreamPayload),
       headers: {
         'content-type': 'application/json',
         'x-api-key': CHAT_API_KEY,
@@ -294,7 +291,7 @@ export const POST = async (req: Request): Promise<Response> => {
     const contentType = upstream.headers.get('content-type') ?? '';
 
     if (!upstream.ok || !contentType.includes(SSE_CONTENT_TYPE)) {
-      const message = await readDetail(upstream);
+      const message = readDetail();
 
       return errorResponse({ inferenceModel }, 'pre_stream', message);
     }

@@ -19,15 +19,25 @@ const OPENAI_CREDENTIAL: ChatCredentialPublic = {
   [USER_ID_FIELD]: USER_ID,
 };
 
-const { loadCredentialsMock } = vi.hoisted(() => ({
+const { loadCredentialsMock, sessionMock } = vi.hoisted(() => ({
   loadCredentialsMock:
     vi.fn<
       (signal: AbortSignal) => Promise<null | readonly ChatCredentialPublic[]>
     >(),
+  sessionMock: vi.fn<
+    () => {
+      readonly data: null;
+      readonly status: 'unauthenticated';
+    }
+  >(),
 }));
 
 vi.mock('@/components/shell/credential-settings-client', () => ({
   loadCredentials: loadCredentialsMock,
+}));
+
+vi.mock('next-auth/react', () => ({
+  useSession: sessionMock,
 }));
 
 const makeWrapper = () => {
@@ -42,6 +52,7 @@ const makeWrapper = () => {
 describe('useCredentials', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionMock.mockReturnValue({ data: null, status: 'unauthenticated' });
   });
 
   it('exposes saved credentials when loading succeeds', async () => {

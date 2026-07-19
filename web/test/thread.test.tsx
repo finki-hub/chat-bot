@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { MyUIMessage } from '@/lib/api-types';
 
-import { AssistantMessage } from '@/components/chat/message';
+import { AssistantMessage, MessageError } from '@/components/chat/message';
 import { SearchStatus } from '@/components/chat/search-status';
 import { Thread } from '@/components/chat/thread';
 import { ResizeObserverStub } from '@/test/helpers/dom-stubs';
@@ -247,22 +247,56 @@ describe('AssistantMessage', () => {
     expect(screen.getByText('Генерирање…')).toBeInTheDocument();
   });
 
-  it('renders a Retry button for a non-interrupted error', () => {
+  it('renders safe generic guidance and Retry for an agent error', () => {
     const onRetry = vi.fn<() => void>();
     const msg = assistantWithParts([]);
+    const rawMessage = 'provider secret: https://secret.invalid';
+
     render(
       <AssistantMessage
-        errorPart={{ code: 'agent_error', message: 'Се случи грешка.' }}
+        errorPart={{ code: 'agent_error', message: rawMessage }}
         message={msg}
         onRetry={onRetry}
       />,
     );
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Се случи грешка.');
+    const alert = screen.getByRole('alert');
+
+    expect(alert).toHaveTextContent(
+      'Се случи неочекувана грешка. Обидете се повторно.',
+    );
+    expect(alert).not.toHaveTextContent(rawMessage);
 
     screen.getByRole('button', { name: 'Обиди се повторно' }).click();
 
     expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it('renders safe credential guidance and opens credential management', async () => {
+    const onManageCredentials = vi.fn<() => void>();
+    const rawMessage = 'provider detail: leaked credential state';
+    const user = userEvent.setup();
+
+    render(
+      <MessageError
+        errorPart={{ code: 'credential_required', message: rawMessage }}
+        onManageCredentials={onManageCredentials}
+        onRetry={vi.fn<() => void>()}
+      />,
+    );
+
+    const alert = screen.getByRole('alert');
+
+    expect(alert).toHaveTextContent('За избраниот модел е потребен API клуч.');
+    expect(alert).not.toHaveTextContent(rawMessage);
+
+    expect(
+      screen.queryByRole('button', { name: 'Обиди се повторно' }),
+    ).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Додај API клуч' }));
+
+    expect(onManageCredentials).toHaveBeenCalledOnce();
   });
 
   it('shows a soft notice (no Retry) for an interrupted error', () => {
@@ -284,6 +318,83 @@ describe('AssistantMessage', () => {
       screen.queryByRole('button', { name: 'Обиди се повторно' }),
     ).not.toBeInTheDocument();
   });
+
+  it('renders safe sponsored quota guidance with a localized reset and actions', async () => {
+    const onManageCredentials = vi.fn<() => void>();
+    const onWait = vi.fn<() => void>();
+    const rawMessage = 'provider secret: https://attacker.invalid';
+    const user = userEvent.setup();
+
+    render(
+      <MessageError
+        errorPart={{
+          code: 'free_quota_exhausted',
+          message: rawMessage,
+          // eslint-disable-next-line camelcase -- mirrors the SSE wire contract.
+          resets_at: '2026-07-18T12:00:00Z',
+        }}
+        onManageCredentials={onManageCredentials}
+        onWait={onWait}
+      />,
+    );
+
+    const alert = screen.getByRole('alert');
+
+    expect(alert).not.toHaveTextContent(rawMessage);
+    expect(alert).not.toHaveTextContent('2026-07-18T12:00:00Z');
+    expect(alert).toHaveTextContent('Бесплатната квота е искористена.');
+
+    expect(
+      screen.getByRole('button', { name: 'Додај API клуч' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Почекај до ресетирањето' }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Додај API клуч' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Почекај до ресетирањето' }),
+    );
+
+    expect(onManageCredentials).toHaveBeenCalledOnce();
+    expect(onWait).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [
+      'free_tier_unavailable' as const,
+      'Бесплатниот модел е привремено недостапен.',
+    ],
+    [
+      'sponsored_request_in_progress' as const,
+      'Барањето за бесплатниот модел е веќе во тек. Почекај да заврши.',
+    ],
+    [
+      'no_answer' as const,
+      'Не е пронајден одговор. Обидете се да го преформулирате прашањето.',
+    ],
+  ])(
+    'renders safe guidance for %s without retry or raw backend text',
+    (code, copy) => {
+      const rawMessage = 'provider detail: do not show this';
+
+      render(
+        <MessageError
+          errorPart={{ code, message: rawMessage }}
+          onRetry={vi.fn<() => void>()}
+        />,
+      );
+
+      const alert = screen.getByRole('alert');
+
+      expect(alert).toHaveTextContent(copy);
+      expect(alert).not.toHaveTextContent(rawMessage);
+
+      expect(
+        screen.queryByRole('button', { name: 'Обиди се повторно' }),
+      ).toBeNull();
+    },
+  );
 
   it('renders a timing footnote when finished with timing metadata', () => {
     const msg: MyUIMessage = {
@@ -548,7 +659,10 @@ describe('Thread', () => {
       {
         id: 'a1',
         metadata: {
-          error: { code: 'agent_error', message: 'Се случи грешка.' },
+          error: {
+            code: 'agent_error',
+            message: 'provider secret: persisted detail',
+          },
         },
         parts: [],
         role: 'assistant',
@@ -561,7 +675,12 @@ describe('Thread', () => {
       />,
     );
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Се случи грешка.');
+    const alert = screen.getByRole('alert');
+
+    expect(alert).toHaveTextContent(
+      'Се случи неочекувана грешка. Обидете се повторно.',
+    );
+    expect(alert).not.toHaveTextContent('provider secret: persisted detail');
   });
 
   it('prefers the live error over a stale persisted one on the last message', () => {
@@ -569,7 +688,9 @@ describe('Thread', () => {
       userMessage('прашање'),
       {
         id: 'a1',
-        metadata: { error: { code: 'agent_error', message: 'Стара грешка.' } },
+        metadata: {
+          error: { code: 'no_answer', message: 'Стара грешка.' },
+        },
         parts: [],
         role: 'assistant',
       },
@@ -582,7 +703,12 @@ describe('Thread', () => {
       />,
     );
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Грешка во живо.');
+    const alert = screen.getByRole('alert');
+
+    expect(alert).toHaveTextContent(
+      'Се случи неочекувана грешка. Обидете се повторно.',
+    );
+    expect(alert).not.toHaveTextContent('Не е пронајден одговор.');
   });
 
   it('shows a typing indicator while awaiting the assistant reply', () => {

@@ -488,9 +488,10 @@ async def get_retrieved_context_with_sources(
             sum(1 for c in final if c.source == "faq"),
             sum(1 for c in final if c.source == "chunk"),
         )
-    except Exception:
-        logger.exception(
-            "Reranking call failed. Using vector search order as a fallback",
+    except Exception as exc:
+        logger.warning(
+            "Reranking failed; using vector order error_type=%s",
+            type(exc).__name__,
         )
         final = _select_with_faq_reservation(candidates, top_k)
         sources = ()
@@ -529,8 +530,11 @@ async def _contextualize_query(
             max_tokens=128,
             credentials=credentials,
         )
-    except Exception:
-        logger.exception("Query contextualization failed; using the raw query")
+    except Exception as exc:
+        logger.warning(
+            "Query contextualization failed; using raw query error_type=%s",
+            type(exc).__name__,
+        )
         return query
     condensed = condensed.strip()
     if condensed and condensed != query:
@@ -560,8 +564,11 @@ async def _expand_and_render(db: Database, final: list[_Candidate]) -> str:
         try:
             for ch in await get_chunks_window(db, refs, window=_NEIGHBOR_WINDOW):
                 window_map[(ch.document_id, ch.chunk_index)] = ch
-        except Exception:
-            logger.exception("Neighbor expansion failed; rendering chunks unexpanded")
+        except Exception as exc:
+            logger.warning(
+                "Neighbor expansion failed; rendering unexpanded error_type=%s",
+                type(exc).__name__,
+            )
 
     return _render_blocks(final, window_map)
 

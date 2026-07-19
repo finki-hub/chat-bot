@@ -1,4 +1,5 @@
 import pytest
+from pydantic import SecretStr
 
 from app.llms import anthropic, google, ollama, openai
 from app.llms.models import Model
@@ -24,6 +25,116 @@ def test_openai_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
     )
 
     assert captured_base_urls == [None]
+
+
+def test_sponsored_openai_client_receives_upstream_model_and_token_cap(
+    monkeypatch,
+) -> None:
+    captured: list[dict] = []
+
+    class OpenAICapturingClient:
+        def __init__(self, **kwargs):
+            captured.append(kwargs)
+
+    monkeypatch.setattr(openai, "ChatOpenAI", OpenAICapturingClient)
+
+    openai.get_openai_llm(
+        Model.GPT_5_6_LUNA,
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=1024,
+        credential=ChatCredentialSecret(
+            provider="openai",
+            api_key="sponsored-key",
+            base_url="https://sponsored.example/v1",
+        ),
+        upstream_model="upstream-luna",
+    )
+
+    assert captured == [
+        {
+            "model": "upstream-luna",
+            "api_key": SecretStr("sponsored-key"),
+            "base_url": "https://sponsored.example/v1",
+            "temperature": 0.0,
+            "streaming": True,
+            "stream_usage": True,
+            "max_tokens": 1024,
+            "use_responses_api": True,
+        },
+    ]
+
+
+def test_sponsored_google_client_receives_upstream_model_and_token_cap(
+    monkeypatch,
+) -> None:
+    captured: list[dict] = []
+
+    class GoogleCapturingClient:
+        def __init__(self, **kwargs):
+            captured.append(kwargs)
+
+    monkeypatch.setattr(google, "ChatGoogleGenerativeAI", GoogleCapturingClient)
+
+    google.get_google_llm(
+        Model.GEMINI_3_5_FLASH,
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=1024,
+        credential=ChatCredentialSecret(
+            provider="google",
+            api_key="sponsored-key",
+            base_url="https://sponsored.example/v1",
+        ),
+        upstream_model="upstream-luna",
+    )
+
+    assert captured == [
+        {
+            "model": "upstream-luna",
+            "google_api_key": "sponsored-key",
+            "base_url": "https://sponsored.example/v1",
+            "temperature": 0.0,
+            "top_p": 1.0,
+            "max_output_tokens": 1024,
+        },
+    ]
+
+
+def test_sponsored_anthropic_client_receives_upstream_model_and_token_cap(
+    monkeypatch,
+) -> None:
+    captured: list[dict] = []
+
+    class AnthropicCapturingClient:
+        def __init__(self, **kwargs):
+            captured.append(kwargs)
+
+    monkeypatch.setattr(anthropic, "ChatAnthropic", AnthropicCapturingClient)
+
+    anthropic.get_anthropic_llm(
+        Model.CLAUDE_HAIKU_4_5,
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=1024,
+        credential=ChatCredentialSecret(
+            provider="anthropic",
+            api_key="sponsored-key",
+            base_url="https://sponsored.example/v1",
+        ),
+        upstream_model="upstream-luna",
+    )
+
+    assert captured == [
+        {
+            "model": "upstream-luna",
+            "api_key": SecretStr("sponsored-key"),
+            "base_url": "https://sponsored.example/v1",
+            "temperature": 0.0,
+            "max_tokens": 1024,
+            "thinking": None,
+        },
+    ]
 
 
 def test_google_byok_client_does_not_inherit_deployment_base_url(monkeypatch) -> None:

@@ -12,6 +12,8 @@ from app.utils.settings import Settings
 logger = logging.getLogger(__name__)
 
 _SERVICE = "chat-bot-api"
+_EXCEPTION_EVENT = "$exception"
+_SAFE_EXCEPTION_MESSAGE = "Unhandled server exception."
 
 _DISTINCT_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
@@ -77,6 +79,46 @@ def capture(
         logger.exception("PostHog capture failed (event=%s)", event)
 
 
+def capture_sponsored_event(
+    distinct_id: str,
+    event: str,
+    *,
+    response_id: str,
+    mode: str,
+    client_interface: str,
+    outcome: str | None = None,
+    admission_reason: str | None = None,
+    denial_reason: str | None = None,
+    provider_failure: bool | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    total_tokens: int | None = None,
+    remaining_user_requests: int | None = None,
+    remaining_global_requests: int | None = None,
+) -> None:
+    """Capture aggregate sponsored-chat metrics without user content or credentials."""
+    properties: dict[str, object] = {
+        "response_id": response_id,
+        "mode": mode,
+        "client_interface": client_interface,
+    }
+    optional_fields = {
+        "outcome": outcome,
+        "admission_reason": admission_reason,
+        "denial_reason": denial_reason,
+        "provider_failure": provider_failure,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "remaining_user_requests": remaining_user_requests,
+        "remaining_global_requests": remaining_global_requests,
+    }
+    properties.update(
+        {key: value for key, value in optional_fields.items() if value is not None},
+    )
+    capture(distinct_id, event, properties)
+
+
 def capture_exception(
     exc: BaseException,
     distinct_id: str = "server",
@@ -86,12 +128,16 @@ def capture_exception(
     if client is None:
         return
 
-    # Capture the real exception (type, message, stacktrace) for debugging.
     try:
-        client.capture_exception(
-            exc,
+        client.capture(
+            event=_EXCEPTION_EVENT,
             distinct_id=distinct_id,
-            properties={"service": _SERVICE, **(properties or {})},
+            properties={
+                "service": _SERVICE,
+                **(properties or {}),
+                "$exception_type": type(exc).__name__,
+                "$exception_message": _SAFE_EXCEPTION_MESSAGE,
+            },
         )
     except Exception:
         logger.exception("PostHog capture_exception failed")

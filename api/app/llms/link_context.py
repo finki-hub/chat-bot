@@ -137,8 +137,11 @@ async def get_links_context(db: Database, *, query: str | None = None) -> str:
     try:
         with timed("links"):
             rows = await fetch_links_for_context(db)
-    except Exception:
-        logger.exception("Failed to load the link catalog for context")
+    except Exception as exc:
+        logger.warning(
+            "Link catalog load failed error_type=%s",
+            type(exc).__name__,
+        )
         return ""
 
     candidates = [
@@ -152,8 +155,11 @@ async def get_links_context(db: Database, *, query: str | None = None) -> str:
         try:
             with timed("links.rerank"):
                 relevant = await _rank_relevant_links(query, candidates)
-        except Exception:
-            logger.exception("Failed to rerank link catalog; rendering unranked links")
+        except Exception as exc:
+            logger.warning(
+                "Link reranking failed; rendering unranked error_type=%s",
+                type(exc).__name__,
+            )
 
     if not relevant:
         return "Корисни линкови:\n" + "\n".join(

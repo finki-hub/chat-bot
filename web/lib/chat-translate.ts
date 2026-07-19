@@ -189,7 +189,14 @@ export const translateToUiStream = async (
 
       case 'error':
         writer.write({
-          data: { code: event.code, message: event.message },
+          data: {
+            code: event.code,
+            message: event.message,
+            ...(event.resets_at !== undefined && {
+              // eslint-disable-next-line camelcase -- mirrors the Python SSE wire contract.
+              resets_at: event.resets_at,
+            }),
+          },
           transient: true,
           type: 'data-error',
         });

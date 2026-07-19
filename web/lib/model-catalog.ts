@@ -1,11 +1,15 @@
 import type {
   CatalogProvider,
   CatalogSource,
+  ModelAvailability,
   ModelCatalog,
   ModelDescriptor,
+  SponsoredQuota,
 } from '@/lib/api-types';
 
 import { t, type TKey } from '@/lib/i18n';
+
+/* eslint-disable camelcase -- catalog fields mirror the Python wire contract. */
 
 const PROVIDER_LABEL_KEYS: Record<CatalogProvider, TKey> = {
   anthropic: 'settings.provider.anthropic',
@@ -16,6 +20,12 @@ const PROVIDER_LABEL_KEYS: Record<CatalogProvider, TKey> = {
 
 const CATALOG_PROVIDERS = ['anthropic', 'google', 'ollama', 'openai'] as const;
 const API_CATALOG_SOURCES = ['live', 'snapshot', 'stale'] as const;
+const MODEL_AVAILABILITIES = [
+  'both',
+  'byok',
+  'sponsored',
+  'unavailable',
+] as const;
 
 const CURATED_MODEL_DATA = [
   ['gpt-5.6-sol', 'GPT-5.6 Sol', 'openai'],
@@ -66,6 +76,9 @@ const isCatalogProvider = (value: unknown): value is CatalogProvider =>
 const isCatalogSource = (value: unknown): value is CatalogSource =>
   API_CATALOG_SOURCES.includes(value as (typeof API_CATALOG_SOURCES)[number]);
 
+const isModelAvailability = (value: unknown): value is ModelAvailability =>
+  MODEL_AVAILABILITIES.includes(value as ModelAvailability);
+
 const inferProvider = (id: string): string => {
   const lower = id.toLowerCase();
   for (const [prefix, provider] of PROVIDER_PREFIXES) {
@@ -84,6 +97,28 @@ const inferProvider = (id: string): string => {
   return id.length > 0 ? id : 'other';
 };
 
+const isNonNegativeInteger = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+
+const normalizeSponsoredQuota = (value: unknown): null | SponsoredQuota => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const { limit, remaining, resets_at: resetsAt } = value;
+  if (
+    !isNonNegativeInteger(limit) ||
+    !isNonNegativeInteger(remaining) ||
+    remaining > limit ||
+    typeof resetsAt !== 'string' ||
+    resetsAt.length === 0
+  ) {
+    return null;
+  }
+
+  return { limit, remaining, resets_at: resetsAt };
+};
+
 const normalizeDescriptor = (
   value: unknown,
   typedEnvelope = false,
@@ -91,7 +126,15 @@ const normalizeDescriptor = (
   if (!isRecord(value)) {
     return null;
   }
-  const { description, id, loaded, name, provider } = value;
+  const {
+    availability,
+    description,
+    id,
+    loaded,
+    name,
+    provider,
+    sponsored_quota: sponsoredQuota,
+  } = value;
   if (typeof id !== 'string' || id.length === 0) {
     return null;
   }
@@ -115,9 +158,15 @@ const normalizeDescriptor = (
     name: typeof name === 'string' && name.length > 0 ? name : id,
     provider: isCatalogProvider(provider) ? provider : inferProvider(id),
   } satisfies ModelDescriptor;
-  return typeof description === 'string' && description.length > 0
-    ? { ...base, description }
-    : base;
+  const normalizedQuota = normalizeSponsoredQuota(sponsoredQuota);
+  return {
+    ...base,
+    ...(typeof availability === 'string' &&
+      isModelAvailability(availability) && { availability }),
+    ...(typeof description === 'string' &&
+      description.length > 0 && { description }),
+    ...(normalizedQuota !== null && { sponsored_quota: normalizedQuota }),
+  };
 };
 
 export type ModelGroup = {
@@ -170,6 +219,19 @@ export const groupModelsByProvider = (
   }));
 };
 
+export const isSponsoredModel = (
+  model: Pick<ModelDescriptor, 'availability'>,
+): boolean =>
+  model.availability === 'both' || model.availability === 'sponsored';
+
+export const isModelAvailable = (
+  model: Pick<ModelDescriptor, 'availability' | 'provider'>,
+  availableProviders: ReadonlySet<string>,
+): boolean =>
+  isSponsoredModel(model) ||
+  (model.availability !== 'unavailable' &&
+    availableProviders.has(model.provider));
+
 // Repair a persisted selection when the catalog no longer contains it: prefer the current
 // model, then the default, then the first available model, and only keep an unknown id when
 // the catalog is empty (so a transient miss never wipes it).
@@ -189,3 +251,5 @@ export const recoverSelectedModel = (
 
 export const providerLabel = (provider: string): string =>
   isCatalogProvider(provider) ? t(PROVIDER_LABEL_KEYS[provider]) : provider;
+
+/* eslint-enable camelcase -- end wire-contract fields. */

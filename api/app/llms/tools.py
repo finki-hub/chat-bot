@@ -28,11 +28,12 @@ async def get_agent_tools() -> list[BaseTool]:
     request_tools = _request_tools.get()
     try:
         mcp_tools = await get_mcp_tools()
-    except Exception:
+    except Exception as exc:
         if not request_tools:
             raise
-        logger.exception(
-            "MCP tool loading failed; using request-scoped agent tools only",
+        logger.warning(
+            "MCP tool loading failed; using request tools error_type=%s",
+            type(exc).__name__,
         )
         return list(request_tools)
     return [*mcp_tools, *request_tools]

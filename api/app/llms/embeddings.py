@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 EMBEDDING_MAX_ATTEMPTS = 3
 _EMBEDDING_RETRY_BASE_DELAY = 0.5
+_EMBEDDING_SSE_ERROR = "Embedding processing failed."
 
 
 async def _dispatch_embeddings(
@@ -96,10 +97,14 @@ async def generate_embeddings(
     is_document: bool = False,
     credentials: LlmProviderCredentials | None = None,
 ) -> list[float] | list[list[float]]:
-    log_preview = (
-        text[:100] if isinstance(text, str) else f"[list of {len(text)} items]"
+    text_count = 1 if isinstance(text, str) else len(text)
+    total_chars = len(text) if isinstance(text, str) else sum(map(len, text))
+    logger.info(
+        "Generating embeddings model=%s text_count=%d total_chars=%d",
+        model.value,
+        text_count,
+        total_chars,
     )
-    logger.info("Generating embeddings for text: '%s'", log_preview)
 
     for attempt in range(1, EMBEDDING_MAX_ATTEMPTS + 1):
         try:
@@ -113,12 +118,14 @@ async def generate_embeddings(
             raise
         except ValueError:
             raise
-        except Exception:
+        except Exception as exc:
             if attempt >= EMBEDDING_MAX_ATTEMPTS:
-                logger.exception(
-                    "Embedding generation failed for model %s after %d attempts",
+                logger.log(
+                    logging.ERROR,
+                    "Embedding generation failed model=%s attempts=%d error_type=%s",
                     model.value,
                     attempt,
+                    type(exc).__name__,
                 )
                 raise
 
@@ -214,8 +221,8 @@ async def _process_question_batch(
             current_model,
             is_document=True,
         )
-    except Exception as e:
-        return [("error", repr(e))] * len(batch)
+    except Exception:
+        return [("error", _EMBEDDING_SSE_ERROR)] * len(batch)
 
     results: list[tuple[str, str]] = []
     expected_dims = MODEL_EMBEDDING_DIMENSIONS.get(current_model)
@@ -235,8 +242,8 @@ async def _process_question_batch(
                 row["id"],
             )
             results.append(("ok", ""))
-        except Exception as e:
-            results.append(("error", repr(e)))
+        except Exception:
+            results.append(("error", _EMBEDDING_SSE_ERROR))
 
     return results
 
@@ -333,8 +340,8 @@ async def _process_chunk_batch(
 
     try:
         embeddings = await generate_embeddings(texts, current_model, is_document=True)
-    except Exception as e:
-        return [("error", repr(e))] * len(batch)
+    except Exception:
+        return [("error", _EMBEDDING_SSE_ERROR)] * len(batch)
 
     results: list[tuple[str, str]] = []
     expected_dims = MODEL_EMBEDDING_DIMENSIONS.get(current_model)
@@ -354,8 +361,8 @@ async def _process_chunk_batch(
                 row["id"],
             )
             results.append(("ok", ""))
-        except Exception as e:
-            results.append(("error", repr(e)))
+        except Exception:
+            results.append(("error", _EMBEDDING_SSE_ERROR))
 
     return results
 
@@ -449,8 +456,8 @@ async def _process_corpus_batch(
 
     try:
         embeddings = await generate_embeddings(texts, current_model, is_document=True)
-    except Exception as e:
-        return [("error", repr(e))] * len(batch)
+    except Exception:
+        return [("error", _EMBEDDING_SSE_ERROR)] * len(batch)
 
     results: list[tuple[str, str]] = []
     expected_dims = MODEL_EMBEDDING_DIMENSIONS.get(current_model)
@@ -470,8 +477,8 @@ async def _process_corpus_batch(
                 row["id"],
             )
             results.append(("ok", ""))
-        except Exception as e:
-            results.append(("error", repr(e)))
+        except Exception:
+            results.append(("error", _EMBEDDING_SSE_ERROR))
 
     return results
 

@@ -15,6 +15,7 @@ export type UiState = {
   activeConversationId: null | string;
   model: string;
   reasoning: boolean;
+  resetModel: () => void;
   setActiveConversationId: (id: null | string) => void;
   setModel: (model: string) => void;
   setReasoning: (reasoning: boolean) => void;
@@ -59,6 +60,9 @@ export const useUiStore = create<UiState>()(
       activeConversationId: null,
       model: DEFAULT_MODEL,
       reasoning: false,
+      resetModel: () => {
+        set({ model: DEFAULT_MODEL });
+      },
       setActiveConversationId: (id) => {
         set({ activeConversationId: id });
       },

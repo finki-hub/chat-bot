@@ -11,6 +11,7 @@ type ConversationRow = {
 type MockChatStateOptions = {
   readonly conversations?: readonly ConversationRow[];
   readonly histories?: Readonly<Record<string, ChatConversationHistory>>;
+  readonly onCreate?: () => void;
   readonly streamUrl: string;
 };
 
@@ -29,6 +30,7 @@ export const installMockChatState = async (
   {
     conversations: initialConversations = [],
     histories = {},
+    onCreate,
     streamUrl,
   }: MockChatStateOptions,
 ): Promise<void> => {
@@ -79,6 +81,7 @@ export const installMockChatState = async (
     const method = route.request().method();
 
     if (method === 'POST') {
+      onCreate?.();
       await route.fulfill({ headers: { location: streamUrl }, status: 307 });
       return;
     }

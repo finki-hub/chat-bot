@@ -29,7 +29,9 @@ export type AssistantMessageProps = {
   actions?: ReactNode;
   errorPart?: ErrorNotice;
   message: MyUIMessage;
+  onManageCredentials?: () => void;
   onRetry?: () => void;
+  onWait?: () => void;
   pending?: boolean;
   statusPart?: StatusPart;
 };
@@ -264,35 +266,150 @@ const MessageTiming = ({
   );
 };
 
-export const MessageError = ({
+const formatResetTime = (resetsAt: string | undefined): string | undefined => {
+  if (resetsAt === undefined) {
+    return undefined;
+  }
+
+  // eslint-disable-next-line unicorn/prefer-temporal -- browser support is required here.
+  const resetDate = new Date(resetsAt);
+  if (Number.isNaN(resetDate.getTime())) {
+    return undefined;
+  }
+
+  return new Intl.DateTimeFormat('mk-MK', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(resetDate);
+};
+
+const SponsoredQuotaError = ({
   errorPart,
-  onRetry,
+  onManageCredentials,
+  onWait,
 }: {
   errorPart: ErrorNotice;
-  onRetry?: () => void;
-}) => (
-  <div
-    className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm"
-    role="alert"
-  >
-    {errorPart.code === 'interrupted' ? (
-      <p className="text-muted-foreground">{t('error.interrupted')}</p>
-    ) : (
-      <div className="flex flex-col gap-2">
-        <p className="text-destructive">{errorPart.message}</p>
-        {onRetry ? (
+  onManageCredentials?: () => void;
+  onWait?: () => void;
+}) => {
+  const resetTime = formatResetTime(errorPart.resets_at);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-destructive">{t('error.sponsoredQuota')}</p>
+      {resetTime === undefined ? null : (
+        <p className="text-muted-foreground">
+          {t('error.sponsoredQuotaReset')} {resetTime}.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {onManageCredentials ? (
           <button
             className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={onRetry}
+            onClick={onManageCredentials}
             type="button"
           >
-            {t('error.retry')}
+            {t('error.manageCredentials')}
+          </button>
+        ) : null}
+        {onWait ? (
+          <button
+            className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={onWait}
+            type="button"
+          >
+            {t('error.sponsoredWait')}
           </button>
         ) : null}
       </div>
-    )}
-  </div>
-);
+    </div>
+  );
+};
+
+export const MessageError = ({
+  errorPart,
+  onManageCredentials,
+  onRetry,
+  onWait,
+}: {
+  errorPart: ErrorNotice;
+  onManageCredentials?: () => void;
+  onRetry?: () => void;
+  onWait?: () => void;
+}) => {
+  let content: ReactNode;
+
+  switch (errorPart.code) {
+    case 'credential_required':
+      content = (
+        <div className="flex flex-col gap-2">
+          <p className="text-destructive">{t('error.credentialRequired')}</p>
+          {onManageCredentials ? (
+            <button
+              className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={onManageCredentials}
+              type="button"
+            >
+              {t('error.manageCredentials')}
+            </button>
+          ) : null}
+        </div>
+      );
+      break;
+    case 'free_quota_exhausted':
+      content = (
+        <SponsoredQuotaError
+          errorPart={errorPart}
+          onManageCredentials={onManageCredentials}
+          onWait={onWait}
+        />
+      );
+      break;
+    case 'free_tier_unavailable':
+      content = (
+        <p className="text-destructive">{t('error.sponsoredUnavailable')}</p>
+      );
+      break;
+    case 'interrupted':
+      content = (
+        <p className="text-muted-foreground">{t('error.interrupted')}</p>
+      );
+      break;
+    case 'no_answer':
+      content = <p className="text-destructive">{t('error.noAnswer')}</p>;
+      break;
+    case 'sponsored_request_in_progress':
+      content = (
+        <p className="text-destructive">{t('error.sponsoredConcurrent')}</p>
+      );
+      break;
+    default:
+      content = (
+        <div className="flex flex-col gap-2">
+          <p className="text-destructive">{t('error.description')}</p>
+          {onRetry ? (
+            <button
+              className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={onRetry}
+              type="button"
+            >
+              {t('error.retry')}
+            </button>
+          ) : null}
+        </div>
+      );
+      break;
+  }
+
+  return (
+    <div
+      className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm"
+      role="alert"
+    >
+      {content}
+    </div>
+  );
+};
 
 // Keep in sync with the `duration-300` exit transition on the stepper wrapper.
 const STEP_EXIT_MS = 300;
@@ -370,7 +487,9 @@ export const AssistantMessage = ({
   actions,
   errorPart,
   message,
+  onManageCredentials,
   onRetry,
+  onWait,
   pending,
   statusPart,
 }: AssistantMessageProps) => {
@@ -444,7 +563,9 @@ export const AssistantMessage = ({
         {errorPart ? (
           <MessageError
             errorPart={errorPart}
+            onManageCredentials={onManageCredentials}
             onRetry={onRetry}
+            onWait={onWait}
           />
         ) : null}
         {answerVisible && actions !== undefined && actions !== null ? (

@@ -32,6 +32,12 @@ describe('Providers', () => {
       SessionProvider: ({ children }: { readonly children: ReactNode }) => (
         <>{children}</>
       ),
+      useSession: vi.fn<
+        () => { readonly data: null; readonly status: 'unauthenticated' }
+      >(() => ({
+        data: null,
+        status: 'unauthenticated',
+      })),
     }));
     vi.doMock('posthog-js/react', () => ({
       PostHogProvider: ({ children }: { readonly children: ReactNode }) => (
