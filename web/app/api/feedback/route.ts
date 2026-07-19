@@ -1,6 +1,9 @@
 import type {
   FeedbackAck,
   FeedbackClientPayload,
+  FeedbackRetractionAck,
+  FeedbackRetractionClientPayload,
+  FeedbackRetractionSchema,
   FeedbackSchema,
   FeedbackType,
 } from '@/lib/api-types';
@@ -45,6 +48,32 @@ const toSchema = (
   client: 'web',
   /* eslint-disable camelcase -- snake_case mirrors the Python API wire contract */
   feedback_type: payload.feedbackType,
+  response_id: payload.responseId,
+  user_id: userId,
+  /* eslint-enable camelcase -- snake_case mirrors the Python API wire contract */
+});
+
+const parseRetractionPayload = (
+  value: unknown,
+): FeedbackRetractionClientPayload | null => {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const { responseId } = candidate;
+  if (typeof responseId !== 'string' || responseId.length === 0) {
+    return null;
+  }
+  return { responseId };
+};
+
+const toRetractionSchema = (
+  payload: FeedbackRetractionClientPayload,
+  userId: string,
+): FeedbackRetractionSchema => ({
+  client: 'web',
+  /* eslint-disable camelcase -- snake_case mirrors the Python API wire contract */
   response_id: payload.responseId,
   user_id: userId,
   /* eslint-enable camelcase -- snake_case mirrors the Python API wire contract */
@@ -117,6 +146,63 @@ export const POST = async (req: Request): Promise<Response> => {
 
   try {
     ack = (await upstream.json()) as FeedbackAck;
+  } catch {
+    return jsonError('The feedback service returned an invalid response.', 502);
+  }
+
+  return Response.json(ack, {
+    headers: { 'content-type': 'application/json' },
+    status: 200,
+  });
+};
+
+export const DELETE = async (req: Request): Promise<Response> => {
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return jsonError('Invalid JSON body', 400);
+  }
+
+  const payload = parseRetractionPayload(raw);
+  if (payload === null) {
+    return jsonError('Invalid feedback payload: responseId is required.', 400);
+  }
+
+  let userId: string;
+  try {
+    userId = await getAuthenticatedChatUserId();
+  } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return unauthenticated();
+    }
+    throw error;
+  }
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${API_BASE_URL}/chat/feedback`, {
+      body: JSON.stringify(toRetractionSchema(payload, userId)),
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': CHAT_API_KEY,
+      },
+      method: 'DELETE',
+    });
+  } catch {
+    return jsonError('Failed to reach the feedback service.', 502);
+  }
+
+  if (upstream.status === 404) {
+    return jsonError('Feedback response not found.', 404);
+  }
+  if (!upstream.ok) {
+    return jsonError('The feedback service rejected the request.', 502);
+  }
+
+  let ack: FeedbackRetractionAck;
+  try {
+    ack = (await upstream.json()) as FeedbackRetractionAck;
   } catch {
     return jsonError('The feedback service returned an invalid response.', 502);
   }
