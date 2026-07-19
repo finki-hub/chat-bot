@@ -149,6 +149,14 @@ def test_sponsored_luna_defaults_are_disabled_and_safe():
     assert settings.SPONSORED_REQUEST_LEASE_SECONDS == 600
 
 
+def test_disabled_sponsored_luna_treats_blank_global_limit_as_unset(monkeypatch):
+    monkeypatch.setenv("SPONSORED_DAILY_GLOBAL_LIMIT", "")
+
+    settings = Settings(SPONSORED_LUNA_ENABLED=False)
+
+    assert settings.SPONSORED_DAILY_GLOBAL_LIMIT is None
+
+
 def test_sponsored_user_limit_cannot_exceed_five():
     with pytest.raises(ValueError, match="SPONSORED_DAILY_USER_LIMIT"):
         Settings(SPONSORED_DAILY_USER_LIMIT=6)

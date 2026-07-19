@@ -179,6 +179,16 @@ class Settings(BaseSettings):
         """Normalise the BYOK custom endpoint allowlist to comma-separated URLs."""
         return str(v).strip() if v else ""
 
+    @field_validator("SPONSORED_DAILY_GLOBAL_LIMIT", mode="before")
+    @classmethod
+    def parse_optional_sponsored_global_limit(
+        cls,
+        value: int | str | None,
+    ) -> int | str | None:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @field_validator("SPONSORED_OPENAI_BASE_URL", mode="before")
     @classmethod
     def parse_sponsored_base_url(cls, v: str | None) -> str | None:
