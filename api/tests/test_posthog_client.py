@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 from unittest.mock import create_autospec
 
 import pytest
@@ -12,7 +11,7 @@ def test_capture_exception_forwards_the_original_exception(
 ) -> None:
     # Given: an initialized PostHog client and an exception with debugging context.
     client = create_autospec(Posthog, instance=True)
-    monkeypatch.setattr(posthog_client, "_state", SimpleNamespace(client=client))
+    monkeypatch.setattr("app.utils.posthog_client._state.client", client)
     exception = RuntimeError("database unavailable")
 
     # When: the application reports the handled exception.
