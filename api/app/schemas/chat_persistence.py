@@ -68,6 +68,7 @@ class ChatConversation(BaseModel):
     user_id: UUID
     active_stream_id: UUID | None = None
     active_response_id: UUID | None = None
+    active_replacement_message_id: UUID | None = None
     active_status: ActiveStreamStatus | None = None
     model: str | None = None
     title: str | None = None
