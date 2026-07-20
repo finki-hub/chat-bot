@@ -1,9 +1,16 @@
 import type { FeedbackSelection, MyUIMessage } from '@/lib/api-types';
+import type { ActiveConversationStream } from '@/lib/conversation-types';
 
 type FinishedReplacement = {
   readonly pruneAfterReplacement: boolean;
   readonly replacement: MyUIMessage;
   readonly streamMessageId: string;
+};
+
+type HydrationReconciliation = {
+  readonly activeStream: ActiveConversationStream | null;
+  readonly current: readonly MyUIMessage[];
+  readonly persisted: readonly MyUIMessage[];
 };
 
 export const finalizeMessage = (
@@ -84,21 +91,6 @@ export const replaceFinishedMessage =
     });
   };
 
-export const applyFeedback =
-  (messageId: string, feedback: FeedbackSelection) =>
-  (messages: MyUIMessage[]): MyUIMessage[] =>
-    messages.map((message) => {
-      if (message.id !== messageId) {
-        return message;
-      }
-      if (feedback !== null) {
-        return { ...message, metadata: { ...message.metadata, feedback } };
-      }
-      const metadata = { ...message.metadata };
-      Reflect.deleteProperty(metadata, 'feedback');
-      return { ...message, metadata };
-    });
-
 export const previewRegeneration = (
   messages: MyUIMessage[],
   messageId: null | string,
@@ -123,3 +115,48 @@ export const previewRegeneration = (
     { ...target, metadata: {}, parts: [] },
   ];
 };
+
+export const reconcileHydratedMessages = ({
+  activeStream,
+  current,
+  persisted,
+}: HydrationReconciliation): MyUIMessage[] => {
+  if (activeStream === null) {
+    return [...persisted];
+  }
+  const resumedAssistant = current.find(
+    (message) =>
+      message.role === 'assistant' &&
+      message.metadata?.responseId === activeStream.id,
+  );
+  if (resumedAssistant === undefined) {
+    return previewRegeneration(
+      [...persisted],
+      activeStream.replacementMessageId,
+    );
+  }
+  const replacement =
+    activeStream.replacementMessageId === null
+      ? resumedAssistant
+      : { ...resumedAssistant, id: activeStream.replacementMessageId };
+  return replaceFinishedMessage({
+    pruneAfterReplacement: activeStream.replacementMessageId !== null,
+    replacement,
+    streamMessageId: resumedAssistant.id,
+  })([...persisted]);
+};
+
+export const applyFeedback =
+  (messageId: string, feedback: FeedbackSelection) =>
+  (messages: MyUIMessage[]): MyUIMessage[] =>
+    messages.map((message) => {
+      if (message.id !== messageId) {
+        return message;
+      }
+      if (feedback !== null) {
+        return { ...message, metadata: { ...message.metadata, feedback } };
+      }
+      const metadata = { ...message.metadata };
+      Reflect.deleteProperty(metadata, 'feedback');
+      return { ...message, metadata };
+    });
