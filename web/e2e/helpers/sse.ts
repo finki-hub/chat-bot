@@ -8,7 +8,11 @@ export type UiChunk =
       type: 'data-reset';
     }
   | {
-      data: { code: string; message: string };
+      data: {
+        code: string;
+        message: string;
+        resets_at?: string;
+      };
       transient: true;
       type: 'data-error';
     }
