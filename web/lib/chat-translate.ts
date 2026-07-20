@@ -27,7 +27,11 @@ export type ChatClientBody = {
   trigger?: string;
 };
 
-export type UiStreamMeta = { inferenceModel?: string; responseId?: string };
+export type UiStreamMeta = {
+  inferenceModel?: string;
+  replacementMessageId?: string;
+  responseId?: string;
+};
 
 export type UiStreamPart =
   | {
@@ -51,7 +55,7 @@ export type UiStreamPart =
   | { id: string; type: 'reasoning-start' }
   | { id: string; type: 'text-end' }
   | { id: string; type: 'text-start' }
-  | { messageMetadata: UiStreamMeta; type: 'start' }
+  | { messageId?: string; messageMetadata: UiStreamMeta; type: 'start' }
   | {
       messageMetadata: {
         diagnostics?: MessageDiagnostics;
@@ -174,7 +178,13 @@ export const translateToUiStream = async (
   idGen: () => string = () => crypto.randomUUID(),
 ): Promise<void> => {
   /* eslint-enable @typescript-eslint/max-params -- re-enable once past the declaration */
-  writer.write({ messageMetadata: meta, type: 'start' });
+  writer.write({
+    ...(meta.replacementMessageId !== undefined && {
+      messageId: meta.replacementMessageId,
+    }),
+    messageMetadata: meta,
+    type: 'start',
+  });
 
   const textPart = createStreamPart(writer, idGen, 'text');
   const reasoningPart = createStreamPart(writer, idGen, 'reasoning');

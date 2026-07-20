@@ -185,6 +185,7 @@ export type MyMetadata = {
   error?: ErrorNotice;
   feedback?: FeedbackType;
   inferenceModel?: string;
+  replacementMessageId?: string;
   responseId?: string;
   sources?: readonly RetrievedSource[];
   timing?: { totalMs: number; ttftMs: null | number };
