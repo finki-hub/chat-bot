@@ -13,6 +13,7 @@ class UserScopedRequest(BaseModel):
 class SetActiveStreamRequest(UserScopedRequest):
     active_stream_id: UUID
     active_response_id: UUID
+    active_replacement_message_id: UUID | None = None
     active_status: ActiveStreamStatus
 
 

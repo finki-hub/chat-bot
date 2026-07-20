@@ -109,3 +109,28 @@ async def mark_active_stream_stopped_if_current(
         active_stream_id,
     )
     return None if row is None else conversation_from_row(row)
+
+
+async def mark_active_stream_streaming_if_pending(
+    db: ChatPersistenceDatabase,
+    *,
+    conversation_id: UUID,
+    user_id: UUID,
+    active_stream_id: UUID,
+) -> ChatConversation | None:
+    row = await db.fetchrow(
+        """
+        UPDATE chat_conversation
+        SET active_status = 'streaming',
+            updated_at = NOW()
+        WHERE id = $1
+          AND user_id = $2
+          AND active_stream_id = $3
+          AND active_status = 'pending'
+        RETURNING *
+        """,
+        conversation_id,
+        user_id,
+        active_stream_id,
+    )
+    return None if row is None else conversation_from_row(row)
