@@ -24,7 +24,6 @@ export type ThreadProps = {
   onManageCredentials?: () => void;
   onPickSuggestion?: (text: string) => unknown;
   onRetry?: () => void;
-  onWait?: () => void;
   renderActions?: (message: MyUIMessage) => ReactNode;
   status: 'error' | 'ready' | 'streaming' | 'submitted';
 };
@@ -84,7 +83,6 @@ export const Thread = ({
   onManageCredentials,
   onPickSuggestion,
   onRetry,
-  onWait,
   renderActions,
   status,
 }: ThreadProps) => {
@@ -145,7 +143,6 @@ export const Thread = ({
                     isLastAssistant ? onManageCredentials : undefined
                   }
                   onRetry={isLastAssistant ? onRetry : undefined}
-                  onWait={isLastAssistant ? onWait : undefined}
                   pending={isLastAssistant && streaming}
                   statusPart={
                     isLastAssistant && streaming ? activeStatus : undefined
@@ -168,7 +165,6 @@ export const Thread = ({
               errorPart={activeError}
               onManageCredentials={onManageCredentials}
               onRetry={onRetry}
-              onWait={onWait}
             />
           </div>
         ) : null}

@@ -127,7 +127,6 @@ export const ChatScreen = () => {
     conversationListError,
     conversationListLoading,
     conversations,
-    dismissError,
     generatingTitleId,
     messages,
     onClearAll,
@@ -200,7 +199,6 @@ export const ChatScreen = () => {
             onManageCredentials={openCredentialSettings}
             onPickSuggestion={unavailable ? undefined : submitMessage}
             onRetry={unavailable ? undefined : retry}
-            onWait={dismissError}
             renderActions={renderActions}
             status={status}
           />

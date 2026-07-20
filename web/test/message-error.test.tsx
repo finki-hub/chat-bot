@@ -23,8 +23,15 @@ describe('MessageError', () => {
       />,
     );
 
+    const manageCredentials = screen.getByRole('button', {
+      name: 'Додај API клуч',
+    });
+
+    expect(manageCredentials).toBeVisible();
+    expect(manageCredentials).toHaveAttribute('data-variant', 'default');
+
     expect(
-      screen.getByRole('button', { name: 'Додај API клуч' }),
-    ).toBeVisible();
+      screen.queryByRole('button', { name: 'Почекај до ресетирањето' }),
+    ).not.toBeInTheDocument();
   });
 });

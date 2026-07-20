@@ -75,7 +75,6 @@ export const messages = {
   'error.sponsoredQuota': 'Бесплатната квота е искористена.',
   'error.sponsoredQuotaReset': 'Повторно ќе биде достапно на',
   'error.sponsoredUnavailable': 'Бесплатниот модел е привремено недостапен.',
-  'error.sponsoredWait': 'Почекај до ресетирањето',
   'error.title': 'Нешто тргна наопаку',
   'header.credentials': 'API клучеви',
   'header.github': 'GitHub репозиториум',
