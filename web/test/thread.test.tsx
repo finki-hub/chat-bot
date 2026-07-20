@@ -23,6 +23,7 @@ const CHUNK_SOURCE_TITLE_RE = /Статут на ФИНКИ · Член 12/u;
 const COLLAPSED_CHUNK_TEXT =
   'Правилата за запишување и заверка на семестарот се наведени во овој член…';
 const EXPANDED_CHUNK_TEXT_RE = /Вториот став/u;
+const SPONSORED_RESET_TEXT = '18 јул. 2026, 14:00.';
 const TIMING_TESTID = 'message-timing';
 
 const assistantWithParts = (parts: MyUIMessage['parts']): MyUIMessage => ({
@@ -319,9 +320,8 @@ describe('AssistantMessage', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('renders safe sponsored quota guidance with a localized reset and actions', async () => {
+  it('renders safe sponsored quota guidance with one recovery action', async () => {
     const onManageCredentials = vi.fn<() => void>();
-    const onWait = vi.fn<() => void>();
     const rawMessage = 'provider secret: https://attacker.invalid';
     const user = userEvent.setup();
 
@@ -334,7 +334,6 @@ describe('AssistantMessage', () => {
           resets_at: '2026-07-18T12:00:00Z',
         }}
         onManageCredentials={onManageCredentials}
-        onWait={onWait}
       />,
     );
 
@@ -343,21 +342,33 @@ describe('AssistantMessage', () => {
     expect(alert).not.toHaveTextContent(rawMessage);
     expect(alert).not.toHaveTextContent('2026-07-18T12:00:00Z');
     expect(alert).toHaveTextContent('Бесплатната квота е искористена.');
+    expect(alert).toHaveTextContent(SPONSORED_RESET_TEXT);
 
     expect(
       screen.getByRole('button', { name: 'Додај API клуч' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Почекај до ресетирањето' }),
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: 'Почекај до ресетирањето' }),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Додај API клуч' }));
-    await user.click(
-      screen.getByRole('button', { name: 'Почекај до ресетирањето' }),
-    );
 
     expect(onManageCredentials).toHaveBeenCalledOnce();
-    expect(onWait).toHaveBeenCalledOnce();
+  });
+
+  it('formats sponsored quota rollover in Skopje time', () => {
+    render(
+      <MessageError
+        errorPart={{
+          code: 'free_quota_exhausted',
+          message: 'safe detail',
+          // eslint-disable-next-line camelcase -- mirrors the SSE wire contract.
+          resets_at: '2026-07-18T22:30:00Z',
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('19 јул. 2026, 00:30.');
   });
 
   it.each([

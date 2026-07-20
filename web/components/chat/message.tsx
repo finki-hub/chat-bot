@@ -13,6 +13,7 @@ import { SearchStatus } from '@/components/chat/search-status';
 import { SearchStepper } from '@/components/chat/search-stepper';
 import { SourceCards } from '@/components/chat/source-cards';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
+import { Button } from '@/components/ui/button';
 import {
   HoverCard,
   HoverCardContent,
@@ -31,7 +32,6 @@ export type AssistantMessageProps = {
   message: MyUIMessage;
   onManageCredentials?: () => void;
   onRetry?: () => void;
-  onWait?: () => void;
   pending?: boolean;
   statusPart?: StatusPart;
 };
@@ -300,6 +300,30 @@ const MessageTiming = ({
   );
 };
 
+const MACEDONIAN_SHORT_MONTHS = [
+  'јан.',
+  'фев.',
+  'мар.',
+  'апр.',
+  'мај',
+  'јун.',
+  'јул.',
+  'авг.',
+  'септ.',
+  'окт.',
+  'ноем.',
+  'дек.',
+] as const;
+const SKOPJE_RESET_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  day: 'numeric',
+  hour: '2-digit',
+  hourCycle: 'h23',
+  minute: '2-digit',
+  month: 'numeric',
+  timeZone: 'Europe/Skopje',
+  year: 'numeric',
+});
+
 const formatResetTime = (resetsAt: string | undefined): string | undefined => {
   if (resetsAt === undefined) {
     return undefined;
@@ -311,20 +335,48 @@ const formatResetTime = (resetsAt: string | undefined): string | undefined => {
     return undefined;
   }
 
-  return new Intl.DateTimeFormat('mk-MK', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(resetDate);
+  const parts = new Map(
+    SKOPJE_RESET_TIME_FORMATTER.formatToParts(resetDate).map((part) => [
+      part.type,
+      part.value,
+    ]),
+  );
+  const day = parts.get('day');
+  if (day === undefined) {
+    return undefined;
+  }
+
+  const hours = parts.get('hour');
+  if (hours === undefined) {
+    return undefined;
+  }
+
+  const minutes = parts.get('minute');
+  if (minutes === undefined) {
+    return undefined;
+  }
+
+  const month = MACEDONIAN_SHORT_MONTHS.at(
+    Number.parseInt(parts.get('month') ?? '', 10) - 1,
+  );
+  if (month === undefined) {
+    return undefined;
+  }
+
+  const year = parts.get('year');
+  if (year === undefined) {
+    return undefined;
+  }
+
+  return `${day} ${month} ${year}, ${hours}:${minutes}`;
 };
 
 const SponsoredQuotaError = ({
   errorPart,
   onManageCredentials,
-  onWait,
 }: {
   errorPart: ErrorNotice;
   onManageCredentials?: () => void;
-  onWait?: () => void;
 }) => {
   const resetTime = formatResetTime(errorPart.resets_at);
 
@@ -336,26 +388,16 @@ const SponsoredQuotaError = ({
           {t('error.sponsoredQuotaReset')} {resetTime}.
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
-        {onManageCredentials ? (
-          <button
-            className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={onManageCredentials}
-            type="button"
-          >
-            {t('error.manageCredentials')}
-          </button>
-        ) : null}
-        {onWait ? (
-          <button
-            className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={onWait}
-            type="button"
-          >
-            {t('error.sponsoredWait')}
-          </button>
-        ) : null}
-      </div>
+      {onManageCredentials ? (
+        <Button
+          className="min-h-11 self-start sm:pointer-fine:min-h-8"
+          onClick={onManageCredentials}
+          size="sm"
+          type="button"
+        >
+          {t('error.manageCredentials')}
+        </Button>
+      ) : null}
     </div>
   );
 };
@@ -364,12 +406,10 @@ export const MessageError = ({
   errorPart,
   onManageCredentials,
   onRetry,
-  onWait,
 }: {
   errorPart: ErrorNotice;
   onManageCredentials?: () => void;
   onRetry?: () => void;
-  onWait?: () => void;
 }) => {
   let content: ReactNode;
 
@@ -395,7 +435,6 @@ export const MessageError = ({
         <SponsoredQuotaError
           errorPart={errorPart}
           onManageCredentials={onManageCredentials}
-          onWait={onWait}
         />
       );
       break;
@@ -523,7 +562,6 @@ export const AssistantMessage = ({
   message,
   onManageCredentials,
   onRetry,
-  onWait,
   pending,
   statusPart,
 }: AssistantMessageProps) => {
@@ -599,7 +637,6 @@ export const AssistantMessage = ({
             errorPart={errorPart}
             onManageCredentials={onManageCredentials}
             onRetry={onRetry}
-            onWait={onWait}
           />
         ) : null}
         {answerVisible && actions !== undefined && actions !== null ? (
