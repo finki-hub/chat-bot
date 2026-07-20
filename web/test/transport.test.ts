@@ -245,6 +245,32 @@ describe('buildChatTransport', () => {
     });
   });
 
+  it('normalizes an omitted active-stream replacement id to null', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          conversation: {
+            activeStream: { id: ACTIVE_STREAM_ID },
+            id: 'conv-7',
+            model: null,
+            title: null,
+          },
+          messages: [],
+        }),
+      ),
+    );
+
+    await expect(loadChatConversationHistory('conv-7')).resolves.toMatchObject({
+      conversation: {
+        activeStream: {
+          id: ACTIVE_STREAM_ID,
+          replacementMessageId: null,
+        },
+      },
+    });
+  });
+
   it('returns an empty conversation list when the server returns invalid JSON', async () => {
     vi.stubGlobal(
       'fetch',

@@ -314,8 +314,7 @@ async def upsert_assistant_message_state(
     payload: AssistantMessageUpsertRequest,
     db: ChatPersistenceDatabase = db_dep,
 ) -> ChatMessage:
-    await _ensure_owned(db, conversation_id=conversation_id, user_id=payload.user_id)
-    return await upsert_assistant_message_by_response_id(
+    updated = await upsert_assistant_message_by_response_id(
         db,
         ChatMessageUpsert(
             id=payload.id,
@@ -326,7 +325,12 @@ async def upsert_assistant_message_state(
             metadata=payload.metadata,
             parts=payload.parts,
         ),
+        active_stream_id=payload.active_stream_id or response_id,
+        user_id=payload.user_id,
     )
+    if updated is None:
+        raise _not_found()
+    return updated
 
 
 @router.put(
@@ -357,6 +361,7 @@ async def replace_assistant_message_state(
             metadata=payload.metadata,
             parts=payload.parts,
         ),
+        active_stream_id=payload.active_stream_id or response_id,
         retained_message_ids=payload.retained_message_ids,
         user_id=payload.user_id,
     )

@@ -267,6 +267,8 @@ class FakeChatDatabase:
             return deleted
 
         if "ON CONFLICT (conversation_id, response_id)" in query:
+            if "FOR UPDATE OF conversation" not in query:
+                raise AssertionError("assistant upsert must lock stream ownership")
             (
                 conversation_id,
                 response_id,
@@ -274,7 +276,15 @@ class FakeChatDatabase:
                 content,
                 metadata_json,
                 parts_json,
+                user_id,
+                active_stream_id,
             ) = args
+            conversation = self._owned_conversation(conversation_id, user_id)
+            if (
+                conversation is None
+                or conversation["active_stream_id"] != active_stream_id
+            ):
+                return None
             for existing in self.messages.values():
                 if (
                     existing["conversation_id"] == conversation_id
@@ -301,10 +311,13 @@ class FakeChatDatabase:
             return inserted_assistant
 
         if "WITH target AS" in query and "DELETE FROM chat_message stale" in query:
+            if "FOR UPDATE OF conversation" not in query:
+                raise AssertionError("assistant replacement must lock stream ownership")
             (
                 message_id,
                 conversation_id,
                 user_id,
+                active_stream_id,
                 content,
                 response_id,
                 metadata_json,
@@ -317,6 +330,7 @@ class FakeChatDatabase:
                 target is None
                 or conversation is None
                 or conversation["user_id"] != user_id
+                or conversation["active_stream_id"] != active_stream_id
                 or target["conversation_id"] != conversation_id
                 or target["role"] != "assistant"
                 or not isinstance(retained_message_ids, list)

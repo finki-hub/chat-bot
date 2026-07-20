@@ -215,12 +215,16 @@ describe('createChatStateClient', () => {
         { state: 'done', text: 'Answer', type: 'text' },
       ],
       responseId: 'response-parts',
+      streamId: 'stream-parts',
       userId: CHAT_USER_ID,
     });
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
-    expect(JSON.parse(init.body as string)).toMatchObject({
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+
+    expect(body['active_stream_id']).toBe('stream-parts');
+    expect(body).toMatchObject({
       parts: [
         { state: 'done', text: 'Reasoning', type: 'reasoning' },
         { state: 'done', text: 'Answer', type: 'text' },
@@ -243,12 +247,16 @@ describe('createChatStateClient', () => {
       parts: [{ state: 'done', text: 'Replacement', type: 'text' }],
       responseId: 'response-parts',
       retainedMessageIds: ['message-parts'],
+      streamId: 'stream-parts',
       userId: CHAT_USER_ID,
     });
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
-    expect(JSON.parse(init.body as string)).toMatchObject({
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+
+    expect(body['active_stream_id']).toBe('stream-parts');
+    expect(body).toMatchObject({
       parts: [{ state: 'done', text: 'Replacement', type: 'text' }],
     });
   });

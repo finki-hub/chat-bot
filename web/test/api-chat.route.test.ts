@@ -15,10 +15,12 @@ import {
   USER_ID,
 } from './api-chat-route-support';
 
+const SSE_CONTENT_TYPE = 'text/event-stream';
+
 const okStreamResponse = (...frames: string[]): Response =>
   new Response(sseBody(...frames), {
     headers: {
-      'content-type': 'text/event-stream',
+      'content-type': SSE_CONTENT_TYPE,
       'X-Response-Id': RESPONSE_ID,
     },
     status: 200,
@@ -38,6 +40,30 @@ const importPost = async (): Promise<(req: Request) => Promise<Response>> => {
 
   return POST;
 };
+
+const regenerationRequest = (): Request =>
+  new Request('http://localhost/api/chat', {
+    body: JSON.stringify({
+      id: CONVERSATION_ID,
+      messageId: TARGET_ASSISTANT_ID,
+      messages: [
+        {
+          id: 'u1',
+          parts: [{ text: 'Здраво', type: 'text' }],
+          role: 'user',
+        },
+        {
+          id: TARGET_ASSISTANT_ID,
+          parts: [{ text: 'Стар одговор', type: 'text' }],
+          role: 'assistant',
+        },
+      ],
+      model: MODEL,
+      trigger: 'regenerate-message',
+    }),
+    headers: { 'content-type': JSON_CONTENT_TYPE },
+    method: 'POST',
+  });
 
 describe('POST /api/chat', () => {
   beforeEach(() => {
@@ -82,7 +108,7 @@ describe('POST /api/chat', () => {
 
     const res = await POST(req);
 
-    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    expect(res.headers.get('content-type')).toContain(SSE_CONTENT_TYPE);
 
     expect(fetchMock).toHaveBeenCalledOnce();
 
@@ -96,7 +122,7 @@ describe('POST /api/chat', () => {
     };
     const out = await res.text();
 
-    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    expect(res.headers.get('content-type')).toContain(SSE_CONTENT_TYPE);
     expect(url).toBe(`${API_BASE_URL}/chat/`);
     expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
     expect(sentBody.messages).toStrictEqual([
@@ -310,6 +336,7 @@ describe('POST /api/chat', () => {
           { state: 'done', text: 'Здраво!', type: 'text' },
         ],
         responseId: RESPONSE_ID,
+        streamId: RESPONSE_ID,
         userId: USER_ID,
       });
     });
@@ -321,6 +348,28 @@ describe('POST /api/chat', () => {
       streamId: RESPONSE_ID,
       userId: USER_ID,
     });
+    expect(routeMocks.activeChatProducers.unregister).toHaveBeenCalledWith(
+      RESPONSE_ID,
+    );
+  });
+
+  it('treats stale normal persistence as a completed stream', async () => {
+    const { ChatStateRequestError } = await import('@/lib/chat-state-client');
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(okStreamResponse(HELLO_TOKEN_FRAME, DONE_FRAME)),
+    );
+    routeMocks.stateClient.upsertAssistantMessage.mockRejectedValueOnce(
+      new ChatStateRequestError(404),
+    );
+
+    const response = await (await importPost())(chatRequest());
+    const out = await response.text();
+
+    expect(out).toContain('Здраво');
+    expect(out).not.toContain('stream error');
     expect(routeMocks.activeChatProducers.unregister).toHaveBeenCalledWith(
       RESPONSE_ID,
     );
@@ -338,30 +387,7 @@ describe('POST /api/chat', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const post = await importPost();
-    const response = await post(
-      new Request('http://localhost/api/chat', {
-        body: JSON.stringify({
-          id: CONVERSATION_ID,
-          messageId: TARGET_ASSISTANT_ID,
-          messages: [
-            {
-              id: 'u1',
-              parts: [{ text: 'Здраво', type: 'text' }],
-              role: 'user',
-            },
-            {
-              id: TARGET_ASSISTANT_ID,
-              parts: [{ text: 'Стар одговор', type: 'text' }],
-              role: 'assistant',
-            },
-          ],
-          model: MODEL,
-          trigger: 'regenerate-message',
-        }),
-        headers: { 'content-type': JSON_CONTENT_TYPE },
-        method: 'POST',
-      }),
-    );
+    const response = await post(regenerationRequest());
 
     await response.text();
 
@@ -390,6 +416,7 @@ describe('POST /api/chat', () => {
         parts: [{ state: 'done', text: 'Нов одговор', type: 'text' }],
         responseId: RESPONSE_ID,
         retainedMessageIds: [SERVER_USER_MESSAGE_ID, TARGET_ASSISTANT_ID],
+        streamId: RESPONSE_ID,
         userId: USER_ID,
       });
     });
@@ -411,6 +438,33 @@ describe('POST /api/chat', () => {
       messageId: 'u1',
       userId: USER_ID,
     });
+  });
+
+  it('treats stale regeneration persistence as a completed stream', async () => {
+    const { ChatStateRequestError } = await import('@/lib/chat-state-client');
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          okStreamResponse(
+            'event: token\ndata: {"text":"Нов одговор"}\n\n',
+            DONE_FRAME,
+          ),
+        ),
+    );
+    routeMocks.stateClient.replaceAssistantMessage.mockRejectedValueOnce(
+      new ChatStateRequestError(404),
+    );
+
+    const response = await (await importPost())(regenerationRequest());
+    const out = await response.text();
+
+    expect(out).toContain('Нов одговор');
+    expect(out).not.toContain('stream error');
+    expect(routeMocks.activeChatProducers.unregister).toHaveBeenCalledWith(
+      RESPONSE_ID,
+    );
   });
 
   it('unregisters the producer before upstream when pending state fails', async () => {
@@ -495,14 +549,17 @@ describe('POST /api/chat', () => {
     });
   });
 
-  it('rejects missing response ids before active state or Redis stream creation', async () => {
+  it('accepts legacy upstream streams without an echoed response id', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn<typeof fetch>().mockResolvedValue(
-        new Response(sseBody('event: token\ndata: {"text":"orphan"}\n\n'), {
-          headers: { 'content-type': 'text/event-stream' },
-          status: 200,
-        }),
+        new Response(
+          sseBody('event: token\ndata: {"text":"legacy"}\n\n', DONE_FRAME),
+          {
+            headers: { 'content-type': SSE_CONTENT_TYPE },
+            status: 200,
+          },
+        ),
       ),
     );
 
@@ -510,19 +567,54 @@ describe('POST /api/chat', () => {
     const res = await post(chatRequest({ text: 'hi' }));
     const out = await res.text();
 
+    expect(out).toContain('legacy');
+    expect(out).not.toContain('data-error');
+    expect(routeMocks.stateClient.setActiveStream).toHaveBeenCalledOnce();
+
+    await vi.waitFor(() => {
+      expect(
+        routeMocks.stateClient.upsertAssistantMessage,
+      ).toHaveBeenCalledExactlyOnceWith({
+        content: 'legacy',
+        conversationId: CONVERSATION_ID,
+        metadata: {
+          inferenceModel: MODEL,
+          responseId: RESPONSE_ID,
+        },
+        parts: [{ state: 'done', text: 'legacy', type: 'text' }],
+        responseId: RESPONSE_ID,
+        streamId: RESPONSE_ID,
+        userId: USER_ID,
+      });
+    });
+  });
+
+  it('rejects an upstream response id that differs from the requested id', async () => {
+    const mismatchedResponseId = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d99';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(sseBody(HELLO_TOKEN_FRAME), {
+          headers: {
+            'content-type': SSE_CONTENT_TYPE,
+            'X-Response-Id': mismatchedResponseId,
+          },
+          status: 200,
+        }),
+      ),
+    );
+
+    const response = await (await importPost())(chatRequest());
+    const out = await response.text();
+
     expect(out).toContain('data-error');
     expect(out).toContain('Request failed');
-    expect(routeMocks.stateClient.setActiveStream).toHaveBeenCalledOnce();
-    expect(
-      routeMocks.stateClient.clearActiveStreamIfCurrent,
-    ).toHaveBeenCalledWith({
-      conversationId: CONVERSATION_ID,
-      streamId: RESPONSE_ID,
-      userId: USER_ID,
-    });
     expect(routeMocks.activeChatProducers.unregister).toHaveBeenCalledWith(
       RESPONSE_ID,
     );
+    expect(
+      routeMocks.stateClient.upsertAssistantMessage,
+    ).not.toHaveBeenCalled();
   });
 });
 

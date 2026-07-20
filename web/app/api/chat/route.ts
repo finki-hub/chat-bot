@@ -17,6 +17,7 @@ import {
   persistedTurns,
 } from '@/lib/chat-route-state';
 import {
+  type ChatStateClient,
   type ChatStateJsonValue,
   ChatStateRequestError,
   createChatStateClient,
@@ -44,6 +45,16 @@ export const dynamic = 'force-dynamic';
 
 const SSE_CONTENT_TYPE = 'text/event-stream';
 const USER_ID_FIELD = 'user_id';
+
+type AssistantPersistence = {
+  readonly chatState: ChatStateClient;
+  readonly conversationId: string;
+  readonly meta: UiStreamMeta;
+  readonly regenerationReplacement: null | RegenerationReplacement;
+  readonly responseMessage: MyUIMessage;
+  readonly streamId: string;
+  readonly userId: string;
+};
 
 type ConversationSummary = {
   readonly id: string;
@@ -146,6 +157,55 @@ const upstreamMessagesFor = (
   regenerationReplacement === null
     ? [...trustedHistory, ...currentMessages]
     : trustedHistory;
+
+const isStalePersistenceError = (error: unknown): boolean =>
+  error instanceof ChatStateRequestError && error.status === 404;
+
+const persistAssistantMessage = async ({
+  chatState,
+  conversationId,
+  meta,
+  regenerationReplacement,
+  responseMessage,
+  streamId,
+  userId,
+}: AssistantPersistence): Promise<void> => {
+  const content = joinText(responseMessage).trim();
+  if (content.length === 0) {
+    return;
+  }
+  const { metadata, parts } = assistantState(responseMessage, meta);
+
+  try {
+    if (regenerationReplacement === null) {
+      await chatState.upsertAssistantMessage({
+        content,
+        conversationId,
+        metadata,
+        parts,
+        responseId: streamId,
+        streamId,
+        userId,
+      });
+      return;
+    }
+    await chatState.replaceAssistantMessage({
+      content,
+      conversationId,
+      messageId: regenerationReplacement.messageId,
+      metadata,
+      parts,
+      responseId: streamId,
+      retainedMessageIds: regenerationReplacement.retainedMessageIds,
+      streamId,
+      userId,
+    });
+  } catch (error) {
+    if (!isStalePersistenceError(error)) {
+      throw error;
+    }
+  }
+};
 
 export const GET = async (): Promise<Response> => {
   const chatState = createChatStateClient();
@@ -298,16 +358,17 @@ export const POST = async (req: Request): Promise<Response> => {
       return errorResponse({ inferenceModel }, 'pre_stream', message);
     }
 
-    const responseId = upstream.headers.get('X-Response-Id') ?? undefined;
+    const upstreamResponseId = upstream.headers.get('X-Response-Id');
 
-    if (responseId !== streamId) {
+    if (upstreamResponseId !== null && upstreamResponseId !== streamId) {
       await cleanupPendingStream();
       return errorResponse(
-        { inferenceModel, responseId },
+        { inferenceModel, responseId: upstreamResponseId },
         'agent_error',
         'Request failed',
       );
     }
+    const responseId = streamId;
 
     const upstreamBody = upstream.body;
 
@@ -334,32 +395,15 @@ export const POST = async (req: Request): Promise<Response> => {
       },
       onEnd: async ({ responseMessage }) => {
         try {
-          const content = joinText(responseMessage).trim();
-
-          if (content.length > 0) {
-            const { metadata, parts } = assistantState(responseMessage, meta);
-            if (regenerationReplacement === null) {
-              await chatState.upsertAssistantMessage({
-                content,
-                conversationId,
-                metadata,
-                parts,
-                responseId: streamId,
-                userId,
-              });
-            } else {
-              await chatState.replaceAssistantMessage({
-                content,
-                conversationId,
-                messageId: regenerationReplacement.messageId,
-                metadata,
-                parts,
-                responseId: streamId,
-                retainedMessageIds: regenerationReplacement.retainedMessageIds,
-                userId,
-              });
-            }
-          }
+          await persistAssistantMessage({
+            chatState,
+            conversationId,
+            meta,
+            regenerationReplacement,
+            responseMessage,
+            streamId,
+            userId,
+          });
 
           await clearChatActiveStream({
             chatState,

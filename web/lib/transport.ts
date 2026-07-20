@@ -170,13 +170,15 @@ const parseActiveStream = (value: unknown): ActiveConversationStream | null => {
     return null;
   }
   const { id, replacementMessageId } = value;
+  const normalizedReplacementMessageId = replacementMessageId ?? null;
   if (
     typeof id !== 'string' ||
-    (replacementMessageId !== null && typeof replacementMessageId !== 'string')
+    (normalizedReplacementMessageId !== null &&
+      typeof normalizedReplacementMessageId !== 'string')
   ) {
     return null;
   }
-  return { id, replacementMessageId };
+  return { id, replacementMessageId: normalizedReplacementMessageId };
 };
 
 export const listChatConversations = async (): Promise<ConversationRow[]> => {

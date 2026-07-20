@@ -15,6 +15,8 @@ export const SHARE_TOKEN = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d23';
 export const USER_ID = 'anon-user-1';
 export const OTHER_USER_ID = 'anon-user-2';
 
+const randomUuidSpy = vi.spyOn(crypto, 'randomUUID');
+
 export type LoadedConversation = {
   readonly conversation: {
     readonly active_replacement_message_id: null | string;
@@ -193,7 +195,7 @@ export const routeMocks = {
 
 export const resetRouteMocks = (): void => {
   vi.clearAllMocks();
-  vi.spyOn(crypto, 'randomUUID').mockReturnValue(RESPONSE_ID);
+  randomUuidSpy.mockReturnValue(RESPONSE_ID);
   routeMocks.consumedResumableStreams.length = 0;
   routeMocks.getAuthenticatedChatUserId.mockResolvedValue(USER_ID);
   routeMocks.sharingClient.getConversationShareStatus.mockResolvedValue(null);

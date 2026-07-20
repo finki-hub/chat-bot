@@ -121,6 +121,7 @@ type ReplaceAssistantMessageInput = {
   readonly parts: readonly ChatStateJsonValue[];
   readonly responseId: string;
   readonly retainedMessageIds: readonly string[];
+  readonly streamId: string;
   readonly userId: string;
 };
 
@@ -146,6 +147,7 @@ type UpsertAssistantMessageInput = {
   readonly metadata: ChatStateMetadata;
   readonly parts: readonly ChatStateJsonValue[];
   readonly responseId: string;
+  readonly streamId: string;
   readonly userId: string;
 };
 
@@ -306,12 +308,14 @@ export const createChatStateClient = (): ChatStateClient => ({
     parts,
     responseId,
     retainedMessageIds,
+    streamId,
     userId,
   }) => {
     await sendStateRequest(
       `/conversations/${conversationId}/messages/assistant/${messageId}/replacement/${responseId}`,
       {
         body: JSON.stringify({
+          active_stream_id: streamId,
           content,
           metadata,
           parts,
@@ -366,12 +370,14 @@ export const createChatStateClient = (): ChatStateClient => ({
     metadata,
     parts,
     responseId,
+    streamId,
     userId,
   }) => {
     await sendStateRequest(
       `/conversations/${conversationId}/messages/assistant/${responseId}`,
       {
         body: JSON.stringify({
+          active_stream_id: streamId,
           content,
           id: crypto.randomUUID(),
           metadata,

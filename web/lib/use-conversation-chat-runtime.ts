@@ -122,12 +122,6 @@ export const useConversationChatRuntime = ({
         if (finishedConversationId === null) {
           return;
         }
-        if (replacementId !== null && message.id === replacementId) {
-          regeneratingMessageIdRef.current = null;
-          setRegeneratingMessageId(null);
-          fireAndForget(refreshConversations());
-          return;
-        }
         regeneratingMessageIdRef.current = null;
         setRegeneratingMessageId(null);
         const finalizedBase = finalizeMessage(

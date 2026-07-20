@@ -48,10 +48,11 @@ class UserMessageUpsertRequest(UserScopedRequest):
 
 
 class AssistantMessageUpsertRequest(UserMessageUpsertRequest):
-    pass
+    active_stream_id: UUID | None = None
 
 
 class AssistantMessageReplacementRequest(UserScopedRequest):
+    active_stream_id: UUID | None = None
     content: str = Field(min_length=1)
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
     parts: list[JsonValue] | None = None
