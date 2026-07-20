@@ -235,7 +235,12 @@ describe('buildChatTransport', () => {
     );
 
     await expect(loadChatConversationHistory('conv-7')).resolves.toStrictEqual({
-      conversation: { id: 'conv-7', model: null, title: 'New conversation' },
+      conversation: {
+        activeStream: null,
+        id: 'conv-7',
+        model: null,
+        title: 'New conversation',
+      },
       messages,
     });
   });

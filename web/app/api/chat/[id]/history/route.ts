@@ -10,6 +10,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type HistoryConversation = {
+  readonly activeStream: null | {
+    readonly id: string;
+    readonly replacementMessageId: null | string;
+  };
   readonly id: string;
   readonly model: ModelId | null;
   readonly title: null | string;
@@ -38,6 +42,13 @@ export const GET = async (
     });
     const uiMessages = await parseChatStateMessages(messages);
     const historyConversation: HistoryConversation = {
+      activeStream:
+        conversation.active_stream_id === null
+          ? null
+          : {
+              id: conversation.active_stream_id,
+              replacementMessageId: conversation.active_replacement_message_id,
+            },
       id: conversation.id,
       model: conversation.model ?? null,
       title: conversation.title ?? null,
