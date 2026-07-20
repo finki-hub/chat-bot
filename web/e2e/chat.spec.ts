@@ -23,6 +23,8 @@ const OBSERVABLE_STAGE_GAP_MS = 5_000;
 const ANSWER_TEST_ID = 'answer-text';
 const ANSWER_PREVIEW = 'Резултатите од испитите се објавуваат';
 const SPONSORED_MODEL = 'gemini-3.5-flash';
+const SPONSORED_RESET_AT = '2099-01-01T12:00:00Z';
+const SPONSORED_RESET_TEXT = 'Повторно ќе биде достапно на 1 јан. 2099, 13:00.';
 const COMPOSER_INPUT = ['composer', 'input'].join('-');
 const COMPOSER_SUBMIT = ['composer', 'submit'].join('-');
 /* eslint-disable camelcase -- catalog fixture mirrors the API wire contract. */
@@ -36,7 +38,7 @@ const SPONSORED_CATALOG: ModelCatalog = {
       sponsored_quota: {
         limit: 5,
         remaining: 0,
-        resets_at: '2099-01-01T12:00:00Z',
+        resets_at: SPONSORED_RESET_AT,
       },
     },
   ],
@@ -44,13 +46,21 @@ const SPONSORED_CATALOG: ModelCatalog = {
   version: 1,
 };
 /* eslint-enable camelcase -- end catalog wire fixture. */
-const errorStream = (code: string, message: string) =>
+const errorStream = (code: string, message: string, resetsAt?: string) =>
   startChatStreamServer({
     gapMs: 0,
     head: [
       { messageMetadata: { inferenceModel: SPONSORED_MODEL }, type: 'start' },
       {
-        data: { code, message },
+        data:
+          resetsAt === undefined
+            ? { code, message }
+            : {
+                code,
+                message,
+                // eslint-disable-next-line camelcase -- mirrors the SSE wire contract.
+                resets_at: resetsAt,
+              },
         transient: true,
         type: 'data-error',
       },
@@ -236,7 +246,7 @@ test.describe('chat streaming (mocked BFF)', () => {
     await chatServer.close();
   });
 
-  test('shows quota exhaustion actions and preserves the prior conversation', async ({
+  test('shows quota recovery and preserves the prior conversation', async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ height: 812, width: 375 });
@@ -259,6 +269,7 @@ test.describe('chat streaming (mocked BFF)', () => {
     const chatServer = await errorStream(
       'free_quota_exhausted',
       'backend quota detail must not render',
+      SPONSORED_RESET_AT,
     );
     try {
       await page.route('**/api/health', async (route) => {
@@ -313,6 +324,7 @@ test.describe('chat streaming (mocked BFF)', () => {
       await expect(
         page.getByText('Бесплатната квота е искористена.'),
       ).toBeVisible();
+      await expect(page.getByText(SPONSORED_RESET_TEXT)).toBeVisible();
       await expect(
         page.getByText('backend quota detail must not render'),
       ).toHaveCount(0);
@@ -321,19 +333,30 @@ test.describe('chat streaming (mocked BFF)', () => {
       ).toBeVisible();
       await expect(
         page.getByRole('button', { name: 'Почекај до ресетирањето' }),
-      ).toBeVisible();
+      ).toHaveCount(0);
       await expect(page.getByText('Претходен одговор')).toBeVisible();
-      await page.screenshot({
-        animations: 'disabled',
-        path: testInfo.outputPath(
-          'sponsored-exhaustion-preserved-conversation.png',
-        ),
-      });
+      await page.getByRole('button', { name: 'Промени тема' }).click();
+      for (const viewport of [
+        { height: 812, label: 'mobile', width: 375 },
+        { height: 900, label: 'tablet', width: 768 },
+        { height: 800, label: 'desktop', width: 1_280 },
+      ] as const) {
+        await page.setViewportSize(viewport);
+        await expect(
+          page.getByText('Бесплатната квота е искористена.'),
+        ).toBeVisible();
+        await page.screenshot({
+          animations: 'disabled',
+          path: testInfo.outputPath(
+            `sponsored-exhaustion-${viewport.label}.png`,
+          ),
+        });
+      }
 
-      await page
-        .getByRole('button', { name: 'Почекај до ресетирањето' })
-        .click();
-      await expect(page.getByText('Претходен одговор')).toBeVisible();
+      await page.getByRole('button', { name: 'Додај API клуч' }).click();
+      await expect(
+        page.getByRole('dialog', { name: 'Лични API клучеви' }),
+      ).toBeVisible();
     } finally {
       await chatServer.close();
     }
