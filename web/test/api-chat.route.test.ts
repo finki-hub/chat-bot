@@ -113,6 +113,7 @@ describe('POST /api/chat', () => {
       'x-api-key': 'test-key',
       'X-Distinct-Id': 'browser-distinct-id',
       'X-PostHog-Session-Id': 'session-test-id',
+      'X-Response-Id': RESPONSE_ID,
     });
     expect(out).toContain('Здраво');
     expect(out).toContain(RESPONSE_ID);
@@ -199,17 +200,66 @@ describe('POST /api/chat', () => {
       RESPONSE_ID,
       expect.any(AbortController),
     );
-    expect(routeMocks.stateClient.setActiveStream).toHaveBeenCalledWith({
+    expect(routeMocks.stateClient.setActiveStream).toHaveBeenNthCalledWith(1, {
       activeResponseId: RESPONSE_ID,
+      activeStatus: 'pending',
       activeStreamId: RESPONSE_ID,
       conversationId: CONVERSATION_ID,
+      replacementMessageId: null,
       userId: USER_ID,
     });
     expect(
       routeMocks.resumableContext.createNewResumableStream,
     ).toHaveBeenCalledWith(RESPONSE_ID, expect.any(Function));
+
+    await vi.waitFor(() => {
+      expect(
+        routeMocks.stateClient.markActiveStreamStreamingIfPending,
+      ).toHaveBeenCalledExactlyOnceWith({
+        conversationId: CONVERSATION_ID,
+        streamId: RESPONSE_ID,
+        userId: USER_ID,
+      });
+    });
+
+    expect(routeMocks.stateClient.setActiveStream).toHaveBeenCalledOnce();
+
     await expect(res.text()).resolves.toContain('Здраво');
     expect(routeMocks.consumedResumableStreams.at(0)).toContain('Здраво');
+  });
+
+  it('claims pending ownership before starting the upstream request', async () => {
+    let pendingWasClaimed = false;
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(() => {
+      pendingWasClaimed =
+        routeMocks.stateClient.setActiveStream.mock.calls.length === 1;
+      return Promise.resolve(okStreamResponse(HELLO_TOKEN_FRAME, DONE_FRAME));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const response = await (await importPost())(chatRequest());
+
+    await response.text();
+
+    expect(pendingWasClaimed).toBe(true);
+  });
+
+  it('keeps the response alive when its pending stream was superseded', async () => {
+    const { ChatStateRequestError } = await import('@/lib/chat-state-client');
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(okStreamResponse(HELLO_TOKEN_FRAME, DONE_FRAME));
+    routeMocks.stateClient.markActiveStreamStreamingIfPending.mockRejectedValueOnce(
+      new ChatStateRequestError(404),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const response = await (await importPost())(chatRequest());
+
+    await expect(response.text()).resolves.toContain('Здраво');
+    expect(routeMocks.activeChatProducers.unregister).toHaveBeenCalledWith(
+      RESPONSE_ID,
+    );
   });
 
   it('persists the final assistant message and clears the active stream when streaming completes', async () => {
@@ -231,36 +281,39 @@ describe('POST /api/chat', () => {
     const res = await (await importPost())(chatRequest({ text: 'Hi' }));
     await res.text();
 
-    expect(
-      routeMocks.stateClient.upsertAssistantMessage,
-    ).toHaveBeenCalledExactlyOnceWith({
-      content: 'Здраво!',
-      conversationId: CONVERSATION_ID,
-      metadata: {
-        diagnostics: {
-          candidateCount: null,
-          serverTotalMs: 1_700,
-          serverTtftMs: 200,
-          spans: {},
-          thinkingMs: 400,
-          tokens: { input: 10, output: 20, total: 30 },
-          topDistance: null,
+    await vi.waitFor(() => {
+      expect(
+        routeMocks.stateClient.upsertAssistantMessage,
+      ).toHaveBeenCalledExactlyOnceWith({
+        content: 'Здраво!',
+        conversationId: CONVERSATION_ID,
+        metadata: {
+          diagnostics: {
+            candidateCount: null,
+            serverTotalMs: 1_700,
+            serverTtftMs: 200,
+            spans: {},
+            thinkingMs: 400,
+            tokens: { input: 10, output: 20, total: 30 },
+            topDistance: null,
+          },
+          inferenceModel: MODEL,
+          responseId: RESPONSE_ID,
+          timing: { totalMs: 1_700, ttftMs: 200 },
         },
-        inferenceModel: MODEL,
+        parts: [
+          {
+            state: 'done',
+            text: 'Проверувам правила.',
+            type: 'reasoning',
+          },
+          { state: 'done', text: 'Здраво!', type: 'text' },
+        ],
         responseId: RESPONSE_ID,
-        timing: { totalMs: 1_700, ttftMs: 200 },
-      },
-      parts: [
-        {
-          state: 'done',
-          text: 'Проверувам правила.',
-          type: 'reasoning',
-        },
-        { state: 'done', text: 'Здраво!', type: 'text' },
-      ],
-      responseId: RESPONSE_ID,
-      userId: USER_ID,
+        userId: USER_ID,
+      });
     });
+
     expect(
       routeMocks.stateClient.clearActiveStreamIfCurrent,
     ).toHaveBeenCalledWith({
@@ -321,16 +374,32 @@ describe('POST /api/chat', () => {
     expect(upstreamBody.match(/Stored question/gu)).toHaveLength(1);
     expect(upstreamBody).not.toContain('Здраво');
     expect(upstreamBody).not.toContain('Стар одговор');
-    expect(
-      routeMocks.stateClient.replaceAssistantMessage,
-    ).toHaveBeenCalledExactlyOnceWith({
-      content: 'Нов одговор',
+
+    await vi.waitFor(() => {
+      expect(
+        routeMocks.stateClient.replaceAssistantMessage,
+      ).toHaveBeenCalledExactlyOnceWith({
+        content: 'Нов одговор',
+        conversationId: CONVERSATION_ID,
+        messageId: TARGET_ASSISTANT_ID,
+        metadata: {
+          inferenceModel: MODEL,
+          replacementMessageId: TARGET_ASSISTANT_ID,
+          responseId: RESPONSE_ID,
+        },
+        parts: [{ state: 'done', text: 'Нов одговор', type: 'text' }],
+        responseId: RESPONSE_ID,
+        retainedMessageIds: [SERVER_USER_MESSAGE_ID, TARGET_ASSISTANT_ID],
+        userId: USER_ID,
+      });
+    });
+
+    expect(routeMocks.stateClient.setActiveStream).toHaveBeenNthCalledWith(1, {
+      activeResponseId: RESPONSE_ID,
+      activeStatus: 'pending',
+      activeStreamId: RESPONSE_ID,
       conversationId: CONVERSATION_ID,
-      messageId: TARGET_ASSISTANT_ID,
-      metadata: { inferenceModel: MODEL, responseId: RESPONSE_ID },
-      parts: [{ state: 'done', text: 'Нов одговор', type: 'text' }],
-      responseId: RESPONSE_ID,
-      retainedMessageIds: [SERVER_USER_MESSAGE_ID, TARGET_ASSISTANT_ID],
+      replacementMessageId: TARGET_ASSISTANT_ID,
       userId: USER_ID,
     });
     expect(
@@ -344,7 +413,7 @@ describe('POST /api/chat', () => {
     });
   });
 
-  it('aborts upstream and unregisters the producer when setting active stream state fails', async () => {
+  it('unregisters the producer before upstream when pending state fails', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(okStreamResponse(HELLO_TOKEN_FRAME));
@@ -354,13 +423,10 @@ describe('POST /api/chat', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const res = await (await importPost())(chatRequest({ text: 'Hi' }));
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const signal = init.signal;
-    const abortSignal = signal instanceof AbortSignal ? signal : null;
     const out = await res.text();
 
     expect(out).toContain('data-error');
-    expect(abortSignal?.aborted).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(routeMocks.activeChatProducers.unregister).toHaveBeenCalledWith(
       RESPONSE_ID,
     );
@@ -422,7 +488,11 @@ describe('POST /api/chat', () => {
     expect(out).not.toContain('Failed to retrieve or re-rank context');
     expect(
       routeMocks.stateClient.clearActiveStreamIfCurrent,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      streamId: RESPONSE_ID,
+      userId: USER_ID,
+    });
   });
 
   it('rejects missing response ids before active state or Redis stream creation', async () => {
@@ -442,8 +512,17 @@ describe('POST /api/chat', () => {
 
     expect(out).toContain('data-error');
     expect(out).toContain('Request failed');
-    expect(routeMocks.stateClient.setActiveStream).not.toHaveBeenCalled();
-    expect(routeMocks.activeChatProducers.register).not.toHaveBeenCalled();
+    expect(routeMocks.stateClient.setActiveStream).toHaveBeenCalledOnce();
+    expect(
+      routeMocks.stateClient.clearActiveStreamIfCurrent,
+    ).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      streamId: RESPONSE_ID,
+      userId: USER_ID,
+    });
+    expect(routeMocks.activeChatProducers.unregister).toHaveBeenCalledWith(
+      RESPONSE_ID,
+    );
   });
 });
 

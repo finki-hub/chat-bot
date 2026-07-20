@@ -22,19 +22,21 @@ import {
   createChatStateClient,
 } from '@/lib/chat-state-client';
 import {
+  clearChatActiveStream,
+  finishChatStream,
+  registerPendingChatStream,
+  startResumableChatStream,
+} from '@/lib/chat-stream-lifecycle';
+import {
   type ChatClientBody,
   currentUserMessageForRequest,
   toChatRequestBody,
   translateToUiStream,
   type UiStreamMeta,
 } from '@/lib/chat-translate';
-import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
+import { requestUpstreamChatStream } from '@/lib/chat-upstream';
 import { joinText } from '@/lib/message-parts';
-import {
-  activeChatProducers,
-  createChatResumableStreamContext,
-  normalizePythonResponseStreamId,
-} from '@/lib/resumable-stream-context';
+import { activeChatProducers } from '@/lib/resumable-stream-context';
 import { parseProtocolV2 } from '@/lib/sse';
 
 export const runtime = 'nodejs';
@@ -92,18 +94,6 @@ const conversationSummary = (conversation: {
 
 const requiredText = (value: string | undefined): null | string =>
   value === undefined || value.length === 0 ? null : value;
-
-const ignoreMissing = async (operation: Promise<void>): Promise<void> => {
-  try {
-    await operation;
-  } catch (error) {
-    if (error instanceof ChatStateRequestError && error.status === 404) {
-      return;
-    }
-
-    throw error;
-  }
-};
 
 const regeneratedMessageId = (body: ResumableChatClientBody): null | string =>
   body.trigger === 'regenerate-message' &&
@@ -263,44 +253,66 @@ export const POST = async (req: Request): Promise<Response> => {
       userId,
     });
     const upstreamController = new AbortController();
+    const streamId = crypto.randomUUID();
+
+    await registerPendingChatStream({
+      chatState,
+      conversationId,
+      replacementMessageId: regenerationReplacement?.messageId ?? null,
+      streamId,
+      upstreamController,
+      userId,
+    });
+    const cleanupPendingStream = async (): Promise<void> => {
+      upstreamController.abort();
+      await finishChatStream({ chatState, conversationId, streamId, userId });
+    };
 
     const upstreamPayload = {
       ...chatBody,
       messages: upstreamMessages,
       [USER_ID_FIELD]: userId,
     } satisfies ChatRequestBody & { user_id: string };
-    const upstream = await fetch(`${API_BASE_URL}/chat/`, {
-      body: JSON.stringify(upstreamPayload),
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': CHAT_API_KEY,
-        'X-Distinct-Id':
-          typeof clientBody.posthogDistinctId === 'string' &&
-          clientBody.posthogDistinctId.length > 0
-            ? clientBody.posthogDistinctId
-            : userId,
-        ...(typeof clientBody.posthogSessionId === 'string' &&
-          clientBody.posthogSessionId.length > 0 && {
-            'X-PostHog-Session-Id': clientBody.posthogSessionId,
-          }),
-      },
-      method: 'POST',
-      signal: upstreamController.signal,
-    });
+    let upstream: Response;
+    try {
+      upstream = await requestUpstreamChatStream({
+        payload: upstreamPayload,
+        posthogDistinctId: clientBody.posthogDistinctId,
+        posthogSessionId: clientBody.posthogSessionId,
+        signal: upstreamController.signal,
+        streamId,
+        userId,
+      });
+    } catch (error) {
+      await cleanupPendingStream();
+      throw error;
+    }
 
     const contentType = upstream.headers.get('content-type') ?? '';
 
     if (!upstream.ok || !contentType.includes(SSE_CONTENT_TYPE)) {
       const message = readDetail();
 
+      await cleanupPendingStream();
+
       return errorResponse({ inferenceModel }, 'pre_stream', message);
     }
 
     const responseId = upstream.headers.get('X-Response-Id') ?? undefined;
-    const streamId = normalizePythonResponseStreamId(responseId);
+
+    if (responseId !== streamId) {
+      await cleanupPendingStream();
+      return errorResponse(
+        { inferenceModel, responseId },
+        'agent_error',
+        'Request failed',
+      );
+    }
+
     const upstreamBody = upstream.body;
 
     if (upstreamBody === null) {
+      await cleanupPendingStream();
       return errorResponse(
         { inferenceModel, responseId },
         'agent_error',
@@ -308,22 +320,13 @@ export const POST = async (req: Request): Promise<Response> => {
       );
     }
 
-    activeChatProducers.register(streamId, upstreamController);
-
-    try {
-      await chatState.setActiveStream({
-        activeResponseId: streamId,
-        activeStreamId: streamId,
-        conversationId,
-        userId,
-      });
-    } catch (error) {
-      upstreamController.abort();
-      activeChatProducers.unregister(streamId);
-      throw error;
-    }
-
-    const meta = { inferenceModel, responseId: streamId };
+    const meta = {
+      inferenceModel,
+      ...(regenerationReplacement !== null && {
+        replacementMessageId: regenerationReplacement.messageId,
+      }),
+      responseId: streamId,
+    };
 
     const stream = createUIMessageStream<MyUIMessage>({
       execute: async ({ writer }) => {
@@ -358,13 +361,12 @@ export const POST = async (req: Request): Promise<Response> => {
             }
           }
 
-          await ignoreMissing(
-            chatState.clearActiveStreamIfCurrent({
-              conversationId,
-              streamId,
-              userId,
-            }),
-          );
+          await clearChatActiveStream({
+            chatState,
+            conversationId,
+            streamId,
+            userId,
+          });
         } finally {
           activeChatProducers.unregister(streamId);
         }
@@ -375,24 +377,15 @@ export const POST = async (req: Request): Promise<Response> => {
 
     return createUIMessageStreamResponse({
       consumeSseStream: async ({ stream: sseStream }) => {
-        try {
-          await createChatResumableStreamContext({
-            waitUntil: after,
-          }).createNewResumableStream(streamId, () => sseStream);
-        } catch {
-          upstreamController.abort();
-          try {
-            await ignoreMissing(
-              chatState.clearActiveStreamIfCurrent({
-                conversationId,
-                streamId,
-                userId,
-              }),
-            );
-          } finally {
-            activeChatProducers.unregister(streamId);
-          }
-        }
+        await startResumableChatStream({
+          chatState,
+          conversationId,
+          sseStream,
+          streamId,
+          upstreamController,
+          userId,
+          waitUntil: after,
+        });
       },
       stream,
     });

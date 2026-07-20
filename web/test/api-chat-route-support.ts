@@ -17,6 +17,7 @@ export const OTHER_USER_ID = 'anon-user-2';
 
 export type LoadedConversation = {
   readonly conversation: {
+    readonly active_replacement_message_id: null | string;
     readonly active_response_id: null | string;
     readonly active_status: null | string;
     readonly active_stream_id: null | string;
@@ -137,6 +138,7 @@ export const routeMocks = {
     deleteConversation: vi.fn(async (_input: StateClientInput) => {}),
     listConversations: vi.fn(async (_input: { readonly userId: string }) => [
       {
+        active_replacement_message_id: null,
         active_response_id: null,
         active_status: null,
         active_stream_id: null,
@@ -149,6 +151,7 @@ export const routeMocks = {
     loadConversation: vi.fn(
       async (_input: StateClientInput): Promise<LoadedConversation> => ({
         conversation: {
+          active_replacement_message_id: null,
           active_response_id: RESPONSE_ID,
           active_status: 'streaming',
           active_stream_id: RESPONSE_ID,
@@ -175,6 +178,9 @@ export const routeMocks = {
         ],
       }),
     ),
+    markActiveStreamStreamingIfPending: vi.fn(
+      async (_input: StateClientInput) => {},
+    ),
     replaceAssistantMessage: vi.fn(async (_input: StateClientInput) => {}),
     setActiveStream: vi.fn(async (_input: StateClientInput) => {}),
     stopActiveStreamIfCurrent: vi.fn(async (_input: StateClientInput) => {}),
@@ -187,6 +193,7 @@ export const routeMocks = {
 
 export const resetRouteMocks = (): void => {
   vi.clearAllMocks();
+  vi.spyOn(crypto, 'randomUUID').mockReturnValue(RESPONSE_ID);
   routeMocks.consumedResumableStreams.length = 0;
   routeMocks.getAuthenticatedChatUserId.mockResolvedValue(USER_ID);
   routeMocks.sharingClient.getConversationShareStatus.mockResolvedValue(null);
