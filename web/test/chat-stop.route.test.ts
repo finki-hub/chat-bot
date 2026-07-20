@@ -52,6 +52,7 @@ describe('POST /api/chat/[id]/stop', () => {
     // Given: the API state already has no active stream.
     routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
       conversation: {
+        active_replacement_message_id: null,
         active_response_id: null,
         active_status: 'stopped',
         active_stream_id: null,
@@ -80,6 +81,7 @@ describe('POST /api/chat/[id]/stop', () => {
     // Given: a stale stop request races after a newer active stream was stored.
     routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
       conversation: {
+        active_replacement_message_id: null,
         active_response_id: NEWER_STREAM_ID,
         active_status: 'streaming',
         active_stream_id: NEWER_STREAM_ID,
@@ -113,6 +115,7 @@ describe('POST /api/chat/[id]/stop', () => {
     // Given: the server already recorded an active stream before the browser received its response id.
     routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
       conversation: {
+        active_replacement_message_id: null,
         active_response_id: RESPONSE_ID,
         active_status: 'streaming',
         active_stream_id: RESPONSE_ID,

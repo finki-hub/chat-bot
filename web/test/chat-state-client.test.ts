@@ -312,10 +312,36 @@ describe('createChatStateClient', () => {
     await expect(
       createChatStateClient().setActiveStream({
         activeResponseId: 'response-missing',
+        activeStatus: 'pending',
         activeStreamId: 'stream-missing',
         conversationId: 'conv-missing',
+        replacementMessageId: null,
         userId: CHAT_USER_ID,
       }),
     ).rejects.toMatchObject(new ChatStateRequestError(404));
+  });
+
+  it('marks only the matching pending stream as streaming', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { createChatStateClient } = await import('@/lib/chat-state-client');
+    await createChatStateClient().markActiveStreamStreamingIfPending({
+      conversationId: 'conv-current',
+      streamId: 'stream-current',
+      userId: CHAT_USER_ID,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(url).toBe(
+      'https://api:8880/chat/state/conversations/conv-current/active-stream/stream-current/streaming',
+    );
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toStrictEqual(
+      Object.fromEntries([['user_id', CHAT_USER_ID]]),
+    );
   });
 });
