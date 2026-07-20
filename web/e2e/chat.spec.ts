@@ -253,6 +253,7 @@ test.describe('chat streaming (mocked BFF)', () => {
     const conversationId = 'sponsored-preserved-conversation';
     const history = {
       conversation: {
+        activeStream: null,
         id: conversationId,
         model: SPONSORED_MODEL,
         title: 'Постоечки разговор',
