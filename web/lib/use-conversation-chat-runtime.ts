@@ -108,7 +108,10 @@ export const useConversationChatRuntime = ({
         }
         const finishedConversationId = activeId;
         setActiveStatus(undefined);
-        const replacementId = regeneratingMessageIdRef.current;
+        const replacementId =
+          regeneratingMessageIdRef.current ??
+          message.metadata?.replacementMessageId ??
+          null;
         const error = activeErrorRef.current;
         activeErrorRef.current = undefined;
         if (isAbort || isError) {
@@ -120,6 +123,9 @@ export const useConversationChatRuntime = ({
           return;
         }
         if (replacementId !== null && message.id === replacementId) {
+          regeneratingMessageIdRef.current = null;
+          setRegeneratingMessageId(null);
+          fireAndForget(refreshConversations());
           return;
         }
         regeneratingMessageIdRef.current = null;
