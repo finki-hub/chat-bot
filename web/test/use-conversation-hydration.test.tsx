@@ -27,12 +27,17 @@ const transportMocks = vi.hoisted(() => {
 
   return {
     ChatConversationRequestError,
-    loadChatConversationHistory:
-      vi.fn<
-        (
-          conversationId: string,
-        ) => Promise<null | { readonly messages: readonly MyUIMessage[] }>
-      >(),
+    loadChatConversationHistory: vi.fn<
+      (conversationId: string) => Promise<null | {
+        readonly conversation: {
+          readonly activeStream: null | {
+            readonly id: string;
+            readonly replacementMessageId: null | string;
+          };
+        };
+        readonly messages: readonly MyUIMessage[];
+      }>
+    >(),
   };
 });
 const setActiveError = vi.fn<(value: ErrorNotice | undefined) => void>();
@@ -49,14 +54,18 @@ const message = (id: string, text: string): MyUIMessage => ({
 
 const useHydratedMessages = ({
   activeStreamConversationId,
+  initialMessages,
   preserveEmptyHydrationId,
 }: {
   readonly activeStreamConversationId?: string;
+  readonly initialMessages?: readonly MyUIMessage[];
   readonly preserveEmptyHydrationId?: string;
 } = {}): MyUIMessage[] => {
-  const [messages, setMessages] = useState<MyUIMessage[]>(() => [
-    message(PREVIOUS_ID, PREVIOUS_TEXT),
-  ]);
+  const [messages, setMessages] = useState<MyUIMessage[]>(() =>
+    initialMessages === undefined
+      ? [message(PREVIOUS_ID, PREVIOUS_TEXT)]
+      : [...initialMessages],
+  );
   const convoIdRef = useRef<null | string>(null);
   const preserveEmptyHydrationIdRef = useRef<null | string>(
     preserveEmptyHydrationId ?? null,
@@ -87,6 +96,7 @@ describe('useConversationHydration', () => {
     setActiveError.mockReset();
     setActiveId.mockReset();
     transportMocks.loadChatConversationHistory.mockResolvedValue({
+      conversation: { activeStream: null },
       messages: [message('server-b', 'Conversation B')],
     });
   });
@@ -106,6 +116,7 @@ describe('useConversationHydration', () => {
 
   it('clears previous messages when the selected server conversation is empty', async () => {
     transportMocks.loadChatConversationHistory.mockResolvedValue({
+      conversation: { activeStream: null },
       messages: [],
     });
 
@@ -118,6 +129,7 @@ describe('useConversationHydration', () => {
 
   it('preserves local messages when a locally created conversation has not saved history yet', async () => {
     transportMocks.loadChatConversationHistory.mockResolvedValue({
+      conversation: { activeStream: null },
       messages: [],
     });
 
@@ -133,6 +145,7 @@ describe('useConversationHydration', () => {
 
   it('preserves resumed stream messages when server history is still empty', async () => {
     transportMocks.loadChatConversationHistory.mockResolvedValue({
+      conversation: { activeStream: null },
       messages: [],
     });
 
@@ -144,6 +157,69 @@ describe('useConversationHydration', () => {
       expect(result.current).toHaveLength(1);
       expect(result.current[0]?.id).toBe(PREVIOUS_ID);
     });
+  });
+
+  it('merges non-empty persisted history with an already resumed assistant', async () => {
+    const resumedAssistant: MyUIMessage = {
+      id: 'stream-answer',
+      metadata: { responseId: 'active-response' },
+      parts: [{ text: 'Resumed answer', type: 'text' }],
+      role: 'assistant',
+    };
+    transportMocks.loadChatConversationHistory.mockResolvedValue({
+      conversation: {
+        activeStream: {
+          id: 'active-response',
+          replacementMessageId: null,
+        },
+      },
+      messages: [message('server-user', 'Persisted question')],
+    });
+
+    const { result } = renderHook(() =>
+      useHydratedMessages({ initialMessages: [resumedAssistant] }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.map((item) => item.id)).toStrictEqual([
+        'server-user',
+        'stream-answer',
+      ]);
+    });
+  });
+
+  it('prunes stale later turns when regeneration history arrives before the stream', async () => {
+    transportMocks.loadChatConversationHistory.mockResolvedValue({
+      conversation: {
+        activeStream: {
+          id: 'active-response',
+          replacementMessageId: 'server-answer',
+        },
+      },
+      messages: [
+        message('server-user', 'Persisted question'),
+        {
+          id: 'server-answer',
+          metadata: { responseId: 'old-response' },
+          parts: [{ text: 'Old answer', type: 'text' }],
+          role: 'assistant',
+        },
+        message('later-user', 'Stale follow-up'),
+      ],
+    });
+
+    const { result } = renderHook(() =>
+      useHydratedMessages({ initialMessages: [] }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.map((item) => item.id)).toStrictEqual([
+        'server-user',
+        'server-answer',
+      ]);
+    });
+
+    expect(result.current.at(1)?.parts).toStrictEqual([]);
   });
 
   it('preserves previous messages and surfaces an error when selected conversation history rejects', async () => {

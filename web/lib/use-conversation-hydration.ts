@@ -11,6 +11,7 @@ import {
 import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
 
 import { fireAndForget } from '@/lib/async';
+import { reconcileHydratedMessages } from '@/lib/conversation-message-state';
 import { t } from '@/lib/i18n';
 import {
   ChatConversationRequestError,
@@ -72,13 +73,20 @@ export const useConversationHydration = ({
         const serverHistory = await loadChatConversationHistory(id);
         if (serverHistory !== null) {
           if (!isCancelled()) {
-            setMessages((current) =>
-              serverHistory.messages.length === 0 &&
-              current.length > 0 &&
-              hasLocalConversationState(id)
-                ? current
-                : [...serverHistory.messages],
-            );
+            setMessages((current) => {
+              if (
+                serverHistory.messages.length === 0 &&
+                current.length > 0 &&
+                hasLocalConversationState(id)
+              ) {
+                return current;
+              }
+              return reconcileHydratedMessages({
+                activeStream: serverHistory.conversation.activeStream,
+                current,
+                persisted: serverHistory.messages,
+              });
+            });
             clearPreserveMarker(id);
             clearActiveStreamMarker(id);
           }
