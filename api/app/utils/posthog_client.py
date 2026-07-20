@@ -12,8 +12,6 @@ from app.utils.settings import Settings
 logger = logging.getLogger(__name__)
 
 _SERVICE = "chat-bot-api"
-_EXCEPTION_EVENT = "$exception"
-_SAFE_EXCEPTION_MESSAGE = "Unhandled server exception."
 
 _DISTINCT_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
@@ -129,15 +127,10 @@ def capture_exception(
         return
 
     try:
-        client.capture(
-            event=_EXCEPTION_EVENT,
+        client.capture_exception(
+            exc,
             distinct_id=distinct_id,
-            properties={
-                "service": _SERVICE,
-                **(properties or {}),
-                "$exception_type": type(exc).__name__,
-                "$exception_message": _SAFE_EXCEPTION_MESSAGE,
-            },
+            properties={"service": _SERVICE, **(properties or {})},
         )
     except Exception:
         logger.exception("PostHog capture_exception failed")
