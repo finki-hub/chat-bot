@@ -16,25 +16,29 @@ const fetchMock = vi.fn<typeof fetch>();
 const fetchCallFor = (method: 'DELETE' | 'POST') =>
   fetchMock.mock.calls.find(([, init]) => init?.method === method);
 
-describe('ShareConversationButton', () => {
-  beforeEach(() => {
-    writeText.mockClear();
-    fetchMock.mockReset();
-    fetchMock.mockImplementation((_input, init) =>
-      init?.method === 'GET'
-        ? Promise.resolve(new Response(null, { status: 204 }))
-        : Promise.resolve(
-            Response.json({ shareToken: SHARE_TOKEN }, { status: 200 }),
-          ),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-    Object.assign(navigator, { clipboard: { writeText } });
-  });
+const setupSharingTests = () => {
+  writeText.mockClear();
+  fetchMock.mockReset();
+  fetchMock.mockImplementation((_input, init) =>
+    init?.method === 'GET'
+      ? Promise.resolve(new Response(null, { status: 204 }))
+      : Promise.resolve(
+          Response.json({ shareToken: SHARE_TOKEN }, { status: 200 }),
+        ),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  Object.assign(navigator, { clipboard: { writeText } });
+};
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
+const teardownSharingTests = () => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+};
+
+describe('ShareConversationButton', () => {
+  beforeEach(setupSharingTests);
+
+  afterEach(teardownSharingTests);
 
   it('is disabled until a conversation exists', async () => {
     const { ShareConversationButton } =
@@ -192,5 +196,54 @@ describe('ShareConversationButton', () => {
       screen.findByRole('button', { name: 'Споделувањето не успеа' }),
     ).resolves.toBeEnabled();
     expect(writeText).not.toHaveBeenCalled();
+  });
+});
+
+describe('ShareConversationButton failure handling', () => {
+  beforeEach(setupSharingTests);
+
+  afterEach(teardownSharingTests);
+
+  it('announces failure when a successful share response has no share token', async () => {
+    const { ShareConversationButton } =
+      await import('@/components/chat/share-conversation-button');
+    render(<ShareConversationButton conversationId="conversation-1" />);
+
+    await screen.findByRole('button', { name: SHARE_LABEL });
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ unexpected: SHARE_TOKEN }, { status: 200 }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: SHARE_LABEL }));
+
+    await expect(
+      screen.findByRole('button', { name: 'Споделувањето не успеа' }),
+    ).resolves.toBeEnabled();
+    expect(writeText).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('button', { name: STOP_SHARING_LABEL }),
+    ).toBeNull();
+  });
+
+  it('keeps the share URL available without claiming it was copied when clipboard writing fails', async () => {
+    writeText.mockRejectedValueOnce(new Error('clipboard unavailable'));
+    const { ShareConversationButton } =
+      await import('@/components/chat/share-conversation-button');
+    render(<ShareConversationButton conversationId="conversation-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: SHARE_LABEL }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        `http://localhost:3000/share/${SHARE_TOKEN}`,
+      );
+    });
+
+    expect(screen.getByRole('button', { name: COPY_LINK_LABEL })).toBeEnabled();
+    expect(
+      screen.queryByRole('button', { name: 'Врската е копирана' }),
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: STOP_SHARING_LABEL }),
+    ).toBeEnabled();
   });
 });
