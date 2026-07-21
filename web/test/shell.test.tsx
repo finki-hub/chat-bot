@@ -471,6 +471,28 @@ describe('ChatPage persistence', () => {
     vi.unstubAllGlobals();
   });
 
+  it('keeps the sidebar modal below the large-screen breakpoint', async () => {
+    const media: MediaQueryList = {
+      addEventListener: vi.fn<MediaQueryList['addEventListener']>(),
+      addListener: vi.fn<MediaQueryList['addListener']>(),
+      dispatchEvent: vi.fn<MediaQueryList['dispatchEvent']>(() => true),
+      matches: false,
+      media: '(min-width: 1024px)',
+      onchange: null,
+      removeEventListener: vi.fn<MediaQueryList['removeEventListener']>(),
+      removeListener: vi.fn<MediaQueryList['removeListener']>(),
+    };
+    const matchMediaMock = vi.fn<(query: string) => MediaQueryList>(
+      () => media,
+    );
+    vi.stubGlobal('matchMedia', matchMediaMock);
+
+    renderChatPage();
+
+    await expect(screen.findByRole('textbox')).resolves.toBeInTheDocument();
+    expect(matchMediaMock).toHaveBeenCalledWith('(min-width: 1024px)');
+  });
+
   it('keeps contextual and account actions out of the global header', async () => {
     renderChatPage();
 

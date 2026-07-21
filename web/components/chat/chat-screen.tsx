@@ -15,6 +15,7 @@ import { Thread } from '@/components/chat/thread';
 import { CredentialSettingsDialog } from '@/components/shell/credential-settings-dialog';
 import { Header } from '@/components/shell/header';
 import { Sidebar } from '@/components/shell/sidebar';
+import { DESKTOP_SIDEBAR_QUERY } from '@/components/shell/sidebar-helpers';
 import { SidebarUserIdentity } from '@/components/shell/sidebar-user-identity';
 import { t } from '@/lib/i18n';
 import { isModelAvailable, recoverSelectedModel } from '@/lib/model-catalog';
@@ -25,7 +26,6 @@ import { useCredentials } from '@/lib/use-credentials';
 import { useHealth } from '@/lib/use-health';
 import { useModels } from '@/lib/use-models';
 
-const DESKTOP_SIDEBAR_QUERY = '(min-width: 768px)';
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
