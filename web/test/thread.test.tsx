@@ -23,6 +23,11 @@ const CHUNK_SOURCE_TITLE_RE = /Статут на ФИНКИ · Член 12/u;
 const COLLAPSED_CHUNK_TEXT =
   'Правилата за запишување и заверка на семестарот се наведени во овој член…';
 const EXPANDED_CHUNK_TEXT_RE = /Вториот став/u;
+const FIRST_SOURCE_TITLE = 'Прв извор';
+const SECOND_SOURCE_TITLE = 'Втор извор';
+const THIRD_SOURCE_TITLE = 'Трет извор';
+const SHOW_SOURCES_LABEL = 'Прикажи извори';
+const HIDE_SOURCES_LABEL = 'Сокриј извори';
 const SPONSORED_RESET_TEXT = '18 јул. 2026, 14:00.';
 const TIMING_TESTID = 'message-timing';
 
@@ -494,7 +499,7 @@ describe('AssistantMessage', () => {
     render(<AssistantMessage message={msg} />);
 
     const sources = screen.getByTestId('message-sources');
-    const toggle = screen.getByRole('button', { name: 'Сокриј извори' });
+    const toggle = screen.getByRole('button', { name: HIDE_SOURCES_LABEL });
 
     expect(sources).toHaveTextContent('Извори');
     expect(sources).toHaveTextContent('2');
@@ -532,12 +537,42 @@ describe('AssistantMessage', () => {
     );
     expect(finkiLink).toHaveAttribute('href', 'https://www.finki.ukim.mk/');
 
-    await user.click(screen.getByRole('button', { name: 'Сокриј извори' }));
+    await user.click(screen.getByRole('button', { name: HIDE_SOURCES_LABEL }));
 
     expect(
-      screen.getByRole('button', { name: 'Прикажи извори' }),
+      screen.getByRole('button', { name: SHOW_SOURCES_LABEL }),
     ).toHaveAttribute(ARIA_EXPANDED, 'false');
     expect(screen.queryByText('Упис')).toBeNull();
+  });
+
+  it('waits for answer completion before automatically opening a small source set', () => {
+    const message: MyUIMessage = {
+      id: 'a1',
+      metadata: {
+        sources: [
+          { id: 'q1', kind: 'faq', title: FIRST_SOURCE_TITLE },
+          { id: 'q2', kind: 'faq', title: SECOND_SOURCE_TITLE },
+        ],
+      },
+      parts: [{ text: 'Одговорот сè уште се генерира.', type: 'text' }],
+      role: 'assistant',
+    };
+    const view = render(
+      <AssistantMessage
+        message={message}
+        pending
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: SHOW_SOURCES_LABEL }),
+    ).toHaveAttribute(ARIA_EXPANDED, 'false');
+
+    view.rerender(<AssistantMessage message={message} />);
+
+    expect(
+      screen.getByRole('button', { name: HIDE_SOURCES_LABEL }),
+    ).toHaveAttribute(ARIA_EXPANDED, 'true');
   });
 
   it('keeps larger source sets collapsed until requested', () => {
@@ -545,9 +580,9 @@ describe('AssistantMessage', () => {
       id: 'a1',
       metadata: {
         sources: [
-          { id: 'q1', kind: 'faq', title: 'Прв извор' },
-          { id: 'q2', kind: 'faq', title: 'Втор извор' },
-          { id: 'q3', kind: 'faq', title: 'Трет извор' },
+          { id: 'q1', kind: 'faq', title: FIRST_SOURCE_TITLE },
+          { id: 'q2', kind: 'faq', title: SECOND_SOURCE_TITLE },
+          { id: 'q3', kind: 'faq', title: THIRD_SOURCE_TITLE },
         ],
       },
       parts: [{ text: 'Готово', type: 'text' }],
@@ -557,9 +592,9 @@ describe('AssistantMessage', () => {
     render(<AssistantMessage message={msg} />);
 
     expect(
-      screen.getByRole('button', { name: 'Прикажи извори' }),
+      screen.getByRole('button', { name: SHOW_SOURCES_LABEL }),
     ).toHaveAttribute(ARIA_EXPANDED, 'false');
-    expect(screen.queryByText('Прв извор')).toBeNull();
+    expect(screen.queryByText(FIRST_SOURCE_TITLE)).toBeNull();
   });
 
   it('keeps a larger source set collapsed when metadata arrives after text', () => {
@@ -573,9 +608,9 @@ describe('AssistantMessage', () => {
       ...emptyMessage,
       metadata: {
         sources: [
-          { id: 'q1', kind: 'faq', title: 'Прв извор' },
-          { id: 'q2', kind: 'faq', title: 'Втор извор' },
-          { id: 'q3', kind: 'faq', title: 'Трет извор' },
+          { id: 'q1', kind: 'faq', title: FIRST_SOURCE_TITLE },
+          { id: 'q2', kind: 'faq', title: SECOND_SOURCE_TITLE },
+          { id: 'q3', kind: 'faq', title: THIRD_SOURCE_TITLE },
         ],
       },
     };
@@ -584,9 +619,9 @@ describe('AssistantMessage', () => {
     view.rerender(<AssistantMessage message={loadedMessage} />);
 
     expect(
-      screen.getByRole('button', { name: 'Прикажи извори' }),
+      screen.getByRole('button', { name: SHOW_SOURCES_LABEL }),
     ).toHaveAttribute(ARIA_EXPANDED, 'false');
-    expect(screen.queryByText('Прв извор')).toBeNull();
+    expect(screen.queryByText(FIRST_SOURCE_TITLE)).toBeNull();
   });
 
   it('collapses an automatically opened source set when it grows past two', () => {
@@ -594,8 +629,8 @@ describe('AssistantMessage', () => {
       id: 'a1',
       metadata: {
         sources: [
-          { id: 'q1', kind: 'faq', title: 'Прв извор' },
-          { id: 'q2', kind: 'faq', title: 'Втор извор' },
+          { id: 'q1', kind: 'faq', title: FIRST_SOURCE_TITLE },
+          { id: 'q2', kind: 'faq', title: SECOND_SOURCE_TITLE },
         ],
       },
       parts: [{ text: 'Готово', type: 'text' }],
@@ -605,24 +640,24 @@ describe('AssistantMessage', () => {
       ...smallMessage,
       metadata: {
         sources: [
-          { id: 'q1', kind: 'faq', title: 'Прв извор' },
-          { id: 'q2', kind: 'faq', title: 'Втор извор' },
-          { id: 'q3', kind: 'faq', title: 'Трет извор' },
+          { id: 'q1', kind: 'faq', title: FIRST_SOURCE_TITLE },
+          { id: 'q2', kind: 'faq', title: SECOND_SOURCE_TITLE },
+          { id: 'q3', kind: 'faq', title: THIRD_SOURCE_TITLE },
         ],
       },
     };
     const view = render(<AssistantMessage message={smallMessage} />);
 
     expect(
-      screen.getByRole('button', { name: 'Сокриј извори' }),
+      screen.getByRole('button', { name: HIDE_SOURCES_LABEL }),
     ).toHaveAttribute(ARIA_EXPANDED, 'true');
 
     view.rerender(<AssistantMessage message={largeMessage} />);
 
     expect(
-      screen.getByRole('button', { name: 'Прикажи извори' }),
+      screen.getByRole('button', { name: SHOW_SOURCES_LABEL }),
     ).toHaveAttribute(ARIA_EXPANDED, 'false');
-    expect(screen.queryByText('Прв извор')).toBeNull();
+    expect(screen.queryByText(FIRST_SOURCE_TITLE)).toBeNull();
   });
 
   it('reveals the model, trace ID, and throughput rows in the diagnostics popover', async () => {
@@ -706,6 +741,40 @@ describe('AssistantMessage', () => {
     );
 
     expect(screen.queryByTestId(TIMING_TESTID)).toBeNull();
+  });
+});
+
+describe('Thread source disclosure', () => {
+  it('keeps completed sources open while waiting for the next reply', () => {
+    const messages: MyUIMessage[] = [
+      userMessage('Прво прашање'),
+      {
+        id: 'a1',
+        metadata: {
+          sources: [{ id: 'q1', kind: 'faq', title: FIRST_SOURCE_TITLE }],
+        },
+        parts: [{ text: 'Завршен одговор', type: 'text' }],
+        role: 'assistant',
+      },
+      {
+        id: 'u2',
+        metadata: {},
+        parts: [{ text: 'Следно прашање', type: 'text' }],
+        role: 'user',
+      },
+    ];
+
+    render(
+      <Thread
+        messages={messages}
+        status="submitted"
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: HIDE_SOURCES_LABEL }),
+    ).toHaveAttribute(ARIA_EXPANDED, 'true');
+    expect(screen.getByText(FIRST_SOURCE_TITLE)).toBeInTheDocument();
   });
 });
 

@@ -110,8 +110,10 @@ const SourceCard = ({ source }: { source: RetrievedSource }) => {
 };
 
 export const SourceCards = ({
+  complete,
   sources,
 }: {
+  complete: boolean;
   sources: readonly RetrievedSource[];
 }) => {
   const sourceCount = sources.length;
@@ -121,6 +123,7 @@ export const SourceCards = ({
   const open =
     disclosure === 'open' ||
     (disclosure === 'automatic' &&
+      complete &&
       sourceCount > 0 &&
       sourceCount <= AUTO_EXPAND_SOURCE_LIMIT);
   const panelId = useId();

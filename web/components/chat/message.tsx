@@ -28,6 +28,7 @@ import { useSearchStage } from '@/lib/use-search-stage';
 
 export type AssistantMessageProps = {
   actions?: ReactNode;
+  complete?: boolean;
   errorPart?: ErrorNotice;
   message: MyUIMessage;
   onManageCredentials?: () => void;
@@ -558,6 +559,7 @@ const AssistantMessageStatus = ({
 };
 export const AssistantMessage = ({
   actions,
+  complete,
   errorPart,
   message,
   onManageCredentials,
@@ -590,6 +592,7 @@ export const AssistantMessage = ({
   const inferenceModel = message.metadata?.inferenceModel;
   const sources = message.metadata?.sources ?? [];
   const responseId = message.metadata?.responseId;
+  const answerComplete = complete ?? !pending;
 
   return (
     <Message from="assistant">
@@ -616,7 +619,12 @@ export const AssistantMessage = ({
             timing={timing}
           />
         )}
-        {text === null ? null : <SourceCards sources={sources} />}
+        {text === null ? null : (
+          <SourceCards
+            complete={answerComplete}
+            sources={sources}
+          />
+        )}
         <AssistantMessageStatus
           errorPart={errorPart}
           pending={pending}
