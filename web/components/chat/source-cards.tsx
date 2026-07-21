@@ -8,6 +8,7 @@ import type { RetrievedSource } from '@/lib/api-types';
 import { t } from '@/lib/i18n';
 
 const PREVIEW_WORD_LIMIT = 12;
+const AUTO_EXPAND_SOURCE_LIMIT = 2;
 const SENTENCE_END_RE = /[.!?]/u;
 const WHITESPACE_RE = /\s+/u;
 
@@ -89,7 +90,7 @@ const SourceCard = ({ source }: { source: RetrievedSource }) => {
             {links.map((link) => (
               <a
                 aria-label={`${t('sources.link')}: ${link.label}`}
-                className="rounded-md p-1 text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0 pointer-fine:min-w-0 pointer-fine:p-1"
                 href={link.url}
                 key={`${link.label}:${link.url}`}
                 rel="noreferrer"
@@ -113,12 +114,24 @@ export const SourceCards = ({
 }: {
   sources: readonly RetrievedSource[];
 }) => {
-  const [open, setOpen] = useState(false);
+  const sourceCount = sources.length;
+  const [disclosure, setDisclosure] = useState<'automatic' | 'closed' | 'open'>(
+    'automatic',
+  );
+  const open =
+    disclosure === 'open' ||
+    (disclosure === 'automatic' &&
+      sourceCount > 0 &&
+      sourceCount <= AUTO_EXPAND_SOURCE_LIMIT);
   const panelId = useId();
 
-  if (sources.length === 0) {
+  if (sourceCount === 0) {
     return null;
   }
+
+  const toggleDisclosure = () => {
+    setDisclosure(open ? 'closed' : 'open');
+  };
 
   return (
     <section
@@ -130,10 +143,8 @@ export const SourceCards = ({
         aria-controls={panelId}
         aria-expanded={open}
         aria-label={open ? t('sources.hide') : t('sources.show')}
-        className="inline-flex items-center gap-1.5 rounded-md text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        onClick={() => {
-          setOpen((current) => !current);
-        }}
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0 pointer-fine:px-0 pointer-fine:text-xs"
+        onClick={toggleDisclosure}
         type="button"
       >
         <ChevronRight
@@ -146,7 +157,7 @@ export const SourceCards = ({
         />
         <span>{t('sources.title')}</span>
         <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground/70">
-          {sources.length}
+          {sourceCount}
         </span>
       </button>
       {open ? (

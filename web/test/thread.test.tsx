@@ -459,7 +459,7 @@ describe('AssistantMessage', () => {
     expect(footnote).toHaveTextContent('2.3s');
   });
 
-  it('keeps source cards collapsed until the user expands them', async () => {
+  it('opens a small source set by default and keeps its links touchable', async () => {
     const user = userEvent.setup();
     const chunkSnippet =
       'Правилата за запишување и заверка на семестарот се наведени во овој член со повеќе детали. Вториот став содржи дополнителни детали што треба да се прикажат кога картичката е отворена.';
@@ -494,17 +494,12 @@ describe('AssistantMessage', () => {
     render(<AssistantMessage message={msg} />);
 
     const sources = screen.getByTestId('message-sources');
-    const toggle = screen.getByRole('button', { name: 'Прикажи извори' });
+    const toggle = screen.getByRole('button', { name: 'Сокриј извори' });
 
     expect(sources).toHaveTextContent('Извори');
     expect(sources).toHaveTextContent('2');
-    expect(toggle).toHaveAttribute(ARIA_EXPANDED, 'false');
-    expect(screen.queryByText('Упис')).toBeNull();
-    expect(screen.queryByText(CHUNK_SOURCE_TITLE)).toBeNull();
-
-    await user.click(toggle);
-
     expect(toggle).toHaveAttribute(ARIA_EXPANDED, 'true');
+    expect(toggle).toHaveClass('min-h-11', 'pointer-fine:min-h-0');
     expect(screen.getByText('Упис')).toBeInTheDocument();
     expect(screen.getByText(CHUNK_SOURCE_TITLE)).toBeInTheDocument();
 
@@ -525,14 +520,17 @@ describe('AssistantMessage', () => {
     expect(expandedChunkText).not.toHaveClass('line-clamp-2');
     expect(expandedChunkText).toHaveClass('whitespace-pre-wrap');
 
-    expect(screen.getByRole('link', { name: 'Врска: iKnow' })).toHaveAttribute(
-      'href',
-      'https://iknow.ukim.mk/',
+    const iKnowLink = screen.getByRole('link', { name: 'Врска: iKnow' });
+    const finkiLink = screen.getByRole('link', { name: 'Врска: ФИНКИ' });
+
+    expect(iKnowLink).toHaveAttribute('href', 'https://iknow.ukim.mk/');
+    expect(iKnowLink).toHaveClass(
+      'min-h-11',
+      'min-w-11',
+      'pointer-fine:min-h-0',
+      'pointer-fine:min-w-0',
     );
-    expect(screen.getByRole('link', { name: 'Врска: ФИНКИ' })).toHaveAttribute(
-      'href',
-      'https://www.finki.ukim.mk/',
-    );
+    expect(finkiLink).toHaveAttribute('href', 'https://www.finki.ukim.mk/');
 
     await user.click(screen.getByRole('button', { name: 'Сокриј извори' }));
 
@@ -540,6 +538,91 @@ describe('AssistantMessage', () => {
       screen.getByRole('button', { name: 'Прикажи извори' }),
     ).toHaveAttribute(ARIA_EXPANDED, 'false');
     expect(screen.queryByText('Упис')).toBeNull();
+  });
+
+  it('keeps larger source sets collapsed until requested', () => {
+    const msg: MyUIMessage = {
+      id: 'a1',
+      metadata: {
+        sources: [
+          { id: 'q1', kind: 'faq', title: 'Прв извор' },
+          { id: 'q2', kind: 'faq', title: 'Втор извор' },
+          { id: 'q3', kind: 'faq', title: 'Трет извор' },
+        ],
+      },
+      parts: [{ text: 'Готово', type: 'text' }],
+      role: 'assistant',
+    };
+
+    render(<AssistantMessage message={msg} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Прикажи извори' }),
+    ).toHaveAttribute(ARIA_EXPANDED, 'false');
+    expect(screen.queryByText('Прв извор')).toBeNull();
+  });
+
+  it('keeps a larger source set collapsed when metadata arrives after text', () => {
+    const emptyMessage: MyUIMessage = {
+      id: 'a1',
+      metadata: { sources: [] },
+      parts: [{ text: 'Готово', type: 'text' }],
+      role: 'assistant',
+    };
+    const loadedMessage: MyUIMessage = {
+      ...emptyMessage,
+      metadata: {
+        sources: [
+          { id: 'q1', kind: 'faq', title: 'Прв извор' },
+          { id: 'q2', kind: 'faq', title: 'Втор извор' },
+          { id: 'q3', kind: 'faq', title: 'Трет извор' },
+        ],
+      },
+    };
+    const view = render(<AssistantMessage message={emptyMessage} />);
+
+    view.rerender(<AssistantMessage message={loadedMessage} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Прикажи извори' }),
+    ).toHaveAttribute(ARIA_EXPANDED, 'false');
+    expect(screen.queryByText('Прв извор')).toBeNull();
+  });
+
+  it('collapses an automatically opened source set when it grows past two', () => {
+    const smallMessage: MyUIMessage = {
+      id: 'a1',
+      metadata: {
+        sources: [
+          { id: 'q1', kind: 'faq', title: 'Прв извор' },
+          { id: 'q2', kind: 'faq', title: 'Втор извор' },
+        ],
+      },
+      parts: [{ text: 'Готово', type: 'text' }],
+      role: 'assistant',
+    };
+    const largeMessage: MyUIMessage = {
+      ...smallMessage,
+      metadata: {
+        sources: [
+          { id: 'q1', kind: 'faq', title: 'Прв извор' },
+          { id: 'q2', kind: 'faq', title: 'Втор извор' },
+          { id: 'q3', kind: 'faq', title: 'Трет извор' },
+        ],
+      },
+    };
+    const view = render(<AssistantMessage message={smallMessage} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Сокриј извори' }),
+    ).toHaveAttribute(ARIA_EXPANDED, 'true');
+
+    view.rerender(<AssistantMessage message={largeMessage} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Прикажи извори' }),
+    ).toHaveAttribute(ARIA_EXPANDED, 'false');
+    expect(screen.queryByText('Прв извор')).toBeNull();
   });
 
   it('reveals the model, trace ID, and throughput rows in the diagnostics popover', async () => {
