@@ -100,6 +100,24 @@ def test_chat_message_parts_migration_adds_nullable_jsonb_column() -> None:
     assert "NOT NULL" not in migration
 
 
+def test_embedding_invalidation_migration_declares_lifecycle_contract() -> None:
+    # Given: all corpus invalidation behavior is owned by one forward migration.
+    migration_path = Path("resources/migrations/0010_add_embedding_invalidation.sql")
+    assert migration_path.is_file(), "missing 0010 lifecycle DDL migration"
+    migration = migration_path.read_text()
+
+    # When / Then: each corpus receives durable lifecycle state and safe triggers.
+    assert migration.count("embedding_revision BIGINT NOT NULL DEFAULT 1") == 4
+    for table in ("question", "chunk", "diploma", "professor_document"):
+        assert f"ALTER TABLE {table}" in migration
+        assert f"embedding_notify_dirty('{table}')" in migration
+    assert "embedding_bge_m3_version TEXT" in migration
+    assert "embedding_bge_m3_updated_at TIMESTAMP" in migration
+    assert "IS DISTINCT FROM" in migration
+    assert "pg_notify('embedding_dirty'" in migration
+    assert "document_title_invalidate_chunks" in migration
+
+
 def test_run_migrations_applies_only_pending_versions(
     monkeypatch,
     tmp_path: Path,
