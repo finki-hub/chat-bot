@@ -36,6 +36,26 @@ export const installMockChatState = async (
 ): Promise<void> => {
   const conversations = [...initialConversations];
 
+  await page.route('**/api/health', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ ok: true }),
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
+
+  await page.context().route('**/api/chat/*/stream', async (route) => {
+    await route.fulfill({ status: 204 });
+  });
+
+  await page.context().route('**/api/chat/*/share', async (route) => {
+    await route.fulfill({ status: 204 });
+  });
+
+  await page.context().route('**/api/chat/title', async (route) => {
+    await route.fulfill({ status: 204 });
+  });
+
   await page.route('**/api/chat/*/history', async (route) => {
     const conversationId = conversationIdFrom(route);
     await route.fulfill({
