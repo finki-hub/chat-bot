@@ -9,6 +9,7 @@ import {
 import {
   ChatStateRequestError,
   createChatStateClient,
+  isResumableChatStreamStatus,
 } from '@/lib/chat-state-client';
 import { createChatResumableStreamContext } from '@/lib/resumable-stream-context';
 
@@ -57,7 +58,10 @@ export const GET = async (
     });
     const activeStreamId = conversation.active_stream_id;
 
-    if (activeStreamId === null) {
+    if (
+      activeStreamId === null ||
+      !isResumableChatStreamStatus(conversation.active_status)
+    ) {
       return empty(204);
     }
 
