@@ -104,6 +104,33 @@ describe('DELETE /api/chat/[id]', () => {
     });
   });
 
+  it('returns 400 without authentication or state access for a malformed PATCH', async () => {
+    const res = await (await importPatch())(patchRequest({}), routeContext());
+
+    expect(res.status).toBe(400);
+    await expect(res.text()).resolves.toBe('');
+    expect(routeMocks.getAuthenticatedChatUserId).not.toHaveBeenCalled();
+    expect(routeMocks.createChatStateClient).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty 401 without updating state when PATCH is unauthenticated', async () => {
+    const { AuthenticationRequiredError } =
+      await import('@/lib/authenticated-chat-user');
+    routeMocks.getAuthenticatedChatUserId.mockRejectedValueOnce(
+      new AuthenticationRequiredError(),
+    );
+
+    const res = await (
+      await importPatch()
+    )(patchRequest({ title: 'Renamed' }), routeContext());
+
+    expect(res.status).toBe(401);
+    await expect(res.text()).resolves.toBe('');
+    expect(routeMocks.stateClient.loadConversation).not.toHaveBeenCalled();
+    expect(routeMocks.stateClient.upsertConversation).not.toHaveBeenCalled();
+    expect(routeMocks.stateClient.updateConversation).not.toHaveBeenCalled();
+  });
+
   it('creates a conversation when the browser starts a new server chat', async () => {
     const res = await (
       await importPatch()

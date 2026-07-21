@@ -25,9 +25,12 @@ type UpsertCredentialInput = {
   readonly userId: string;
 };
 
-const { getAuthenticatedChatUserIdMock, stateClientMock } = vi.hoisted(() => ({
-  getAuthenticatedChatUserIdMock: vi.fn<() => Promise<string>>(),
-  stateClientMock: {
+const {
+  createChatStateClientMock,
+  getAuthenticatedChatUserIdMock,
+  stateClientMock,
+} = vi.hoisted(() => {
+  const client = {
     deleteCredential: vi.fn<(input: DeleteCredentialInput) => Promise<void>>(),
     listCredentials:
       vi.fn<
@@ -37,8 +40,14 @@ const { getAuthenticatedChatUserIdMock, stateClientMock } = vi.hoisted(() => ({
       >(),
     upsertCredential:
       vi.fn<(input: UpsertCredentialInput) => Promise<ChatCredentialPublic>>(),
-  },
-}));
+  };
+
+  return {
+    createChatStateClientMock: vi.fn<() => typeof client>(() => client),
+    getAuthenticatedChatUserIdMock: vi.fn<() => Promise<string>>(),
+    stateClientMock: client,
+  };
+});
 
 vi.mock('@/lib/authenticated-chat-user', () => {
   class AuthenticationRequiredError extends Error {
@@ -73,7 +82,7 @@ vi.mock('@/lib/chat-state-client', () => {
 
   return {
     ChatStateRequestError,
-    createChatStateClient: () => stateClientMock,
+    createChatStateClient: createChatStateClientMock,
   };
 });
 
@@ -89,6 +98,7 @@ const jsonRequest = (body: unknown): Request =>
 describe('/api/chat/credentials', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    createChatStateClientMock.mockClear();
     getAuthenticatedChatUserIdMock.mockResolvedValue(USER_ID);
     stateClientMock.listCredentials.mockResolvedValue([]);
   });
@@ -187,6 +197,45 @@ describe('/api/chat/credentials', () => {
       provider: 'ollama',
       userId: USER_ID,
     });
+  });
+
+  it('returns a JSON error without authentication or state access for an invalid credential payload', async () => {
+    getAuthenticatedChatUserIdMock.mockClear();
+    stateClientMock.upsertCredential.mockClear();
+    const { PUT } = await import('@/app/api/chat/credentials/route');
+
+    const response = await PUT(jsonRequest({ provider: 'openai' }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toStrictEqual({
+      error: 'Invalid credential payload',
+    });
+    expect(getAuthenticatedChatUserIdMock).not.toHaveBeenCalled();
+    expect(createChatStateClientMock).not.toHaveBeenCalled();
+    expect(stateClientMock.upsertCredential).not.toHaveBeenCalled();
+  });
+
+  it('returns a JSON 401 without writing credentials when the user is unauthenticated', async () => {
+    stateClientMock.upsertCredential.mockClear();
+    const { AuthenticationRequiredError } =
+      await import('@/lib/authenticated-chat-user');
+    getAuthenticatedChatUserIdMock.mockRejectedValueOnce(
+      new AuthenticationRequiredError(),
+    );
+    const { PUT } = await import('@/app/api/chat/credentials/route');
+
+    const response = await PUT(
+      jsonRequest({
+        api_key: 'user-secret-key',
+        provider: 'openai',
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toStrictEqual({
+      error: 'Authentication required',
+    });
+    expect(stateClientMock.upsertCredential).not.toHaveBeenCalled();
   });
 
   it('deletes credentials for the authenticated chat user only', async () => {
