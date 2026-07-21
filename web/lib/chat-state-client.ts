@@ -10,6 +10,13 @@ import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
 
 /* eslint-disable camelcase -- Python chat state API uses snake_case fields. */
 
+export type ChatStateActiveStreamStatus =
+  | 'completed'
+  | 'error'
+  | 'pending'
+  | 'stopped'
+  | 'streaming';
+
 export type ChatStateClient = {
   readonly clearActiveStreamIfCurrent: (
     input: ClearActiveStreamInput,
@@ -52,10 +59,14 @@ export type ChatStateClient = {
   readonly upsertUserMessage: (input: UpsertUserMessageInput) => Promise<void>;
 };
 
+export const isResumableChatStreamStatus = (
+  status: ChatStateActiveStreamStatus | null,
+): boolean => status === 'pending' || status === 'streaming';
+
 export type ChatStateConversation = {
   readonly active_replacement_message_id: null | string;
   readonly active_response_id: null | string;
-  readonly active_status: null | string;
+  readonly active_status: ChatStateActiveStreamStatus | null;
   readonly active_stream_id: null | string;
   readonly created_at?: string;
   readonly id: string;

@@ -30,8 +30,11 @@ export const GET = async (
   { params }: RouteContext,
 ): Promise<Response> => {
   const { id: conversationId } = await params;
-  const { ChatStateRequestError, createChatStateClient } =
-    await import('@/lib/chat-state-client');
+  const {
+    ChatStateRequestError,
+    createChatStateClient,
+    isResumableChatStreamStatus,
+  } = await import('@/lib/chat-state-client');
   const chatState = createChatStateClient();
 
   try {
@@ -43,7 +46,8 @@ export const GET = async (
     const uiMessages = await parseChatStateMessages(messages);
     const historyConversation: HistoryConversation = {
       activeStream:
-        conversation.active_stream_id === null
+        conversation.active_stream_id === null ||
+        !isResumableChatStreamStatus(conversation.active_status)
           ? null
           : {
               id: conversation.active_stream_id,
