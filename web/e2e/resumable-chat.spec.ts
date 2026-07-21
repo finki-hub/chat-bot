@@ -74,11 +74,14 @@ const emptyHistoryBody = (id: null | string): string =>
     messages: [],
   });
 
-const chunksForAnswer = (answer: string): UiChunk[] => [
+const chunksForAnswer = (
+  answer: string,
+  responseId: string = RESPONSE_ID,
+): UiChunk[] => [
   {
     messageMetadata: {
       inferenceModel: INFERENCE_MODEL,
-      responseId: RESPONSE_ID,
+      responseId,
     },
     type: 'start',
   },
@@ -105,6 +108,15 @@ const installHealthRoute = async (page: Page): Promise<void> => {
   });
 };
 
+const installChatStateRoutes = async (page: Page): Promise<void> => {
+  await page.context().route('**/api/chat/title', async (route) => {
+    await route.fulfill({ status: 204 });
+  });
+  await page.context().route('**/api/chat/*/share', async (route) => {
+    await route.fulfill({ status: 204 });
+  });
+};
+
 test.describe('resumable chat lifecycle (mocked BFF)', () => {
   test('resumes after refresh and persists the completed assistant response', async ({
     page,
@@ -112,6 +124,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
     // Given: the initial POST emits one token slowly while the resume endpoint can replay the full stream.
     await installHealthRoute(page);
     await installModelRoute(page);
+    await installChatStateRoutes(page);
     const firstLegServer = await startChatStreamServer({
       gapMs: LONG_GAP_MS,
       head: chunksForAnswer(FIRST_TOKEN).slice(0, 3),
@@ -277,96 +290,105 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
 
   test('explicit stop prevents a later refresh from resuming the stream', async ({
     page,
-  }) => {
+  }, testInfo) => {
     // Given: an active stream has rendered a partial answer.
     await installHealthRoute(page);
     await installModelRoute(page);
+    await installChatStateRoutes(page);
+    const responseId = `${RESPONSE_ID}-${testInfo.repeatEachIndex}-${testInfo.workerIndex}-${testInfo.retry}`;
     const activeServer = await startChatStreamServer({
       gapMs: LONG_GAP_MS,
-      head: chunksForAnswer(STOP_TOKEN).slice(0, 3),
+      head: chunksForAnswer(STOP_TOKEN, responseId).slice(0, 3),
       tail: [],
     });
-    const stopRequests: unknown[] = [];
-    const resumeStatuses: number[] = [];
-    const conversations: ConversationRow[] = [];
-    let conversationId: null | string = null;
+    try {
+      const stopRequests: unknown[] = [];
+      const resumeStatuses: number[] = [];
+      const conversations: ConversationRow[] = [];
+      let conversationId: null | string = null;
 
-    await page.route('**/api/chat', async (route) => {
-      if (route.request().method() === 'GET') {
+      await page.route('**/api/chat', async (route) => {
+        if (route.request().method() === 'GET') {
+          await route.fulfill({
+            body: JSON.stringify(conversations),
+            contentType: 'application/json',
+            status: 200,
+          });
+          return;
+        }
         await route.fulfill({
-          body: JSON.stringify(conversations),
+          headers: { location: activeServer.url },
+          status: 307,
+        });
+      });
+      await page.route('**/api/chat/*', async (route) => {
+        if (route.request().method() === 'PATCH') {
+          conversationId = conversationIdFrom(route.request().url());
+          if (
+            conversations.every(
+              (conversation) => conversation.id !== conversationId,
+            )
+          ) {
+            conversations.unshift({
+              id: conversationId,
+              model: INFERENCE_MODEL,
+              title: 'Започни долг одговор.',
+            });
+          }
+          await route.fulfill({ status: 204 });
+          return;
+        }
+        await route.fallback();
+      });
+      await page.route('**/api/chat/*/stop', async (route) => {
+        stopRequests.push(JSON.parse(route.request().postData() ?? '{}'));
+        await route.fulfill({
+          body: JSON.stringify({ aborted: true, stopped: true }),
           contentType: 'application/json',
           status: 200,
         });
-        return;
-      }
-      await route.fulfill({
-        headers: { location: activeServer.url },
-        status: 307,
       });
-    });
-    await page.route('**/api/chat/*', async (route) => {
-      if (route.request().method() === 'PATCH') {
-        conversationId = conversationIdFrom(route.request().url());
-        if (
-          conversations.every(
-            (conversation) => conversation.id !== conversationId,
-          )
-        ) {
-          conversations.unshift({
-            id: conversationId,
-            model: INFERENCE_MODEL,
-            title: 'Започни долг одговор.',
-          });
-        }
+      await page.route('**/api/chat/*/stream', async (route) => {
+        resumeStatuses.push(204);
         await route.fulfill({ status: 204 });
-        return;
-      }
-      await route.fallback();
-    });
-    await page.route('**/api/chat/*/stop', async (route) => {
-      stopRequests.push(JSON.parse(route.request().postData() ?? '{}'));
-      await route.fulfill({
-        body: JSON.stringify({ aborted: true, stopped: true }),
-        contentType: 'application/json',
-        status: 200,
       });
-    });
-    await page.route('**/api/chat/*/stream', async (route) => {
-      resumeStatuses.push(204);
-      await route.fulfill({ status: 204 });
-    });
-    await page.route('**/api/chat/*/history', async (route) => {
-      await route.fulfill({
-        body: emptyHistoryBody(conversationId),
-        contentType: 'application/json',
-        status: 200,
+      await page.route('**/api/chat/*/history', async (route) => {
+        await route.fulfill({
+          body: emptyHistoryBody(conversationId),
+          contentType: 'application/json',
+          status: 200,
+        });
       });
-    });
 
-    await page.goto('/');
-    await page.getByTestId('composer-input').fill('Започни долг одговор.');
-    await page.getByTestId('composer-input').press('Enter');
-    await expect(page.getByTestId('answer-text')).toContainText(STOP_TOKEN);
+      await page.goto('/');
+      await page.getByTestId('composer-model').click();
+      await expect(
+        page.getByTestId('model-free-badge-claude-sonnet-5'),
+      ).toContainText('5/5');
+      await page.keyboard.press('Escape');
+      await page.getByTestId('composer-input').fill('Започни долг одговор.');
+      await page.getByTestId('composer-input').press('Enter');
+      await expect(page.getByTestId('answer-text')).toContainText(STOP_TOKEN);
 
-    // When: the user explicitly stops and refreshes the same chat.
-    await page.getByTestId('composer-submit').click();
-    await expect.poll(() => stopRequests).toHaveLength(1);
-    const noActiveResponse = page.waitForResponse((response) =>
-      CHAT_STREAM_URL_PATTERN.test(response.url()),
-    );
-    await page.reload();
+      // When: the user explicitly stops and refreshes the same chat.
+      await page.getByTestId('composer-submit').click();
+      await expect.poll(() => stopRequests).toHaveLength(1);
+      const noActiveResponse = page.waitForResponse((response) =>
+        CHAT_STREAM_URL_PATTERN.test(response.url()),
+      );
+      await page.reload();
 
-    // Then: reconnect receives 204/no-active instead of replaying the stopped stream.
-    const noActive = await noActiveResponse;
-    expect(noActive.status()).toBe(204);
-    expect(resumeStatuses.length).toBeGreaterThan(0);
-    expect(resumeStatuses.every((status) => status === 204)).toBe(true);
-    expect(stopRequests[0]).toEqual({
-      activeStreamId: RESPONSE_ID,
-    });
-
-    await activeServer.close();
+      // Then: reconnect receives 204/no-active instead of replaying the stopped stream.
+      const noActive = await noActiveResponse;
+      expect(noActive.status()).toBe(204);
+      expect(resumeStatuses.length).toBeGreaterThan(0);
+      expect(resumeStatuses.every((status) => status === 204)).toBe(true);
+      expect(stopRequests[0]).toEqual({
+        activeStreamId: responseId,
+      });
+    } finally {
+      await activeServer.close();
+    }
   });
 });
 

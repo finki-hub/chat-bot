@@ -5,6 +5,11 @@ import {
   getAuthenticatedChatUserId,
 } from '@/lib/authenticated-chat-user';
 import { parseChatStateMessages } from '@/lib/chat-history';
+import {
+  ChatStateRequestError,
+  createChatStateClient,
+  isResumableChatStreamStatus,
+} from '@/lib/chat-state-client';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,8 +35,6 @@ export const GET = async (
   { params }: RouteContext,
 ): Promise<Response> => {
   const { id: conversationId } = await params;
-  const { ChatStateRequestError, createChatStateClient } =
-    await import('@/lib/chat-state-client');
   const chatState = createChatStateClient();
 
   try {
@@ -43,7 +46,8 @@ export const GET = async (
     const uiMessages = await parseChatStateMessages(messages);
     const historyConversation: HistoryConversation = {
       activeStream:
-        conversation.active_stream_id === null
+        conversation.active_stream_id === null ||
+        !isResumableChatStreamStatus(conversation.active_status)
           ? null
           : {
               id: conversation.active_stream_id,

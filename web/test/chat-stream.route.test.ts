@@ -1,3 +1,5 @@
+import type * as TimersPromises from 'node:timers/promises';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -9,6 +11,30 @@ import {
   sseBody,
   USER_ID,
 } from './api-chat-route-support';
+
+type PromiseTimerMock = (
+  milliseconds?: number,
+  value?: unknown,
+) => Promise<unknown>;
+
+const timerMocks = vi.hoisted(() => ({
+  setTimeout: vi.fn<PromiseTimerMock>((_milliseconds, value) =>
+    Promise.resolve(value),
+  ),
+}));
+
+vi.mock('node:timers/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof TimersPromises>();
+
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      setTimeout: timerMocks.setTimeout,
+    },
+    setTimeout: timerMocks.setTimeout,
+  };
+});
 
 /* eslint-disable camelcase -- Route tests mirror Python chat state API payloads. */
 
@@ -32,17 +58,18 @@ const routeContext = () => ({
   params: Promise.resolve({ id: CONVERSATION_ID }),
 });
 
+beforeEach(() => {
+  vi.resetModules();
+  timerMocks.setTimeout.mockClear();
+  resetRouteMocks();
+  installRouteMocks();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe('GET /api/chat/[id]/stream', () => {
-  beforeEach(() => {
-    vi.resetModules();
-    resetRouteMocks();
-    installRouteMocks();
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it('returns UI-message SSE when the owner has an active Redis stream', async () => {
     // Given: the API state points at a live Redis-backed UI message stream.
     routeMocks.resumableContext.resumeExistingStream.mockResolvedValueOnce(
@@ -214,6 +241,73 @@ describe('GET /api/chat/[id]/stream', () => {
     // Then: missing stale state is treated as an idempotent no-active-stream response.
     expect(res.status).toBe(204);
     await expect(res.text()).resolves.toBe('');
+  });
+});
+
+describe('GET /api/chat/[id]/stream lifecycle states', () => {
+  it.each(['completed', 'stopped', 'error'] as const)(
+    'returns 204 without consulting Redis for a terminal %s stream',
+    async (activeStatus) => {
+      // Given: terminal API state retains a stale stream id while Redis still has a body.
+      routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
+        conversation: {
+          active_replacement_message_id: null,
+          active_response_id: RESPONSE_ID,
+          active_status: activeStatus,
+          active_stream_id: RESPONSE_ID,
+          id: CONVERSATION_ID,
+          user_id: USER_ID,
+        },
+        messages: [],
+      });
+      // When: the owner asks to reconnect after the stream reached its terminal state.
+      const res = await (await importGet())(streamRequest(), routeContext());
+
+      // Then: terminal state wins before Redis can resume or clean up the old stream.
+      expect(res.status).toBe(204);
+      await expect(res.text()).resolves.toBe('');
+      expect(
+        routeMocks.createChatResumableStreamContext,
+      ).not.toHaveBeenCalled();
+      expect(
+        routeMocks.resumableContext.resumeExistingStream,
+      ).not.toHaveBeenCalled();
+      expect(
+        routeMocks.stateClient.clearActiveStreamIfCurrent,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns 204 without clearing a pending stream when registration retries exhaust', async () => {
+    // Given: API state is pending while every Redis registration lookup is absent.
+    routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
+      conversation: {
+        active_replacement_message_id: null,
+        active_response_id: RESPONSE_ID,
+        active_status: 'pending',
+        active_stream_id: RESPONSE_ID,
+        id: CONVERSATION_ID,
+        user_id: USER_ID,
+      },
+      messages: [],
+    });
+    routeMocks.resumableContext.resumeExistingStream.mockResolvedValue(
+      undefined,
+    );
+
+    // When: reconnect outlasts the bounded Postgres-to-Redis registration window.
+    const res = await (await importGet())(streamRequest(), routeContext());
+
+    // Then: the route returns no body without destroying pending API state.
+    expect(res.status).toBe(204);
+    await expect(res.text()).resolves.toBe('');
+    expect(
+      routeMocks.resumableContext.resumeExistingStream,
+    ).toHaveBeenCalledTimes(7);
+    expect(timerMocks.setTimeout).toHaveBeenCalledTimes(6);
+    expect(
+      routeMocks.stateClient.clearActiveStreamIfCurrent,
+    ).not.toHaveBeenCalled();
   });
 });
 

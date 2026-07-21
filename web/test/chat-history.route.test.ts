@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ChatStateActiveStreamStatus } from '@/lib/chat-state-client';
+
 /* eslint-disable camelcase -- Test fixtures mirror the Python chat state API wire format. */
 import {
   CONVERSATION_ID,
@@ -12,6 +14,18 @@ import {
 } from './api-chat-route-support';
 
 const STORED_TITLE = 'Stored title';
+
+type ExpectedActiveStream = {
+  readonly id: string;
+  readonly replacementMessageId: null | string;
+};
+
+type StoredConversationOverrides = {
+  readonly active_replacement_message_id?: null | string;
+  readonly active_response_id?: null | string;
+  readonly active_status?: ChatStateActiveStreamStatus | null;
+  readonly active_stream_id?: null | string;
+};
 
 const importGet = async (): Promise<
   (
@@ -33,30 +47,45 @@ const routeContext = () => ({
   params: Promise.resolve({ id: CONVERSATION_ID }),
 });
 
-describe('GET /api/chat/[id]/history', () => {
-  beforeEach(() => {
-    vi.resetModules();
-    resetRouteMocks();
-    installRouteMocks();
-  });
+const getHistory = async (): Promise<Response> =>
+  (await importGet())(historyRequest(), routeContext());
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
+const expectedConversation = (
+  activeStream: ExpectedActiveStream | null = null,
+) => ({
+  activeStream,
+  id: CONVERSATION_ID,
+  model: MODEL,
+  title: STORED_TITLE,
+});
 
+const storedConversation = (overrides: StoredConversationOverrides = {}) => ({
+  active_replacement_message_id: null,
+  active_response_id: null,
+  active_status: null,
+  active_stream_id: null,
+  id: CONVERSATION_ID,
+  model: MODEL,
+  title: STORED_TITLE,
+  user_id: USER_ID,
+  ...overrides,
+});
+
+beforeEach(() => {
+  vi.resetModules();
+  resetRouteMocks();
+  installRouteMocks();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('GET /api/chat/[id]/history persisted messages', () => {
   it('returns persisted UI messages for the owner', async () => {
     // Given: the Python API has durable conversation messages for this owner.
     routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
-      conversation: {
-        active_replacement_message_id: null,
-        active_response_id: null,
-        active_status: null,
-        active_stream_id: null,
-        id: CONVERSATION_ID,
-        model: MODEL,
-        title: STORED_TITLE,
-        user_id: USER_ID,
-      },
+      conversation: storedConversation(),
       messages: [
         {
           content: 'Stored question',
@@ -90,21 +119,13 @@ describe('GET /api/chat/[id]/history', () => {
         },
       ],
     });
-    const get = await importGet();
-
     // When: the browser asks for completed history after local storage was cleared.
-    const res = await get(historyRequest(), routeContext());
-    const body: unknown = await res.json();
+    const res = await getHistory();
 
     // Then: the route exposes UI-message history with response id metadata preserved.
     expect(res.status).toBe(200);
-    expect(body).toStrictEqual({
-      conversation: {
-        activeStream: null,
-        id: CONVERSATION_ID,
-        model: MODEL,
-        title: STORED_TITLE,
-      },
+    await expect(res.json()).resolves.toStrictEqual({
+      conversation: expectedConversation(),
       messages: [
         {
           id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d31',
@@ -145,16 +166,7 @@ describe('GET /api/chat/[id]/history', () => {
   it('falls back to text when persisted parts are absent or invalid', async () => {
     // Given: legacy and malformed rows still have durable text content.
     routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
-      conversation: {
-        active_replacement_message_id: null,
-        active_response_id: null,
-        active_status: null,
-        active_stream_id: null,
-        id: CONVERSATION_ID,
-        model: MODEL,
-        title: STORED_TITLE,
-        user_id: USER_ID,
-      },
+      conversation: storedConversation(),
       messages: [
         {
           content: 'Legacy question',
@@ -175,18 +187,12 @@ describe('GET /api/chat/[id]/history', () => {
     });
 
     // When: history is reconstructed from those rows.
-    const res = await (await importGet())(historyRequest(), routeContext());
-    const body: unknown = await res.json();
+    const res = await getHistory();
 
     // Then: neither turn is dropped and both use their durable text content.
     expect(res.status).toBe(200);
-    expect(body).toStrictEqual({
-      conversation: {
-        activeStream: null,
-        id: CONVERSATION_ID,
-        model: MODEL,
-        title: STORED_TITLE,
-      },
+    await expect(res.json()).resolves.toStrictEqual({
+      conversation: expectedConversation(),
       messages: [
         {
           id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d33',
@@ -203,39 +209,57 @@ describe('GET /api/chat/[id]/history', () => {
       ],
     });
   });
+});
 
+describe('GET /api/chat/[id]/history active streams', () => {
   it('returns the active regeneration descriptor needed after a refresh', async () => {
     const replacementMessageId = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d35';
     routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
-      conversation: {
+      conversation: storedConversation({
         active_replacement_message_id: replacementMessageId,
         active_response_id: RESPONSE_ID,
         active_status: 'streaming',
         active_stream_id: RESPONSE_ID,
-        id: CONVERSATION_ID,
-        model: MODEL,
-        title: STORED_TITLE,
-        user_id: USER_ID,
-      },
+      }),
       messages: [],
     });
 
-    const res = await (await importGet())(historyRequest(), routeContext());
-    const body: unknown = await res.json();
+    const res = await getHistory();
 
-    expect(body).toStrictEqual({
-      conversation: {
-        activeStream: {
-          id: RESPONSE_ID,
-          replacementMessageId,
-        },
-        id: CONVERSATION_ID,
-        model: MODEL,
-        title: STORED_TITLE,
-      },
+    await expect(res.json()).resolves.toStrictEqual({
+      conversation: expectedConversation({
+        id: RESPONSE_ID,
+        replacementMessageId,
+      }),
       messages: [],
     });
   });
+
+  it.each(['completed', 'stopped', 'error'] as const)(
+    'does not expose a stale active stream when its status is %s',
+    async (activeStatus) => {
+      // Given: terminal persistence still contains a stream id while cleanup races.
+      routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
+        conversation: storedConversation({
+          active_replacement_message_id: RESPONSE_ID,
+          active_response_id: RESPONSE_ID,
+          active_status: activeStatus,
+          active_stream_id: RESPONSE_ID,
+        }),
+        messages: [],
+      });
+
+      // When: the browser restores history after the terminal stream.
+      const res = await getHistory();
+
+      // Then: the HTTP response keeps the conversation shape but exposes no resume descriptor.
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toStrictEqual({
+        conversation: expectedConversation(),
+        messages: [],
+      });
+    },
+  );
 
   it('does not expose history when the API rejects the user', async () => {
     // Given: the API state endpoint rejects this user for the conversation.
@@ -245,7 +269,7 @@ describe('GET /api/chat/[id]/history', () => {
     );
 
     // When: the authenticated user asks for inaccessible completed history.
-    const res = await (await importGet())(historyRequest(), routeContext());
+    const res = await getHistory();
 
     // Then: the route preserves the ownership failure and returns no body.
     expect(res.status).toBe(404);
@@ -259,7 +283,7 @@ describe('GET /api/chat/[id]/history', () => {
       new AuthenticationRequiredError(),
     );
 
-    const res = await (await importGet())(historyRequest(), routeContext());
+    const res = await getHistory();
 
     expect(res.status).toBe(401);
     expect(routeMocks.stateClient.loadConversation).not.toHaveBeenCalled();
