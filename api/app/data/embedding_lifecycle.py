@@ -50,6 +50,7 @@ class EmbeddingWriteResult:
 
     valid: bool
     updated: int
+    applied: tuple[bool, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,7 +102,7 @@ async def fetch_dirty_embeddings(
         BGE_M3_EMBEDDING_SPEC_VERSION,
         limit,
     )
-    return tuple(_candidate_from_row(corpus, row) for row in rows)
+    return tuple(embedding_candidate_from_row(corpus, row) for row in rows)
 
 
 async def lifecycle_counts(database: Database) -> tuple[EmbeddingLifecycleCount, ...]:
@@ -131,9 +132,10 @@ async def persist_embedding_batch(
 ) -> EmbeddingWriteResult:
     """Validate and revision-guardedly persist one BGE-M3 provider batch."""
     if not validate_embedding_batch(batch):
-        return EmbeddingWriteResult(valid=False, updated=0)
+        return EmbeddingWriteResult(valid=False, updated=0, applied=())
 
     updated = 0
+    applied_rows: list[bool] = []
     async with database.transaction() as connection:
         for candidate, vector in zip(batch.candidates, batch.vectors, strict=True):
             applied = await connection.fetchval(
@@ -143,8 +145,14 @@ async def persist_embedding_batch(
                 candidate.id,
                 candidate.revision,
             )
-            updated += applied is True
-    return EmbeddingWriteResult(valid=True, updated=updated)
+            applied_row = applied is True
+            applied_rows.append(applied_row)
+            updated += applied_row
+    return EmbeddingWriteResult(
+        valid=True,
+        updated=updated,
+        applied=tuple(applied_rows),
+    )
 
 
 async def wake_embedding_worker(database: Database) -> None:
@@ -176,7 +184,10 @@ async def rebuild_embedding_lifecycle_in_transaction(
     )
 
 
-def _candidate_from_row(corpus: EmbeddingCorpus, row: Record) -> EmbeddingCandidate:
+def embedding_candidate_from_row(
+    corpus: EmbeddingCorpus,
+    row: Record,
+) -> EmbeddingCandidate:
     """Parse one trusted allowlisted query result into a captured lifecycle candidate."""
     match corpus:
         case EmbeddingCorpus.QUESTION:
