@@ -160,6 +160,7 @@ class FakeChatDatabase:
                 user_id=user_id,
                 active_stream_id=None,
                 active_response_id=None,
+                active_replacement_message_id=None,
                 active_status=None,
                 model=model,
                 title=title,
@@ -178,20 +179,43 @@ class FakeChatDatabase:
                 return None
             current["active_stream_id"] = None
             current["active_response_id"] = None
+            current["active_replacement_message_id"] = None
             current["active_status"] = None
             current["updated_at"] = self.now
             return current
 
         if "UPDATE chat_conversation" in query and "SET active_stream_id = $3" in query:
-            conversation_id, user_id, active_stream_id, active_response_id, status = (
-                args
-            )
+            (
+                conversation_id,
+                user_id,
+                active_stream_id,
+                active_response_id,
+                active_replacement_message_id,
+                status,
+            ) = args
             current = self._owned_conversation(conversation_id, user_id)
             if current is None:
                 return None
             current["active_stream_id"] = active_stream_id
             current["active_response_id"] = active_response_id
+            current["active_replacement_message_id"] = active_replacement_message_id
             current["active_status"] = status
+            current["updated_at"] = self.now
+            return current
+
+        if (
+            "UPDATE chat_conversation" in query
+            and "active_status = 'streaming'" in query
+        ):
+            conversation_id, user_id, active_stream_id = args
+            current = self._owned_conversation(conversation_id, user_id)
+            if (
+                current is None
+                or current["active_stream_id"] != active_stream_id
+                or current["active_status"] != "pending"
+            ):
+                return None
+            current["active_status"] = "streaming"
             current["updated_at"] = self.now
             return current
 
@@ -243,6 +267,8 @@ class FakeChatDatabase:
             return deleted
 
         if "ON CONFLICT (conversation_id, response_id)" in query:
+            if "FOR UPDATE OF conversation" not in query:
+                raise AssertionError("assistant upsert must lock stream ownership")
             (
                 conversation_id,
                 response_id,
@@ -250,7 +276,15 @@ class FakeChatDatabase:
                 content,
                 metadata_json,
                 parts_json,
+                user_id,
+                active_stream_id,
             ) = args
+            conversation = self._owned_conversation(conversation_id, user_id)
+            if (
+                conversation is None
+                or conversation["active_stream_id"] != active_stream_id
+            ):
+                return None
             for existing in self.messages.values():
                 if (
                     existing["conversation_id"] == conversation_id
@@ -277,10 +311,13 @@ class FakeChatDatabase:
             return inserted_assistant
 
         if "WITH target AS" in query and "DELETE FROM chat_message stale" in query:
+            if "FOR UPDATE OF conversation" not in query:
+                raise AssertionError("assistant replacement must lock stream ownership")
             (
                 message_id,
                 conversation_id,
                 user_id,
+                active_stream_id,
                 content,
                 response_id,
                 metadata_json,
@@ -293,6 +330,7 @@ class FakeChatDatabase:
                 target is None
                 or conversation is None
                 or conversation["user_id"] != user_id
+                or conversation["active_stream_id"] != active_stream_id
                 or target["conversation_id"] != conversation_id
                 or target["role"] != "assistant"
                 or not isinstance(retained_message_ids, list)
@@ -415,6 +453,7 @@ class FakeChatDatabase:
             ):
                 row["active_stream_id"] = None
                 row["active_response_id"] = None
+                row["active_replacement_message_id"] = None
                 row["active_status"] = None
                 cleared += 1
         return cleared
@@ -447,6 +486,7 @@ class FakeChatDatabase:
         user_id: object,
         active_stream_id: object,
         active_response_id: object,
+        active_replacement_message_id: object,
         active_status: object,
         model: object,
         title: object,
@@ -457,6 +497,7 @@ class FakeChatDatabase:
             "user_id": user_id,
             "active_stream_id": active_stream_id,
             "active_response_id": active_response_id,
+            "active_replacement_message_id": active_replacement_message_id,
             "active_status": active_status,
             "model": model,
             "title": title,

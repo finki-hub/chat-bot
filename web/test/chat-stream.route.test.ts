@@ -95,6 +95,7 @@ describe('GET /api/chat/[id]/stream', () => {
     // Given: the API state has no active stream for this owned conversation.
     routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
       conversation: {
+        active_replacement_message_id: null,
         active_response_id: null,
         active_status: null,
         active_stream_id: null,
@@ -112,6 +113,37 @@ describe('GET /api/chat/[id]/stream', () => {
     await expect(res.text()).resolves.toBe('');
     expect(
       routeMocks.resumableContext.resumeExistingStream,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('waits for a pending stream registration instead of clearing active state', async () => {
+    // Given: Postgres committed the pending stream before Redis created its sentinel.
+    routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
+      conversation: {
+        active_replacement_message_id: null,
+        active_response_id: RESPONSE_ID,
+        active_status: 'pending',
+        active_stream_id: RESPONSE_ID,
+        id: CONVERSATION_ID,
+        user_id: USER_ID,
+      },
+      messages: [],
+    });
+    routeMocks.resumableContext.resumeExistingStream
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(sseBody('data: registered-token\n\n'));
+
+    // When: refresh lands inside the Postgres-to-Redis registration window.
+    const res = await (await importGet())(streamRequest(), routeContext());
+
+    // Then: the route retries the pending stream and never destroys valid active state.
+    expect(res.status).toBe(200);
+    await expect(res.text()).resolves.toContain('registered-token');
+    expect(
+      routeMocks.resumableContext.resumeExistingStream,
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      routeMocks.stateClient.clearActiveStreamIfCurrent,
     ).not.toHaveBeenCalled();
   });
 

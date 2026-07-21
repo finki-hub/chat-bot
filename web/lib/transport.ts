@@ -3,6 +3,7 @@ import { posthog } from 'posthog-js';
 
 import type { ModelId, MyUIMessage, QueryTransformMode } from '@/lib/api-types';
 import type {
+  ActiveConversationStream,
   ChatConversationHistory,
   ConversationRow,
 } from '@/lib/conversation-types';
@@ -161,6 +162,25 @@ const isUiMessage = (value: unknown): value is MyUIMessage => {
   );
 };
 
+const parseActiveStream = (value: unknown): ActiveConversationStream | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (!isRecord(value)) {
+    return null;
+  }
+  const { id, replacementMessageId } = value;
+  const normalizedReplacementMessageId = replacementMessageId ?? null;
+  if (
+    typeof id !== 'string' ||
+    (normalizedReplacementMessageId !== null &&
+      typeof normalizedReplacementMessageId !== 'string')
+  ) {
+    return null;
+  }
+  return { id, replacementMessageId: normalizedReplacementMessageId };
+};
+
 export const listChatConversations = async (): Promise<ConversationRow[]> => {
   const response = await fetch('/api/chat', { method: 'GET' });
 
@@ -211,7 +231,7 @@ const parseConversationHistory = (
     return null;
   }
   const conversationRecord = conversation as Record<string, unknown>;
-  const { id, model, title } = conversationRecord;
+  const { activeStream, id, model, title } = conversationRecord;
   if (
     typeof id !== 'string' ||
     (model !== null && typeof model !== 'string') ||
@@ -222,7 +242,12 @@ const parseConversationHistory = (
     return null;
   }
   return {
-    conversation: { id, model, title: title ?? 'New conversation' },
+    conversation: {
+      activeStream: parseActiveStream(activeStream),
+      id,
+      model,
+      title: title ?? 'New conversation',
+    },
     messages,
   };
 };

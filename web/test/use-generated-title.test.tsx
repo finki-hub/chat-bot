@@ -88,6 +88,7 @@ test('loads the requested conversation before generating its title', async () =>
   ];
   loadChatConversationHistory.mockResolvedValue({
     conversation: {
+      activeStream: null,
       id: CONVERSATION_ID,
       model: MODEL_ID,
       title: OLD_TITLE,

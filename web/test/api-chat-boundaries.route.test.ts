@@ -24,6 +24,7 @@ const okStreamResponse = (): Response =>
   });
 
 const ACTIVE_RESPONSE_ID = 'active_response_id' as const;
+const ACTIVE_REPLACEMENT_MESSAGE_ID = 'active_replacement_message_id' as const;
 const ACTIVE_STATUS = 'active_status' as const;
 const ACTIVE_STREAM_ID = 'active_stream_id' as const;
 const RESPONSE_ID_FIELD = 'response_id' as const;
@@ -39,6 +40,7 @@ const loadedConversation = (
   messages: LoadedConversation['messages'],
 ): LoadedConversation => ({
   conversation: {
+    [ACTIVE_REPLACEMENT_MESSAGE_ID]: null,
     [ACTIVE_RESPONSE_ID]: RESPONSE_ID,
     [ACTIVE_STATUS]: 'streaming',
     [ACTIVE_STREAM_ID]: RESPONSE_ID,

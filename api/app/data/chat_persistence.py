@@ -203,6 +203,7 @@ async def set_active_stream(
     user_id: UUID,
     active_stream_id: UUID,
     active_response_id: UUID,
+    active_replacement_message_id: UUID | None,
     active_status: ActiveStreamStatus,
 ) -> ChatConversation | None:
     row = await db.fetchrow(
@@ -210,7 +211,8 @@ async def set_active_stream(
         UPDATE chat_conversation
         SET active_stream_id = $3,
             active_response_id = $4,
-            active_status = $5,
+            active_replacement_message_id = $5,
+            active_status = $6,
             updated_at = NOW()
         WHERE id = $1 AND user_id = $2
         RETURNING *
@@ -219,6 +221,7 @@ async def set_active_stream(
         user_id,
         active_stream_id,
         active_response_id,
+        active_replacement_message_id,
         active_status.value,
     )
     return None if row is None else conversation_from_row(row)
@@ -236,6 +239,7 @@ async def clear_active_stream_if_current(
         UPDATE chat_conversation
         SET active_stream_id = NULL,
             active_response_id = NULL,
+            active_replacement_message_id = NULL,
             active_status = NULL,
             updated_at = NOW()
         WHERE id = $1 AND user_id = $2 AND active_stream_id = $3
@@ -259,6 +263,7 @@ async def clear_stale_active_streams(
             UPDATE chat_conversation
             SET active_stream_id = NULL,
                 active_response_id = NULL,
+                active_replacement_message_id = NULL,
                 active_status = NULL
             WHERE active_stream_id IS NOT NULL AND updated_at < $1
             RETURNING id

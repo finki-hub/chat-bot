@@ -1,5 +1,6 @@
 import { UI_MESSAGE_STREAM_HEADERS } from 'ai';
 import { after } from 'next/server';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import {
   AuthenticationRequiredError,
@@ -20,6 +21,27 @@ type RouteContext = {
 
 const empty = (status: number): Response => new Response(null, { status });
 
+const REGISTRATION_RETRY_DELAYS_MS = [50, 100, 250, 500, 1_000, 2_000] as const;
+
+const resumeActiveStream = async (
+  activeStatus: null | string,
+  activeStreamId: string,
+  streamContext: ReturnType<typeof createChatResumableStreamContext>,
+) => {
+  let stream = await streamContext.resumeExistingStream(activeStreamId);
+  if (stream !== undefined || activeStatus !== 'pending') {
+    return stream;
+  }
+  for (const delayMs of REGISTRATION_RETRY_DELAYS_MS) {
+    await delay(delayMs);
+    stream = await streamContext.resumeExistingStream(activeStreamId);
+    if (stream !== undefined) {
+      return stream;
+    }
+  }
+  return stream;
+};
+
 export const GET = async (
   _request: Request,
   { params }: RouteContext,
@@ -39,9 +61,18 @@ export const GET = async (
       return empty(204);
     }
 
-    const stream = await createChatResumableStreamContext({
+    const streamContext = createChatResumableStreamContext({
       waitUntil: after,
-    }).resumeExistingStream(activeStreamId);
+    });
+    const stream = await resumeActiveStream(
+      conversation.active_status,
+      activeStreamId,
+      streamContext,
+    );
+
+    if (stream === undefined && conversation.active_status === 'pending') {
+      return empty(204);
+    }
 
     if (stream === null || stream === undefined) {
       try {

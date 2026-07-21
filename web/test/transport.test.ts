@@ -235,8 +235,39 @@ describe('buildChatTransport', () => {
     );
 
     await expect(loadChatConversationHistory('conv-7')).resolves.toStrictEqual({
-      conversation: { id: 'conv-7', model: null, title: 'New conversation' },
+      conversation: {
+        activeStream: null,
+        id: 'conv-7',
+        model: null,
+        title: 'New conversation',
+      },
       messages,
+    });
+  });
+
+  it('normalizes an omitted active-stream replacement id to null', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          conversation: {
+            activeStream: { id: ACTIVE_STREAM_ID },
+            id: 'conv-7',
+            model: null,
+            title: null,
+          },
+          messages: [],
+        }),
+      ),
+    );
+
+    await expect(loadChatConversationHistory('conv-7')).resolves.toMatchObject({
+      conversation: {
+        activeStream: {
+          id: ACTIVE_STREAM_ID,
+          replacementMessageId: null,
+        },
+      },
     });
   });
 

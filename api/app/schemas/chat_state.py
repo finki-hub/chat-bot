@@ -13,6 +13,7 @@ class UserScopedRequest(BaseModel):
 class SetActiveStreamRequest(UserScopedRequest):
     active_stream_id: UUID
     active_response_id: UUID
+    active_replacement_message_id: UUID | None = None
     active_status: ActiveStreamStatus
 
 
@@ -47,10 +48,11 @@ class UserMessageUpsertRequest(UserScopedRequest):
 
 
 class AssistantMessageUpsertRequest(UserMessageUpsertRequest):
-    pass
+    active_stream_id: UUID | None = None
 
 
 class AssistantMessageReplacementRequest(UserScopedRequest):
+    active_stream_id: UUID | None = None
     content: str = Field(min_length=1)
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
     parts: list[JsonValue] | None = None

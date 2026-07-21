@@ -289,6 +289,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
     assistant_message_id = uuid4()
     stream_id = uuid4()
     response_id = uuid4()
+    replacement_message_id = uuid4()
     final_parts = [
         {"state": "done", "text": "Check the rules.", "type": "reasoning"},
         {"state": "done", "text": "Final answer", "type": "text"},
@@ -318,6 +319,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
             "user_id": OWNER_ID,
             "active_stream_id": str(stream_id),
             "active_response_id": str(response_id),
+            "active_replacement_message_id": str(replacement_message_id),
             "active_status": "streaming",
         },
     )
@@ -325,6 +327,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
         f"/chat/state/conversations/{conversation_id}/messages/assistant/{response_id}",
         headers=_auth_headers(),
         json={
+            "active_stream_id": str(stream_id),
             "id": str(assistant_message_id),
             "user_id": OWNER_ID,
             "content": "First draft",
@@ -335,6 +338,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
         f"/chat/state/conversations/{conversation_id}/messages/assistant/{response_id}",
         headers=_auth_headers(),
         json={
+            "active_stream_id": str(stream_id),
             "id": str(uuid4()),
             "user_id": OWNER_ID,
             "content": "Final answer",
@@ -358,6 +362,9 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
     body = loaded.json()
     assert body["conversation"]["active_stream_id"] == str(stream_id)
     assert body["conversation"]["active_response_id"] == str(response_id)
+    assert body["conversation"]["active_replacement_message_id"] == str(
+        replacement_message_id,
+    )
     assert [message["role"] for message in body["messages"]] == ["user", "assistant"]
     assert body["messages"][1]["id"] == str(assistant_message_id)
     assert body["messages"][1]["content"] == "Final answer"
@@ -411,6 +418,7 @@ def test_chat_state_replaces_regenerated_assistant_and_prunes_later_messages() -
     second_user_id = uuid4()
     second_assistant_id = uuid4()
     new_response_id = uuid4()
+    stream_id = uuid4()
     client.post(
         "/chat/state/conversations",
         headers=_auth_headers(),
@@ -434,11 +442,24 @@ def test_chat_state_replaces_regenerated_assistant_and_prunes_later_messages() -
             "updated_at": db.now,
         }
 
+    client.put(
+        f"/chat/state/conversations/{conversation_id}/active-stream",
+        headers=_auth_headers(),
+        json={
+            "active_replacement_message_id": str(first_assistant_id),
+            "active_response_id": str(new_response_id),
+            "active_status": "streaming",
+            "active_stream_id": str(stream_id),
+            "user_id": OWNER_ID,
+        },
+    )
+
     # When: the first assistant answer is regenerated.
     replaced = client.put(
         f"/chat/state/conversations/{conversation_id}/messages/assistant/{first_assistant_id}/replacement/{new_response_id}",
         headers=_auth_headers(),
         json={
+            "active_stream_id": str(stream_id),
             "content": "New first answer",
             "metadata": {"responseId": str(new_response_id)},
             "parts": [
@@ -776,6 +797,179 @@ def test_chat_state_clear_and_stop_are_current_stream_guarded() -> None:
     assert stopped.json()["active_stream_id"] == str(current_stream_id)
     assert cleared.status_code == 200
     assert cleared.json()["active_stream_id"] is None
+
+
+def test_chat_state_rejects_assistant_completion_from_superseded_stream() -> None:
+    # Given: a normal response stream was superseded before it completed.
+    db = FakeChatDatabase()
+    client = _client(db)
+    conversation_id = uuid4()
+    stale_stream_id = uuid4()
+    current_stream_id = uuid4()
+    stale_message_id = uuid4()
+    current_message_id = uuid4()
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={"id": str(conversation_id), "user_id": OWNER_ID},
+    )
+    for stream_id in (stale_stream_id, current_stream_id):
+        client.put(
+            f"/chat/state/conversations/{conversation_id}/active-stream",
+            headers=_auth_headers(),
+            json={
+                "active_response_id": str(stream_id),
+                "active_status": "streaming",
+                "active_stream_id": str(stream_id),
+                "user_id": OWNER_ID,
+            },
+        )
+
+    # When: the stale stream completes before the current stream.
+    stale_completion = client.put(
+        f"/chat/state/conversations/{conversation_id}/messages/assistant/{stale_stream_id}",
+        headers=_auth_headers(),
+        json={
+            "active_stream_id": str(stale_stream_id),
+            "content": "Stale answer",
+            "id": str(stale_message_id),
+            "user_id": OWNER_ID,
+        },
+    )
+    current_completion = client.put(
+        f"/chat/state/conversations/{conversation_id}/messages/assistant/{current_stream_id}",
+        headers=_auth_headers(),
+        json={
+            "active_stream_id": str(current_stream_id),
+            "content": "Current answer",
+            "id": str(current_message_id),
+            "user_id": OWNER_ID,
+        },
+    )
+
+    # Then: only the completion that still owns the conversation is persisted.
+    assert stale_completion.status_code == 404
+    assert current_completion.status_code == 200
+    assert stale_message_id not in db.messages
+    assert db.messages[current_message_id]["content"] == "Current answer"
+
+
+def test_chat_state_rejects_regeneration_completion_from_superseded_stream() -> None:
+    # Given: regeneration was superseded while the original answer and later turn exist.
+    db = FakeChatDatabase()
+    client = _client(db)
+    conversation_id = uuid4()
+    target_message_id = uuid4()
+    later_message_id = uuid4()
+    stale_stream_id = uuid4()
+    current_stream_id = uuid4()
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={"id": str(conversation_id), "user_id": OWNER_ID},
+    )
+    for index, (message_id, role, content) in enumerate(
+        (
+            (target_message_id, "assistant", "Original answer"),
+            (later_message_id, "user", "Later question"),
+        ),
+    ):
+        db.messages[message_id] = {
+            "content": content,
+            "conversation_id": conversation_id,
+            "created_at": db.now + timedelta(seconds=index),
+            "id": message_id,
+            "metadata": {},
+            "response_id": None,
+            "role": role,
+            "updated_at": db.now,
+        }
+    for stream_id in (stale_stream_id, current_stream_id):
+        client.put(
+            f"/chat/state/conversations/{conversation_id}/active-stream",
+            headers=_auth_headers(),
+            json={
+                "active_replacement_message_id": str(target_message_id),
+                "active_response_id": str(stream_id),
+                "active_status": "streaming",
+                "active_stream_id": str(stream_id),
+                "user_id": OWNER_ID,
+            },
+        )
+
+    # When: the stale regeneration finishes before the current regeneration.
+    stale_completion = client.put(
+        f"/chat/state/conversations/{conversation_id}/messages/assistant/{target_message_id}/replacement/{stale_stream_id}",
+        headers=_auth_headers(),
+        json={
+            "active_stream_id": str(stale_stream_id),
+            "content": "Stale replacement",
+            "retained_message_ids": [str(target_message_id)],
+            "user_id": OWNER_ID,
+        },
+    )
+
+    # Then: it neither replaces the target nor prunes later messages.
+    assert stale_completion.status_code == 404
+    assert db.messages[target_message_id]["content"] == "Original answer"
+    assert later_message_id in db.messages
+
+    current_completion = client.put(
+        f"/chat/state/conversations/{conversation_id}/messages/assistant/{target_message_id}/replacement/{current_stream_id}",
+        headers=_auth_headers(),
+        json={
+            "active_stream_id": str(current_stream_id),
+            "content": "Current replacement",
+            "retained_message_ids": [str(target_message_id)],
+            "user_id": OWNER_ID,
+        },
+    )
+    assert current_completion.status_code == 200
+    assert db.messages[target_message_id]["content"] == "Current replacement"
+    assert later_message_id not in db.messages
+
+
+def test_chat_state_streaming_transition_is_pending_and_current_guarded() -> None:
+    # Given: a pending stream superseded by a newer pending stream.
+    db = FakeChatDatabase()
+    client = _client(db)
+    conversation_id = uuid4()
+    stale_stream_id = uuid4()
+    current_stream_id = uuid4()
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={"id": str(conversation_id), "user_id": OWNER_ID},
+    )
+    for stream_id in (stale_stream_id, current_stream_id):
+        client.put(
+            f"/chat/state/conversations/{conversation_id}/active-stream",
+            headers=_auth_headers(),
+            json={
+                "user_id": OWNER_ID,
+                "active_stream_id": str(stream_id),
+                "active_response_id": str(stream_id),
+                "active_status": "pending",
+            },
+        )
+
+    # When: the stale stream finishes registering before the current stream.
+    stale_transition = client.post(
+        f"/chat/state/conversations/{conversation_id}/active-stream/{stale_stream_id}/streaming",
+        headers=_auth_headers(),
+        json={"user_id": OWNER_ID},
+    )
+    current_transition = client.post(
+        f"/chat/state/conversations/{conversation_id}/active-stream/{current_stream_id}/streaming",
+        headers=_auth_headers(),
+        json={"user_id": OWNER_ID},
+    )
+
+    # Then: the stale transition is rejected and the current identity is preserved.
+    assert stale_transition.status_code == 404
+    assert current_transition.status_code == 200
+    assert current_transition.json()["active_stream_id"] == str(current_stream_id)
+    assert current_transition.json()["active_status"] == "streaming"
 
 
 def test_chat_state_clear_stale_active_streams_uses_cutoff() -> None:

@@ -17,10 +17,17 @@ import {
   persistedTurns,
 } from '@/lib/chat-route-state';
 import {
+  type ChatStateClient,
   type ChatStateJsonValue,
   ChatStateRequestError,
   createChatStateClient,
 } from '@/lib/chat-state-client';
+import {
+  clearChatActiveStream,
+  finishChatStream,
+  registerPendingChatStream,
+  startResumableChatStream,
+} from '@/lib/chat-stream-lifecycle';
 import {
   type ChatClientBody,
   currentUserMessageForRequest,
@@ -28,13 +35,9 @@ import {
   translateToUiStream,
   type UiStreamMeta,
 } from '@/lib/chat-translate';
-import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
+import { requestUpstreamChatStream } from '@/lib/chat-upstream';
 import { joinText } from '@/lib/message-parts';
-import {
-  activeChatProducers,
-  createChatResumableStreamContext,
-  normalizePythonResponseStreamId,
-} from '@/lib/resumable-stream-context';
+import { activeChatProducers } from '@/lib/resumable-stream-context';
 import { parseProtocolV2 } from '@/lib/sse';
 
 export const runtime = 'nodejs';
@@ -42,6 +45,16 @@ export const dynamic = 'force-dynamic';
 
 const SSE_CONTENT_TYPE = 'text/event-stream';
 const USER_ID_FIELD = 'user_id';
+
+type AssistantPersistence = {
+  readonly chatState: ChatStateClient;
+  readonly conversationId: string;
+  readonly meta: UiStreamMeta;
+  readonly regenerationReplacement: null | RegenerationReplacement;
+  readonly responseMessage: MyUIMessage;
+  readonly streamId: string;
+  readonly userId: string;
+};
 
 type ConversationSummary = {
   readonly id: string;
@@ -92,18 +105,6 @@ const conversationSummary = (conversation: {
 
 const requiredText = (value: string | undefined): null | string =>
   value === undefined || value.length === 0 ? null : value;
-
-const ignoreMissing = async (operation: Promise<void>): Promise<void> => {
-  try {
-    await operation;
-  } catch (error) {
-    if (error instanceof ChatStateRequestError && error.status === 404) {
-      return;
-    }
-
-    throw error;
-  }
-};
 
 const regeneratedMessageId = (body: ResumableChatClientBody): null | string =>
   body.trigger === 'regenerate-message' &&
@@ -156,6 +157,55 @@ const upstreamMessagesFor = (
   regenerationReplacement === null
     ? [...trustedHistory, ...currentMessages]
     : trustedHistory;
+
+const isStalePersistenceError = (error: unknown): boolean =>
+  error instanceof ChatStateRequestError && error.status === 404;
+
+const persistAssistantMessage = async ({
+  chatState,
+  conversationId,
+  meta,
+  regenerationReplacement,
+  responseMessage,
+  streamId,
+  userId,
+}: AssistantPersistence): Promise<void> => {
+  const content = joinText(responseMessage).trim();
+  if (content.length === 0) {
+    return;
+  }
+  const { metadata, parts } = assistantState(responseMessage, meta);
+
+  try {
+    if (regenerationReplacement === null) {
+      await chatState.upsertAssistantMessage({
+        content,
+        conversationId,
+        metadata,
+        parts,
+        responseId: streamId,
+        streamId,
+        userId,
+      });
+      return;
+    }
+    await chatState.replaceAssistantMessage({
+      content,
+      conversationId,
+      messageId: regenerationReplacement.messageId,
+      metadata,
+      parts,
+      responseId: streamId,
+      retainedMessageIds: regenerationReplacement.retainedMessageIds,
+      streamId,
+      userId,
+    });
+  } catch (error) {
+    if (!isStalePersistenceError(error)) {
+      throw error;
+    }
+  }
+};
 
 export const GET = async (): Promise<Response> => {
   const chatState = createChatStateClient();
@@ -263,44 +313,67 @@ export const POST = async (req: Request): Promise<Response> => {
       userId,
     });
     const upstreamController = new AbortController();
+    const streamId = crypto.randomUUID();
+
+    await registerPendingChatStream({
+      chatState,
+      conversationId,
+      replacementMessageId: regenerationReplacement?.messageId ?? null,
+      streamId,
+      upstreamController,
+      userId,
+    });
+    const cleanupPendingStream = async (): Promise<void> => {
+      upstreamController.abort();
+      await finishChatStream({ chatState, conversationId, streamId, userId });
+    };
 
     const upstreamPayload = {
       ...chatBody,
       messages: upstreamMessages,
       [USER_ID_FIELD]: userId,
     } satisfies ChatRequestBody & { user_id: string };
-    const upstream = await fetch(`${API_BASE_URL}/chat/`, {
-      body: JSON.stringify(upstreamPayload),
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': CHAT_API_KEY,
-        'X-Distinct-Id':
-          typeof clientBody.posthogDistinctId === 'string' &&
-          clientBody.posthogDistinctId.length > 0
-            ? clientBody.posthogDistinctId
-            : userId,
-        ...(typeof clientBody.posthogSessionId === 'string' &&
-          clientBody.posthogSessionId.length > 0 && {
-            'X-PostHog-Session-Id': clientBody.posthogSessionId,
-          }),
-      },
-      method: 'POST',
-      signal: upstreamController.signal,
-    });
+    let upstream: Response;
+    try {
+      upstream = await requestUpstreamChatStream({
+        payload: upstreamPayload,
+        posthogDistinctId: clientBody.posthogDistinctId,
+        posthogSessionId: clientBody.posthogSessionId,
+        signal: upstreamController.signal,
+        streamId,
+        userId,
+      });
+    } catch (error) {
+      await cleanupPendingStream();
+      throw error;
+    }
 
     const contentType = upstream.headers.get('content-type') ?? '';
 
     if (!upstream.ok || !contentType.includes(SSE_CONTENT_TYPE)) {
       const message = readDetail();
 
+      await cleanupPendingStream();
+
       return errorResponse({ inferenceModel }, 'pre_stream', message);
     }
 
-    const responseId = upstream.headers.get('X-Response-Id') ?? undefined;
-    const streamId = normalizePythonResponseStreamId(responseId);
+    const upstreamResponseId = upstream.headers.get('X-Response-Id');
+
+    if (upstreamResponseId !== null && upstreamResponseId !== streamId) {
+      await cleanupPendingStream();
+      return errorResponse(
+        { inferenceModel, responseId: upstreamResponseId },
+        'agent_error',
+        'Request failed',
+      );
+    }
+    const responseId = streamId;
+
     const upstreamBody = upstream.body;
 
     if (upstreamBody === null) {
+      await cleanupPendingStream();
       return errorResponse(
         { inferenceModel, responseId },
         'agent_error',
@@ -308,22 +381,13 @@ export const POST = async (req: Request): Promise<Response> => {
       );
     }
 
-    activeChatProducers.register(streamId, upstreamController);
-
-    try {
-      await chatState.setActiveStream({
-        activeResponseId: streamId,
-        activeStreamId: streamId,
-        conversationId,
-        userId,
-      });
-    } catch (error) {
-      upstreamController.abort();
-      activeChatProducers.unregister(streamId);
-      throw error;
-    }
-
-    const meta = { inferenceModel, responseId: streamId };
+    const meta = {
+      inferenceModel,
+      ...(regenerationReplacement !== null && {
+        replacementMessageId: regenerationReplacement.messageId,
+      }),
+      responseId: streamId,
+    };
 
     const stream = createUIMessageStream<MyUIMessage>({
       execute: async ({ writer }) => {
@@ -331,40 +395,22 @@ export const POST = async (req: Request): Promise<Response> => {
       },
       onEnd: async ({ responseMessage }) => {
         try {
-          const content = joinText(responseMessage).trim();
+          await persistAssistantMessage({
+            chatState,
+            conversationId,
+            meta,
+            regenerationReplacement,
+            responseMessage,
+            streamId,
+            userId,
+          });
 
-          if (content.length > 0) {
-            const { metadata, parts } = assistantState(responseMessage, meta);
-            if (regenerationReplacement === null) {
-              await chatState.upsertAssistantMessage({
-                content,
-                conversationId,
-                metadata,
-                parts,
-                responseId: streamId,
-                userId,
-              });
-            } else {
-              await chatState.replaceAssistantMessage({
-                content,
-                conversationId,
-                messageId: regenerationReplacement.messageId,
-                metadata,
-                parts,
-                responseId: streamId,
-                retainedMessageIds: regenerationReplacement.retainedMessageIds,
-                userId,
-              });
-            }
-          }
-
-          await ignoreMissing(
-            chatState.clearActiveStreamIfCurrent({
-              conversationId,
-              streamId,
-              userId,
-            }),
-          );
+          await clearChatActiveStream({
+            chatState,
+            conversationId,
+            streamId,
+            userId,
+          });
         } finally {
           activeChatProducers.unregister(streamId);
         }
@@ -375,24 +421,15 @@ export const POST = async (req: Request): Promise<Response> => {
 
     return createUIMessageStreamResponse({
       consumeSseStream: async ({ stream: sseStream }) => {
-        try {
-          await createChatResumableStreamContext({
-            waitUntil: after,
-          }).createNewResumableStream(streamId, () => sseStream);
-        } catch {
-          upstreamController.abort();
-          try {
-            await ignoreMissing(
-              chatState.clearActiveStreamIfCurrent({
-                conversationId,
-                streamId,
-                userId,
-              }),
-            );
-          } finally {
-            activeChatProducers.unregister(streamId);
-          }
-        }
+        await startResumableChatStream({
+          chatState,
+          conversationId,
+          sseStream,
+          streamId,
+          upstreamController,
+          userId,
+          waitUntil: after,
+        });
       },
       stream,
     });

@@ -26,6 +26,9 @@ export type ChatStateClient = {
   readonly loadConversation: (
     input: LoadConversationInput,
   ) => Promise<ChatStateConversationWithMessages>;
+  readonly markActiveStreamStreamingIfPending: (
+    input: ClearActiveStreamInput,
+  ) => Promise<void>;
   readonly replaceAssistantMessage: (
     input: ReplaceAssistantMessageInput,
   ) => Promise<void>;
@@ -50,6 +53,7 @@ export type ChatStateClient = {
 };
 
 export type ChatStateConversation = {
+  readonly active_replacement_message_id: null | string;
   readonly active_response_id: null | string;
   readonly active_status: null | string;
   readonly active_stream_id: null | string;
@@ -117,13 +121,16 @@ type ReplaceAssistantMessageInput = {
   readonly parts: readonly ChatStateJsonValue[];
   readonly responseId: string;
   readonly retainedMessageIds: readonly string[];
+  readonly streamId: string;
   readonly userId: string;
 };
 
 type SetActiveStreamInput = {
   readonly activeResponseId: string;
+  readonly activeStatus: 'pending' | 'streaming';
   readonly activeStreamId: string;
   readonly conversationId: string;
+  readonly replacementMessageId: null | string;
   readonly userId: string;
 };
 
@@ -140,6 +147,7 @@ type UpsertAssistantMessageInput = {
   readonly metadata: ChatStateMetadata;
   readonly parts: readonly ChatStateJsonValue[];
   readonly responseId: string;
+  readonly streamId: string;
   readonly userId: string;
 };
 
@@ -279,6 +287,19 @@ export const createChatStateClient = (): ChatStateClient => ({
     readStateJson<ChatStateConversationWithMessages>(
       `/conversations/${conversationId}?user_id=${encodeURIComponent(userId)}`,
     ),
+  markActiveStreamStreamingIfPending: async ({
+    conversationId,
+    streamId,
+    userId,
+  }) => {
+    await sendStateRequest(
+      `/conversations/${conversationId}/active-stream/${streamId}/streaming`,
+      {
+        body: JSON.stringify({ user_id: userId }),
+        method: 'POST',
+      },
+    );
+  },
   replaceAssistantMessage: async ({
     content,
     conversationId,
@@ -287,12 +308,14 @@ export const createChatStateClient = (): ChatStateClient => ({
     parts,
     responseId,
     retainedMessageIds,
+    streamId,
     userId,
   }) => {
     await sendStateRequest(
       `/conversations/${conversationId}/messages/assistant/${messageId}/replacement/${responseId}`,
       {
         body: JSON.stringify({
+          active_stream_id: streamId,
           content,
           metadata,
           parts,
@@ -305,14 +328,17 @@ export const createChatStateClient = (): ChatStateClient => ({
   },
   setActiveStream: async ({
     activeResponseId,
+    activeStatus,
     activeStreamId,
     conversationId,
+    replacementMessageId,
     userId,
   }) => {
     await sendStateRequest(`/conversations/${conversationId}/active-stream`, {
       body: JSON.stringify({
+        active_replacement_message_id: replacementMessageId,
         active_response_id: activeResponseId,
-        active_status: 'streaming',
+        active_status: activeStatus,
         active_stream_id: activeStreamId,
         user_id: userId,
       }),
@@ -344,12 +370,14 @@ export const createChatStateClient = (): ChatStateClient => ({
     metadata,
     parts,
     responseId,
+    streamId,
     userId,
   }) => {
     await sendStateRequest(
       `/conversations/${conversationId}/messages/assistant/${responseId}`,
       {
         body: JSON.stringify({
+          active_stream_id: streamId,
           content,
           id: crypto.randomUUID(),
           metadata,

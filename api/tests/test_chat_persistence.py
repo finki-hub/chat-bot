@@ -64,6 +64,7 @@ async def test_chat_persistence_happy_path_orders_messages_and_clears_current_st
         user_id=OWNER_ID,
         active_stream_id=response_id,
         active_response_id=response_id,
+        active_replacement_message_id=None,
         active_status=ActiveStreamStatus.STREAMING,
     )
 
@@ -126,6 +127,7 @@ async def test_chat_persistence_clear_with_stale_stream_id_keeps_newer_active_st
             user_id=OWNER_ID,
             active_stream_id=stream_id,
             active_response_id=stream_id,
+            active_replacement_message_id=None,
             active_status=ActiveStreamStatus.STREAMING,
         )
 
@@ -176,6 +178,7 @@ async def test_chat_persistence_lists_updates_owner_and_clears_stale_streams() -
         user_id=OWNER_ID,
         active_stream_id=uuid4(),
         active_response_id=uuid4(),
+        active_replacement_message_id=None,
         active_status=ActiveStreamStatus.STREAMING,
     )
     db.conversations[first.id]["updated_at"] = db.now - timedelta(hours=2)

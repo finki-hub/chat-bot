@@ -28,6 +28,15 @@ export type UiChunk =
   | { id: string; type: 'text-end' }
   | { id: string; type: 'text-start' }
   | {
+      messageId?: string;
+      messageMetadata?: {
+        inferenceModel?: string;
+        replacementMessageId?: string;
+        responseId?: string;
+      };
+      type: 'start';
+    }
+  | {
       messageMetadata: {
         diagnostics: {
           cost?: { inputUsd: number; outputUsd: number; totalUsd: number };
@@ -40,10 +49,6 @@ export type UiChunk =
         responseId?: string;
       };
       type: 'message-metadata';
-    }
-  | {
-      messageMetadata?: { inferenceModel?: string; responseId?: string };
-      type: 'start';
     }
   | { type: 'finish' };
 

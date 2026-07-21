@@ -176,6 +176,7 @@ test.describe('reasoning streaming (mocked BFF)', () => {
       histories: {
         [firstId]: {
           conversation: {
+            activeStream: null,
             id: firstId,
             model: INFERENCE_MODEL,
             title: 'Reasoning history',
@@ -203,6 +204,7 @@ test.describe('reasoning streaming (mocked BFF)', () => {
         },
         [secondId]: {
           conversation: {
+            activeStream: null,
             id: secondId,
             model: INFERENCE_MODEL,
             title: 'Other history',

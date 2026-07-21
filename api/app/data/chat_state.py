@@ -13,11 +13,19 @@ from app.schemas.chat_persistence import (
 async def upsert_assistant_message_by_response_id(
     db: ChatPersistenceDatabase,
     message: ChatMessageUpsert,
-) -> ChatMessage:
+    *,
+    active_stream_id: UUID,
+    user_id: UUID,
+) -> ChatMessage | None:
     row = await db.fetchrow(
         """
         INSERT INTO chat_message (id, conversation_id, role, content, response_id, metadata, parts)
-        VALUES ($3, $1, 'assistant', $4, $2, $5::jsonb, $6::jsonb)
+        SELECT $3, conversation.id, 'assistant', $4, $2, $5::jsonb, $6::jsonb
+        FROM chat_conversation conversation
+        WHERE conversation.id = $1
+          AND conversation.user_id = $7
+          AND conversation.active_stream_id = $8
+        FOR UPDATE OF conversation
         ON CONFLICT (conversation_id, response_id)
         WHERE response_id IS NOT NULL AND role = 'assistant'
         DO UPDATE SET
@@ -33,16 +41,17 @@ async def upsert_assistant_message_by_response_id(
         message.content,
         json.dumps(message.metadata),
         None if message.parts is None else json.dumps(message.parts),
+        user_id,
+        active_stream_id,
     )
-    if row is None:
-        raise RuntimeError("assistant chat_message upsert returned no row")
-    return message_from_row(row)
+    return None if row is None else message_from_row(row)
 
 
 async def replace_assistant_message_and_prune_after(
     db: ChatPersistenceDatabase,
     message: ChatMessageUpsert,
     *,
+    active_stream_id: UUID,
     retained_message_ids: list[UUID],
     user_id: UUID,
 ) -> ChatMessage | None:
@@ -57,12 +66,14 @@ async def replace_assistant_message_and_prune_after(
               AND assistant.conversation_id = $2
               AND assistant.role = 'assistant'
               AND conversation.user_id = $3
+              AND conversation.active_stream_id = $4
+            FOR UPDATE OF conversation
         ), updated AS (
             UPDATE chat_message assistant
-            SET content = $4,
-                response_id = $5,
-                metadata = $6::jsonb,
-                parts = $7::jsonb,
+            SET content = $5,
+                response_id = $6,
+                metadata = $7::jsonb,
+                parts = $8::jsonb,
                 updated_at = NOW()
             FROM target
             WHERE assistant.id = target.id
@@ -72,7 +83,7 @@ async def replace_assistant_message_and_prune_after(
             USING target
             WHERE stale.conversation_id = target.conversation_id
               AND stale.created_at > target.created_at
-              AND NOT (stale.id = ANY($8::uuid[]))
+              AND NOT (stale.id = ANY($9::uuid[]))
             RETURNING stale.id
         )
         SELECT * FROM updated
@@ -80,6 +91,7 @@ async def replace_assistant_message_and_prune_after(
         message.id,
         message.conversation_id,
         user_id,
+        active_stream_id,
         message.content,
         message.response_id,
         json.dumps(message.metadata),
@@ -102,6 +114,31 @@ async def mark_active_stream_stopped_if_current(
         SET active_status = 'stopped',
             updated_at = NOW()
         WHERE id = $1 AND user_id = $2 AND active_stream_id = $3
+        RETURNING *
+        """,
+        conversation_id,
+        user_id,
+        active_stream_id,
+    )
+    return None if row is None else conversation_from_row(row)
+
+
+async def mark_active_stream_streaming_if_pending(
+    db: ChatPersistenceDatabase,
+    *,
+    conversation_id: UUID,
+    user_id: UUID,
+    active_stream_id: UUID,
+) -> ChatConversation | None:
+    row = await db.fetchrow(
+        """
+        UPDATE chat_conversation
+        SET active_status = 'streaming',
+            updated_at = NOW()
+        WHERE id = $1
+          AND user_id = $2
+          AND active_stream_id = $3
+          AND active_status = 'pending'
         RETURNING *
         """,
         conversation_id,

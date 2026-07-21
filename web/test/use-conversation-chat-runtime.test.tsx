@@ -1,9 +1,13 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
 
 import { useConversationChatRuntime } from '@/lib/use-conversation-chat-runtime';
+
+type MessageUpdate =
+  | ((messages: MyUIMessage[]) => MyUIMessage[])
+  | MyUIMessage[];
 
 type RuntimeDataPart =
   | { readonly data: ErrorNotice; readonly type: 'data-error' }
@@ -36,8 +40,9 @@ const previousMessages: MyUIMessage[] = [
 ];
 
 const useChatOptions: RuntimeOptions[] = [];
-const setMessages = vi.fn<(messages: MyUIMessage[]) => void>();
+const setMessages = vi.fn<(messages: MessageUpdate) => void>();
 const refreshConversations = vi.fn<() => Promise<void>>();
+const getChatStatus = vi.fn<() => 'ready' | 'submitted'>(() => 'ready');
 const { refetchModels } = vi.hoisted(() => ({
   refetchModels: vi.fn<() => Promise<void>>(),
 }));
@@ -50,7 +55,7 @@ vi.mock('@ai-sdk/react', () => ({
       regenerate: vi.fn<() => Promise<void>>(),
       sendMessage: vi.fn<() => Promise<void>>(),
       setMessages,
-      status: 'ready',
+      status: getChatStatus(),
       stop: vi.fn<() => void>(),
     };
   },
@@ -80,7 +85,13 @@ describe('useConversationChatRuntime sponsored errors', () => {
     refetchModels.mockReset();
     refetchModels.mockResolvedValue();
     setMessages.mockReset();
+    getChatStatus.mockReset();
+    getChatStatus.mockReturnValue('ready');
     useChatOptions.length = 0;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('refreshes the model catalog and preserves the prior conversation on terminal quota errors', async () => {
@@ -165,5 +176,52 @@ describe('useConversationChatRuntime sponsored errors', () => {
     await Promise.resolve();
 
     expect(refetchModels).not.toHaveBeenCalled();
+  });
+
+  it('finalizes client timing when a regenerated message keeps its target id', () => {
+    getChatStatus.mockReturnValue('submitted');
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    renderHook(() =>
+      useConversationChatRuntime({
+        activeId: 'conversation-1',
+        model: 'gpt-5.6-luna',
+        preserveEmptyHydrationIdRef: { current: null },
+        reasoning: false,
+        refreshConversations,
+        setActiveId: vi.fn<(id: null | string) => void>(),
+      }),
+    );
+    const options = useChatOptions.at(-1);
+    if (options?.onFinish === undefined) {
+      throw new Error('Chat runtime finish callback was not registered');
+    }
+    nowSpy.mockReturnValue(1_800);
+
+    act(() => {
+      options.onFinish?.({
+        isAbort: false,
+        isError: false,
+        message: {
+          id: 'a1',
+          metadata: {
+            replacementMessageId: 'a1',
+            responseId: 'response-2',
+          },
+          parts: [{ text: 'Регенериран одговор', type: 'text' }],
+          role: 'assistant',
+        },
+      });
+    });
+
+    const update = setMessages.mock.calls[0]?.[0];
+    if (typeof update !== 'function') {
+      throw new TypeError('Expected a functional message update');
+    }
+    const updated = update(previousMessages);
+
+    expect(updated.at(1)?.metadata?.timing).toStrictEqual({
+      totalMs: 800,
+      ttftMs: 0,
+    });
   });
 });

@@ -11,6 +11,8 @@ import {
   USER_ID,
 } from './api-chat-route-support';
 
+const STORED_TITLE = 'Stored title';
+
 const importGet = async (): Promise<
   (
     req: Request,
@@ -46,12 +48,13 @@ describe('GET /api/chat/[id]/history', () => {
     // Given: the Python API has durable conversation messages for this owner.
     routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
       conversation: {
+        active_replacement_message_id: null,
         active_response_id: null,
         active_status: null,
         active_stream_id: null,
         id: CONVERSATION_ID,
         model: MODEL,
-        title: 'Stored title',
+        title: STORED_TITLE,
         user_id: USER_ID,
       },
       messages: [
@@ -97,9 +100,10 @@ describe('GET /api/chat/[id]/history', () => {
     expect(res.status).toBe(200);
     expect(body).toStrictEqual({
       conversation: {
+        activeStream: null,
         id: CONVERSATION_ID,
         model: MODEL,
-        title: 'Stored title',
+        title: STORED_TITLE,
       },
       messages: [
         {
@@ -142,12 +146,13 @@ describe('GET /api/chat/[id]/history', () => {
     // Given: legacy and malformed rows still have durable text content.
     routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
       conversation: {
+        active_replacement_message_id: null,
         active_response_id: null,
         active_status: null,
         active_stream_id: null,
         id: CONVERSATION_ID,
         model: MODEL,
-        title: 'Stored title',
+        title: STORED_TITLE,
         user_id: USER_ID,
       },
       messages: [
@@ -177,9 +182,10 @@ describe('GET /api/chat/[id]/history', () => {
     expect(res.status).toBe(200);
     expect(body).toStrictEqual({
       conversation: {
+        activeStream: null,
         id: CONVERSATION_ID,
         model: MODEL,
-        title: 'Stored title',
+        title: STORED_TITLE,
       },
       messages: [
         {
@@ -195,6 +201,39 @@ describe('GET /api/chat/[id]/history', () => {
           role: 'assistant',
         },
       ],
+    });
+  });
+
+  it('returns the active regeneration descriptor needed after a refresh', async () => {
+    const replacementMessageId = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d35';
+    routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
+      conversation: {
+        active_replacement_message_id: replacementMessageId,
+        active_response_id: RESPONSE_ID,
+        active_status: 'streaming',
+        active_stream_id: RESPONSE_ID,
+        id: CONVERSATION_ID,
+        model: MODEL,
+        title: STORED_TITLE,
+        user_id: USER_ID,
+      },
+      messages: [],
+    });
+
+    const res = await (await importGet())(historyRequest(), routeContext());
+    const body: unknown = await res.json();
+
+    expect(body).toStrictEqual({
+      conversation: {
+        activeStream: {
+          id: RESPONSE_ID,
+          replacementMessageId,
+        },
+        id: CONVERSATION_ID,
+        model: MODEL,
+        title: STORED_TITLE,
+      },
+      messages: [],
     });
   });
 

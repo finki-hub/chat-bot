@@ -4,10 +4,11 @@ import json
 import logging
 from collections.abc import AsyncGenerator, AsyncIterable
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from fastapi.responses import StreamingResponse
 
 from app.api.provider_credentials import (
@@ -868,9 +869,13 @@ async def _chat_response_stream(
 async def chat(
     payload: ChatSchema,
     request: Request,
+    x_response_id: Annotated[
+        UUID | None,
+        Header(alias="X-Response-Id"),
+    ] = None,
     db: Database = db_dep,
 ) -> StreamingResponse:
-    response_id = uuid4()
+    response_id = x_response_id or uuid4()
     record_response_id(str(response_id))
     stream = _chat_response_stream(payload, request, db, response_id)
     response = StreamingResponse(stream, media_type="text/event-stream")

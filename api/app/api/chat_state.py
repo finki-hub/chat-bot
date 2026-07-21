@@ -24,6 +24,7 @@ from app.data.chat_persistence import (
 )
 from app.data.chat_state import (
     mark_active_stream_stopped_if_current,
+    mark_active_stream_streaming_if_pending,
     replace_assistant_message_and_prune_after,
     upsert_assistant_message_by_response_id,
 )
@@ -313,8 +314,7 @@ async def upsert_assistant_message_state(
     payload: AssistantMessageUpsertRequest,
     db: ChatPersistenceDatabase = db_dep,
 ) -> ChatMessage:
-    await _ensure_owned(db, conversation_id=conversation_id, user_id=payload.user_id)
-    return await upsert_assistant_message_by_response_id(
+    updated = await upsert_assistant_message_by_response_id(
         db,
         ChatMessageUpsert(
             id=payload.id,
@@ -325,7 +325,12 @@ async def upsert_assistant_message_state(
             metadata=payload.metadata,
             parts=payload.parts,
         ),
+        active_stream_id=payload.active_stream_id or response_id,
+        user_id=payload.user_id,
     )
+    if updated is None:
+        raise _not_found()
+    return updated
 
 
 @router.put(
@@ -356,6 +361,7 @@ async def replace_assistant_message_state(
             metadata=payload.metadata,
             parts=payload.parts,
         ),
+        active_stream_id=payload.active_stream_id or response_id,
         retained_message_ids=payload.retained_message_ids,
         user_id=payload.user_id,
     )
@@ -380,6 +386,7 @@ async def set_active_stream_state(
         user_id=payload.user_id,
         active_stream_id=payload.active_stream_id,
         active_response_id=payload.active_response_id,
+        active_replacement_message_id=payload.active_replacement_message_id,
         active_status=payload.active_status,
     )
     if updated is None:
@@ -402,6 +409,28 @@ async def clear_active_stream_state(
         db,
         conversation_id=conversation_id,
         user_id=user_id,
+        active_stream_id=active_stream_id,
+    )
+    if updated is None:
+        raise _not_found()
+    return updated
+
+
+@router.post(
+    "/conversations/{conversation_id}/active-stream/{active_stream_id}/streaming",
+    status_code=status.HTTP_200_OK,
+    operation_id="markChatStateActiveStreamStreamingIfPending",
+)
+async def mark_active_stream_streaming_state(
+    conversation_id: UUID,
+    active_stream_id: UUID,
+    payload: UserScopedRequest,
+    db: ChatPersistenceDatabase = db_dep,
+) -> ChatConversation:
+    updated = await mark_active_stream_streaming_if_pending(
+        db,
+        conversation_id=conversation_id,
+        user_id=payload.user_id,
         active_stream_id=active_stream_id,
     )
     if updated is None:
