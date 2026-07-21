@@ -1,23 +1,36 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useHealth } from '@/lib/use-health';
 
-const HealthProbe = () => {
+type HealthProbeProps = {
+  readonly onRendered?: (queryClient: QueryClient) => void;
+  readonly queryClient: QueryClient;
+};
+
+const HealthProbe = ({ onRendered, queryClient }: HealthProbeProps) => {
   const { unavailable } = useHealth();
+
+  useEffect(() => {
+    onRendered?.(queryClient);
+  });
 
   return <div data-testid="health-state">{unavailable ? 'down' : 'up'}</div>;
 };
 
-const renderHealthProbe = () => {
+const renderHealthProbe = (onRendered?: (queryClient: QueryClient) => void) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retryDelay: 0 } },
   });
 
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <HealthProbe />
+      <HealthProbe
+        onRendered={onRendered}
+        queryClient={queryClient}
+      />
     </QueryClientProvider>,
   );
 
@@ -26,11 +39,6 @@ const renderHealthProbe = () => {
 
 const healthResponse = (status: number): Response =>
   Response.json({ ok: status === 200 }, { status });
-
-const nextCheckTick = (): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, 1);
-  });
 
 describe('useHealth', () => {
   afterEach(() => {
@@ -46,21 +54,29 @@ describe('useHealth', () => {
       .mockResolvedValueOnce(healthResponse(200));
     vi.stubGlobal('fetch', fetchMock);
 
-    const { queryClient } = renderHealthProbe();
+    let resolveFirstRecovery: (() => void) | undefined;
+    const { queryClient } = renderHealthProbe((client) => {
+      const state = client.getQueryState(['health']);
+      if (state?.fetchStatus === 'idle' && state.status === 'success') {
+        resolveFirstRecovery?.();
+        resolveFirstRecovery = undefined;
+      }
+    });
 
     await waitFor(() => {
       expect(screen.getByTestId('health-state')).toHaveTextContent('down');
     });
 
+    const firstRecovery = new Promise<void>((resolve) => {
+      resolveFirstRecovery = resolve;
+    });
+
     await act(async () => {
       await queryClient.invalidateQueries({ queryKey: ['health'] });
+      await firstRecovery;
     });
 
     expect(screen.getByTestId('health-state')).toHaveTextContent('down');
-
-    await act(async () => {
-      await nextCheckTick();
-    });
 
     await act(async () => {
       await queryClient.invalidateQueries({ queryKey: ['health'] });
