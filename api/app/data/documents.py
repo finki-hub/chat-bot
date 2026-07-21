@@ -7,7 +7,12 @@ from uuid import UUID
 from asyncpg import Record
 
 from app.data.connection import Database
-from app.data.embedding_sql import embedding_vector_sql
+from app.data.embedding_sql import (
+    current_embedding_predicate,
+    dirty_embedding_predicate,
+    embedding_column_name,
+    embedding_vector_sql,
+)
 from app.llms.chunking import Chunk
 from app.llms.models import (
     MODEL_DISTANCE_THRESHOLDS,
@@ -112,6 +117,11 @@ async def get_closest_chunks(
 ) -> list[ChunkSchema]:
     """Vector search over the chunk table (mirrors get_closest_questions)."""
     embedding = embedding_vector_sql(model, embedded_query, table_alias="c")
+    predicate = current_embedding_predicate(
+        model,
+        embedding.column_ref,
+        version_parameter=4,
+    )
 
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
@@ -128,7 +138,7 @@ async def get_closest_chunks(
         {embedding.distance_operand} <=> {embedding.query_operand} AS distance
     FROM chunk c
     JOIN document d ON d.id = c.document_id
-    WHERE {embedding.column_ref} IS NOT NULL
+    WHERE {predicate.sql}
         AND {embedding.distance_operand} <=> {embedding.query_operand} < $3
     ORDER BY distance
     LIMIT $2
@@ -139,6 +149,7 @@ async def get_closest_chunks(
         embedding_to_pgvector(embedded_query),
         limit,
         threshold,
+        *predicate.parameters,
     )
 
     return [
@@ -206,29 +217,40 @@ async def get_chunks_window(
 
 async def fetch_chunk_rows_for_fill(
     db: Database,
-    model_column: str,
+    model: Model,
     documents: list[str] | None,
     *,
     all_chunks: bool,
 ) -> list[Record]:
     """Chunk rows (with document title) needing this model's embedding."""
     select = """
-        SELECT c.id, c.content, c.section, d.title AS document_title
+        SELECT c.id, c.content, c.section, c.embedding_revision, d.title AS document_title
         FROM chunk c
         JOIN document d ON d.id = c.document_id
     """
+    model_column = embedding_column_name(model)
     if documents:
         placeholders = ",".join("$" + str(i + 1) for i in range(len(documents)))
         where = f"WHERE d.name IN ({placeholders})"
-        if not all_chunks:
-            where += f" AND c.{model_column} IS NULL"
+        if all_chunks:
+            return await db.fetch(
+                f"{select} {where} ORDER BY d.name, c.chunk_index",
+                *documents,
+            )
+        predicate = dirty_embedding_predicate(
+            model,
+            f"c.{model_column}",
+            version_parameter=len(documents) + 1,
+        )
         return await db.fetch(
-            f"{select} {where} ORDER BY d.name, c.chunk_index",
+            f"{select} {where} AND {predicate.sql} ORDER BY d.name, c.chunk_index",
             *documents,
+            *predicate.parameters,
         )
 
     if all_chunks:
         return await db.fetch(f"{select} ORDER BY d.name, c.chunk_index")
     return await db.fetch(
-        f"{select} WHERE c.{model_column} IS NULL ORDER BY d.name, c.chunk_index",
+        f"{select} WHERE {dirty_embedding_predicate(model, f'c.{model_column}').sql} ORDER BY d.name, c.chunk_index",
+        *dirty_embedding_predicate(model, f"c.{model_column}").parameters,
     )
