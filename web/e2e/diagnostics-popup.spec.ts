@@ -84,7 +84,7 @@ test('keeps complete diagnostics reachable inside a small viewport', async ({
     const diagnosticsPopup = page.locator('[data-slot="hover-card-content"]');
     const waitForPopupAnimation = async () => {
       await diagnosticsPopup.evaluate(async (element) => {
-        await Promise.all(
+        await Promise.allSettled(
           element.getAnimations().map((animation) => animation.finished),
         );
       });
