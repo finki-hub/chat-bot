@@ -1,3 +1,5 @@
+import type * as TimersPromises from 'node:timers/promises';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -9,6 +11,30 @@ import {
   sseBody,
   USER_ID,
 } from './api-chat-route-support';
+
+type PromiseTimerMock = (
+  milliseconds?: number,
+  value?: unknown,
+) => Promise<unknown>;
+
+const timerMocks = vi.hoisted(() => ({
+  setTimeout: vi.fn<PromiseTimerMock>((_milliseconds, value) =>
+    Promise.resolve(value),
+  ),
+}));
+
+vi.mock('node:timers/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof TimersPromises>();
+
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      setTimeout: timerMocks.setTimeout,
+    },
+    setTimeout: timerMocks.setTimeout,
+  };
+});
 
 /* eslint-disable camelcase -- Route tests mirror Python chat state API payloads. */
 
@@ -34,6 +60,7 @@ const routeContext = () => ({
 
 beforeEach(() => {
   vi.resetModules();
+  timerMocks.setTimeout.mockClear();
   resetRouteMocks();
   installRouteMocks();
 });
@@ -277,6 +304,7 @@ describe('GET /api/chat/[id]/stream lifecycle states', () => {
     expect(
       routeMocks.resumableContext.resumeExistingStream,
     ).toHaveBeenCalledTimes(7);
+    expect(timerMocks.setTimeout).toHaveBeenCalledTimes(6);
     expect(
       routeMocks.stateClient.clearActiveStreamIfCurrent,
     ).not.toHaveBeenCalled();
