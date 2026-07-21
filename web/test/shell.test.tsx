@@ -10,6 +10,7 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SessionProvider } from 'next-auth/react';
+import { renderToString } from 'react-dom/server';
 import {
   afterEach,
   beforeAll,
@@ -469,6 +470,22 @@ describe('ChatPage persistence', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('omits the static sidebar before the viewport is synchronized', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    const markup = renderToString(
+      <SessionProvider>
+        <QueryClientProvider client={queryClient}>
+          <ChatScreen />
+        </QueryClientProvider>
+      </SessionProvider>,
+    );
+
+    expect(markup).not.toContain('<aside');
   });
 
   it('keeps the sidebar modal below the large-screen breakpoint', async () => {

@@ -168,7 +168,7 @@ export const ChatScreen = () => {
           generatingTitleId={generatingTitleId}
           listError={conversationListError}
           listLoading={conversationListLoading}
-          mobile={sidebarSynced && !desktopSidebar}
+          mobile={!sidebarSynced || !desktopSidebar}
           onClose={() => {
             setSidebarOpen(false);
           }}
@@ -178,7 +178,7 @@ export const ChatScreen = () => {
           onRename={onRename}
           onRetryList={onRetryConversationList}
           onSelect={onSelect}
-          open={sidebarOpen}
+          open={sidebarSynced && sidebarOpen}
           synced={sidebarSynced}
         />
         <main
