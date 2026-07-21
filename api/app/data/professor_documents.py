@@ -5,7 +5,12 @@ import json
 from asyncpg import Record
 
 from app.data.connection import Database
-from app.data.embedding_sql import embedding_vector_sql
+from app.data.embedding_sql import (
+    current_embedding_predicate,
+    dirty_embedding_predicate,
+    embedding_column_name,
+    embedding_vector_sql,
+)
 from app.llms.models import (
     MODEL_DISTANCE_THRESHOLDS,
     Model,
@@ -53,10 +58,12 @@ async def upsert_professor_document(
 
 async def fetch_professor_document_rows_for_fill(
     db: Database,
-    model_column: str,
+    model: Model,
 ) -> list[Record]:
+    predicate = dirty_embedding_predicate(model, embedding_column_name(model))
     return await db.fetch(
-        f"SELECT id, title, abstract FROM professor_document WHERE {model_column} IS NULL ORDER BY external_id ASC",  # noqa: S608
+        f"SELECT id, title, abstract, embedding_revision FROM professor_document WHERE {predicate.sql} ORDER BY external_id ASC",  # noqa: S608
+        *predicate.parameters,
     )
 
 
@@ -79,6 +86,11 @@ async def get_closest_professor_documents(
     threshold: float | None = None,
 ) -> list[Record]:
     embedding = embedding_vector_sql(model, embedded_query)
+    predicate = current_embedding_predicate(
+        model,
+        embedding.column_ref,
+        version_parameter=4,
+    )
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
 
@@ -90,7 +102,7 @@ async def get_closest_professor_documents(
         canonical_authors,
         {embedding.distance_operand} <=> {embedding.query_operand} AS distance
     FROM professor_document
-    WHERE {embedding.column_ref} IS NOT NULL
+    WHERE {predicate.sql}
         AND {embedding.distance_operand} <=> {embedding.query_operand} < $3
     ORDER BY distance
     LIMIT $2
@@ -101,4 +113,5 @@ async def get_closest_professor_documents(
         embedding_to_pgvector(embedded_query),
         limit,
         threshold,
+        *predicate.parameters,
     )
