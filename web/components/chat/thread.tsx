@@ -129,9 +129,14 @@ export const Thread = ({
               }
 
               const isLastAssistant = m.id === lastAssistantId;
+              const activeAssistant =
+                isLastAssistant &&
+                streaming &&
+                lastMessage?.role === 'assistant';
               return (
                 <AssistantMessage
                   actions={renderActions ? renderActions(m) : undefined}
+                  complete={!activeAssistant}
                   errorPart={
                     isLastAssistant
                       ? (activeError ?? m.metadata?.error)

@@ -15,6 +15,7 @@ const DEFAULT_SESSION_USER = {
   email: 'student@example.com',
   name: 'Student',
 } as const satisfies MockSessionUser;
+const CONVERSATION_TITLE = 'Услови за запишување семестар';
 const SIDEBAR_TOGGLE_LABEL = 'Прикажи/сокриј странична лента';
 const STREAM_URL = 'http://127.0.0.1:9/stream';
 const SPONSORED_MODEL = 'gpt-5.6-luna';
@@ -116,6 +117,42 @@ test('mobile primary controls meet the 44px touch target minimum', async ({
 
   expect(triggerBox?.height).toBeGreaterThanOrEqual(44);
   expect(triggerBox?.width).toBeGreaterThanOrEqual(44);
+});
+
+test('mobile conversation actions use one touch-friendly overflow menu', async ({
+  page,
+}) => {
+  // Given a conversation in the compact sidebar.
+  await page.setViewportSize({ height: 812, width: 375 });
+  await mockSession(page);
+  await mockModels(page);
+  await installMockChatState(page, {
+    conversations: [
+      { id: 'conversation-1', model: null, title: CONVERSATION_TITLE },
+    ],
+    streamUrl: STREAM_URL,
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
+  const drawer = page.getByRole('dialog', { name: 'Странична лента' });
+
+  // When the row action trigger is opened.
+  const actionsTrigger = drawer.getByRole('button', {
+    name: `Дејства за разговорот: ${CONVERSATION_TITLE}`,
+  });
+  const triggerBox = await actionsTrigger.boundingBox();
+  await actionsTrigger.click();
+
+  // Then one 44px trigger exposes labeled menu actions without crowding the title.
+  expect(triggerBox?.height).toBeGreaterThanOrEqual(44);
+  expect(triggerBox?.width).toBeGreaterThanOrEqual(44);
+  await expect(
+    page.getByRole('menuitem', { name: 'Генерирај име' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('menuitem', { name: 'Преименувај' }),
+  ).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Избриши' })).toBeVisible();
 });
 
 test('mobile keeps account actions in the profile menu and opens credentials after closing the drawer', async ({

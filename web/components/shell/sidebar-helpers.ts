@@ -1,5 +1,8 @@
 import type { ConversationRow } from '@/lib/conversation-types';
 
+export const DESKTOP_SIDEBAR_QUERY = '(min-width: 1024px)';
+const COMPACT_SIDEBAR_QUERY = '(max-width: 1023px)';
+
 type ConversationFilter = {
   readonly filtered: ConversationRow[];
   readonly term: string;
@@ -8,7 +11,7 @@ type ConversationFilter = {
 export const closeSidebarOnMobile = (onClose: () => void): void => {
   if (
     typeof matchMedia === 'function' &&
-    matchMedia('(max-width: 767px)').matches
+    matchMedia(COMPACT_SIDEBAR_QUERY).matches
   ) {
     onClose();
   }
@@ -19,10 +22,10 @@ export const getSidebarWidthClass = (
   synced: boolean,
 ): string => {
   if (!synced) {
-    return 'md:w-64';
+    return 'lg:w-64';
   }
 
-  return open ? 'md:w-64' : 'md:w-0';
+  return open ? 'lg:w-64' : 'lg:w-0';
 };
 
 export const getConversationFilter = (

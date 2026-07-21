@@ -9,6 +9,7 @@ import {
   stagedRunChunks,
   startChatStreamServer,
   toolRunChunks,
+  type UiChunk,
 } from './helpers/sse';
 
 const RESPONSE_ID = '11111111-2222-3333-4444-555555555555';
@@ -200,6 +201,74 @@ test.describe('chat streaming (mocked BFF)', () => {
       'aria-pressed',
       'false',
     );
+
+    await chatServer.close();
+  });
+
+  test('keeps small source sets collapsed until the streamed answer completes', async ({
+    page,
+  }, testInfo) => {
+    const answerId = 'txt-source-answer';
+    const sourceTitle = 'Упис на семестар';
+    const sources = [
+      { id: 'q1', kind: 'faq', title: sourceTitle },
+      { id: 'q2', kind: 'faq', title: 'Заверка на семестар' },
+    ] as const;
+    const chatServer = await startChatStreamServer({
+      gapMs: 3_000,
+      head: [
+        {
+          messageMetadata: {
+            inferenceModel: INFERENCE_MODEL,
+            responseId: RESPONSE_ID,
+          },
+          type: 'start',
+        },
+        { id: answerId, type: 'text-start' },
+        {
+          delta: 'Одговорот се генерира и изворите се подготвени.',
+          id: answerId,
+          type: 'text-delta',
+        },
+        { messageMetadata: { sources }, type: 'message-metadata' },
+      ] satisfies UiChunk[],
+      tail: [{ id: answerId, type: 'text-end' }, { type: 'finish' }],
+    });
+
+    await page.route('**/api/health', async (route) => {
+      await route.fulfill({
+        body: JSON.stringify({ ok: true }),
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
+    await page.route('**/api/chat/*/stream', async (route) => {
+      await route.fulfill({ status: 204 });
+    });
+    await mockModels(page);
+    await installMockChatState(page, { streamUrl: chatServer.url });
+    await page.goto('/');
+    await page.getByTestId(COMPOSER_INPUT).fill('Кои се условите за упис?');
+    await page.getByTestId(COMPOSER_SUBMIT).click();
+
+    const collapsedToggle = page.getByRole('button', {
+      name: 'Прикажи извори',
+    });
+    await expect(collapsedToggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByText(sourceTitle)).toHaveCount(0);
+    await page.screenshot({
+      animations: 'disabled',
+      path: testInfo.outputPath('streaming-sources-collapsed.png'),
+    });
+
+    await expect(
+      page.getByRole('button', { name: 'Сокриј извори' }),
+    ).toHaveAttribute('aria-expanded', 'true', { timeout: 10_000 });
+    await expect(page.getByText(sourceTitle)).toBeVisible();
+    await page.screenshot({
+      animations: 'disabled',
+      path: testInfo.outputPath('completed-sources-open.png'),
+    });
 
     await chatServer.close();
   });

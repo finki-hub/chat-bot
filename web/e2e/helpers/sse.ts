@@ -1,6 +1,8 @@
 import { createServer, type Server } from 'node:http';
 import { type AddressInfo } from 'node:net';
 
+import type { MyUIMessage } from '@/lib/api-types';
+
 export type UiChunk =
   | {
       data: Record<string, never>;
@@ -37,17 +39,7 @@ export type UiChunk =
       type: 'start';
     }
   | {
-      messageMetadata: {
-        diagnostics: {
-          cost?: { inputUsd: number; outputUsd: number; totalUsd: number };
-          serverTotalMs: number;
-          serverTtftMs: number;
-          spans?: Record<string, number>;
-          tokens: { input: number; output: number; total: number };
-        };
-        inferenceModel?: string;
-        responseId?: string;
-      };
+      messageMetadata: NonNullable<MyUIMessage['metadata']>;
       type: 'message-metadata';
     }
   | { type: 'finish' };

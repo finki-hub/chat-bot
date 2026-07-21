@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Sidebar } from '@/components/shell/sidebar';
+import { getSidebarWidthClass } from '@/components/shell/sidebar-helpers';
 import { SidebarUserIdentity } from '@/components/shell/sidebar-user-identity';
 
 type MockSessionState =
@@ -219,5 +220,52 @@ describe('Sidebar conversation loading', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Се вчитуваат разговори…',
     );
+  });
+});
+
+describe('Sidebar responsive behavior', () => {
+  it('closes the tablet drawer after selecting a conversation', async () => {
+    const onClose = vi.fn<() => void>();
+    const onSelect = vi.fn<(id: string) => void>();
+    const media: MediaQueryList = {
+      addEventListener: vi.fn<MediaQueryList['addEventListener']>(),
+      addListener: vi.fn<MediaQueryList['addListener']>(),
+      dispatchEvent: vi.fn<MediaQueryList['dispatchEvent']>(() => true),
+      matches: true,
+      media: '(max-width: 1023px)',
+      onchange: null,
+      removeEventListener: vi.fn<MediaQueryList['removeEventListener']>(),
+      removeListener: vi.fn<MediaQueryList['removeListener']>(),
+    };
+    const matchMediaMock = vi.fn<(query: string) => MediaQueryList>(
+      () => media,
+    );
+    const user = userEvent.setup();
+    vi.stubGlobal('matchMedia', matchMediaMock);
+    render(
+      <Sidebar
+        {...baseProps}
+        conversations={[
+          { id: 'conversation-1', model: null, title: 'Прв разговор' },
+        ]}
+        mobile
+        onClose={onClose}
+        onSelect={onSelect}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Прв разговор' }));
+
+    expect(onSelect).toHaveBeenCalledWith('conversation-1');
+    expect(matchMediaMock).toHaveBeenCalledWith('(max-width: 1023px)');
+
+    expect(onClose).toHaveBeenCalledOnce();
+
+    vi.unstubAllGlobals();
+  });
+
+  it('uses the large breakpoint for static sidebar width', () => {
+    expect(getSidebarWidthClass(true, false)).toBe('lg:w-64');
+    expect(getSidebarWidthClass(false, true)).toBe('lg:w-0');
   });
 });
