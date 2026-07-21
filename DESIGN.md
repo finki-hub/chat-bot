@@ -24,16 +24,17 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 
 ## 5. Components
 
-- Sidebar conversation row: selectable title button plus compact row-action icon buttons that reveal on hover/focus for desktop and stay visible on mobile.
+- Sidebar conversation row: selectable title button plus compact row-action icon buttons that reveal on hover/focus for fine pointers. Coarse pointers use one 44px overflow trigger with labeled generate, rename, and delete menu items so conversation titles keep useful width.
 - Row action button: Lucide icon, `size-3.5`, semantic aria label, focus-visible ring, muted default color, stronger hover color matching the action intent, and the existing Radix tooltip using the same localized label on hover or keyboard focus.
 - Destructive row action: use destructive hover color only for delete.
+- Answer sources: automatically expose one or two source cards below a completed answer; larger source sets stay collapsed behind the source-count trigger. The trigger and external source links keep compact fine-pointer sizing and expose at least 44px targets on coarse pointers.
 - Auth sign-in panel: card surface using `card`, `border`, `background`, `primary`, and `muted-foreground` tokens, with provider buttons that visibly change border/background on hover and use `focus-visible:ring-ring`.
 - Auth sign-in content: limit the supporting value list to 2 concise benefits so the primary action remains visible on small screens. The panel uses `Започни разговор`, and provider actions follow `Продолжи со {provider.name}`.
 - Credential settings dialog: modal card using existing `Dialog`, `Input`, and `Button` primitives. Provider rows use `border`, `card`, `muted`, and `muted-foreground` tokens, with saved state indicated by text and destructive delete action only when a credential exists. Deleting a saved key opens a focused confirmation dialog; cancellation preserves the credential and confirmation is the only path that starts deletion.
 - Model selector option: group models only by provider in catalog order. Models without saved provider credentials remain visible but disabled, use `muted-foreground`, and pair a Lucide key icon with visible key-required text rather than relying on color or hover help.
 - Scrollable select menu: keep both scroll-arrow rows mounted while overflow exists so reaching a boundary never moves the popup. Show the unavailable direction with `muted-foreground` and without pointer behavior; hide both rows when the menu does not overflow.
 - Diagnostics hover card: preserve the existing hover/focus interaction, keep the card inside the dynamic viewport with the standard 16px outer gutter, and make the card the single vertical scroll owner when its full diagnostics content is taller than the available screen. The preferred minimum width must yield to Radix's available width on ultra-narrow viewports. While the trigger has keyboard focus, Arrow, Page Up/Down, Home, and End keys scroll the card without moving the conversation. Desktop-sized content remains unchanged and the surrounding conversation does not become a second scroll owner.
-- Mobile sidebar: a modal Radix dialog that traps focus, closes on Escape or overlay interaction, and restores focus to the header trigger. Desktop retains the static complementary landmark.
+- Compact sidebar: viewports below `lg` use a modal Radix dialog that traps focus, closes on Escape or overlay interaction, and restores focus to the header trigger. Desktop viewports from `lg` retain the static complementary landmark so tablet-width chat content keeps enough reading space.
 - Conversation loading state: preserve the current list/thread during transient failures and present an inline alert with a retry action. Only a confirmed missing conversation clears the selection.
 - Composer submission failure: retain the draft and show an inline retryable error; clear the draft only after the message is accepted.
 - Sponsored quota notice: present the exhausted state and localized reset time as passive information, then offer `Додај API клуч` as the only recovery action. Use the existing primary `Button` treatment with a coarse-pointer 44px target. Do not render wait, dismiss, or retry controls that cannot change the quota state.
@@ -48,7 +49,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 ## 6. Accessibility
 
 - Every icon-only action must have an `aria-label` from `web/lib/i18n.ts`.
-- Primary controls, dialog actions, close controls, search clear, and conversation row actions expose at least 44px targets whenever the primary pointer is coarse. Compact desktop sizing is gated by `pointer-fine`, not viewport width, so touch tablets retain full targets.
+- Primary controls, dialog actions, close controls, search clear, conversation overflow actions, source disclosure, and external source links expose at least 44px targets whenever the primary pointer is coarse. Compact desktop sizing is gated by `pointer-fine`, not viewport width, so touch tablets retain full targets.
 - Mobile header and drawer honor safe-area insets; decorative logo and GitHub shortcut are hidden below `sm` to protect the title and primary actions.
 - Modal drawers contain keyboard focus and restore it to their invoking control.
 - The account trigger exposes its expanded state through the Radix menu primitive, retains a visible focus ring, and keeps identity text available through a full accessible label when visual text truncates.
