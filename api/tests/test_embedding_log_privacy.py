@@ -4,6 +4,7 @@ import anyio
 import pytest
 from anyio.lowlevel import checkpoint
 
+from app.llms import embedding_generation as generation_module
 from app.llms import embeddings as embeddings_module
 from app.llms.models import Model
 
@@ -18,8 +19,8 @@ def test_embedding_logs_shape_without_raw_text(caplog, monkeypatch):
         await checkpoint()
         return [0.1]
 
-    monkeypatch.setattr(embeddings_module, "_dispatch_embeddings", dispatch)
-    caplog.set_level(logging.INFO, logger=embeddings_module.__name__)
+    monkeypatch.setattr(generation_module, "_dispatch_embeddings", dispatch)
+    caplog.set_level(logging.INFO, logger=generation_module.__name__)
 
     async def collect():
         return await embeddings_module.generate_embeddings(
@@ -40,8 +41,8 @@ def test_embedding_failure_logs_only_safe_error_metadata(caplog, monkeypatch):
         await checkpoint()
         raise RuntimeError(_PRIVATE_PROVIDER_ERROR)
 
-    monkeypatch.setattr(embeddings_module, "_dispatch_embeddings", fail_dispatch)
-    caplog.set_level(logging.ERROR, logger=embeddings_module.__name__)
+    monkeypatch.setattr(generation_module, "_dispatch_embeddings", fail_dispatch)
+    caplog.set_level(logging.ERROR, logger=generation_module.__name__)
 
     async def collect():
         return await embeddings_module.generate_embeddings(
