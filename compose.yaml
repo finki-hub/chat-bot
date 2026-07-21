@@ -54,6 +54,28 @@ services:
     pull_policy: never
     restart: unless-stopped
 
+  embedding-worker:
+    build:
+      context: ./api
+    command: ["python", "-m", "app.embedding_worker"]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    environment:
+      DATABASE_POOL_MAX_SIZE: ${DATABASE_POOL_MAX_SIZE:-10}
+      DATABASE_POOL_MIN_SIZE: ${DATABASE_POOL_MIN_SIZE:-1}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+      GPU_API_URL: ${GPU_API_URL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      TZ: ${TZ}
+    image: finki-hub/chat-bot-api:latest
+    networks:
+      - finki_stack_dev
+    pull_policy: never
+    restart: unless-stopped
+
   db:
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
