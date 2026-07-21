@@ -18,6 +18,8 @@ const STATUS_LABEL = '🔍 Пребарувам…';
 const TOOL = 'search_documents';
 const ANSWER = 'Резултатите од испитите се објавуваат на https://finki.ukim.mk';
 const LINK_NAME = /finki\.ukim\.mk/u;
+const SEARCH_STEPPER_TEXT =
+  /Разбирање….*Пребарување….*Рерангирање….*Составување…/su;
 const DIAGNOSTICS_LABEL = /Дијагностика/u;
 const OBSERVABLE_STAGE_GAP_MS = 5_000;
 const ANSWER_TEST_ID = 'answer-text';
@@ -144,9 +146,10 @@ test.describe('chat streaming (mocked BFF)', () => {
     await input.fill('Кога се објавуваат резултатите?');
     await page.getByTestId(COMPOSER_SUBMIT).click();
 
-    const chip = page.getByTestId('search-status');
+    const chip = page
+      .getByTestId('search-status')
+      .filter({ hasText: 'Пребарувам' });
     await expect(chip).toBeVisible({ timeout: 15_000 });
-    await expect(chip).toContainText('Пребарувам');
 
     const answer = page.getByTestId(ANSWER_TEST_ID);
     await expect(answer).toContainText(ANSWER_PREVIEW, { timeout: 15_000 });
@@ -230,13 +233,10 @@ test.describe('chat streaming (mocked BFF)', () => {
     await input.fill('Кога се објавуваат резултатите?');
     await page.getByTestId('composer-submit').click();
 
-    const stepper = page.getByTestId('search-stepper');
+    const stepper = page.getByTestId('search-stepper').filter({
+      hasText: SEARCH_STEPPER_TEXT,
+    });
     await expect(stepper).toBeVisible({ timeout: 15_000 });
-    // Progressive reveal: retrieval stages appear one-by-one as they run.
-    await expect(stepper).toContainText('Разбирање…');
-    await expect(stepper).toContainText('Пребарување…');
-    await expect(stepper).toContainText('Рерангирање…');
-    await expect(stepper).toContainText('Составување…');
 
     const answer = page.getByTestId(ANSWER_TEST_ID);
     await expect(answer).toContainText(ANSWER_PREVIEW, { timeout: 15_000 });
@@ -273,13 +273,6 @@ test.describe('chat streaming (mocked BFF)', () => {
       SPONSORED_RESET_AT,
     );
     try {
-      await page.route('**/api/health', async (route) => {
-        await route.fulfill({
-          body: '{}',
-          contentType: 'application/json',
-          status: 200,
-        });
-      });
       await page.route('**/api/auth/session', async (route) => {
         await route.fulfill({
           body: JSON.stringify({
@@ -370,13 +363,6 @@ test.describe('chat streaming (mocked BFF)', () => {
       'free_tier_unavailable',
       'upstream availability detail must not render',
     );
-    await page.route('**/api/health', async (route) => {
-      await route.fulfill({
-        body: '{}',
-        contentType: 'application/json',
-        status: 200,
-      });
-    });
     await page.route('**/api/auth/session', async (route) => {
       await route.fulfill({
         body: JSON.stringify({
