@@ -28,6 +28,7 @@ export const messages = {
   'composer.reasoning': 'Размислување',
   'composer.send': 'Испрати',
   'composer.stop': 'Запри',
+  'conversation.actions': 'Дејства за разговорот',
   'conversation.contextLabel': 'Активен разговор',
   'conversation.createError':
     'Разговорот не можеше да се започне. Прашањето е зачувано за повторен обид.',

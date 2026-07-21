@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ConversationRow } from '@/lib/conversation-types';
@@ -36,11 +37,14 @@ describe('ConversationList accessibility', () => {
     const actions = within(item).getByTestId('row-actions');
 
     expect(actions).toHaveClass(
-      'sm:pointer-fine:group-focus-within:opacity-100',
+      'hidden',
+      'pointer-fine:flex',
+      'pointer-fine:group-focus-within:opacity-100',
     );
   });
 
-  it('gives mobile conversation controls 44px touch targets', () => {
+  it('uses one 44px mobile menu trigger with labeled actions', async () => {
+    const user = userEvent.setup();
     render(
       <ConversationList
         activeId={null}
@@ -53,25 +57,28 @@ describe('ConversationList accessibility', () => {
     );
 
     const item = screen.getByTestId('conversation-c1');
+    const actionsTrigger = within(item).getByRole('button', {
+      name: 'Дејства за разговорот: Прв разговор',
+    });
 
     expect(
       within(item).getByRole('button', { name: 'Прв разговор' }),
-    ).toHaveClass('min-h-11', 'sm:pointer-fine:min-h-0');
+    ).toHaveClass('min-h-11', 'pointer-fine:min-h-0');
+    expect(actionsTrigger).toHaveClass('size-12', 'pointer-fine:hidden');
+
+    await user.click(actionsTrigger);
+
+    const menu = screen.getByRole('menu');
+
     expect(
-      within(item).getByRole('button', { name: 'Генерирај име' }),
-    ).toHaveClass('size-11');
+      within(menu).getByRole('menuitem', { name: 'Генерирај име' }),
+    ).toHaveClass('min-h-11', 'pointer-fine:min-h-8');
     expect(
-      within(item).getByRole('button', { name: 'Генерирај име' }),
-    ).toHaveClass('sm:pointer-fine:size-6');
-    expect(
-      within(item).getByRole('button', { name: 'Преименувај' }),
-    ).toHaveClass('size-11');
-    expect(
-      within(item).getByRole('button', { name: 'Преименувај' }),
-    ).toHaveClass('sm:pointer-fine:size-6');
-    expect(within(item).getByRole('button', { name: 'Избриши' })).toHaveClass(
-      'size-11',
-      'sm:pointer-fine:size-6',
+      within(menu).getByRole('menuitem', { name: 'Преименувај' }),
+    ).toHaveClass('min-h-11', 'pointer-fine:min-h-8');
+    expect(within(menu).getByRole('menuitem', { name: 'Избриши' })).toHaveClass(
+      'min-h-11',
+      'pointer-fine:min-h-8',
     );
   });
 
