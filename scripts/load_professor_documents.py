@@ -17,6 +17,8 @@ if (Path.cwd() / "app").is_dir() and str(Path.cwd()) not in sys.path:
 
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.data.connection import Database
+from app.data.embedding_lifecycle import lifecycle_counts
+from app.data.embedding_lifecycle_sql import EmbeddingCorpus
 from app.data.professor_documents import upsert_professor_document
 from app.llms.embeddings import stream_fill_professor_document_embeddings
 from app.utils.http_client import close_http_client, init_http_client
@@ -33,7 +35,7 @@ def _external_id(paper: dict) -> str:
     return "T:" + hashlib.sha256(norm.encode("utf-8")).hexdigest()
 
 
-async def _run(papers: list[dict]) -> int:
+async def run(papers: list[dict]) -> int:
     settings = Settings()
     init_http_client()
     db = Database(dsn=settings.DATABASE_URL)
@@ -79,10 +81,16 @@ async def _run(papers: list[dict]) -> int:
                     print(f"  fill {done}/{total}  ok={ok} err={err}")
         print(f"FILL DONE: ok={ok} err={err} total={total}")
 
-        embedded = await db.fetchval(
-            "SELECT COUNT(*) FROM professor_document WHERE embedding_bge_m3 IS NOT NULL",
+        professor_document_count = next(
+            count
+            for count in await lifecycle_counts(db)
+            if count.corpus is EmbeddingCorpus.PROFESSOR_DOCUMENT
         )
-        print(f"VERIFY: embedded papers = {embedded}")
+        print(
+            "VERIFY: current papers = "
+            f"{professor_document_count.ready} dirty papers = "
+            f"{professor_document_count.dirty}",
+        )
     finally:
         await db.disconnect()
         await close_http_client()
@@ -100,7 +108,7 @@ def main() -> int:
         parser.error(f"--json must point to an existing file: {json_path}")
     papers = json.loads(json_path.read_text(encoding="utf-8"))
     print(f"loaded {len(papers)} papers from {json_path}")
-    return asyncio.run(_run(papers))
+    return asyncio.run(run(papers))
 
 
 if __name__ == "__main__":
