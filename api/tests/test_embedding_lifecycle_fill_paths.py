@@ -1,12 +1,12 @@
 import os
 import subprocess
 import sys
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from pathlib import Path
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import anyio
+from anyio.lowlevel import checkpoint
 from asyncpg import PostgresError
 from fastapi.responses import StreamingResponse
 
@@ -20,7 +20,7 @@ class FillState:
         self.apply_write = apply_write
         self.calls: list[tuple[str, tuple[str | int | UUID, ...]]] = []
 
-    async def fetch(self, query, *args):
+    def fetch(self, query, *args):
         self.calls.append((query, args))
         return [
             {
@@ -31,17 +31,29 @@ class FillState:
             },
         ]
 
-    async def execute(self, query, *args):
+    def execute(self, query, *args):
         self.calls.append((query, args))
         return "UPDATE 1"
 
     async def fetchval(self, query, *args):
+        await checkpoint()
         self.calls.append((query, args))
         return True if self.apply_write else None
 
-    @asynccontextmanager
-    async def transaction(self) -> AsyncIterator[FillState]:
-        yield self
+    def transaction(self) -> FillTransaction:
+        return FillTransaction(self)
+
+
+class FillTransaction:
+    def __init__(self, state: FillState) -> None:
+        self._state = state
+
+    async def __aenter__(self) -> FillState:
+        await checkpoint()
+        return self._state
+
+    async def __aexit__(self, *_args) -> None:
+        await checkpoint()
 
 
 class MixedFillState(FillState):
@@ -49,7 +61,7 @@ class MixedFillState(FillState):
         super().__init__(apply_write=True)
         self.apply_results = iter((True, None))
 
-    async def fetch(self, query, *args):
+    def fetch(self, query, *args):
         self.calls.append((query, args))
         return [
             {
@@ -67,14 +79,15 @@ class MixedFillState(FillState):
         ]
 
     async def fetchval(self, query, *args):
+        await checkpoint()
         self.calls.append((query, args))
         return next(self.apply_results)
 
 
 def _database(state, monkeypatch) -> Database:
     database = Database("postgresql://lifecycle-test")
-    monkeypatch.setattr(database, "fetch", state.fetch)
-    monkeypatch.setattr(database, "execute", state.execute)
+    monkeypatch.setattr(database, "fetch", AsyncMock(side_effect=state.fetch))
+    monkeypatch.setattr(database, "execute", AsyncMock(side_effect=state.execute))
     monkeypatch.setattr(database, "fetchval", state.fetchval)
     monkeypatch.setattr(database, "transaction", state.transaction)
     return database
@@ -108,8 +121,7 @@ def test_embedding_fills_imports_without_the_embeddings_facade() -> None:
 def test_manual_question_fill_writes_lifecycle_metadata_with_captured_revision(
     monkeypatch,
 ) -> None:
-    async def generate(*_args, **_kwargs) -> list[list[float]]:
-        return [[0.0] * 1024]
+    generate = AsyncMock(return_value=[[0.0] * 1024])
 
     async def run() -> None:
         # Given: a current source revision and a deterministic BGE provider.
@@ -139,8 +151,7 @@ def test_manual_question_fill_writes_lifecycle_metadata_with_captured_revision(
 def test_manual_question_fill_reports_no_success_when_source_revision_races(
     monkeypatch,
 ) -> None:
-    async def generate(*_args, **_kwargs) -> list[list[float]]:
-        return [[0.0] * 1024]
+    generate = AsyncMock(return_value=[[0.0] * 1024])
 
     async def run() -> None:
         # Given: a source update that advances the revision before guarded persistence.
@@ -163,8 +174,7 @@ def test_manual_question_fill_reports_no_success_when_source_revision_races(
 
 
 def test_manual_question_fill_reports_mixed_guarded_batch_outcomes(monkeypatch) -> None:
-    async def generate(*_args, **_kwargs) -> list[list[float]]:
-        return [[0.0] * 1024, [1.0] * 1024]
+    generate = AsyncMock(return_value=[[0.0] * 1024, [1.0] * 1024])
 
     async def run() -> None:
         state = MixedFillState()
@@ -187,11 +197,8 @@ def test_manual_question_fill_reports_mixed_guarded_batch_outcomes(monkeypatch) 
 def test_manual_question_fill_reports_persistence_failure_as_row_error(
     monkeypatch,
 ) -> None:
-    async def generate(*_args, **_kwargs) -> list[list[float]]:
-        return [[0.0] * 1024]
-
-    async def fail_persist(*_args, **_kwargs):
-        raise PostgresError("database unavailable")
+    generate = AsyncMock(return_value=[[0.0] * 1024])
+    fail_persist = AsyncMock(side_effect=PostgresError("database unavailable"))
 
     async def run() -> None:
         # Given: embedding generation succeeds but database persistence fails.

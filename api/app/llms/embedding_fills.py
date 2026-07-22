@@ -63,7 +63,7 @@ async def _process_batch(
     ]
 
 
-async def _stream_fill(
+def _stream_fill(
     database: Database,
     model: Model,
     *,
@@ -135,7 +135,7 @@ async def stream_fill_embeddings(
             all_questions=all_questions,
         )
 
-    return await _stream_fill(
+    return _stream_fill(
         database,
         model,
         corpus=EmbeddingCorpus.QUESTION,
@@ -161,7 +161,7 @@ async def stream_fill_chunk_embeddings(
             all_chunks=all_chunks,
         )
 
-    return await _stream_fill(
+    return _stream_fill(
         database,
         model,
         corpus=EmbeddingCorpus.CHUNK,
@@ -177,7 +177,7 @@ async def stream_fill_professor_document_embeddings(
     *,
     all_models: bool = False,
 ) -> StreamingResponse:
-    return await _stream_fill(
+    return _stream_fill(
         database,
         model,
         corpus=EmbeddingCorpus.PROFESSOR_DOCUMENT,
@@ -193,7 +193,7 @@ async def stream_fill_diploma_embeddings(
     *,
     all_models: bool = False,
 ) -> StreamingResponse:
-    return await _stream_fill(
+    return _stream_fill(
         database,
         model,
         corpus=EmbeddingCorpus.DIPLOMA,
