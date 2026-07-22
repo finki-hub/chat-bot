@@ -17,6 +17,12 @@ from app.data.embedding_lifecycle import (
     rebuild_embedding_lifecycle_in_transaction,
 )
 
+DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+pytestmark = pytest.mark.skipif(
+    DATABASE_URL is None,
+    reason="set TEST_DATABASE_URL to run real-PostgreSQL embedding rebuild tests",
+)
+
 QUESTION_ID = UUID("00000000-0000-0000-0000-000000000107")
 
 

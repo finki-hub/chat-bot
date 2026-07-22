@@ -12,6 +12,12 @@ from app.llms.context import _chunk_candidate, _expand_and_render
 from app.llms.models import BGE_M3_EMBEDDING_SPEC_VERSION, Model
 from app.schemas.documents import ChunkSchema
 
+DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+pytestmark = pytest.mark.skipif(
+    DATABASE_URL is None,
+    reason="set TEST_DATABASE_URL to run real-PostgreSQL dirty-neighbor context tests",
+)
+
 
 @asynccontextmanager
 async def _database() -> AsyncIterator[Database]:
@@ -30,7 +36,8 @@ async def _database() -> AsyncIterator[Database]:
 @pytest.mark.parametrize("model", [Model.BGE_M3, Model.BGE_M3_LOCAL])
 @pytest.mark.parametrize("dirty_version", [None, "bge-m3-old"])
 def test_context_excludes_dirty_bge_neighbors(
-    model: Model, dirty_version: str | None,
+    model: Model,
+    dirty_version: str | None,
 ) -> None:
     async def run() -> None:
         vector = "[1," + "0," * 1022 + "0]"
@@ -105,7 +112,9 @@ def test_context_keeps_non_bge_neighbors() -> None:
                 content="NON-BGE CENTER",
             )
             text = await _expand_and_render(
-                database, [_chunk_candidate(center)], Model.TEXT_EMBEDDING_3_LARGE,
+                database,
+                [_chunk_candidate(center)],
+                Model.TEXT_EMBEDDING_3_LARGE,
             )
             assert "NON-BGE CENTER" in text
             assert "NON-BGE NEIGHBOR" in text

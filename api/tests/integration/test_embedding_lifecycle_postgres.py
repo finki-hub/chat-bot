@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 import anyio
+import pytest
 from asyncpg import connect
 
 from app.data.connection import Database
@@ -19,6 +20,12 @@ from app.data.embedding_lifecycle import (
     wake_embedding_worker,
 )
 from app.llms.models import BGE_M3_EMBEDDING_SPEC_VERSION
+
+DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+pytestmark = pytest.mark.skipif(
+    DATABASE_URL is None,
+    reason="set TEST_DATABASE_URL to run real-PostgreSQL embedding lifecycle tests",
+)
 
 QUESTION_ID = UUID("00000000-0000-0000-0000-000000000101")
 QUESTION_TWO_ID = UUID("00000000-0000-0000-0000-000000000102")
