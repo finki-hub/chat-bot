@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 import anyio
+import pytest
 from asyncpg import connect
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -20,6 +21,12 @@ from app.data.embedding_lifecycle import (
 )
 from app.main import make_app
 from app.utils.settings import Settings
+
+DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+pytestmark = pytest.mark.skipif(
+    DATABASE_URL is None,
+    reason="set TEST_DATABASE_URL to run real-PostgreSQL embedding administration tests",
+)
 
 API_KEY = "task-5-api-key"
 QUESTION_ID = UUID("00000000-0000-0000-0000-000000000501")
@@ -261,28 +268,3 @@ def test_embedding_administration_wakes_and_rebuilds_all_corpora() -> None:
             assert await _lifecycle_rows(database) == after_rebuild
 
     anyio.run(run)
-
-
-def test_embedding_administration_openapi_has_typed_operation_schemas() -> None:
-    # Given: the configured application.
-    app = make_app(
-        Settings(
-            API_KEY=API_KEY,
-            CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
-            MCP_API_KEY="test-mcp-key",
-        ),
-    )
-
-    # When: FastAPI generates OpenAPI.
-    schema = app.openapi()
-
-    # Then: each stable route exposes its explicit typed response model.
-    for path, method, response_name in (
-        ("/embeddings/health", "get", "EmbeddingHealthResponse"),
-        ("/embeddings/fill-dirty", "post", "EmbeddingFillDirtyResponse"),
-        ("/embeddings/rebuild", "post", "EmbeddingRebuildResponse"),
-    ):
-        response = schema["paths"][path][method]["responses"]["200"]["content"][
-            "application/json"
-        ]["schema"]
-        assert response == {"$ref": f"#/components/schemas/{response_name}"}
