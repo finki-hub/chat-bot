@@ -85,7 +85,7 @@ describe('conversation switch runtime', () => {
     });
   });
 
-  it('keeps previous messages visible while the selected chat runtime is empty and hydrating', () => {
+  it('keeps previous messages visible without replaying their entrance animation while the selected chat hydrates', () => {
     useUiStore.setState({ activeConversationId: 'conversation-a' });
     render(<RuntimeSwitchHarness />);
 
@@ -94,6 +94,12 @@ describe('conversation switch runtime', () => {
     );
 
     expect(screen.queryByText('Започни разговор')).not.toBeInTheDocument();
-    expect(screen.getByText('Conversation A')).toBeInTheDocument();
+
+    const previousMessageShell = screen
+      .getByText('Conversation A')
+      .closest('.group');
+
+    expect(previousMessageShell).toBeInTheDocument();
+    expect(previousMessageShell).not.toHaveClass('motion-safe:animate-in');
   });
 });
