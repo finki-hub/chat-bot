@@ -6,7 +6,6 @@ import anyio
 
 import app.embedding_worker as worker
 from app.data.embedding_lifecycle_sql import EmbeddingCorpus
-from app.embedding_worker import WorkerDependencies, run_worker
 from app.embedding_worker_drain import DirtyDrainReport
 from tests.embedding_worker_test_support import WorkerListener, no_delay
 
@@ -102,11 +101,11 @@ def _dependencies(
     state: ResourceState,
     database: FakeDatabase,
     listeners: list[FakeListener],
-) -> WorkerDependencies:
+) -> worker.WorkerDependencies:
     async def drain(target: EmbeddingCorpus | None) -> DirtyDrainReport:
         return await _drain(state, target)
 
-    return WorkerDependencies(
+    return worker.WorkerDependencies(
         database=database,
         database_url="postgresql://worker-test",
         connect_listener=ListenerFactory(listeners),
@@ -127,7 +126,7 @@ def test_worker_migrates_and_drains_before_listening() -> None:
         # When: the worker starts and reaches its LISTEN wait state.
         async with anyio.create_task_group() as task_group:
             task_group.start_soon(
-                run_worker,
+                worker.run_worker,
                 _dependencies(state, database, [listener]),
             )
             await listener.listening.wait()
@@ -161,7 +160,7 @@ def test_worker_closes_initialized_resources_when_migration_is_cancelled() -> No
         # When: worker cancellation interrupts the migration await point.
         async with anyio.create_task_group() as task_group:
             task_group.start_soon(
-                run_worker,
+                worker.run_worker,
                 _dependencies(state, database, []),
             )
             await database.migration_started.wait()
@@ -203,7 +202,7 @@ def test_worker_coalesces_notification_bursts_and_stays_idle_without_polling() -
         listener = FakeListener(state)
         async with anyio.create_task_group() as task_group:
             task_group.start_soon(
-                run_worker,
+                worker.run_worker,
                 _dependencies(state, database, [listener]),
             )
             await listener.listening.wait()
@@ -238,7 +237,7 @@ def test_worker_reconnects_and_runs_a_new_full_scan_after_listener_termination()
         second = FakeListener(state)
         async with anyio.create_task_group() as task_group:
             task_group.start_soon(
-                run_worker,
+                worker.run_worker,
                 _dependencies(state, database, [first, second]),
             )
             await first.listening.wait()
