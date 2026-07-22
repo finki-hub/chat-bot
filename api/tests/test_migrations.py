@@ -6,7 +6,14 @@ import anyio
 from anyio.lowlevel import checkpoint
 
 from app.data import connection as connection_module
-from app.data.connection import Database, Migration, _load_migrations
+from app.data.connection import (
+    _MIGRATION_ADVISORY_LOCK_KEY,
+    _MIGRATION_ADVISORY_LOCK_SQL,
+    _MIGRATION_ADVISORY_UNLOCK_SQL,
+    Database,
+    Migration,
+    _load_migrations,
+)
 
 
 class FakeTransaction:
@@ -25,13 +32,15 @@ class FakeTransaction:
 class FakeConnection:
     def __init__(self, applied: set[str]) -> None:
         self.applied = applied
-        self.executed: list[tuple[str, tuple[str, ...]]] = []
+        self.executed: list[tuple[str, tuple[str | int, ...]]] = []
 
-    async def execute(self, sql: str, *args: str) -> str:
+    async def execute(self, sql: str, *args: str | int) -> str:
         await checkpoint()
         self.executed.append((sql, args))
         if sql.startswith("INSERT INTO schema_migrations"):
-            self.applied.add(args[0])
+            version = args[0]
+            assert isinstance(version, str)
+            self.applied.add(version)
         return "EXECUTE"
 
     async def fetch(self, sql: str) -> list[dict[str, str]]:
@@ -140,6 +149,7 @@ def test_run_migrations_applies_only_pending_versions(
 
     # Then: the runner ensures the history table and applies only the pending file.
     assert conn.executed == [
+        (_MIGRATION_ADVISORY_LOCK_SQL, (_MIGRATION_ADVISORY_LOCK_KEY,)),
         (
             """
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -151,6 +161,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
         ),
         ("SELECT 2;", ()),
         ("INSERT INTO schema_migrations (version) VALUES ($1)", ("0002_second.sql",)),
+        (_MIGRATION_ADVISORY_UNLOCK_SQL, (_MIGRATION_ADVISORY_LOCK_KEY,)),
     ]
 
 
@@ -172,6 +183,7 @@ def test_run_migrations_is_idempotent(monkeypatch, tmp_path: Path) -> None:
 
     # Then: no migration SQL is re-executed.
     assert conn.executed == [
+        (_MIGRATION_ADVISORY_LOCK_SQL, (_MIGRATION_ADVISORY_LOCK_KEY,)),
         (
             """
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -181,4 +193,5 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 """,
             (),
         ),
+        (_MIGRATION_ADVISORY_UNLOCK_SQL, (_MIGRATION_ADVISORY_LOCK_KEY,)),
     ]
