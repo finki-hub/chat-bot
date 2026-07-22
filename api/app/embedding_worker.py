@@ -26,11 +26,14 @@ _FAILED_DRAIN_RETRY_MAX_SECONDS = 30.0
 class WorkerDatabase(Protocol):
     """The pooled database lifecycle used by the worker process."""
 
-    async def init(self) -> None: ...
+    async def init(self) -> None:
+        raise NotImplementedError
 
-    async def run_migrations(self) -> None: ...
+    async def run_migrations(self) -> None:
+        raise NotImplementedError
 
-    async def disconnect(self) -> None: ...
+    async def disconnect(self) -> None:
+        raise NotImplementedError
 
 
 class ListenerConnection(Protocol):
@@ -40,13 +43,17 @@ class ListenerConnection(Protocol):
         self,
         channel: str,
         callback: Callable[..., None],
-    ) -> None: ...
+    ) -> None:
+        raise NotImplementedError
 
-    def add_termination_listener(self, callback: Callable[..., None]) -> None: ...
+    def add_termination_listener(self, callback: Callable[..., None]) -> None:
+        raise NotImplementedError
 
-    async def execute(self, query: str) -> str: ...
+    async def execute(self, query: str) -> str:
+        raise NotImplementedError
 
-    async def close(self) -> None: ...
+    async def close(self) -> None:
+        raise NotImplementedError
 
 
 type ListenerConnector = Callable[[str], Awaitable[ListenerConnection]]
@@ -128,8 +135,7 @@ class ListenerSignals:
             return self.consume_request()
         event = self.event
         await event.wait()
-        if event is self.event:
-            self.event = anyio.Event()
+        self.event = anyio.Event()
         return self.consume_request()
 
     async def wait_for_retry(self, delay: float) -> DrainRequest:
@@ -137,8 +143,7 @@ class ListenerSignals:
         event = self.event
         with anyio.move_on_after(delay):
             await event.wait()
-        if event is self.event:
-            self.event = anyio.Event()
+        self.event = anyio.Event()
         return self.consume_request()
 
 
@@ -233,8 +238,7 @@ async def run_worker(dependencies: WorkerDependencies) -> None:
         await dependencies.database.init()
         await dependencies.database.run_migrations()
         dependencies.open_client()
-        async with anyio.create_task_group() as task_group:
-            task_group.start_soon(_run_listener_forever, dependencies)
+        await _run_listener_forever(dependencies)
     finally:
         with anyio.CancelScope(shield=True):
             await dependencies.close_client()
