@@ -26,17 +26,18 @@ async def _dispatch_embeddings(
     is_document: bool,
     credentials: LlmProviderCredentials | None,
 ) -> list[float] | list[list[float]]:
+    embeddings: list[float] | list[list[float]]
     match model:
         case Model.BGE_M3_LOCAL:
-            return await generate_gpu_api_embeddings(text, model)
+            embeddings = await generate_gpu_api_embeddings(text, model)
         case Model.TEXT_EMBEDDING_3_LARGE:
-            return await generate_openai_embeddings(
+            embeddings = await generate_openai_embeddings(
                 text,
                 model,
                 None if credentials is None else credentials.openai,
             )
         case Model.GEMINI_EMBEDDING_001:
-            return await generate_google_embeddings(
+            embeddings = await generate_google_embeddings(
                 text,
                 model,
                 is_document=is_document,
@@ -44,6 +45,7 @@ async def _dispatch_embeddings(
             )
         case _:
             raise ValueError(f"Unsupported model: {model}")
+    return embeddings
 
 
 @overload
@@ -53,7 +55,8 @@ async def generate_embeddings(
     *,
     is_document: bool = ...,
     credentials: LlmProviderCredentials | None = None,
-) -> list[float]: ...
+) -> list[float]:
+    raise NotImplementedError
 
 
 @overload
@@ -63,7 +66,8 @@ async def generate_embeddings(
     *,
     is_document: bool = ...,
     credentials: LlmProviderCredentials | None = None,
-) -> list[list[float]]: ...
+) -> list[list[float]]:
+    raise NotImplementedError
 
 
 async def generate_embeddings(
@@ -81,6 +85,7 @@ async def generate_embeddings(
         text_count,
         total_chars,
     )
+    delay = _EMBEDDING_RETRY_BASE_DELAY
     for attempt in range(1, EMBEDDING_MAX_ATTEMPTS + 1):
         try:
             return await _dispatch_embeddings(
@@ -103,7 +108,6 @@ async def generate_embeddings(
                     type(exc).__name__,
                 )
                 raise
-            delay = _EMBEDDING_RETRY_BASE_DELAY * 2 ** (attempt - 1)
             logger.warning(
                 "Embedding attempt %d/%d for model %s failed; retrying in %.1fs",
                 attempt,
@@ -112,6 +116,7 @@ async def generate_embeddings(
                 delay,
             )
             await asyncio.sleep(delay)
+            delay *= 2
     raise RuntimeError("Unreachable embedding retry loop")
 
 
