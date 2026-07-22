@@ -24,7 +24,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 
 ## 5. Components
 
-- Sidebar conversation row: selectable title button plus compact row-action icon buttons that reveal on hover/focus for fine pointers. Coarse pointers use one 44px overflow trigger with labeled generate, rename, and delete menu items so conversation titles keep useful width.
+- Sidebar conversation row: full-row selection button spanning the rounded hover surface, with compact row-action icon buttons layered above it and independently operable on fine pointers. Coarse pointers use one 44px overflow trigger with labeled generate, rename, and delete menu items so conversation titles keep useful width.
 - Row action button: Lucide icon, `size-3.5`, semantic aria label, focus-visible ring, muted default color, stronger hover color matching the action intent, and the existing Radix tooltip using the same localized label on hover or keyboard focus.
 - Destructive row action: use destructive hover color only for delete.
 - Answer sources: automatically expose one or two source cards below a completed answer; larger source sets stay collapsed behind the source-count trigger. The trigger and external source links keep compact fine-pointer sizing and expose at least 44px targets on coarse pointers.
