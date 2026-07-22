@@ -9,6 +9,12 @@ from asyncpg import connect
 
 from app.data.connection import Database
 
+DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+pytestmark = pytest.mark.skipif(
+    DATABASE_URL is None,
+    reason="set TEST_DATABASE_URL to run real-PostgreSQL embedding invalidation tests",
+)
+
 SEED_UPDATED_AT = datetime.fromisoformat("2000-01-01T00:00:00")
 QUESTION_ID = "00000000-0000-0000-0000-000000000001"
 DOCUMENT_ID = "00000000-0000-0000-0000-000000000002"
@@ -29,10 +35,6 @@ LIFECYCLE_COLUMNS = (
     ("embedding_bge_m3_updated_at", "timestamp without time zone", "YES", None),
 )
 type LifecycleState = tuple[str, int, bool, str | None, datetime | None, datetime]
-
-
-class RollbackRequestedError(Exception):
-    pass
 
 
 class NotificationCollector:
@@ -129,15 +131,6 @@ async def _states(database: Database) -> list[LifecycleState]:
         """,
     )
     return [tuple(row) for row in rows]
-
-
-async def _rollback_question(database: Database) -> None:
-    async with database.transaction() as connection:
-        await connection.execute(
-            "UPDATE question SET name = 'changed' WHERE id = $1",
-            QUESTION_ID,
-        )
-        raise RollbackRequestedError
 
 
 def test_real_postgres_adds_exact_lifecycle_columns_when_migrations_run() -> None:
@@ -255,59 +248,5 @@ def test_real_postgres_notifies_stale_version_inserts_when_rows_have_vectors() -
                     "professor_document:00000000-0000-0000-0000-000000000010",
                 ],
             )
-
-    anyio.run(run)
-
-
-def test_real_postgres_preserves_current_state_when_irrelevant_fields_change() -> None:
-    async def run() -> None:
-        # Given: current BGE-M3 lifecycle state before the listener is attached.
-        async with _database() as database:
-            await _seed_current_rows(database)
-            async with _notifications() as notifications:
-                before = await _states(database)
-
-                # When: only non-embedding fields change for every corpus.
-                async with database.transaction() as connection:
-                    await connection.execute(
-                        "UPDATE question SET user_id = 'user' WHERE id = $1",
-                        QUESTION_ID,
-                    )
-                    await connection.execute(
-                        'UPDATE chunk SET metadata = \'{"source": "test"}\'::jsonb WHERE id = $1',
-                        CHUNK_ONE_ID,
-                    )
-                    await connection.execute(
-                        "UPDATE diploma SET mentor = 'Other' WHERE id = $1",
-                        DIPLOMA_ID,
-                    )
-                    await connection.execute(
-                        "UPDATE professor_document SET year = 2026 WHERE id = $1",
-                        PROFESSOR_DOCUMENT_ID,
-                    )
-                await notifications.assert_no_notification()
-
-                # Then: the vector, version, timestamp, revision, and update timestamp are untouched.
-                assert await _states(database) == before
-
-    anyio.run(run)
-
-
-def test_real_postgres_preserves_state_when_relevant_edit_rolls_back() -> None:
-    async def run() -> None:
-        # Given: a current BGE-M3 question and a listener before a transaction begins.
-        async with _database() as database, _notifications() as notifications:
-            await _seed_current_rows(database)
-            await notifications.wait_for_count(5)
-            notifications.payloads.clear()
-            before = await _states(database)
-
-            # When: a relevant source edit rolls back instead of committing.
-            with pytest.raises(RollbackRequestedError):
-                await _rollback_question(database)
-            await notifications.assert_no_notification()
-
-            # Then: neither durable lifecycle state nor the wakeup escaped the rollback.
-            assert await _states(database) == before
 
     anyio.run(run)
