@@ -10,6 +10,7 @@ from app.llms import embeddings as embeddings_module
 from app.llms import reranker as reranker_module
 from app.llms.models import Model
 from app.main import make_app
+from app.utils.exceptions import ModelNotReadyError
 from app.utils.settings import Settings
 
 
@@ -46,6 +47,22 @@ def test_gpu_api_reports_cuda_health_over_http(monkeypatch):
     }
 
 
+def test_gpu_api_reports_unhealthy_cuda_over_http(monkeypatch):
+    monkeypatch.setattr("app.api.health.torch.cuda.is_available", lambda: False)
+    client = make_test_client()
+
+    response = client.get("/health/health")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert set(body) == {"status", "timestamp", "dependencies"}
+    assert body["status"] == "unhealthy"
+    assert body["dependencies"]["cuda"] == {
+        "healthy": False,
+        "status": "cuda_not_available",
+    }
+
+
 def test_gpu_api_returns_empty_rerank_result_without_model_work():
     client = make_test_client()
 
@@ -53,6 +70,51 @@ def test_gpu_api_returns_empty_rerank_result_without_model_work():
 
     assert response.status_code == 200
     assert response.json() == {"reranked_documents": []}
+
+
+def test_embeddings_route_maps_model_not_ready_to_503(monkeypatch):
+    async def fake_generate_embeddings(_input, _model):
+        raise ModelNotReadyError
+
+    monkeypatch.setattr(
+        "app.api.embeddings.generate_embeddings",
+        fake_generate_embeddings,
+    )
+    client = make_test_client()
+
+    response = client.post(
+        "/embeddings/embed",
+        json={
+            "embeddings_model": Model.BGE_M3.value,
+            "input": "embedding text",
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "The model is not ready. Please try again later.",
+    }
+
+
+def test_rerank_route_maps_model_not_ready_to_503(monkeypatch):
+    def fake_rerank_documents(_query, _documents):
+        raise ModelNotReadyError
+
+    monkeypatch.setattr(
+        "app.api.rerank.rerank_documents",
+        fake_rerank_documents,
+    )
+    client = make_test_client()
+
+    response = client.post(
+        "/rerank/",
+        json={"query": "rerank query", "documents": ["document"]},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "The model is not ready. Please try again later.",
+    }
 
 
 def test_rerank_route_logs_query_metadata_without_raw_text(caplog, monkeypatch):

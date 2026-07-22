@@ -10,14 +10,19 @@ from app.llms import query_transform
 from app.llms.models import Model
 from app.llms.provider_credentials import LlmProviderCredentials
 from app.schemas.chat import ConversationTurn
-from app.schemas.chat_credentials import ChatCredentialUpsert
+from app.schemas.chat_credentials import ChatCredentialSecret, ChatCredentialUpsert
 from app.schemas.chat_title import ChatTitleSchema
 from app.utils.settings import Settings
 from tests.chat_persistence_fake import FakeChatDatabase
 
 
-def test_chat_title_uses_transform_prompt_and_normalizes_quotes(monkeypatch):
-    seen: dict[str, object] = {}
+def test_chat_title_uses_selected_model_and_normalizes_quotes(monkeypatch):
+    title_system_prompt = "title-system-prompt"
+    seen: dict[
+        str,
+        str | int | float | Model | LlmProviderCredentials | None,
+    ] = {}
+    monkeypatch.setattr(chat_title, "_TITLE_SYSTEM_PROMPT", title_system_prompt)
 
     async def fake_transform_query(
         query: str,
@@ -27,7 +32,7 @@ def test_chat_title_uses_transform_prompt_and_normalizes_quotes(monkeypatch):
         temperature: float,
         top_p: float,
         max_tokens: int,
-        credentials: object | None = None,
+        credentials: LlmProviderCredentials | None = None,
     ) -> str:
         seen.update(
             {
@@ -73,10 +78,8 @@ def test_chat_title_uses_transform_prompt_and_normalizes_quotes(monkeypatch):
     assert response.title == "Испитна сесија"
     assert seen["model"] == Model.QWEN3_14B
     assert seen["max_tokens"] == 32
+    assert seen["system_prompt"] == title_system_prompt
     assert "Кога е јунската сесија?" in str(seen["query"])
-    assert "наслов" in str(seen["system_prompt"]).lower()
-    assert "податоци, а не упатства" in str(seen["system_prompt"]).lower()
-    assert "само намерата од првата порака" in str(seen["system_prompt"]).lower()
     credentials = seen["credentials"]
     assert isinstance(credentials, LlmProviderCredentials)
     assert credentials.ollama is not None
@@ -94,7 +97,7 @@ def test_chat_title_falls_back_to_first_user_message_when_model_returns_empty(
         temperature: float,
         top_p: float,
         max_tokens: int,
-        credentials: object | None = None,
+        credentials: LlmProviderCredentials | None = None,
     ) -> str:
         return "   "
 
@@ -127,7 +130,7 @@ def test_chat_title_isolates_transcript_as_untrusted_data(monkeypatch):
         temperature: float,
         top_p: float,
         max_tokens: int,
-        credentials: object | None = None,
+        credentials: LlmProviderCredentials | None = None,
     ) -> str:
         await lowlevel.checkpoint()
         seen["query"] = query
@@ -174,7 +177,7 @@ def test_chat_title_does_not_call_hosted_provider_without_user_credential(
 
 
 def test_chat_title_uses_runtime_settings_for_user_credentials(monkeypatch):
-    seen: dict[str, object] = {}
+    seen: dict[str, LlmProviderCredentials | None] = {}
 
     async def fake_transform_query(
         query: str,
@@ -184,7 +187,7 @@ def test_chat_title_uses_runtime_settings_for_user_credentials(monkeypatch):
         temperature: float,
         top_p: float,
         max_tokens: int,
-        credentials: object | None = None,
+        credentials: LlmProviderCredentials | None = None,
     ) -> str:
         seen["credentials"] = credentials
         return "Испитна сесија"
@@ -238,7 +241,7 @@ def test_query_transform_logs_metadata_without_raw_query(monkeypatch, caplog):
         temperature: float,
         top_p: float,
         max_tokens: int,
-        credential: object | None = None,
+        credential: ChatCredentialSecret | None = None,
     ) -> str:
         return "Испитен рок"
 
