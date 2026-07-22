@@ -1,9 +1,11 @@
 import json
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import anyio
 import pytest
+from pydantic import HttpUrl
 
 from app.data.connection import Database
 from app.llms.agents import sources_event
@@ -22,7 +24,7 @@ class WindowState:
     def __init__(self, rows: list[dict[str, object]]) -> None:
         self.rows = rows
 
-    async def fetch(self, query: str, *_args: object) -> list[dict[str, object]]:
+    def fetch(self, query: str, *_args: object) -> list[dict[str, object]]:
         return self.rows[:1] if "embedding_bge_m3_version" in query else self.rows
 
 
@@ -45,7 +47,7 @@ def _chunk(
 
 def _database(state: WindowState, monkeypatch) -> Database:
     database = Database("postgresql://context-test")
-    monkeypatch.setattr(database, "fetch", state.fetch)
+    monkeypatch.setattr(database, "fetch", AsyncMock(side_effect=state.fetch))
     return database
 
 
@@ -142,7 +144,7 @@ def test_question_candidate_keeps_structured_links():
         id=uuid4(),
         name="Упис",
         content="Уписот се прави преку iKnow.",
-        links={"iKnow": "https://iknow.ukim.mk/"},
+        links={"iKnow": HttpUrl(url="https://iknow.ukim.mk/")},
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
