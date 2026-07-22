@@ -46,7 +46,7 @@ const routeContext = () => ({
   params: Promise.resolve({ id: CONVERSATION_ID }),
 });
 
-describe('DELETE /api/chat/[id]', () => {
+describe('/api/chat/[id] route', () => {
   beforeEach(() => {
     vi.resetModules();
     resetRouteMocks();
