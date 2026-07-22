@@ -153,12 +153,11 @@ class Database:
         async with pool.acquire() as conn:
             lock_acquired = False
             try:
-                with anyio.CancelScope(shield=True):
-                    await conn.execute(
-                        _MIGRATION_ADVISORY_LOCK_SQL,
-                        _MIGRATION_ADVISORY_LOCK_KEY,
-                    )
-                    lock_acquired = True
+                await conn.execute(
+                    _MIGRATION_ADVISORY_LOCK_SQL,
+                    _MIGRATION_ADVISORY_LOCK_KEY,
+                )
+                lock_acquired = True
 
                 migrations = await _load_migrations(MIGRATIONS_PATH)
                 if not migrations:

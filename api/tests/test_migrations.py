@@ -52,6 +52,21 @@ class FakeConnection:
         return FakeTransaction()
 
 
+class BlockingLockConnection(FakeConnection):
+    def __init__(self, applied: set[str]) -> None:
+        super().__init__(applied)
+        self.lock_waiting = anyio.Event()
+        self.release_lock = anyio.Event()
+
+    async def execute(self, sql: str, *args: str | int) -> str:
+        if sql == _MIGRATION_ADVISORY_LOCK_SQL:
+            self.executed.append((sql, args))
+            self.lock_waiting.set()
+            await self.release_lock.wait()
+            return "LOCK"
+        return await super().execute(sql, *args)
+
+
 class FakePool:
     def __init__(self, conn: FakeConnection) -> None:
         self.conn = conn
@@ -194,4 +209,36 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
             (),
         ),
         (_MIGRATION_ADVISORY_UNLOCK_SQL, (_MIGRATION_ADVISORY_LOCK_KEY,)),
+    ]
+
+
+def test_run_migrations_cancels_while_waiting_for_advisory_lock(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    async def run() -> BlockingLockConnection:
+        # Given: one pending migration and a runner blocked on advisory-lock wait.
+        await anyio.Path(tmp_path / "0001_first.sql").write_text("SELECT 1;")
+        monkeypatch.setattr(connection_module, "MIGRATIONS_PATH", tmp_path)
+
+        conn = BlockingLockConnection(applied=set())
+        db = Database("postgresql://unused")
+        monkeypatch.setattr(db, "pool", FakePool(conn))
+
+        # When: cancellation arrives before PostgreSQL grants the advisory lock.
+        async with anyio.create_task_group() as task_group:
+            task_group.start_soon(db.run_migrations)
+            await conn.lock_waiting.wait()
+            task_group.cancel_scope.cancel()
+            conn.release_lock.set()
+            await checkpoint()
+
+        return conn
+
+    conn = anyio.run(run)
+
+    # Then: cancellation unwinds without running migration SQL or unlocking a lock
+    # the task never acquired.
+    assert conn.executed == [
+        (_MIGRATION_ADVISORY_LOCK_SQL, (_MIGRATION_ADVISORY_LOCK_KEY,)),
     ]
