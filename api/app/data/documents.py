@@ -17,6 +17,7 @@ from app.llms.chunking import Chunk
 from app.llms.models import (
     MODEL_DISTANCE_THRESHOLDS,
     Model,
+    is_bge_m3_lifecycle_model,
 )
 from app.schemas.documents import ChunkSchema, DocumentSchema, IngestDocumentSchema
 from app.utils.database import embedding_to_pgvector
@@ -170,6 +171,7 @@ async def get_closest_chunks(
 async def get_chunks_window(
     db: Database,
     refs: Sequence[tuple[UUID, int]],
+    model: Model,
     window: int = 1,
 ) -> list[ChunkSchema]:
     """Chunks within ±window (by chunk_index, same document) of the given center refs,
@@ -187,32 +189,48 @@ async def get_chunks_window(
     if not wanted:
         return []
 
-    rows = await db.fetch(
-        """
+    predicate = (
+        current_embedding_predicate(
+            model,
+            "c.embedding_bge_m3",
+            version_parameter=3,
+        )
+        if is_bge_m3_lifecycle_model(model)
+        else None
+    )
+    window_sql = f"""
         SELECT c.id, c.document_id, c.chunk_index, c.content, c.section,
                d.name AS document_name, d.title AS document_title
         FROM chunk c
         JOIN document d ON d.id = c.document_id
         WHERE c.document_id = ANY($1::uuid[]) AND c.chunk_index = ANY($2::int[])
-        """,
+        {f"AND {predicate.sql}" if predicate else ""}
+        """  # noqa: S608
+    rows = await db.fetch(
+        window_sql,
         list({doc_id for doc_id, _ in wanted}),
         list({idx for _, idx in wanted}),
+        *(() if predicate is None else predicate.parameters),
     )
 
     return [
-        ChunkSchema(
-            id=row["id"],
-            document_id=row["document_id"],
-            document_name=row["document_name"],
-            document_title=row["document_title"],
-            chunk_index=row["chunk_index"],
-            section=row["section"],
-            content=row["content"],
-            distance=None,
-        )
+        _window_chunk(row)
         for row in rows
         if (row["document_id"], row["chunk_index"]) in wanted
     ]
+
+
+def _window_chunk(row: Record) -> ChunkSchema:
+    return ChunkSchema(
+        id=row["id"],
+        document_id=row["document_id"],
+        document_name=row["document_name"],
+        document_title=row["document_title"],
+        chunk_index=row["chunk_index"],
+        section=row["section"],
+        content=row["content"],
+        distance=None,
+    )
 
 
 async def fetch_chunk_rows_for_fill(
