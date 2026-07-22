@@ -2,19 +2,25 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from urllib.parse import urlunsplit
 
 type JsonValue = (
     dict[str, "JsonValue"] | list["JsonValue"] | str | int | float | bool | None
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+_GPU_API_SERVICE = "gpu-api"
+_GPU_API_PORT = 8888
+_AUTH_URL = urlunsplit(("http", "localhost:3000", "", "", ""))
 
 _COMPOSE_ENVIRONMENT = {
     "API_KEY": "compose-test-api-key",
     "AUTH_SECRET": "compose-test-auth-secret",
-    "AUTH_URL": "http://localhost:3000",
+    "AUTH_URL": _AUTH_URL,
     "CREDENTIAL_ENCRYPTION_KEY": "compose-test-credential-key",
-    "GPU_API_URL": "http://gpu-api:8888",
+    "GPU_API_URL": urlunsplit(
+        ("http", f"{_GPU_API_SERVICE}:{_GPU_API_PORT}", "", "", ""),
+    ),
     "LOG_LEVEL": "info",
     "PGADMIN_EMAIL": "compose-test@example.invalid",
     "PGADMIN_PASSWORD": "compose-test-password",
