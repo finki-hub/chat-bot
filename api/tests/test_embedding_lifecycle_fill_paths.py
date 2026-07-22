@@ -130,7 +130,7 @@ def test_manual_question_fill_writes_lifecycle_metadata_with_captured_revision(
         monkeypatch.setattr("app.llms.embedding_fills.generate_embeddings", generate)
 
         # When: the actual compatibility SSE fill generator is consumed.
-        response = await stream_fill_embeddings(
+        response = stream_fill_embeddings(
             database,
             Model.BGE_M3_LOCAL,
             questions=["Question"],
@@ -160,7 +160,7 @@ def test_manual_question_fill_reports_no_success_when_source_revision_races(
         monkeypatch.setattr("app.llms.embedding_fills.generate_embeddings", generate)
 
         # When: the real SSE fill generator completes the stale batch.
-        response = await stream_fill_embeddings(
+        response = stream_fill_embeddings(
             database,
             Model.BGE_M3_LOCAL,
             questions=["Question"],
@@ -181,7 +181,7 @@ def test_manual_question_fill_reports_mixed_guarded_batch_outcomes(monkeypatch) 
         database = _database(state, monkeypatch)
         monkeypatch.setattr("app.llms.embedding_fills.generate_embeddings", generate)
 
-        response = await stream_fill_embeddings(
+        response = stream_fill_embeddings(
             database,
             Model.BGE_M3_LOCAL,
             questions=["Current", "Stale"],
@@ -211,7 +211,7 @@ def test_manual_question_fill_reports_persistence_failure_as_row_error(
         )
 
         # When: the real SSE fill generator is consumed.
-        response = await stream_fill_embeddings(
+        response = stream_fill_embeddings(
             database,
             Model.BGE_M3_LOCAL,
             questions=["Question"],

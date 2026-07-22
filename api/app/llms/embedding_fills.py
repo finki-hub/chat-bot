@@ -119,7 +119,7 @@ def _stream_fill(
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
-async def stream_fill_embeddings(
+def stream_fill_embeddings(
     database: Database,
     model: Model,
     *,
@@ -145,7 +145,7 @@ async def stream_fill_embeddings(
     )
 
 
-async def stream_fill_chunk_embeddings(
+def stream_fill_chunk_embeddings(
     database: Database,
     model: Model,
     *,
@@ -171,7 +171,7 @@ async def stream_fill_chunk_embeddings(
     )
 
 
-async def stream_fill_professor_document_embeddings(
+def stream_fill_professor_document_embeddings(
     database: Database,
     model: Model,
     *,
@@ -187,7 +187,7 @@ async def stream_fill_professor_document_embeddings(
     )
 
 
-async def stream_fill_diploma_embeddings(
+def stream_fill_diploma_embeddings(
     database: Database,
     model: Model,
     *,

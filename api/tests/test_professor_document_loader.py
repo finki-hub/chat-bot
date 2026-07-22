@@ -1,7 +1,7 @@
 import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import anyio
 from fastapi.responses import StreamingResponse
@@ -35,7 +35,7 @@ def test_loader_reports_current_and_dirty_professor_document_counts(
         disconnect=AsyncMock(),
         fetchval=AsyncMock(return_value=99),
     )
-    stream_fill = AsyncMock(
+    stream_fill = Mock(
         return_value=StreamingResponse(
             response_body(),
             media_type="text/event-stream",

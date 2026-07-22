@@ -139,7 +139,7 @@ async def fill_diploma_embeddings(
     payload: FillDiplomaEmbeddingsSchema,
     db: Database = db_dep,
 ) -> StreamingResponse:
-    return await stream_fill_diploma_embeddings(
+    return stream_fill_diploma_embeddings(
         db,
         payload.embeddings_model,
         all_models=payload.all_models,

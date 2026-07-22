@@ -68,7 +68,7 @@ async def _upsert_papers(db: Database, papers: list[dict]) -> int:
 
 async def _fill_embeddings(db: Database) -> None:
     """Fill embeddings and report progress from the server-sent event stream."""
-    response = await stream_fill_professor_document_embeddings(
+    response = stream_fill_professor_document_embeddings(
         db,
         DEFAULT_EMBEDDINGS_MODEL,
     )

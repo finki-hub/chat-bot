@@ -151,7 +151,7 @@ async def fill_chunk_embeddings(
     payload: FillChunkEmbeddingsSchema,
     db: Database = db_dep,
 ) -> StreamingResponse:
-    return await stream_fill_chunk_embeddings(
+    return stream_fill_chunk_embeddings(
         db,
         payload.embeddings_model,
         documents=payload.documents,
