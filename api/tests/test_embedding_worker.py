@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 
 import anyio
 
+import app.embedding_worker as worker
+from app.data.embedding_lifecycle_sql import EmbeddingCorpus
 from app.embedding_worker import ListenerConnection, WorkerDependencies, run_worker
 from app.embedding_worker_drain import DirtyDrainReport
 
@@ -14,6 +16,7 @@ class ResourceState:
     events: list[str] = field(default_factory=list)
     client_closed: bool = False
     drain_count: int = 0
+    drain_targets: list[EmbeddingCorpus | None] = field(default_factory=list)
     drain_event: anyio.Event = field(default_factory=anyio.Event)
 
     def open_client(self) -> None:
@@ -80,9 +83,9 @@ class FakeListener(ListenerConnection):
         self.closed = True
         self._state.events.append("listener-close")
 
-    def notify(self) -> None:
+    def notify(self, payload: str = "wake") -> None:
         assert self._notification_callback is not None
-        self._notification_callback(self, 1, "embedding_dirty", "ignored")
+        self._notification_callback(self, 1, "embedding_dirty", payload)
 
     def terminate(self) -> None:
         assert self._termination_callback is not None
@@ -100,9 +103,13 @@ class ListenerFactory:
         return listener
 
 
-async def _drain(state: ResourceState) -> DirtyDrainReport:
+async def _drain(
+    state: ResourceState,
+    target: EmbeddingCorpus | None = None,
+) -> DirtyDrainReport:
     state.events.append("drain")
     state.drain_count += 1
+    state.drain_targets.append(target)
     state.drain_event.set()
     return DirtyDrainReport(0, 0, 0, 0)
 
@@ -124,11 +131,14 @@ def _dependencies(
     database: FakeDatabase,
     listeners: list[FakeListener],
 ) -> WorkerDependencies:
+    async def drain(target: EmbeddingCorpus | None) -> DirtyDrainReport:
+        return await _drain(state, target)
+
     return WorkerDependencies(
         database=database,
         database_url="postgresql://worker-test",
         connect_listener=ListenerFactory(listeners),
-        drain=lambda: _drain(state),
+        drain=drain,
         open_client=state.open_client,
         close_client=state.close_client,
         reconnect_delay=_no_delay,
@@ -190,6 +200,27 @@ def test_worker_closes_initialized_resources_when_migration_is_cancelled() -> No
         assert state.client_closed
 
     anyio.run(run)
+
+
+def test_worker_main_configures_logging_from_log_level(monkeypatch) -> None:
+    configured_levels: list[str] = []
+
+    def setup_logging(level: str) -> None:
+        configured_levels.append(level)
+
+    def run(_func, _dependencies) -> None:
+        return None
+
+    # Given: the standalone worker entrypoint receives a non-default log level.
+    monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+    monkeypatch.setattr(worker, "setup_logging", setup_logging, raising=False)
+    monkeypatch.setattr(worker.anyio, "run", run)
+
+    # When: the module entrypoint starts.
+    worker.main()
+
+    # Then: worker logging uses the same project configuration path as the API.
+    assert configured_levels == ["DEBUG"]
 
 
 def test_worker_coalesces_notification_bursts_and_stays_idle_without_polling() -> None:

@@ -2,13 +2,16 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Protocol
+from uuid import UUID
 
 import anyio
 from asyncpg import InterfaceError, PostgresError, connect
 
 from app.data.connection import Database
+from app.data.embedding_lifecycle_sql import EmbeddingCorpus
 from app.embedding_worker_drain import DirtyDrainReport, drain_dirty_embeddings
 from app.utils.http_client import close_http_client, init_http_client
+from app.utils.logger import setup_logging
 from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -47,7 +50,7 @@ class ListenerConnection(Protocol):
 
 
 type ListenerConnector = Callable[[str], Awaitable[ListenerConnection]]
-type WorkerDrain = Callable[[], Awaitable[DirtyDrainReport]]
+type WorkerDrain = Callable[[EmbeddingCorpus | None], Awaitable[DirtyDrainReport]]
 type ReconnectDelay = Callable[[float], Awaitable[None]]
 
 
@@ -64,6 +67,14 @@ class WorkerDependencies:
     reconnect_delay: ReconnectDelay
 
 
+@dataclass(frozen=True, slots=True)
+class DrainRequest:
+    """A coalesced durable drain request observed from LISTEN state."""
+
+    corpus: EmbeddingCorpus | None
+    listener_terminated: bool
+
+
 @dataclass(slots=True)
 class ListenerSignals:
     """Coalesce LISTEN callbacks while retaining termination as durable state."""
@@ -71,15 +82,26 @@ class ListenerSignals:
     event: anyio.Event = field(default_factory=anyio.Event)
     generation: int = 0
     listener_terminated: bool = False
+    requested_corpus: EmbeddingCorpus | None = None
+    full_scan_requested: bool = False
 
     def notification[ConnectionReference, Payload](
         self,
         _connection: ConnectionReference,
         _process_id: int,
         _channel: str,
-        _payload: Payload,
+        payload: Payload,
     ) -> None:
-        """Record a payload-agnostic wakeup from asyncpg's callback."""
+        corpus = _corpus_from_payload(payload)
+        if corpus is None:
+            self.full_scan_requested = True
+            self.requested_corpus = None
+        elif not self.full_scan_requested:
+            if self.requested_corpus is None or self.requested_corpus is corpus:
+                self.requested_corpus = corpus
+            else:
+                self.full_scan_requested = True
+                self.requested_corpus = None
         self.generation += 1
         self.event.set()
 
@@ -92,27 +114,45 @@ class ListenerSignals:
         self.generation += 1
         self.event.set()
 
-    async def wait_after(self, generation: int) -> bool:
-        """Wait for a newer wakeup and return whether it was listener termination."""
+    def consume_request(self) -> DrainRequest:
+        corpus = None if self.full_scan_requested else self.requested_corpus
+        self.full_scan_requested = False
+        self.requested_corpus = None
+        return DrainRequest(corpus, self.listener_terminated)
+
+    async def wait_after(self, generation: int) -> DrainRequest:
         if self.listener_terminated:
-            return self.listener_terminated
+            return self.consume_request()
         if generation != self.generation:
             self.event = anyio.Event()
-            return False
+            return self.consume_request()
         event = self.event
         await event.wait()
         if event is self.event:
             self.event = anyio.Event()
-        return self.listener_terminated
+        return self.consume_request()
 
-    async def wait_for_retry(self, delay: float) -> bool:
+    async def wait_for_retry(self, delay: float) -> DrainRequest:
         """Wait for a wakeup or capped retry delay after durable work failed."""
         event = self.event
         with anyio.move_on_after(delay):
             await event.wait()
         if event is self.event:
             self.event = anyio.Event()
-        return self.listener_terminated
+        return self.consume_request()
+
+
+def _corpus_from_payload(payload: object) -> EmbeddingCorpus | None:
+    if not isinstance(payload, str):
+        return None
+    corpus_name, separator, row_id = payload.partition(":")
+    if separator != ":":
+        return None
+    try:
+        UUID(row_id)
+        return EmbeddingCorpus(corpus_name)
+    except ValueError:
+        return None
 
 
 async def _connect_listener(database_url: str) -> ListenerConnection:
@@ -138,9 +178,10 @@ async def _run_listener_session(
     logger.info("embedding_worker.listener connected")
 
     retry_delay = _FAILED_DRAIN_RETRY_MIN_SECONDS
+    drain_corpus: EmbeddingCorpus | None = None
     while True:
         generation = signals.generation
-        report = await dependencies.drain()
+        report = await dependencies.drain(drain_corpus)
         if report.failed_batches or report.invalid_batches:
             logger.warning(
                 "embedding_worker.drain retrying failed=%d invalid=%d delay=%.1f",
@@ -148,16 +189,20 @@ async def _run_listener_session(
                 report.invalid_batches,
                 retry_delay,
             )
-            if await signals.wait_for_retry(retry_delay):
+            request = await signals.wait_for_retry(retry_delay)
+            if request.listener_terminated:
                 logger.warning("embedding_worker.listener terminated")
                 return
+            drain_corpus = None
             retry_delay = min(retry_delay * 2, _FAILED_DRAIN_RETRY_MAX_SECONDS)
             continue
 
         retry_delay = _FAILED_DRAIN_RETRY_MIN_SECONDS
-        if await signals.wait_after(generation):
+        request = await signals.wait_after(generation)
+        if request.listener_terminated:
             logger.warning("embedding_worker.listener terminated")
             return
+        drain_corpus = request.corpus
 
 
 async def _run_listener_forever(dependencies: WorkerDependencies) -> None:
@@ -208,7 +253,7 @@ def default_dependencies() -> WorkerDependencies:
         database=database,
         database_url=settings.DATABASE_URL,
         connect_listener=_connect_listener,
-        drain=lambda: drain_dirty_embeddings(database),
+        drain=lambda corpus: drain_dirty_embeddings(database, corpus=corpus),
         open_client=init_http_client,
         close_client=close_http_client,
         reconnect_delay=anyio.sleep,
@@ -217,6 +262,7 @@ def default_dependencies() -> WorkerDependencies:
 
 def main() -> None:
     """Start the reconnect-safe embedding invalidation worker command."""
+    setup_logging(level=Settings().LOG_LEVEL)
     anyio.run(run_worker, default_dependencies())
 
 
