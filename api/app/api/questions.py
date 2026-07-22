@@ -257,7 +257,7 @@ async def fill_embeddings(
     payload: FillEmbeddingsSchema,
     db: Database = db_dep,
 ) -> StreamingResponse:
-    return await stream_fill_embeddings(
+    return stream_fill_embeddings(
         db,
         payload.embeddings_model,
         questions=payload.questions,

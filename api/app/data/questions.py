@@ -2,8 +2,15 @@
 
 import json
 
+from asyncpg import Record
+
 from app.data.connection import Database
-from app.data.embedding_sql import embedding_column_name, embedding_vector_sql
+from app.data.embedding_sql import (
+    current_embedding_predicate,
+    dirty_embedding_predicate,
+    embedding_column_name,
+    embedding_vector_sql,
+)
 from app.llms.models import (
     MODEL_DISTANCE_THRESHOLDS,
     Model,
@@ -68,8 +75,9 @@ async def get_questions_without_embeddings_query(
     model: Model,
 ) -> list[QuestionSchema]:
     embedding_column = embedding_column_name(model)
-    query = f"SELECT * FROM question WHERE {embedding_column} IS NULL ORDER BY name ASC"  # noqa: S608
-    result = await db.fetch(query)
+    predicate = dirty_embedding_predicate(model, embedding_column)
+    query = f"SELECT * FROM question WHERE {predicate.sql} ORDER BY name ASC"  # noqa: S608
+    result = await db.fetch(query, *predicate.parameters)
 
     return [
         QuestionSchema(
@@ -192,6 +200,11 @@ async def get_closest_questions(
     threshold: float | None = None,
 ) -> list[QuestionSchema]:
     embedding = embedding_vector_sql(model, embedded_query)
+    predicate = current_embedding_predicate(
+        model,
+        embedding.column_ref,
+        version_parameter=4,
+    )
 
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
@@ -207,7 +220,7 @@ async def get_closest_questions(
         updated_at,
         {embedding.distance_operand} <=> {embedding.query_operand} AS distance
     FROM question
-    WHERE {embedding.column_ref} IS NOT NULL
+    WHERE {predicate.sql}
         AND {embedding.distance_operand} <=> {embedding.query_operand} < $3
     ORDER BY distance
     LIMIT $2
@@ -218,6 +231,7 @@ async def get_closest_questions(
         embedding_to_pgvector(embedded_query),
         limit,
         threshold,
+        *predicate.parameters,
     )
 
     return [
@@ -233,3 +247,28 @@ async def get_closest_questions(
         )
         for row in result
     ]
+
+
+async def fetch_question_rows_for_fill(
+    db: Database,
+    model: Model,
+    questions: list[str] | None,
+    *,
+    all_questions: bool,
+) -> list[Record]:
+    """Return question fill inputs together with the source revision captured for writing."""
+    select = "SELECT id, name, content, embedding_revision FROM question"
+    if all_questions:
+        return await db.fetch(select)
+    if questions:
+        placeholders = ",".join("$" + str(index + 1) for index in range(len(questions)))
+        return await db.fetch(
+            f"{select} WHERE name IN ({placeholders})",
+            *questions,
+        )
+    embedding_column = embedding_column_name(model)
+    predicate = dirty_embedding_predicate(model, embedding_column)
+    return await db.fetch(
+        f"{select} WHERE {predicate.sql} ORDER BY name ASC",
+        *predicate.parameters,
+    )

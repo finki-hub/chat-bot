@@ -14,6 +14,7 @@ from app.api.chat_state import router as chat_state_router
 from app.api.chat_title import router as chat_title_router
 from app.api.diplomas import router as diplomas_router
 from app.api.documents import router as documents_router
+from app.api.embedding_administration import router as embedding_administration_router
 from app.api.feedback import router as feedback_router
 from app.api.groups import router as groups_router
 from app.api.health import router as health_router
@@ -87,6 +88,10 @@ def make_app(settings: Settings) -> FastAPI:
             {"name": "Feedback", "description": "Submit response feedback"},
             {"name": "Questions", "description": "Manage questions"},
             {"name": "Documents", "description": "Manage source-of-truth documents"},
+            {
+                "name": "Embeddings",
+                "description": "Operate BGE-M3 embedding lifecycle administration",
+            },
             {"name": "Diplomas", "description": "Manage diplomas"},
             {
                 "name": "Recommendations",
@@ -123,6 +128,7 @@ def make_app(settings: Settings) -> FastAPI:
     app.include_router(health_router)
     app.include_router(questions_router)
     app.include_router(documents_router)
+    app.include_router(embedding_administration_router)
     app.include_router(diplomas_router)
     app.include_router(recommendations_router)
     app.include_router(groups_router)

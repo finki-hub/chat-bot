@@ -10,6 +10,7 @@ import hashlib
 import json
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 if (Path.cwd() / "app").is_dir() and str(Path.cwd()) not in sys.path:
@@ -17,6 +18,8 @@ if (Path.cwd() / "app").is_dir() and str(Path.cwd()) not in sys.path:
 
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.data.connection import Database
+from app.data.embedding_lifecycle import lifecycle_counts
+from app.data.embedding_lifecycle_sql import EmbeddingCorpus
 from app.data.professor_documents import upsert_professor_document
 from app.llms.embeddings import stream_fill_professor_document_embeddings
 from app.utils.http_client import close_http_client, init_http_client
@@ -33,56 +36,80 @@ def _external_id(paper: dict) -> str:
     return "T:" + hashlib.sha256(norm.encode("utf-8")).hexdigest()
 
 
-async def _run(papers: list[dict]) -> int:
+def _sse_data_lines(chunk: str | bytes | memoryview[int]) -> Iterator[str]:
+    """Yield the JSON payload from each server-sent event line."""
+    text = chunk if isinstance(chunk, str) else bytes(chunk).decode("utf-8")
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("data:"):
+            yield line[len("data:") :].strip()
+
+
+async def _upsert_papers(db: Database, papers: list[dict]) -> int:
+    """Persist papers with titles and return the number of upserts."""
+    upserted = 0
+    for paper in papers:
+        title = (paper.get("title") or "").strip()
+        if not title:
+            continue
+        await upsert_professor_document(
+            db,
+            external_id=_external_id(paper),
+            title=title,
+            abstract=(paper.get("abstract") or "").strip() or None,
+            year=paper.get("year"),
+            topics=paper.get("topics") or [],
+            canonical_authors=paper.get("canonicalAuthors") or [],
+            sources=paper.get("sources") or [],
+        )
+        upserted += 1
+    return upserted
+
+
+async def _fill_embeddings(db: Database) -> None:
+    """Fill embeddings and report progress from the server-sent event stream."""
+    response = stream_fill_professor_document_embeddings(
+        db,
+        DEFAULT_EMBEDDINGS_MODEL,
+    )
+    ok = err = total = 0
+    async for chunk in response.body_iterator:
+        for data in _sse_data_lines(chunk):
+            event = json.loads(data)
+            total = event.get("total", total)
+            if event.get("status") == "ok":
+                ok += 1
+            else:
+                err += 1
+            done = ok + err
+            if done % 500 == 0 or done == total:
+                print(f"  fill {done}/{total}  ok={ok} err={err}")
+    print(f"FILL DONE: ok={ok} err={err} total={total}")
+
+
+async def _report_lifecycle_counts(db: Database) -> None:
+    """Print the current and dirty professor-document counts."""
+    professor_document_count = next(
+        count
+        for count in await lifecycle_counts(db)
+        if count.corpus is EmbeddingCorpus.PROFESSOR_DOCUMENT
+    )
+    print(
+        "VERIFY: current papers = "
+        f"{professor_document_count.ready} dirty papers = "
+        f"{professor_document_count.dirty}",
+    )
+
+
+async def run(papers: list[dict]) -> int:
     settings = Settings()
     init_http_client()
     db = Database(dsn=settings.DATABASE_URL)
     await db.init()
     try:
-        upserted = 0
-        for paper in papers:
-            title = (paper.get("title") or "").strip()
-            if not title:
-                continue
-            await upsert_professor_document(
-                db,
-                external_id=_external_id(paper),
-                title=title,
-                abstract=(paper.get("abstract") or "").strip() or None,
-                year=paper.get("year"),
-                topics=paper.get("topics") or [],
-                canonical_authors=paper.get("canonicalAuthors") or [],
-                sources=paper.get("sources") or [],
-            )
-            upserted += 1
-        print(f"UPSERT: {upserted} papers")
-
-        resp = await stream_fill_professor_document_embeddings(
-            db,
-            DEFAULT_EMBEDDINGS_MODEL,
-        )
-        ok = err = total = 0
-        async for chunk in resp.body_iterator:
-            text = chunk if isinstance(chunk, str) else bytes(chunk).decode("utf-8")
-            for raw in text.splitlines():
-                line = raw.strip()
-                if not line.startswith("data:"):
-                    continue
-                ev = json.loads(line[len("data:") :].strip())
-                total = ev.get("total", total)
-                if ev.get("status") == "ok":
-                    ok += 1
-                else:
-                    err += 1
-                done = ok + err
-                if done % 500 == 0 or done == total:
-                    print(f"  fill {done}/{total}  ok={ok} err={err}")
-        print(f"FILL DONE: ok={ok} err={err} total={total}")
-
-        embedded = await db.fetchval(
-            "SELECT COUNT(*) FROM professor_document WHERE embedding_bge_m3 IS NOT NULL",
-        )
-        print(f"VERIFY: embedded papers = {embedded}")
+        print(f"UPSERT: {await _upsert_papers(db, papers)} papers")
+        await _fill_embeddings(db)
+        await _report_lifecycle_counts(db)
     finally:
         await db.disconnect()
         await close_http_client()
@@ -100,7 +127,7 @@ def main() -> int:
         parser.error(f"--json must point to an existing file: {json_path}")
     papers = json.loads(json_path.read_text(encoding="utf-8"))
     print(f"loaded {len(papers)} papers from {json_path}")
-    return asyncio.run(_run(papers))
+    return asyncio.run(run(papers))
 
 
 if __name__ == "__main__":

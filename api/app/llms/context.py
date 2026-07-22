@@ -501,7 +501,7 @@ async def get_retrieved_context_with_sources(
     _stage("context")
 
     with timed("retrieval.expand"):
-        text = await _expand_and_render(db, final)
+        text = await _expand_and_render(db, final, embedding_model)
     return RetrievedContext(
         text=text,
         sources=sources,
@@ -548,7 +548,11 @@ async def _contextualize_query(
     return query
 
 
-async def _expand_and_render(db: Database, final: list[_Candidate]) -> str:
+async def _expand_and_render(
+    db: Database,
+    final: list[_Candidate],
+    embedding_model: Model,
+) -> str:
     """Render the final candidates, stitching each retrieved chunk together with its
     immediate neighbors into a single contiguous passage so an answer that spans a chunk
     boundary reads as one block. Falls back to plain per-candidate rendering on error.
@@ -562,7 +566,12 @@ async def _expand_and_render(db: Database, final: list[_Candidate]) -> str:
     window_map: dict[tuple[UUID, int], ChunkSchema] = {}
     if refs:
         try:
-            for ch in await get_chunks_window(db, refs, window=_NEIGHBOR_WINDOW):
+            for ch in await get_chunks_window(
+                db,
+                refs,
+                embedding_model,
+                window=_NEIGHBOR_WINDOW,
+            ):
                 window_map[(ch.document_id, ch.chunk_index)] = ch
         except Exception as exc:
             logger.warning(

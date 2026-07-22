@@ -140,6 +140,10 @@ MODEL_EMBEDDING_DIMENSIONS: Final[dict[Model, int]] = {
     Model.GEMINI_EMBEDDING_001: 3072,
     Model.MULTILINGUAL_E5_LARGE: 1024,
 }
+BGE_M3_EMBEDDING_SPEC_VERSION: Final = "bge-m3-v1"
+BGE_M3_LIFECYCLE_MODELS: Final[frozenset[Model]] = frozenset(
+    {Model.BGE_M3, Model.BGE_M3_LOCAL},
+)
 
 
 def _validate_model_maps() -> None:
@@ -161,6 +165,11 @@ _validate_model_maps()
 
 def model_id(model: ChatModel) -> str:
     return model.value if isinstance(model, Model) else model
+
+
+def is_bge_m3_lifecycle_model(model: Model) -> bool:
+    """Return whether a model uses the versioned BGE-M3 corpus lifecycle."""
+    return model in BGE_M3_LIFECYCLE_MODELS
 
 
 def is_ollama_model_tag(value: str) -> bool:

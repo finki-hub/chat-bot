@@ -3,7 +3,12 @@
 from asyncpg import Record
 
 from app.data.connection import Database
-from app.data.embedding_sql import embedding_column_name, embedding_vector_sql
+from app.data.embedding_sql import (
+    current_embedding_predicate,
+    dirty_embedding_predicate,
+    embedding_column_name,
+    embedding_vector_sql,
+)
 from app.llms.models import (
     MODEL_DISTANCE_THRESHOLDS,
     Model,
@@ -79,6 +84,12 @@ async def get_closest_diplomas(
     exclude_external_id: str | None = None,
 ) -> list[DiplomaSchema]:
     embedding = embedding_vector_sql(model, embedded_query)
+    version_parameter = 5 if exclude_external_id is not None else 4
+    predicate = current_embedding_predicate(
+        model,
+        embedding.column_ref,
+        version_parameter=version_parameter,
+    )
 
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
@@ -102,7 +113,7 @@ async def get_closest_diplomas(
         updated_at,
         {embedding.distance_operand} <=> {embedding.query_operand} AS distance
     FROM diploma
-    WHERE {embedding.column_ref} IS NOT NULL
+    WHERE {predicate.sql}
         AND status = 'Одбрана'
         AND {embedding.distance_operand} <=> {embedding.query_operand} < $3
         {exclude_clause}
@@ -117,6 +128,7 @@ async def get_closest_diplomas(
     ]
     if exclude_external_id is not None:
         args.append(exclude_external_id)
+    args.extend(predicate.parameters)
 
     result = await db.fetch(sql, *args)
 
@@ -144,8 +156,9 @@ async def get_diplomas_without_embeddings(
     model: Model,
 ) -> list[DiplomaSchema]:
     embedding_column = embedding_column_name(model)
-    query = f"SELECT * FROM diploma WHERE {embedding_column} IS NULL ORDER BY external_id ASC"  # noqa: S608
-    result = await db.fetch(query)
+    predicate = dirty_embedding_predicate(model, embedding_column)
+    query = f"SELECT * FROM diploma WHERE {predicate.sql} ORDER BY external_id ASC"  # noqa: S608
+    result = await db.fetch(query, *predicate.parameters)
 
     return [
         DiplomaSchema(
@@ -167,10 +180,12 @@ async def get_diplomas_without_embeddings(
 
 async def fetch_diploma_rows_for_fill(
     db: Database,
-    model_column: str,
+    model: Model,
 ) -> list[Record]:
+    predicate = dirty_embedding_predicate(model, embedding_column_name(model))
     return await db.fetch(
-        f"SELECT id, title, description FROM diploma WHERE {model_column} IS NULL ORDER BY external_id ASC",  # noqa: S608
+        f"SELECT id, title, description, embedding_revision FROM diploma WHERE {predicate.sql} ORDER BY external_id ASC",  # noqa: S608
+        *predicate.parameters,
     )
 
 
@@ -193,14 +208,19 @@ async def get_backtest_population(
     model: Model,
 ) -> list[Record]:
     embedding_column = embedding_column_name(model)
+    predicate = current_embedding_predicate(
+        model,
+        embedding_column,
+        version_parameter=1,
+    )
     query = f"""
     SELECT external_id, title, mentor, member1, member2
     FROM diploma
     WHERE status = 'Одбрана'
-        AND {embedding_column} IS NOT NULL
+        AND {predicate.sql}
         AND mentor IS NOT NULL
         AND member1 IS NOT NULL
         AND member2 IS NOT NULL
     ORDER BY external_id ASC
     """  # noqa: S608
-    return await db.fetch(query)
+    return await db.fetch(query, *predicate.parameters)

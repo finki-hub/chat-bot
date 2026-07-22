@@ -3,6 +3,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 import anyio
 from asyncpg import Pool, PostgresError, Record, create_pool
@@ -22,6 +23,10 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 _APPLIED_MIGRATIONS_SQL = "SELECT version FROM schema_migrations ORDER BY version ASC"
 
 _RECORD_MIGRATION_SQL = "INSERT INTO schema_migrations (version) VALUES ($1)"
+
+_MIGRATION_ADVISORY_LOCK_KEY: Final[int] = 0x46494E4B4D494752
+_MIGRATION_ADVISORY_LOCK_SQL: Final[str] = "SELECT pg_advisory_lock($1)"
+_MIGRATION_ADVISORY_UNLOCK_SQL: Final[str] = "SELECT pg_advisory_unlock($1)"
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,38 +150,55 @@ class Database:
         Apply versioned SQL migrations that have not been recorded yet.
         """
         pool = await self._ensure_pool()
-
-        migrations = await _load_migrations(MIGRATIONS_PATH)
-        if not migrations:
-            logger.warning("No database migrations found in %s", MIGRATIONS_PATH)
-            return
-
-        logger.info("Running database migrations from %s", MIGRATIONS_PATH)
         async with pool.acquire() as conn:
-            await conn.execute(_MIGRATION_TABLE_SQL)
-            applied = {
-                row["version"] for row in await conn.fetch(_APPLIED_MIGRATIONS_SQL)
-            }
-            pending = [m for m in migrations if m.version not in applied]
+            lock_acquired = False
+            try:
+                await conn.execute(
+                    _MIGRATION_ADVISORY_LOCK_SQL,
+                    _MIGRATION_ADVISORY_LOCK_KEY,
+                )
+                lock_acquired = True
 
-            if not pending:
-                logger.info("Database schema is up to date")
-                return
-
-            for migration in pending:
-                logger.info("Applying database migration %s", migration.version)
-                try:
-                    async with conn.transaction():
-                        await conn.execute(migration.sql)
-                        await conn.execute(_RECORD_MIGRATION_SQL, migration.version)
-                except PostgresError:
-                    logger.exception(
-                        "Failed to apply database migration %s",
-                        migration.version,
+                migrations = await _load_migrations(MIGRATIONS_PATH)
+                if not migrations:
+                    logger.warning(
+                        "No database migrations found in %s",
+                        MIGRATIONS_PATH,
                     )
-                    raise
+                    return
 
-            logger.info("Applied %d database migration(s)", len(pending))
+                logger.info("Running database migrations from %s", MIGRATIONS_PATH)
+                await conn.execute(_MIGRATION_TABLE_SQL)
+                applied = {
+                    row["version"] for row in await conn.fetch(_APPLIED_MIGRATIONS_SQL)
+                }
+                pending = [m for m in migrations if m.version not in applied]
+
+                if not pending:
+                    logger.info("Database schema is up to date")
+                    return
+
+                for migration in pending:
+                    logger.info("Applying database migration %s", migration.version)
+                    try:
+                        async with conn.transaction():
+                            await conn.execute(migration.sql)
+                            await conn.execute(_RECORD_MIGRATION_SQL, migration.version)
+                    except PostgresError:
+                        logger.exception(
+                            "Failed to apply database migration %s",
+                            migration.version,
+                        )
+                        raise
+
+                logger.info("Applied %d database migration(s)", len(pending))
+            finally:
+                if lock_acquired:
+                    with anyio.CancelScope(shield=True):
+                        await conn.execute(
+                            _MIGRATION_ADVISORY_UNLOCK_SQL,
+                            _MIGRATION_ADVISORY_LOCK_KEY,
+                        )
 
 
 async def _load_migrations(path: Path) -> list[Migration]:
