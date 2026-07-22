@@ -6,7 +6,6 @@ import anyio
 
 import app.embedding_worker as worker
 from app.data.embedding_lifecycle_sql import EmbeddingCorpus
-from app.embedding_worker import WorkerDependencies
 from app.embedding_worker_drain import DirtyDrainReport
 from tests.embedding_worker_test_support import (
     NoopWorkerDatabase,
@@ -21,12 +20,12 @@ RetryListener = WorkerListener
 def _dependencies(
     drain: Callable[[EmbeddingCorpus | None], Awaitable[DirtyDrainReport]],
     listener: RetryListener,
-) -> WorkerDependencies:
+) -> worker.WorkerDependencies:
     async def connect_listener(_database_url: str) -> RetryListener:
         await no_delay(0)
         return listener
 
-    return WorkerDependencies(
+    return worker.WorkerDependencies(
         database=NoopWorkerDatabase(),
         database_url="postgresql://worker-test",
         connect_listener=connect_listener,
