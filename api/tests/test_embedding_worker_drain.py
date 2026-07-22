@@ -54,6 +54,76 @@ def test_drain_leaves_dirty_rows_unwritten_when_generation_fails(monkeypatch) ->
     anyio.run(run)
 
 
+def test_drain_continues_to_later_corpora_after_generation_fails(monkeypatch) -> None:
+    async def run() -> None:
+        # Given: the first corpus has a poison batch and a later corpus has work.
+        poison = EmbeddingCandidate(
+            corpus=EmbeddingCorpus.QUESTION,
+            id=UUID("00000000-0000-0000-0000-000000000411"),
+            text="poison",
+            revision=1,
+        )
+        later = EmbeddingCandidate(
+            corpus=EmbeddingCorpus.CHUNK,
+            id=UUID("00000000-0000-0000-0000-000000000412"),
+            text="later",
+            revision=1,
+        )
+        persisted: list[EmbeddingCorpus] = []
+        attempts: dict[EmbeddingCorpus, int] = {
+            EmbeddingCorpus.QUESTION: 0,
+            EmbeddingCorpus.CHUNK: 0,
+        }
+
+        async def fetch_dirty(_database, corpus, _limit):
+            match corpus:
+                case EmbeddingCorpus.QUESTION:
+                    attempts[corpus] += 1
+                    return (poison,)
+                case EmbeddingCorpus.CHUNK:
+                    attempts[corpus] += 1
+                    return (later,) if attempts[corpus] == 1 else ()
+                case EmbeddingCorpus.DIPLOMA | EmbeddingCorpus.PROFESSOR_DOCUMENT:
+                    return ()
+
+        async def generate(texts, _model, **_kwargs):
+            if texts == ["poison"]:
+                raise ConnectionError("provider unavailable")
+            return [[0.0] * 1024]
+
+        async def persist(_database, batch):
+            persisted.append(batch.corpus)
+
+            class Result:
+                valid = True
+                updated = len(batch.candidates)
+
+            return Result()
+
+        monkeypatch.setattr(
+            "app.embedding_worker_drain.fetch_dirty_embeddings",
+            fetch_dirty,
+        )
+        monkeypatch.setattr(
+            "app.embedding_worker_drain.persist_embedding_batch",
+            persist,
+        )
+
+        # When: the drain hits the poison batch before later corpus work.
+        report = await drain_dirty_embeddings(
+            Database("postgresql://worker-test"),
+            generate,
+        )
+
+        # Then: the failed batch is retained, but later durable work still progresses.
+        assert report.failed_batches == 1
+        assert report.updated_rows == 1
+        assert persisted == [EmbeddingCorpus.CHUNK]
+        assert attempts[EmbeddingCorpus.QUESTION] == 1
+
+    anyio.run(run)
+
+
 def test_drain_rejects_malformed_vectors_without_writing(monkeypatch) -> None:
     async def run() -> None:
         # Given: one dirty row and a provider response with the wrong vector dimension.

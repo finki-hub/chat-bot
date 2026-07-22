@@ -33,6 +33,7 @@ class DirtyDrainReport:
 async def drain_dirty_embeddings(
     database: Database,
     generate: EmbeddingGenerator = generate_embeddings,
+    corpus: EmbeddingCorpus | None = None,
 ) -> DirtyDrainReport:
     """Drain every currently dirty BGE-M3 row without streaming or polling."""
     processed_batches = 0
@@ -40,11 +41,12 @@ async def drain_dirty_embeddings(
     failed_batches = 0
     invalid_batches = 0
 
-    for corpus in EmbeddingCorpus:
+    corpora = (corpus,) if corpus is not None else tuple(EmbeddingCorpus)
+    for current_corpus in corpora:
         while True:
             candidates = await fetch_dirty_embeddings(
                 database,
-                corpus,
+                current_corpus,
                 EMBEDDING_BATCH_SIZE,
             )
             if not candidates:
@@ -60,20 +62,15 @@ async def drain_dirty_embeddings(
                 failed_batches += 1
                 logger.warning(
                     "embedding_worker.drain provider_failed corpus=%s count=%d error_type=%s",
-                    corpus.value,
+                    current_corpus.value,
                     len(candidates),
                     type(error).__name__,
                 )
-                return DirtyDrainReport(
-                    processed_batches,
-                    updated_rows,
-                    failed_batches,
-                    invalid_batches,
-                )
+                break
 
             try:
                 batch = EmbeddingBatch(
-                    corpus=corpus,
+                    corpus=current_corpus,
                     candidates=candidates,
                     vectors=tuple(tuple(vector) for vector in vectors),
                 )
@@ -81,30 +78,20 @@ async def drain_dirty_embeddings(
                 invalid_batches += 1
                 logger.warning(
                     "embedding_worker.drain provider_malformed corpus=%s count=%d",
-                    corpus.value,
+                    current_corpus.value,
                     len(candidates),
                 )
-                return DirtyDrainReport(
-                    processed_batches,
-                    updated_rows,
-                    failed_batches,
-                    invalid_batches,
-                )
+                break
 
             result = await persist_embedding_batch(database, batch)
             if not result.valid:
                 invalid_batches += 1
                 logger.warning(
                     "embedding_worker.drain provider_malformed corpus=%s count=%d",
-                    corpus.value,
+                    current_corpus.value,
                     len(candidates),
                 )
-                return DirtyDrainReport(
-                    processed_batches,
-                    updated_rows,
-                    failed_batches,
-                    invalid_batches,
-                )
+                break
             updated_rows += result.updated
 
     report = DirtyDrainReport(
