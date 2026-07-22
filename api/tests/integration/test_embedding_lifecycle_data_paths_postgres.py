@@ -201,7 +201,8 @@ def test_real_postgres_manual_fill_reports_mixed_guarded_race_outcomes(
                 return [[1.0] + [0.0] * 1023, [1.0] + [0.0] * 1023]
 
             monkeypatch.setattr(
-                "app.llms.embedding_fills.generate_embeddings", generate,
+                "app.llms.embedding_fills.generate_embeddings",
+                generate,
             )
             response = await stream_fill_embeddings(
                 database,
