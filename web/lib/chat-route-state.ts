@@ -71,14 +71,57 @@ export const persistedTurns = (
     return turn === null ? [] : [turn];
   });
   const currentIndex = turns.findIndex((turn) => turn.id === currentMessageId);
-  const previousTurns =
+  const candidateTurns =
     currentIndex === -1 ? turns : turns.slice(0, currentIndex);
+  const regenerationUserIndex =
+    turns[currentIndex]?.role === 'assistant'
+      ? candidateTurns.findLastIndex((turn) => turn.role === 'user')
+      : null;
+
+  if (regenerationUserIndex === -1) {
+    throw new TypeError('Regeneration history requires a prior user turn');
+  }
+
+  const previousTurns =
+    regenerationUserIndex === null
+      ? candidateTurns
+      : candidateTurns.slice(0, regenerationUserIndex + 1);
   const historyLimit = Math.max(0, MAX_MESSAGES - requestTurnCount);
 
   return previousTurns.slice(-historyLimit).map((turn) => ({
     content: turn.content.slice(0, MAX_CHARS_PER_TURN),
     role: turn.role,
   }));
+};
+
+export const retainedServerMessageIdsForRegeneration = (
+  messages: readonly ChatStateJsonValue[],
+  messageId: string,
+): null | readonly string[] => {
+  const turns = messages.flatMap((message) => {
+    const turn = persistedTurnFrom(message);
+
+    return turn === null ? [] : [turn];
+  });
+  const targetIndex = turns.findIndex((turn) => turn.id === messageId);
+  const target = turns[targetIndex];
+
+  if (target?.role !== 'assistant') {
+    return null;
+  }
+
+  const priorUserIndex = turns
+    .slice(0, targetIndex)
+    .findLastIndex((turn) => turn.role === 'user');
+
+  if (priorUserIndex === -1) {
+    return null;
+  }
+
+  return [
+    ...turns.slice(0, priorUserIndex + 1).map((turn) => turn.id),
+    target.id,
+  ];
 };
 
 export const lastUserMessageForState = (
