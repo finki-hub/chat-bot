@@ -75,17 +75,19 @@ def test_drain_continues_to_later_corpora_after_generation_fails(monkeypatch) ->
         }
 
         def fetch_dirty(_database, corpus, _limit):
+            candidates: list[EmbeddingCandidate]
             match corpus:
                 case EmbeddingCorpus.QUESTION:
                     attempts[corpus] += 1
-                    return [poison]
+                    candidates = [poison]
                 case EmbeddingCorpus.CHUNK:
                     attempts[corpus] += 1
-                    return [later] if attempts[corpus] == 1 else []
+                    candidates = [later] if attempts[corpus] == 1 else []
                 case EmbeddingCorpus.DIPLOMA | EmbeddingCorpus.PROFESSOR_DOCUMENT:
-                    return []
+                    candidates = []
                 case unreachable:
                     assert_never(unreachable)
+            return candidates
 
         def generate_embeddings(texts, _model):
             if texts == ["poison"]:
