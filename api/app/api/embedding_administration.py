@@ -49,7 +49,6 @@ def _counts_response(
 
 @router.get(
     "/health",
-    response_model=EmbeddingHealthResponse,
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_401_UNAUTHORIZED: {"description": "Invalid or missing API Key"},
@@ -62,7 +61,6 @@ async def health(db: DatabaseDependency) -> EmbeddingHealthResponse:
 
 @router.post(
     "/fill-dirty",
-    response_model=EmbeddingFillDirtyResponse,
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_401_UNAUTHORIZED: {"description": "Invalid or missing API Key"},
@@ -78,7 +76,6 @@ async def fill_dirty(db: DatabaseDependency) -> EmbeddingFillDirtyResponse:
 
 @router.post(
     "/rebuild",
-    response_model=EmbeddingRebuildResponse,
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_401_UNAUTHORIZED: {"description": "Invalid or missing API Key"},
