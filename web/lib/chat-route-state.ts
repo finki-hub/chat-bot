@@ -71,8 +71,21 @@ export const persistedTurns = (
     return turn === null ? [] : [turn];
   });
   const currentIndex = turns.findIndex((turn) => turn.id === currentMessageId);
-  const previousTurns =
+  const candidateTurns =
     currentIndex === -1 ? turns : turns.slice(0, currentIndex);
+  const regenerationUserIndex =
+    turns[currentIndex]?.role === 'assistant'
+      ? candidateTurns.findLastIndex((turn) => turn.role === 'user')
+      : null;
+
+  if (regenerationUserIndex === -1) {
+    throw new TypeError('Regeneration history requires a prior user turn');
+  }
+
+  const previousTurns =
+    regenerationUserIndex === null
+      ? candidateTurns
+      : candidateTurns.slice(0, regenerationUserIndex + 1);
   const historyLimit = Math.max(0, MAX_MESSAGES - requestTurnCount);
 
   return previousTurns.slice(-historyLimit).map((turn) => ({
