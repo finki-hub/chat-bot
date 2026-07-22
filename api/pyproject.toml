@@ -17,7 +17,7 @@ dependencies = [
     "langchain-openai>=1.3.5",
     "langchain-text-splitters>=1.1.2",
     "langgraph>=1.2.9",
-    "posthog>=7.27.0",
+    "posthog>=7.28.0",
     "pydantic>=2.13.4",
     "tzdata>=2026.3",
 ]
