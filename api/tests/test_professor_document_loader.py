@@ -1,5 +1,7 @@
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import anyio
 from fastapi.responses import StreamingResponse
@@ -25,24 +27,22 @@ def test_loader_reports_current_and_dirty_professor_document_counts(
     monkeypatch,
     capsys,
 ) -> None:
-    class FakeDatabase:
-        async def init(self) -> None:
-            return None
-
-        async def disconnect(self) -> None:
-            return None
-
-        async def fetchval(self, *_args) -> int:
-            return 99
-
     async def response_body():
         yield 'data: {"status":"ok","total":1}\n\n'
 
-    async def stream_fill(*_args):
-        return StreamingResponse(response_body(), media_type="text/event-stream")
-
-    async def lifecycle_counts(*_args):
-        return (
+    database = SimpleNamespace(
+        init=AsyncMock(),
+        disconnect=AsyncMock(),
+        fetchval=AsyncMock(return_value=99),
+    )
+    stream_fill = AsyncMock(
+        return_value=StreamingResponse(
+            response_body(),
+            media_type="text/event-stream",
+        ),
+    )
+    lifecycle_counts = AsyncMock(
+        return_value=[
             EmbeddingLifecycleCount(EmbeddingCorpus.QUESTION, ready=1, dirty=0),
             EmbeddingLifecycleCount(EmbeddingCorpus.CHUNK, ready=1, dirty=0),
             EmbeddingLifecycleCount(EmbeddingCorpus.DIPLOMA, ready=1, dirty=0),
@@ -51,19 +51,16 @@ def test_loader_reports_current_and_dirty_professor_document_counts(
                 ready=1,
                 dirty=2,
             ),
-        )
-
-    async def upsert(*_args, **_kwargs):
-        return "paper"
-
-    async def close_client() -> None:
-        return None
+        ],
+    )
+    upsert = AsyncMock(return_value="paper")
+    close_client = AsyncMock()
 
     def settings():
         return type("Settings", (), {"DATABASE_URL": ""})()
 
     loader = _loader_module()
-    monkeypatch.setattr(loader, "Database", lambda **_kwargs: FakeDatabase())
+    monkeypatch.setattr(loader, "Database", lambda **_kwargs: database)
     monkeypatch.setattr(
         loader,
         "Settings",
