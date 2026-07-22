@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import anyio
 
 from app.data.embedding_lifecycle_sql import EmbeddingCorpus
-from app.embedding_worker import ListenerConnection, WorkerDependencies, run_worker
+from app.embedding_worker import WorkerDependencies, run_worker
 from app.embedding_worker_drain import DirtyDrainReport
+from tests.embedding_worker_test_support import (
+    NoopWorkerDatabase,
+    WorkerListener,
+    no_delay,
+)
+from tests.embedding_worker_test_support import close_client as noop_close_client
 
 
 @dataclass
@@ -16,52 +21,10 @@ class NotificationState:
     drain_event: anyio.Event = field(default_factory=anyio.Event)
 
     async def close_client(self) -> None:
-        return None
+        await noop_close_client()
 
 
-class NotificationDatabase:
-    async def init(self) -> None:
-        return None
-
-    async def run_migrations(self) -> None:
-        return None
-
-    async def disconnect(self) -> None:
-        return None
-
-
-class NotificationListener(ListenerConnection):
-    def __init__(self) -> None:
-        self.listening = anyio.Event()
-        self._notification_callback: Callable[..., None] | None = None
-        self._termination_callback: Callable[..., None] | None = None
-
-    async def add_listener(
-        self,
-        channel: str,
-        callback: Callable[..., None],
-    ) -> None:
-        assert channel == "embedding_dirty"
-        self._notification_callback = callback
-
-    def add_termination_listener(self, callback: Callable[..., None]) -> None:
-        self._termination_callback = callback
-
-    async def execute(self, query: str) -> str:
-        assert query == "LISTEN embedding_dirty"
-        self.listening.set()
-        return "LISTEN"
-
-    async def close(self) -> None:
-        return None
-
-    def notify(self, payload: str) -> None:
-        assert self._notification_callback is not None
-        self._notification_callback(self, 1, "embedding_dirty", payload)
-
-
-async def _no_delay(_seconds: float) -> None:
-    return None
+NotificationListener = WorkerListener
 
 
 def _dependencies(
@@ -69,21 +32,23 @@ def _dependencies(
     listener: NotificationListener,
 ) -> WorkerDependencies:
     async def connect_listener(_database_url: str) -> NotificationListener:
+        await no_delay(0)
         return listener
 
     async def drain(target: EmbeddingCorpus | None) -> DirtyDrainReport:
         state.drain_targets.append(target)
         state.drain_event.set()
+        await no_delay(0)
         return DirtyDrainReport(0, 0, 0, 0)
 
     return WorkerDependencies(
-        database=NotificationDatabase(),
+        database=NoopWorkerDatabase(),
         database_url="postgresql://worker-test",
         connect_listener=connect_listener,
         drain=drain,
         open_client=lambda: None,
         close_client=state.close_client,
-        reconnect_delay=_no_delay,
+        reconnect_delay=no_delay,
     )
 
 

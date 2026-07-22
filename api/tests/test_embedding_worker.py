@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import anyio
 
 import app.embedding_worker as worker
 from app.data.embedding_lifecycle_sql import EmbeddingCorpus
-from app.embedding_worker import ListenerConnection, WorkerDependencies, run_worker
+from app.embedding_worker import WorkerDependencies, run_worker
 from app.embedding_worker_drain import DirtyDrainReport
+from tests.embedding_worker_test_support import WorkerListener, no_delay
 
 
 @dataclass
@@ -25,6 +25,7 @@ class ResourceState:
     async def close_client(self) -> None:
         self.client_closed = True
         self.events.append("client-close")
+        await no_delay(0)
 
 
 @dataclass
@@ -34,13 +35,16 @@ class FakeDatabase:
 
     async def init(self) -> None:
         self.state.events.append("database-init")
+        await no_delay(0)
 
     async def run_migrations(self) -> None:
         self.state.events.append("migrations")
+        await no_delay(0)
 
     async def disconnect(self) -> None:
         self.disconnected = True
         self.state.events.append("database-close")
+        await no_delay(0)
 
 
 @dataclass
@@ -54,42 +58,12 @@ class MigrationBlockedDatabase(FakeDatabase):
         await self.migration_blocker.wait()
 
 
-class FakeListener(ListenerConnection):
+class FakeListener(WorkerListener):
     def __init__(self, state: ResourceState) -> None:
-        self.closed = False
-        self.listening = anyio.Event()
-        self._state = state
-        self._notification_callback: Callable[..., None] | None = None
-        self._termination_callback: Callable[..., None] | None = None
-
-    async def add_listener(
-        self,
-        channel: str,
-        callback: Callable[..., None],
-    ) -> None:
-        assert channel == "embedding_dirty"
-        self._notification_callback = callback
-
-    def add_termination_listener(self, callback: Callable[..., None]) -> None:
-        self._termination_callback = callback
-
-    async def execute(self, query: str) -> str:
-        assert query == "LISTEN embedding_dirty"
-        self._state.events.append("listen")
-        self.listening.set()
-        return "LISTEN"
-
-    async def close(self) -> None:
-        self.closed = True
-        self._state.events.append("listener-close")
-
-    def notify(self, payload: str = "wake") -> None:
-        assert self._notification_callback is not None
-        self._notification_callback(self, 1, "embedding_dirty", payload)
-
-    def terminate(self) -> None:
-        assert self._termination_callback is not None
-        self._termination_callback(self)
+        super().__init__(
+            on_listen=lambda: state.events.append("listen"),
+            on_close=lambda: state.events.append("listener-close"),
+        )
 
 
 class ListenerFactory:
@@ -100,6 +74,7 @@ class ListenerFactory:
     async def __call__(self, _database_url: str):
         listener = self._listeners[self._index]
         self._index += 1
+        await no_delay(0)
         return listener
 
 
@@ -111,6 +86,7 @@ async def _drain(
     state.drain_count += 1
     state.drain_targets.append(target)
     state.drain_event.set()
+    await no_delay(0)
     return DirtyDrainReport(0, 0, 0, 0)
 
 
@@ -120,10 +96,6 @@ async def _wait_for_drains(state: ResourceState, expected: int) -> None:
         await event.wait()
         if event is state.drain_event:
             state.drain_event = anyio.Event()
-
-
-async def _no_delay(_seconds: float) -> None:
-    return None
 
 
 def _dependencies(
@@ -141,7 +113,7 @@ def _dependencies(
         drain=drain,
         open_client=state.open_client,
         close_client=state.close_client,
-        reconnect_delay=_no_delay,
+        reconnect_delay=no_delay,
     )
 
 
@@ -274,6 +246,7 @@ def test_worker_reconnects_and_runs_a_new_full_scan_after_listener_termination()
             # When: PostgreSQL terminates the first listener backend.
             first.terminate()
             await second.listening.wait()
+            await _wait_for_drains(state, 2)
 
             # Then: reconnect registration closes the race and is followed by a full drain.
             assert state.events.count("drain") == 2

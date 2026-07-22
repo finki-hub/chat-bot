@@ -1,64 +1,21 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 
 import anyio
 
 import app.embedding_worker as worker
 from app.data.embedding_lifecycle_sql import EmbeddingCorpus
-from app.embedding_worker import ListenerConnection, WorkerDependencies
+from app.embedding_worker import WorkerDependencies
 from app.embedding_worker_drain import DirtyDrainReport
+from tests.embedding_worker_test_support import (
+    NoopWorkerDatabase,
+    WorkerListener,
+    close_client,
+    no_delay,
+)
 
-
-@dataclass
-class RetryDatabase:
-    async def init(self) -> None:
-        return None
-
-    async def run_migrations(self) -> None:
-        return None
-
-    async def disconnect(self) -> None:
-        return None
-
-
-class RetryListener(ListenerConnection):
-    def __init__(self) -> None:
-        self.ready = anyio.Event()
-        self._notification_callback: Callable[..., None] | None = None
-        self._termination_callback: Callable[..., None] | None = None
-
-    async def add_listener(
-        self,
-        channel: str,
-        callback: Callable[..., None],
-    ) -> None:
-        assert channel == "embedding_dirty"
-        self._notification_callback = callback
-
-    def add_termination_listener(self, callback: Callable[..., None]) -> None:
-        self._termination_callback = callback
-
-    async def execute(self, query: str) -> str:
-        assert query == "LISTEN embedding_dirty"
-        self.ready.set()
-        return "LISTEN"
-
-    async def close(self) -> None:
-        return None
-
-    def notify(self, payload: str) -> None:
-        assert self._notification_callback is not None
-        self._notification_callback(self, 1, "embedding_dirty", payload)
-
-
-async def _close_client() -> None:
-    return None
-
-
-async def _no_delay(_seconds: float) -> None:
-    return None
+RetryListener = WorkerListener
 
 
 def _dependencies(
@@ -66,16 +23,17 @@ def _dependencies(
     listener: RetryListener,
 ) -> WorkerDependencies:
     async def connect_listener(_database_url: str) -> RetryListener:
+        await no_delay(0)
         return listener
 
     return WorkerDependencies(
-        database=RetryDatabase(),
+        database=NoopWorkerDatabase(),
         database_url="postgresql://worker-test",
         connect_listener=connect_listener,
         drain=drain,
         open_client=lambda: None,
-        close_client=_close_client,
-        reconnect_delay=_no_delay,
+        close_client=close_client,
+        reconnect_delay=no_delay,
     )
 
 
@@ -90,12 +48,14 @@ def test_listener_retries_failed_drain_without_notification(monkeypatch) -> None
             nonlocal calls
             calls += 1
             if calls == 1:
+                await no_delay(0)
                 return DirtyDrainReport(1, 0, 1, 0)
             retry_completed.set()
+            await no_delay(0)
             return DirtyDrainReport(0, 0, 0, 0)
 
         # When: the session starts with a retry delay that does not wait in the test.
-        monkeypatch.setattr(worker.anyio, "sleep", _no_delay)
+        monkeypatch.setattr(worker.anyio, "sleep", no_delay)
         monkeypatch.setattr(worker, "_FAILED_DRAIN_RETRY_MIN_SECONDS", 0.001)
         async with anyio.create_task_group() as task_group:
             task_group.start_soon(
@@ -130,12 +90,14 @@ def test_listener_preserves_failed_full_scan_retry_after_targeted_notification(
             targets.append(target)
             if calls == 1:
                 first_failure.set()
+                await no_delay(0)
                 return DirtyDrainReport(1, 0, 1, 0)
             retry_completed.set()
+            await no_delay(0)
             return DirtyDrainReport(0, 0, 0, 0)
 
         # When: a targeted wake arrives while failed durable work is awaiting retry.
-        monkeypatch.setattr(worker.anyio, "sleep", _no_delay)
+        monkeypatch.setattr(worker.anyio, "sleep", no_delay)
         monkeypatch.setattr(worker, "_FAILED_DRAIN_RETRY_MIN_SECONDS", 30.0)
         async with anyio.create_task_group() as task_group:
             task_group.start_soon(
@@ -168,6 +130,7 @@ def test_listener_cancels_while_waiting_to_retry_persistent_failure(
             nonlocal calls
             calls += 1
             first_failure.set()
+            await no_delay(0)
             return DirtyDrainReport(1, 0, 1, 0)
 
         # When: cancellation arrives after the first failed drain enters backoff.
