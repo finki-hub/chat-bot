@@ -11,8 +11,6 @@ from app.llms.embedding_generation import (
 )
 from app.llms.gpu_api import generate_gpu_api_embeddings
 
-_resolve_models = resolve_fill_models
-
 __all__ = [
     "ensure_self_hosted_embedding_model",
     "generate_embeddings",

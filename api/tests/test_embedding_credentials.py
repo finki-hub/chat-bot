@@ -23,7 +23,7 @@ def test_all_models_embedding_fill_uses_only_self_hosted_models() -> None:
 )
 def test_explicit_hosted_embedding_fill_is_rejected(model: Model) -> None:
     with pytest.raises(HTTPException) as error:
-        embeddings._resolve_models(  # noqa: SLF001
+        embeddings.resolve_fill_models(
             model,
             all_models=False,
         )
