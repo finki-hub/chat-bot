@@ -18,6 +18,13 @@ const previousMessage: MyUIMessage = {
   role: 'user',
 };
 
+const freshAssistantMessage: MyUIMessage = {
+  id: 'message-b',
+  metadata: {},
+  parts: [{ text: 'Fresh answer', type: 'text' }],
+  role: 'assistant',
+};
+
 vi.mock('@ai-sdk/react', () => ({
   useChat: (options: UseChatOptions) => ({
     messages: options.id === 'conversation-b' ? [] : [previousMessage],
@@ -85,7 +92,7 @@ describe('conversation switch runtime', () => {
     });
   });
 
-  it('keeps previous messages visible while the selected chat runtime is empty and hydrating', () => {
+  it('keeps previous messages visible without replaying their entrance animation while the selected chat hydrates', () => {
     useUiStore.setState({ activeConversationId: 'conversation-a' });
     render(<RuntimeSwitchHarness />);
 
@@ -94,6 +101,60 @@ describe('conversation switch runtime', () => {
     );
 
     expect(screen.queryByText('Започни разговор')).not.toBeInTheDocument();
-    expect(screen.getByText('Conversation A')).toBeInTheDocument();
+
+    const previousMessageShell = screen
+      .getByText('Conversation A')
+      .closest('.group');
+
+    expect(previousMessageShell).not.toBeNull();
+
+    if (previousMessageShell === null) {
+      throw new Error('Preserved message shell not found');
+    }
+
+    expect(previousMessageShell).toBeInTheDocument();
+    expect(previousMessageShell).not.toHaveClass('motion-safe:animate-in');
+  });
+
+  it('animates a newly submitted user message', () => {
+    render(
+      <Thread
+        messages={[previousMessage]}
+        status="submitted"
+      />,
+    );
+
+    const newMessageShell = screen
+      .getByText('Conversation A')
+      .closest('.group');
+
+    expect(newMessageShell).not.toBeNull();
+
+    if (newMessageShell === null) {
+      throw new Error('Submitted message shell not found');
+    }
+
+    expect(newMessageShell).toHaveClass('motion-safe:animate-in');
+  });
+
+  it('animates a newly streaming assistant message', () => {
+    render(
+      <Thread
+        messages={[previousMessage, freshAssistantMessage]}
+        status="streaming"
+      />,
+    );
+
+    const animatedShell = screen
+      .getByText('Fresh answer')
+      .closest('[class~="motion-safe:animate-in"]');
+
+    expect(animatedShell).not.toBeNull();
+
+    if (animatedShell === null) {
+      throw new Error('Streaming assistant animation shell not found');
+    }
+
+    expect(animatedShell).toBeInTheDocument();
   });
 });

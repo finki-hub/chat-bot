@@ -40,6 +40,8 @@ const STAGGER = ['stagger-1', 'stagger-2', 'stagger-3', 'stagger-4'];
 
 const CHIP =
   'group rounded-xl border border-border bg-card/60 px-4 py-3 text-left text-pretty text-sm text-foreground/90 shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:fill-mode-both';
+const MESSAGE_ENTRANCE =
+  'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500';
 
 const Welcome = ({ onPick }: { onPick?: (text: string) => void }) => (
   <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-6 py-12 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:slide-in-from-bottom-4 motion-safe:duration-700">
@@ -118,6 +120,11 @@ export const Thread = ({
               if (m.role === 'user') {
                 return (
                   <Message
+                    className={
+                      streaming && m.id === lastMessage?.id
+                        ? MESSAGE_ENTRANCE
+                        : undefined
+                    }
                     from="user"
                     key={m.id}
                   >
@@ -134,29 +141,36 @@ export const Thread = ({
                 streaming &&
                 lastMessage?.role === 'assistant';
               return (
-                <AssistantMessage
-                  actions={renderActions ? renderActions(m) : undefined}
-                  complete={!activeAssistant}
-                  errorPart={
-                    isLastAssistant
-                      ? (activeError ?? m.metadata?.error)
-                      : m.metadata?.error
-                  }
+                <div
+                  className={activeAssistant ? MESSAGE_ENTRANCE : undefined}
                   key={m.id}
-                  message={m}
-                  onManageCredentials={
-                    isLastAssistant ? onManageCredentials : undefined
-                  }
-                  onRetry={isLastAssistant ? onRetry : undefined}
-                  pending={isLastAssistant && streaming}
-                  statusPart={
-                    isLastAssistant && streaming ? activeStatus : undefined
-                  }
-                />
+                >
+                  <AssistantMessage
+                    actions={renderActions ? renderActions(m) : undefined}
+                    complete={!activeAssistant}
+                    errorPart={
+                      isLastAssistant
+                        ? (activeError ?? m.metadata?.error)
+                        : m.metadata?.error
+                    }
+                    message={m}
+                    onManageCredentials={
+                      isLastAssistant ? onManageCredentials : undefined
+                    }
+                    onRetry={isLastAssistant ? onRetry : undefined}
+                    pending={isLastAssistant && streaming}
+                    statusPart={
+                      isLastAssistant && streaming ? activeStatus : undefined
+                    }
+                  />
+                </div>
               );
             })}
             {awaitingReply ? (
-              <Message from="assistant">
+              <Message
+                className={MESSAGE_ENTRANCE}
+                from="assistant"
+              >
                 <MessageContent>
                   <TypingIndicator />
                 </MessageContent>
