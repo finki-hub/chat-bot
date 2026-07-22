@@ -94,6 +94,36 @@ export const persistedTurns = (
   }));
 };
 
+export const retainedServerMessageIdsForRegeneration = (
+  messages: readonly ChatStateJsonValue[],
+  messageId: string,
+): null | readonly string[] => {
+  const turns = messages.flatMap((message) => {
+    const turn = persistedTurnFrom(message);
+
+    return turn === null ? [] : [turn];
+  });
+  const targetIndex = turns.findIndex((turn) => turn.id === messageId);
+  const target = turns[targetIndex];
+
+  if (target?.role !== 'assistant') {
+    return null;
+  }
+
+  const priorUserIndex = turns
+    .slice(0, targetIndex)
+    .findLastIndex((turn) => turn.role === 'user');
+
+  if (priorUserIndex === -1) {
+    return null;
+  }
+
+  return [
+    ...turns.slice(0, priorUserIndex + 1).map((turn) => turn.id),
+    target.id,
+  ];
+};
+
 export const lastUserMessageForState = (
   message: MyUIMessage | undefined,
 ): null | UserMessageForState => {
