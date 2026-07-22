@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 _CHANNEL = "embedding_dirty"
 _RECONNECT_MIN_SECONDS = 0.5
 _RECONNECT_MAX_SECONDS = 30.0
+_FAILED_DRAIN_RETRY_MIN_SECONDS = 0.5
+_FAILED_DRAIN_RETRY_MAX_SECONDS = 30.0
 
 
 class WorkerDatabase(Protocol):
@@ -103,6 +105,15 @@ class ListenerSignals:
             self.event = anyio.Event()
         return self.listener_terminated
 
+    async def wait_for_retry(self, delay: float) -> bool:
+        """Wait for a wakeup or capped retry delay after durable work failed."""
+        event = self.event
+        with anyio.move_on_after(delay):
+            await event.wait()
+        if event is self.event:
+            self.event = anyio.Event()
+        return self.listener_terminated
+
 
 async def _connect_listener(database_url: str) -> ListenerConnection:
     """Open the dedicated asyncpg connection that owns LISTEN state."""
@@ -126,9 +137,24 @@ async def _run_listener_session(
     await listener.execute(f"LISTEN {_CHANNEL}")
     logger.info("embedding_worker.listener connected")
 
+    retry_delay = _FAILED_DRAIN_RETRY_MIN_SECONDS
     while True:
         generation = signals.generation
-        await dependencies.drain()
+        report = await dependencies.drain()
+        if report.failed_batches or report.invalid_batches:
+            logger.warning(
+                "embedding_worker.drain retrying failed=%d invalid=%d delay=%.1f",
+                report.failed_batches,
+                report.invalid_batches,
+                retry_delay,
+            )
+            if await signals.wait_for_retry(retry_delay):
+                logger.warning("embedding_worker.listener terminated")
+                return
+            retry_delay = min(retry_delay * 2, _FAILED_DRAIN_RETRY_MAX_SECONDS)
+            continue
+
+        retry_delay = _FAILED_DRAIN_RETRY_MIN_SECONDS
         if await signals.wait_after(generation):
             logger.warning("embedding_worker.listener terminated")
             return
