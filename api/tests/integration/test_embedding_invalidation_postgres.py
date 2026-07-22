@@ -36,6 +36,13 @@ DIRTY_INSERT_PAYLOADS = [
     f"diploma:{DIPLOMA_ID}",
     f"professor_document:{PROFESSOR_DOCUMENT_ID}",
 ]
+INVALIDATION_PAYLOADS = [
+    f"question:{QUESTION_ID}",
+    f"chunk:{CHUNK_ONE_ID}",
+    f"diploma:{DIPLOMA_ID}",
+    f"professor_document:{PROFESSOR_DOCUMENT_ID}",
+    f"chunk:{DOCUMENT_ID}",
+]
 LIFECYCLE_COLUMNS = (
     ("embedding_revision", "bigint", "NO", "1"),
     ("embedding_bge_m3_version", "text", "YES", None),
@@ -118,7 +125,7 @@ def test_real_postgres_invalidates_all_corpora_when_sources_change() -> None:
             await notifications.wait_for_count(5)
 
             # Then: each committed edit dirties its row and produces the exact wake payload.
-            assert sorted(notifications.payloads) == sorted(DIRTY_INSERT_PAYLOADS)
+            assert sorted(notifications.payloads) == sorted(INVALIDATION_PAYLOADS)
             states = {state[0]: state[1:] for state in await _states(database)}
             assert [
                 states[name][0]
