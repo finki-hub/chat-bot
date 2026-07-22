@@ -466,7 +466,11 @@ def test_chat_state_replaces_regenerated_assistant_and_prunes_later_messages() -
                 {"state": "done", "text": "New reasoning", "type": "reasoning"},
                 {"state": "done", "text": "New first answer", "type": "text"},
             ],
-            "retained_message_ids": [str(first_user_id), str(first_assistant_id)],
+            "retained_message_ids": [
+                str(setup_message_id),
+                str(first_user_id),
+                str(first_assistant_id),
+            ],
             "user_id": OWNER_ID,
         },
     )

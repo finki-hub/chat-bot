@@ -58,7 +58,7 @@ async def replace_assistant_message_and_prune_after(
     row = await db.fetchrow(
         """
         WITH target AS (
-            SELECT assistant.id, assistant.conversation_id, assistant.created_at
+            SELECT assistant.id, assistant.conversation_id
             FROM chat_message assistant
             JOIN chat_conversation conversation
               ON conversation.id = assistant.conversation_id
@@ -82,7 +82,6 @@ async def replace_assistant_message_and_prune_after(
             DELETE FROM chat_message stale
             USING target
             WHERE stale.conversation_id = target.conversation_id
-              AND stale.created_at > target.created_at
               AND NOT (stale.id = ANY($9::uuid[]))
             RETURNING stale.id
         )
