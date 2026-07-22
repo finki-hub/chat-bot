@@ -1,10 +1,12 @@
-from contextlib import asynccontextmanager
+from typing import assert_never
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import anyio
+from anyio.lowlevel import checkpoint
 
 from app.data.connection import Database
-from app.data.embedding_lifecycle import EmbeddingCandidate
+from app.data.embedding_lifecycle import EmbeddingCandidate, EmbeddingWriteResult
 from app.data.embedding_lifecycle_sql import EmbeddingCorpus
 from app.embedding_worker_drain import drain_dirty_embeddings
 
@@ -18,18 +20,15 @@ def test_drain_leaves_dirty_rows_unwritten_when_generation_fails(monkeypatch) ->
             text="not logged",
             revision=1,
         )
-        writes = 0
-
-        async def fetch_dirty(_database, corpus, _limit):
-            return (candidate,) if corpus is EmbeddingCorpus.QUESTION else ()
-
-        async def generate(_texts, _model, **_kwargs):
-            raise ConnectionError("provider unavailable")
-
-        async def persist(_database, _batch):
-            nonlocal writes
-            writes += 1
-            raise AssertionError("failed provider output must not be persisted")
+        fetch_dirty = AsyncMock(
+            side_effect=lambda _database, corpus, _limit: (
+                [candidate] if corpus is EmbeddingCorpus.QUESTION else []
+            ),
+        )
+        generate = AsyncMock(side_effect=ConnectionError("provider unavailable"))
+        persist = AsyncMock(
+            side_effect=AssertionError("failed provider output must not be persisted"),
+        )
 
         monkeypatch.setattr(
             "app.embedding_worker_drain.fetch_dirty_embeddings",
@@ -49,7 +48,7 @@ def test_drain_leaves_dirty_rows_unwritten_when_generation_fails(monkeypatch) ->
         # Then: it records the failure and retains the durable dirty row for a future wake.
         assert report.failed_batches == 1
         assert report.updated_rows == 0
-        assert writes == 0
+        assert persist.await_count == 0
 
     anyio.run(run)
 
@@ -75,44 +74,45 @@ def test_drain_continues_to_later_corpora_after_generation_fails(monkeypatch) ->
             EmbeddingCorpus.CHUNK: 0,
         }
 
-        async def fetch_dirty(_database, corpus, _limit):
+        def fetch_dirty(_database, corpus, _limit):
             match corpus:
                 case EmbeddingCorpus.QUESTION:
                     attempts[corpus] += 1
-                    return (poison,)
+                    return [poison]
                 case EmbeddingCorpus.CHUNK:
                     attempts[corpus] += 1
-                    return (later,) if attempts[corpus] == 1 else ()
+                    return [later] if attempts[corpus] == 1 else []
                 case EmbeddingCorpus.DIPLOMA | EmbeddingCorpus.PROFESSOR_DOCUMENT:
-                    return ()
+                    return []
+                case unreachable:
+                    assert_never(unreachable)
 
-        async def generate(texts, _model, **_kwargs):
+        def generate_embeddings(texts, _model):
             if texts == ["poison"]:
                 raise ConnectionError("provider unavailable")
             return [[0.0] * 1024]
 
-        async def persist(_database, batch):
+        def persist(_database, batch):
             persisted.append(batch.corpus)
-
-            class Result:
-                valid = True
-                updated = len(batch.candidates)
-
-            return Result()
+            return EmbeddingWriteResult(
+                valid=True,
+                updated=len(batch.candidates),
+                applied=tuple(True for _ in batch.candidates),
+            )
 
         monkeypatch.setattr(
             "app.embedding_worker_drain.fetch_dirty_embeddings",
-            fetch_dirty,
+            AsyncMock(side_effect=fetch_dirty),
         )
         monkeypatch.setattr(
             "app.embedding_worker_drain.persist_embedding_batch",
-            persist,
+            AsyncMock(side_effect=persist),
         )
 
         # When: the drain hits the poison batch before later corpus work.
         report = await drain_dirty_embeddings(
             Database("postgresql://worker-test"),
-            generate,
+            AsyncMock(side_effect=generate_embeddings),
         )
 
         # Then: the failed batch is retained, but later durable work still progresses.
@@ -134,11 +134,12 @@ def test_drain_rejects_malformed_vectors_without_writing(monkeypatch) -> None:
             revision=1,
         )
 
-        async def fetch_dirty(_database, corpus, _limit):
-            return (candidate,) if corpus is EmbeddingCorpus.QUESTION else ()
-
-        async def generate(_texts, _model, **_kwargs):
-            return [[0.0] * 3]
+        fetch_dirty = AsyncMock(
+            side_effect=lambda _database, corpus, _limit: (
+                [candidate] if corpus is EmbeddingCorpus.QUESTION else []
+            ),
+        )
+        generate = AsyncMock(return_value=[[0.0] * 3])
 
         monkeypatch.setattr(
             "app.embedding_worker_drain.fetch_dirty_embeddings",
@@ -146,12 +147,18 @@ def test_drain_rejects_malformed_vectors_without_writing(monkeypatch) -> None:
         )
         database = Database("postgresql://worker-test")
 
-        @asynccontextmanager
-        async def unexpected_transaction():
-            raise AssertionError(
-                "malformed provider output must not open a transaction",
-            )
-            yield
+        class UnexpectedTransaction:
+            async def __aenter__(self) -> None:
+                await checkpoint()
+                raise AssertionError(
+                    "malformed provider output must not open a transaction",
+                )
+
+            async def __aexit__(self, *_args) -> None:
+                await checkpoint()
+
+        def unexpected_transaction() -> UnexpectedTransaction:
+            return UnexpectedTransaction()
 
         monkeypatch.setattr(database, "transaction", unexpected_transaction)
 
