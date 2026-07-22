@@ -11,6 +11,7 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 vi.stubGlobal('reportError', vi.fn());
 /* eslint-disable sonarjs/class-prototype -- stub prototype methods jsdom does not implement */
 Element.prototype.scrollIntoView = noop;
+Element.prototype.scrollTo = noop;
 Element.prototype.setPointerCapture = noop;
 Element.prototype.releasePointerCapture = noop;
 Element.prototype.hasPointerCapture = () => false;

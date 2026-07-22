@@ -72,7 +72,7 @@ describe('SignInPage', () => {
     await renderSignInPage();
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      'Одговори за ФИНКИ, кога ти требаат.',
+      'Имаш прашање за ФИНКИ?',
     );
     expect(
       screen.getByRole('button', { name: 'Продолжи со Google' }),
