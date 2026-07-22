@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import UUID
 
 import anyio
+from asyncpg import PostgresError
 from fastapi.responses import StreamingResponse
 
 from app.data.connection import Database
@@ -179,5 +180,40 @@ def test_manual_question_fill_reports_mixed_guarded_batch_outcomes(monkeypatch) 
 
         assert '"status": "ok"' in events[0]
         assert '"status": "error"' in events[1]
+
+    anyio.run(run)
+
+
+def test_manual_question_fill_reports_persistence_failure_as_row_error(
+    monkeypatch,
+) -> None:
+    async def generate(*_args, **_kwargs) -> list[list[float]]:
+        return [[0.0] * 1024]
+
+    async def fail_persist(*_args, **_kwargs):
+        raise PostgresError("database unavailable")
+
+    async def run() -> None:
+        # Given: embedding generation succeeds but database persistence fails.
+        state = FillState(apply_write=True)
+        database = _database(state, monkeypatch)
+        monkeypatch.setattr("app.llms.embedding_fills.generate_embeddings", generate)
+        monkeypatch.setattr(
+            "app.llms.embedding_fills.persist_embedding_batch",
+            fail_persist,
+        )
+
+        # When: the real SSE fill generator is consumed.
+        response = await stream_fill_embeddings(
+            database,
+            Model.BGE_M3_LOCAL,
+            questions=["Question"],
+        )
+        events = await _sse_events(response)
+
+        # Then: the stream completes with a row-level error event.
+        assert len(events) == 1
+        assert '"status": "error"' in events[0]
+        assert "Embedding processing failed." in events[0]
 
     anyio.run(run)

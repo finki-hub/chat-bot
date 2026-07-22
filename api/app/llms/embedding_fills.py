@@ -3,7 +3,7 @@ import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import UTC, datetime
 
-from asyncpg import Record
+from asyncpg import PostgresError, Record
 from fastapi.responses import StreamingResponse
 
 from app.data.connection import Database
@@ -44,14 +44,17 @@ async def _process_batch(
     except Exception:
         return [("error", _EMBEDDING_SSE_ERROR)] * len(candidates)
 
-    result = await persist_embedding_batch(
-        database,
-        EmbeddingBatch(
-            corpus=candidates[0].corpus,
-            candidates=candidates,
-            vectors=tuple(tuple(vector) for vector in vectors),
-        ),
-    )
+    try:
+        result = await persist_embedding_batch(
+            database,
+            EmbeddingBatch(
+                corpus=candidates[0].corpus,
+                candidates=candidates,
+                vectors=tuple(tuple(vector) for vector in vectors),
+            ),
+        )
+    except PostgresError:
+        return [("error", _EMBEDDING_SSE_ERROR)] * len(candidates)
     if not result.valid:
         return [("error", _EMBEDDING_SSE_ERROR)] * len(candidates)
     return [
