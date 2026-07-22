@@ -84,7 +84,10 @@ async def generate_embeddings(
     for attempt in range(1, EMBEDDING_MAX_ATTEMPTS + 1):
         try:
             return await _dispatch_embeddings(
-                text, model, is_document=is_document, credentials=credentials,
+                text,
+                model,
+                is_document=is_document,
+                credentials=credentials,
             )
         except ProviderCredentialRequiredError:
             raise
