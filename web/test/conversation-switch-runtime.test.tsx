@@ -106,6 +106,12 @@ describe('conversation switch runtime', () => {
       .getByText('Conversation A')
       .closest('.group');
 
+    expect(previousMessageShell).not.toBeNull();
+
+    if (previousMessageShell === null) {
+      throw new Error('Preserved message shell not found');
+    }
+
     expect(previousMessageShell).toBeInTheDocument();
     expect(previousMessageShell).not.toHaveClass('motion-safe:animate-in');
   });
@@ -122,6 +128,12 @@ describe('conversation switch runtime', () => {
       .getByText('Conversation A')
       .closest('.group');
 
+    expect(newMessageShell).not.toBeNull();
+
+    if (newMessageShell === null) {
+      throw new Error('Submitted message shell not found');
+    }
+
     expect(newMessageShell).toHaveClass('motion-safe:animate-in');
   });
 
@@ -136,6 +148,12 @@ describe('conversation switch runtime', () => {
     const animatedShell = screen
       .getByText('Fresh answer')
       .closest('[class~="motion-safe:animate-in"]');
+
+    expect(animatedShell).not.toBeNull();
+
+    if (animatedShell === null) {
+      throw new Error('Streaming assistant animation shell not found');
+    }
 
     expect(animatedShell).toBeInTheDocument();
   });
