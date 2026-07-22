@@ -18,6 +18,13 @@ const previousMessage: MyUIMessage = {
   role: 'user',
 };
 
+const freshAssistantMessage: MyUIMessage = {
+  id: 'message-b',
+  metadata: {},
+  parts: [{ text: 'Fresh answer', type: 'text' }],
+  role: 'assistant',
+};
+
 vi.mock('@ai-sdk/react', () => ({
   useChat: (options: UseChatOptions) => ({
     messages: options.id === 'conversation-b' ? [] : [previousMessage],
@@ -101,5 +108,35 @@ describe('conversation switch runtime', () => {
 
     expect(previousMessageShell).toBeInTheDocument();
     expect(previousMessageShell).not.toHaveClass('motion-safe:animate-in');
+  });
+
+  it('animates a newly submitted user message', () => {
+    render(
+      <Thread
+        messages={[previousMessage]}
+        status="submitted"
+      />,
+    );
+
+    const newMessageShell = screen
+      .getByText('Conversation A')
+      .closest('.group');
+
+    expect(newMessageShell).toHaveClass('motion-safe:animate-in');
+  });
+
+  it('animates a newly streaming assistant message', () => {
+    render(
+      <Thread
+        messages={[previousMessage, freshAssistantMessage]}
+        status="streaming"
+      />,
+    );
+
+    const animatedShell = screen
+      .getByText('Fresh answer')
+      .closest('[class~="motion-safe:animate-in"]');
+
+    expect(animatedShell).toBeInTheDocument();
   });
 });
