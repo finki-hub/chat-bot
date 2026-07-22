@@ -5,7 +5,6 @@ from uuid import UUID
 
 import anyio
 import pytest
-from asyncpg import connect
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -21,6 +20,12 @@ from app.data.embedding_lifecycle import (
 )
 from app.main import make_app
 from app.utils.settings import Settings
+from tests.integration.embedding_postgres_test_support import (
+    database_url as _database_url,
+)
+from tests.integration.embedding_postgres_test_support import (
+    notifications as _notifications,
+)
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -35,10 +40,6 @@ DOCUMENT_ID = UUID("00000000-0000-0000-0000-000000000503")
 CHUNK_ID = UUID("00000000-0000-0000-0000-000000000504")
 DIPLOMA_ID = UUID("00000000-0000-0000-0000-000000000505")
 PROFESSOR_DOCUMENT_ID = UUID("00000000-0000-0000-0000-000000000506")
-
-
-def _database_url() -> str:
-    return os.environ["TEST_DATABASE_URL"]
 
 
 @asynccontextmanager
@@ -60,36 +61,6 @@ async def _app() -> AsyncIterator[FastAPI]:
     )
     async with app.router.lifespan_context(app):
         yield app
-
-
-class NotificationCollector:
-    def __init__(self) -> None:
-        self.payloads: list[str] = []
-        self._event = anyio.Event()
-
-    def receive(self, _connection, _process_id, _channel, payload) -> None:
-        self.payloads.append(payload)
-        self._event.set()
-
-    async def wait_for_count(self, expected_count: int) -> None:
-        while len(self.payloads) < expected_count:
-            event = self._event
-            with anyio.fail_after(2):
-                await event.wait()
-            if event is self._event:
-                self._event = anyio.Event()
-
-
-@asynccontextmanager
-async def _notifications() -> AsyncIterator[NotificationCollector]:
-    connection = await connect(_database_url())
-    collector = NotificationCollector()
-    await connection.add_listener("embedding_dirty", collector.receive)
-    try:
-        yield collector
-    finally:
-        await connection.remove_listener("embedding_dirty", collector.receive)
-        await connection.close()
 
 
 async def _seed_and_fill(database: Database) -> EmbeddingCandidate:
@@ -164,7 +135,7 @@ def test_embedding_administration_rejects_missing_and_wrong_api_keys() -> None:
             transport = ASGITransport(app=app)
             async with AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url="https://test",
             ) as client:
                 # When: each operation receives absent and incorrect credentials.
                 for method, path in (
@@ -196,7 +167,7 @@ def test_embedding_administration_wakes_and_rebuilds_all_corpora() -> None:
                 _notifications() as notifications,
                 AsyncClient(
                     transport=transport,
-                    base_url="http://test",
+                    base_url="https://test",
                 ) as client,
             ):
                 health_response = await client.get(

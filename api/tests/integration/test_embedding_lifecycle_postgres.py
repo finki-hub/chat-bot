@@ -1,11 +1,8 @@
 import os
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from uuid import UUID
 
 import anyio
 import pytest
-from asyncpg import connect
 
 from app.data.connection import Database
 from app.data.embedding_lifecycle import (
@@ -20,6 +17,10 @@ from app.data.embedding_lifecycle import (
     wake_embedding_worker,
 )
 from app.llms.models import BGE_M3_EMBEDDING_SPEC_VERSION
+from tests.integration.embedding_postgres_test_support import database as _database
+from tests.integration.embedding_postgres_test_support import (
+    notifications as _notifications,
+)
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -33,54 +34,6 @@ DOCUMENT_ID = UUID("00000000-0000-0000-0000-000000000103")
 CHUNK_ID = UUID("00000000-0000-0000-0000-000000000104")
 DIPLOMA_ID = UUID("00000000-0000-0000-0000-000000000105")
 PROFESSOR_DOCUMENT_ID = UUID("00000000-0000-0000-0000-000000000106")
-
-
-def _database_url() -> str:
-    return os.environ["TEST_DATABASE_URL"]
-
-
-@asynccontextmanager
-async def _database() -> AsyncIterator[Database]:
-    database = Database(_database_url(), min_size=1, max_size=4)
-    await database.init()
-    await database.run_migrations()
-    await database.execute(
-        "TRUNCATE question, document, diploma, professor_document CASCADE",
-    )
-    try:
-        yield database
-    finally:
-        await database.disconnect()
-
-
-class NotificationCollector:
-    def __init__(self) -> None:
-        self.payloads: list[str] = []
-        self._event = anyio.Event()
-
-    def receive(self, _connection, _process_id, _channel, payload) -> None:
-        self.payloads.append(payload)
-        self._event.set()
-
-    async def wait_for_count(self, expected_count: int) -> None:
-        while len(self.payloads) < expected_count:
-            event = self._event
-            with anyio.fail_after(2):
-                await event.wait()
-            if event is self._event:
-                self._event = anyio.Event()
-
-
-@asynccontextmanager
-async def _notifications() -> AsyncIterator[NotificationCollector]:
-    connection = await connect(_database_url())
-    collector = NotificationCollector()
-    await connection.add_listener("embedding_dirty", collector.receive)
-    try:
-        yield collector
-    finally:
-        await connection.remove_listener("embedding_dirty", collector.receive)
-        await connection.close()
 
 
 async def _seed_dirty_rows(database: Database) -> None:
