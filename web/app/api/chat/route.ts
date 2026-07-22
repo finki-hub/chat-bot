@@ -15,10 +15,10 @@ import {
   assistantState,
   lastUserMessageForState,
   persistedTurns,
+  retainedServerMessageIdsForRegeneration,
 } from '@/lib/chat-route-state';
 import {
   type ChatStateClient,
-  type ChatStateJsonValue,
   ChatStateRequestError,
   createChatStateClient,
 } from '@/lib/chat-state-client';
@@ -112,34 +112,6 @@ const regeneratedMessageId = (body: ResumableChatClientBody): null | string =>
   body.messageId.length > 0
     ? body.messageId
     : null;
-
-const isChatStateRecord = (
-  value: ChatStateJsonValue,
-): value is Readonly<Record<string, ChatStateJsonValue>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const idFromChatStateMessage = (value: ChatStateJsonValue): null | string => {
-  if (!isChatStateRecord(value)) {
-    return null;
-  }
-  const id = value['id'];
-  return typeof id === 'string' ? id : null;
-};
-
-const retainedServerMessageIdsForRegeneration = (
-  messages: readonly ChatStateJsonValue[],
-  messageId: string,
-): null | readonly string[] => {
-  const targetIndex = messages.findIndex(
-    (message) => idFromChatStateMessage(message) === messageId,
-  );
-  return targetIndex === -1
-    ? null
-    : messages.slice(0, targetIndex + 1).flatMap((message) => {
-        const id = idFromChatStateMessage(message);
-        return id === null ? [] : [id];
-      });
-};
 
 const regenerationReplacementFor = (
   messageId: null | string,
