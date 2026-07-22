@@ -17,10 +17,12 @@ from tests.chat_persistence_fake import FakeChatDatabase
 
 
 def test_chat_title_uses_selected_model_and_normalizes_quotes(monkeypatch):
+    title_system_prompt = "title-system-prompt"
     seen: dict[
         str,
         str | int | float | Model | LlmProviderCredentials | None,
     ] = {}
+    monkeypatch.setattr(chat_title, "_TITLE_SYSTEM_PROMPT", title_system_prompt)
 
     async def fake_transform_query(
         query: str,
@@ -38,6 +40,7 @@ def test_chat_title_uses_selected_model_and_normalizes_quotes(monkeypatch):
                 "max_tokens": max_tokens,
                 "model": model,
                 "query": query,
+                "system_prompt": system_prompt,
                 "temperature": temperature,
                 "top_p": top_p,
             },
@@ -75,6 +78,7 @@ def test_chat_title_uses_selected_model_and_normalizes_quotes(monkeypatch):
     assert response.title == "Испитна сесија"
     assert seen["model"] == Model.QWEN3_14B
     assert seen["max_tokens"] == 32
+    assert seen["system_prompt"] == title_system_prompt
     assert "Кога е јунската сесија?" in str(seen["query"])
     credentials = seen["credentials"]
     assert isinstance(credentials, LlmProviderCredentials)
