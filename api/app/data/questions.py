@@ -266,7 +266,8 @@ async def fetch_question_rows_for_fill(
             f"{select} WHERE name IN ({placeholders})",
             *questions,
         )
-    predicate = dirty_embedding_predicate(model, "embedding_bge_m3")
+    embedding_column = embedding_column_name(model)
+    predicate = dirty_embedding_predicate(model, embedding_column)
     return await db.fetch(
         f"{select} WHERE {predicate.sql} ORDER BY name ASC",
         *predicate.parameters,

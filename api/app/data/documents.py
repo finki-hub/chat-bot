@@ -268,7 +268,8 @@ async def fetch_chunk_rows_for_fill(
 
     if all_chunks:
         return await db.fetch(f"{select} ORDER BY d.name, c.chunk_index")
+    predicate = dirty_embedding_predicate(model, f"c.{model_column}")
     return await db.fetch(
-        f"{select} WHERE {dirty_embedding_predicate(model, f'c.{model_column}').sql} ORDER BY d.name, c.chunk_index",
-        *dirty_embedding_predicate(model, f"c.{model_column}").parameters,
+        f"{select} WHERE {predicate.sql} ORDER BY d.name, c.chunk_index",
+        *predicate.parameters,
     )
