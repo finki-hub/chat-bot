@@ -80,14 +80,14 @@ export const ConversationList = ({
         {conversations.map((c) => (
           <li
             aria-current={c.id === activeId ? 'true' : undefined}
-            className={`group flex items-center justify-between gap-1 rounded-lg px-2.5 py-1.5 text-sm text-foreground/80 transition-colors duration-150 hover:bg-muted/70 ${
+            className={`group relative isolate flex items-center justify-between gap-1 rounded-lg px-2.5 py-1.5 text-sm text-foreground/80 transition-colors duration-150 hover:bg-muted/70 ${
               c.id === activeId ? 'bg-muted font-medium text-foreground' : ''
             }`}
             data-testid={`conversation-${c.id}`}
             key={c.id}
           >
             <button
-              className="min-h-11 flex-1 truncate rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50 pointer-fine:min-h-0"
+              className="min-h-11 flex-1 truncate rounded-md text-left outline-none before:absolute before:inset-0 before:rounded-lg before:content-[''] focus-visible:before:ring-2 focus-visible:before:ring-ring/50 pointer-fine:min-h-0"
               onClick={() => {
                 onSelect(c.id);
               }}
@@ -95,13 +95,15 @@ export const ConversationList = ({
             >
               {c.title}
             </button>
-            <ConversationRowActions
-              conversation={c}
-              generatingTitleId={generatingTitleId}
-              onDeleteAction={setPendingDelete}
-              onGenerateTitle={onGenerateTitle}
-              onRenameAction={openRename}
-            />
+            <div className="relative z-10 flex shrink-0">
+              <ConversationRowActions
+                conversation={c}
+                generatingTitleId={generatingTitleId}
+                onDeleteAction={setPendingDelete}
+                onGenerateTitle={onGenerateTitle}
+                onRenameAction={openRename}
+              />
+            </div>
           </li>
         ))}
       </ul>

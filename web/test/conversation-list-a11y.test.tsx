@@ -22,6 +22,30 @@ const conversations: ConversationRow[] = [
 const noop = vi.fn<() => void>;
 
 describe('ConversationList accessibility', () => {
+  it('uses the whole row as the conversation selection target', () => {
+    render(
+      <ConversationList
+        activeId={null}
+        conversations={conversations}
+        onDelete={noop()}
+        onRename={noop()}
+        onSelect={noop()}
+      />,
+    );
+
+    const item = screen.getByTestId('conversation-c1');
+    const selection = within(item).getByRole('button', {
+      name: 'Прв разговор',
+    });
+
+    expect(item).toHaveClass('relative');
+    expect(selection).toHaveClass('before:absolute', 'before:inset-0');
+    expect(within(item).getByTestId('row-actions').parentElement).toHaveClass(
+      'relative',
+      'z-10',
+    );
+  });
+
   it('keeps row actions discoverable when a keyboard user focuses the row', () => {
     render(
       <ConversationList
