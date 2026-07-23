@@ -16,8 +16,10 @@ COPY . .
 # Empty by default = analytics off; CI supplies it via --build-arg NEXT_PUBLIC_POSTHOG_KEY=... to enable.
 ARG NEXT_PUBLIC_POSTHOG_KEY=
 ARG NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
+ARG NEXT_DEPLOYMENT_ID=
 ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
 ENV NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST
+ENV NEXT_DEPLOYMENT_ID=$NEXT_DEPLOYMENT_ID
 RUN API_BASE_URL="http://localhost:8880" \
   AUTH_GOOGLE_ID="build-time-google-client-id" \
   AUTH_GOOGLE_SECRET="build-time-google-client-secret" \
