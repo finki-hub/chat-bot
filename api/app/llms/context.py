@@ -169,6 +169,16 @@ def _chunk_candidate(c: ChunkSchema) -> _Candidate:
             kind="chunk",
             title=c.document_title,
             chunk_index=c.chunk_index,
+            links=(
+                (
+                    RetrievalSourceLink(
+                        label=c.document_title,
+                        url=str(c.document_url),
+                    ),
+                )
+                if c.document_url
+                else ()
+            ),
             section=c.section,
             snippet=c.content,
         ),

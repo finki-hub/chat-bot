@@ -2,10 +2,11 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.llms.models import Model
+from app.schemas.document_sources import parse_document_source_url
 
 
 class DocumentSchema(BaseModel):
@@ -53,6 +54,10 @@ class ChunkSchema(BaseModel):
     document_id: UUID = Field(examples=["3fa85f64-5717-4562-b3fc-2c963f66afa6"])
     document_name: str = Field(examples=["statut-finki-2019"])
     document_title: str = Field(examples=["Статут на ФИНКИ"])
+    document_url: HttpUrl | None = Field(
+        default=None,
+        description="Canonical URL for the original document",
+    )
     chunk_index: int = Field(examples=[0])
     section: str | None = Field(
         default=None,
@@ -102,6 +107,17 @@ class IngestDocumentSchema(BaseModel):
         if not stripped:
             raise ValueError("must not be blank or whitespace-only")
         return stripped
+
+    @field_validator("metadata")
+    @classmethod
+    def _normalize_source_url(
+        cls,
+        value: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if value is None or value.get("source_url") is None:
+            return value
+        source_url = parse_document_source_url(value["source_url"])
+        return {**value, "source_url": str(source_url)}
 
 
 class FillChunkEmbeddingsSchema(BaseModel):

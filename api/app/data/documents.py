@@ -19,6 +19,7 @@ from app.llms.models import (
     Model,
     is_bge_m3_lifecycle_model,
 )
+from app.schemas.document_sources import resolve_document_source_url
 from app.schemas.documents import ChunkSchema, DocumentSchema, IngestDocumentSchema
 from app.utils.database import embedding_to_pgvector
 
@@ -136,6 +137,8 @@ async def get_closest_chunks(
         c.section,
         d.name AS document_name,
         d.title AS document_title,
+        d.metadata->>'source_url' AS document_source_url,
+        d.metadata->>'source_file' AS document_source_file,
         {embedding.distance_operand} <=> {embedding.query_operand} AS distance
     FROM chunk c
     JOIN document d ON d.id = c.document_id
@@ -159,6 +162,10 @@ async def get_closest_chunks(
             document_id=row["document_id"],
             document_name=row["document_name"],
             document_title=row["document_title"],
+            document_url=resolve_document_source_url(
+                row.get("document_source_url"),
+                row.get("document_source_file"),
+            ),
             chunk_index=row["chunk_index"],
             section=row["section"],
             content=row["content"],
