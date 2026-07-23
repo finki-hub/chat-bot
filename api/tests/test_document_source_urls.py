@@ -23,6 +23,15 @@ def test_explicit_source_url_takes_precedence() -> None:
     assert str(url) == "https://www.finki.ukim.mk/documents/akt.pdf"
 
 
+def test_explicit_source_url_ignores_malformed_source_file() -> None:
+    url = resolve_document_source_url(
+        "https://www.finki.ukim.mk/documents/akt.pdf",
+        "a" * 3_000,
+    )
+
+    assert str(url) == "https://www.finki.ukim.mk/documents/akt.pdf"
+
+
 def test_invalid_legacy_source_url_falls_back_to_source_file() -> None:
     url = resolve_document_source_url("javascript:alert(1)", "akt.pdf")
 
@@ -36,12 +45,29 @@ def test_invalid_legacy_source_url_without_source_file_is_omitted() -> None:
 
 
 @pytest.mark.parametrize(
+    "source_file",
+    [
+        "a" * 3_000,
+        ".",
+        "..",
+        "../README.md",
+        "directory/document.pdf",
+        "directory\\document.pdf",
+        "document\n.pdf",
+    ],
+)
+def test_malformed_source_file_is_omitted(source_file: str) -> None:
+    assert resolve_document_source_url("javascript:alert(1)", source_file) is None
+
+
+@pytest.mark.parametrize(
     "source_url",
     [
         "javascript:alert(1)",
         "http://www.finki.ukim.mk/document.pdf",
         "https://user:password@example.com/document.pdf",
         "https://www.finki.ukim.mk/document.pdf?token=secret",
+        "https://www.finki.ukim.mk/document.pdf#section",
     ],
 )
 def test_ingest_rejects_non_public_source_url(source_url: str) -> None:

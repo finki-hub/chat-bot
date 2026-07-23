@@ -32,16 +32,25 @@ def resolve_document_source_url(
     source_url: str | None,
     source_file: str | None,
 ) -> HttpUrl | None:
-    fallback = (
-        parse_document_source_url(
+    try:
+        explicit_url = parse_document_source_url(source_url) if source_url else None
+    except InvalidDocumentSourceUrlError, ValidationError:
+        explicit_url = None
+    if explicit_url is not None:
+        return explicit_url
+    if (
+        not source_file
+        or source_file in {".", ".."}
+        or "/" in source_file
+        or "\\" in source_file
+        or any(
+            ord(character) < 32 or ord(character) == 127 for character in source_file
+        )
+    ):
+        return None
+    try:
+        return parse_document_source_url(
             f"{DOCUMENTS_RAW_BASE_URL}{quote(source_file, safe='')}",
         )
-        if source_file
-        else None
-    )
-    if source_url:
-        try:
-            return parse_document_source_url(source_url)
-        except InvalidDocumentSourceUrlError, ValidationError:
-            return fallback
-    return fallback
+    except InvalidDocumentSourceUrlError, ValidationError:
+        return None
