@@ -24,10 +24,8 @@ from app.schemas.questions import QuestionSchema
 class WindowState:
     def __init__(self, rows: list[dict[str, object]]) -> None:
         self.rows: list[dict[str, object]] = rows
-        self.last_query: str | None = None
 
     def fetch(self, query: str, *_args: object) -> list[dict[str, object]]:
-        self.last_query = query
         return self.rows[:1] if "embedding_bge_m3_version" in query else self.rows
 
 
