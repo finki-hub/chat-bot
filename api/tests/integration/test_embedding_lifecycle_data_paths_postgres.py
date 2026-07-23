@@ -53,8 +53,14 @@ async def _seed_current_and_old_rows(database: Database) -> None:
     document_id = UUID("00000000-0000-0000-0000-000000000301")
     async with database.transaction() as connection:
         await connection.execute(
-            "INSERT INTO document (id, name, title) VALUES ($1, 'document', 'Document')",
+            "INSERT INTO document (id, name, title, metadata) VALUES ($1, 'document', 'Document', $2::jsonb)",
             document_id,
+            json.dumps(
+                {
+                    "source_file": "акт.pdf",
+                    "source_url": "https://www.finki.ukim.mk/document.pdf",
+                },
+            ),
         )
         await connection.executemany(
             "INSERT INTO question (id, name, content, embedding_bge_m3, embedding_bge_m3_version) VALUES ($1, $2, 'answer', $3::vector, $4)",
@@ -169,6 +175,9 @@ def test_real_postgres_data_paths_only_use_current_bge_vectors_for_both_aliases(
 
                 assert [question.name for question in questions] == ["current-question"]
                 assert [chunk.content for chunk in chunks] == ["current-chunk"]
+                assert str(chunks[0].document_url) == (
+                    "https://www.finki.ukim.mk/document.pdf"
+                )
                 assert [diploma.external_id for diploma in diplomas] == [
                     "current-diploma",
                 ]
@@ -182,6 +191,26 @@ def test_real_postgres_data_paths_only_use_current_bge_vectors_for_both_aliases(
                     "old-diploma",
                 ]
                 assert [row["title"] for row in dirty_papers] == ["old paper"]
+
+            await database.execute(
+                "UPDATE document SET metadata = $1::jsonb WHERE id = $2",
+                json.dumps(
+                    {
+                        "source_file": "акт.pdf",
+                        "source_url": "javascript:alert(1)",
+                    },
+                ),
+                UUID("00000000-0000-0000-0000-000000000301"),
+            )
+            chunks = await get_closest_chunks(
+                database,
+                [1.0] + [0.0] * 1023,
+                Model.BGE_M3,
+            )
+            assert str(chunks[0].document_url) == (
+                "https://raw.githubusercontent.com/finki-hub/documents/main/raw/"
+                "%D0%B0%D0%BA%D1%82.pdf"
+            )
 
     anyio.run(run)
 

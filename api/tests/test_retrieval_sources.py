@@ -205,7 +205,7 @@ def test_chunk_candidate_omits_link_without_document_url() -> None:
     assert "links" not in payload
 
 
-def test_chunk_retrieval_projects_document_url(
+def test_chunk_retrieval_derives_document_url_from_source_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     document_url = (
@@ -219,7 +219,8 @@ def test_chunk_retrieval_projects_document_url(
                 "document_id": uuid4(),
                 "document_name": "statut-finki",
                 "document_title": "Статут на ФИНКИ",
-                "document_url": document_url,
+                "document_source_url": None,
+                "document_source_file": "statut_i_delovnik.pdf",
                 "chunk_index": 4,
                 "section": "Член 12",
                 "content": "Правилата се наведени во членот.",
@@ -238,8 +239,6 @@ def test_chunk_retrieval_projects_document_url(
         )
 
         assert str(chunks[0].document_url) == document_url
-        assert state.last_query is not None
-        assert "d.metadata->>'source_url' AS document_url" in state.last_query
 
     anyio.run(run)
 
