@@ -183,7 +183,7 @@ describe('parseProtocolV2', () => {
 
   it('maps source frames to typed retrieved sources and drops malformed entries', async () => {
     const events = await collect(
-      'event: sources\ndata: {"sources":[{"id":"q1","kind":"faq","title":"Упис","links":[{"label":"iKnow","url":"https://iknow.ukim.mk/"}],"snippet":"Упис преку iKnow."},{"id":"bad","kind":"unknown","title":"bad"},{"id":"c1","kind":"chunk","title":"Статут","section":"Член 12","chunk_index":4,"snippet":"Правила."}]}\n\n',
+      'event: sources\ndata: {"sources":[{"id":"q1","kind":"faq","title":"Упис","links":[{"label":"iKnow","url":"https://iknow.ukim.mk/"}],"snippet":"Упис преку iKnow."},{"id":"bad","kind":"unknown","title":"bad"},{"id":"c1","kind":"chunk","title":"Статут","section":"Член 12","chunk_index":4,"links":[{"label":"Статут","url":"https://raw.githubusercontent.com/finki-hub/documents/main/raw/statut_i_delovnik.pdf"}],"snippet":"Правила."}]}\n\n',
       DONE_FRAME,
     );
 
@@ -201,6 +201,12 @@ describe('parseProtocolV2', () => {
             chunkIndex: 4,
             id: 'c1',
             kind: 'chunk',
+            links: [
+              {
+                label: 'Статут',
+                url: 'https://raw.githubusercontent.com/finki-hub/documents/main/raw/statut_i_delovnik.pdf',
+              },
+            ],
             section: 'Член 12',
             snippet: 'Правила.',
             title: 'Статут',
