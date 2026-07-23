@@ -35,17 +35,21 @@ import argparse
 import asyncio
 import json
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from app.data.connection import Database
 from app.data.documents import get_closest_chunks
 from app.data.questions import get_closest_questions
 from app.llms.context import (
+    _Candidate,
     _chunk_candidate,
     _embed_variant,
     _post_rerank,
     _question_candidate,
+    _select_with_source_priority,
 )
 from app.llms.models import MODEL_DISTANCE_THRESHOLDS, Model
 from app.llms.query_modes import QueryTransformMode
@@ -53,6 +57,8 @@ from app.llms.query_variants import (
     build_query_variants,
 )
 from app.llms.retrieval_budget import retrieval_budget
+from app.schemas.documents import ChunkSchema
+from app.schemas.questions import QuestionSchema
 from app.utils.http_client import close_http_client, init_http_client
 from app.utils.settings import Settings
 
@@ -61,12 +67,17 @@ settings = Settings()
 # A ceiling high enough to disable the distance pre-filter (cosine distance maxes at 2.0).
 NO_THRESHOLD = 9.0
 
+type FaqKey = tuple[Literal["Q"], str]
+type ChunkKey = tuple[Literal["C"], str, int]
+type AbstainKey = tuple[Literal["none"]]
+type NaturalKey = FaqKey | ChunkKey | AbstainKey
+
 
 @dataclass
 class Example:
     id: str
     query: str
-    anchor: dict
+    anchor: Mapping[str, str | int]
     category: str = ""
     difficulty: str = ""
 
@@ -75,27 +86,27 @@ class Example:
         return self.anchor.get("type") == "none"
 
 
-def anchor_key(anchor: dict) -> tuple:
+def anchor_key(anchor: Mapping[str, str | int]) -> NaturalKey:
     """Stable natural key for an anchor, used to test membership in retrieved results."""
     if anchor["type"] == "Q":
-        return ("Q", anchor["name"])
+        return ("Q", str(anchor["name"]))
     if anchor["type"] == "C":
-        return ("C", anchor["document_name"], int(anchor["chunk_index"]))
+        return ("C", str(anchor["document_name"]), int(anchor["chunk_index"]))
     return ("none",)
 
 
-def question_key(q) -> tuple:
+def question_key(q: QuestionSchema) -> FaqKey:
     return ("Q", q.name)
 
 
-def chunk_key(c) -> tuple:
+def chunk_key(c: ChunkSchema) -> ChunkKey:
     return ("C", c.document_name, int(c.chunk_index))
 
 
 def final_context_hit(
     ex: Example,
-    want: tuple,
-    topk: list[tuple],
+    want: NaturalKey,
+    topk: list[NaturalKey],
 ) -> tuple[bool, int | None]:
     if ex.is_abstain:
         return bool(topk), 1 if topk else None
@@ -319,8 +330,9 @@ async def evaluate_one(
 
     seen: set[str] = set()
     cand_keys: list[str] = []
+    candidates: list[_Candidate] = []
     cand_rerank: list[str] = []
-    cand_nat: list[tuple] = []
+    cand_nat: list[NaturalKey] = []
     ann_prod = False
     for qs, cs in prod_lists:
         for q in qs:
@@ -329,6 +341,7 @@ async def evaluate_one(
                 continue
             seen.add(cand.key)
             cand_keys.append(cand.key)
+            candidates.append(cand)
             cand_rerank.append(cand.rerank_text)
             cand_nat.append(question_key(q))
             if question_key(q) == want:
@@ -339,6 +352,7 @@ async def evaluate_one(
                 continue
             seen.add(cand.key)
             cand_keys.append(cand.key)
+            candidates.append(cand)
             cand_rerank.append(cand.rerank_text)
             cand_nat.append(chunk_key(ch))
             if chunk_key(ch) == want:
@@ -351,21 +365,25 @@ async def evaluate_one(
             {"query": variant_bundle.rerank_query, "documents": cand_rerank},
         )
         ranked = response.json()["reranked_documents"]
-        kept_nat: list[tuple] = []
+        kept_candidates: list[_Candidate] = []
         for item in ranked:
             idx = item["index"]
             if not 0 <= idx < len(cand_nat):
                 continue
             if item["score"] < settings.RERANKER_MIN_SCORE:
                 continue
-            kept_nat.append(cand_nat[idx])
+            kept_candidates.append(candidates[idx])
         if (
-            not kept_nat and ranked
+            not kept_candidates and ranked
         ):  # production keeps the single best if all below floor
             best_idx = ranked[0]["index"]
             if 0 <= best_idx < len(cand_nat):
-                kept_nat = [cand_nat[best_idx]]
-        topk = kept_nat[:top_k]
+                kept_candidates = [candidates[best_idx]]
+        natural_key_by_candidate = dict(zip(cand_keys, cand_nat, strict=True))
+        topk = [
+            natural_key_by_candidate[candidate.key]
+            for candidate in _select_with_source_priority(kept_candidates, top_k)
+        ]
         final_hit, rank = final_context_hit(ex, want, topk)
 
     return Result(
