@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.llms.models import Model
+from app.schemas.document_sources import parse_document_source_url
 
 
 class DocumentSchema(BaseModel):
@@ -106,6 +107,17 @@ class IngestDocumentSchema(BaseModel):
         if not stripped:
             raise ValueError("must not be blank or whitespace-only")
         return stripped
+
+    @field_validator("metadata")
+    @classmethod
+    def _normalize_source_url(
+        cls,
+        value: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if value is None or value.get("source_url") is None:
+            return value
+        source_url = parse_document_source_url(value["source_url"])
+        return {**value, "source_url": str(source_url)}
 
 
 class FillChunkEmbeddingsSchema(BaseModel):
