@@ -45,9 +45,6 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
-# Guarantee at least this many FAQ answers in the final context (if available), so a
-# long document's many chunks cannot crowd FAQ out of the shared rerank pool.
-RESERVED_FAQ_SLOTS: int = 3
 # Chunks pulled in on each side of a retrieved chunk, to give the model a contiguous passage.
 _NEIGHBOR_WINDOW: int = 1
 _RETRIEVAL_IDS_CAP: int = 10
@@ -131,7 +128,12 @@ def _question_candidate(q: QuestionSchema) -> _Candidate:
     )
     context_text = "\n".join(
         part
-        for part in [f"Наслов: {q.name}", f"Содржина: {q.content}", sources]
+        for part in [
+            "Тип на извор: FAQ",
+            f"Наслов: {q.name}",
+            f"Содржина: {q.content}",
+            sources,
+        ]
         if part is not None
     )
     return _Candidate(
@@ -156,7 +158,7 @@ def _question_candidate(q: QuestionSchema) -> _Candidate:
 def _chunk_candidate(c: ChunkSchema) -> _Candidate:
     label = f"{c.document_title} ({c.section})" if c.section else c.document_title
     rerank_text = f"Наслов: {label}\nСодржина: {c.content}"
-    context_text = f"Извор: {label}\nСодржина: {c.content}"
+    context_text = f"Тип на извор: Документ\nИзвор: {label}\nСодржина: {c.content}"
     return _Candidate(
         key=f"C:{c.id}",
         source="chunk",
@@ -193,45 +195,13 @@ def _build_candidates(
     return merged
 
 
-def _select_with_faq_reservation(
+def _select_with_source_priority(
     ranked: list[_Candidate],
     top_k: int,
 ) -> list[_Candidate]:
-    """Take top_k ranked, but guarantee up to RESERVED_FAQ_SLOTS FAQ entries by displacing the lowest-ranked chunks."""
-    primary = ranked[:top_k]
-    faqs = [c for c in ranked if c.source == "faq"]
-    reserve = min(RESERVED_FAQ_SLOTS, len(faqs))
-    in_primary = sum(1 for c in primary if c.source == "faq")
-    if in_primary >= reserve:
-        return primary
-
-    primary_keys = {c.key for c in primary}
-    extra = [c for c in faqs if c.key not in primary_keys][: reserve - in_primary]
-    if not extra:
-        return primary
-
-    result = list(primary)
-    needed = len(extra)
-    displaced: list[str] = []
-    for i in range(len(result) - 1, -1, -1):
-        if needed == 0:
-            break
-        if result[i].source == "chunk":
-            displaced.append(result[i].key)
-            result.pop(i)
-            needed -= 1
-    result.extend(extra)
-
-    if displaced and logger.isEnabledFor(logging.DEBUG):
-        logger.debug(
-            "FAQ reservation displaced %s to insert FAQs %s",
-            displaced,
-            [c.key for c in extra],
-        )
-
-    order = {c.key: i for i, c in enumerate(ranked)}
-    result.sort(key=lambda c: order[c.key])
-    return result[:top_k]
+    faqs = [candidate for candidate in ranked if candidate.source == "faq"]
+    chunks = [candidate for candidate in ranked if candidate.source == "chunk"]
+    return [*faqs, *chunks][:top_k]
 
 
 async def get_retrieved_context(
@@ -473,7 +443,7 @@ async def get_retrieved_context_with_sources(
                 )
                 ranked_candidates = [candidates[best_idx]]
 
-        final = _select_with_faq_reservation(ranked_candidates, top_k)
+        final = _select_with_source_priority(ranked_candidates, top_k)
         sources = visible_sources(
             [
                 (candidate.retrieval_source, scores_by_key.get(candidate.key))
@@ -483,7 +453,7 @@ async def get_retrieved_context_with_sources(
         )
 
         logger.info(
-            "Selected %d documents after reranking (faq=%d, chunk=%d)",
+            "Selected %d sources after reranking (faq=%d, chunk=%d)",
             len(final),
             sum(1 for c in final if c.source == "faq"),
             sum(1 for c in final if c.source == "chunk"),
@@ -493,7 +463,7 @@ async def get_retrieved_context_with_sources(
             "Reranking failed; using vector order error_type=%s",
             type(exc).__name__,
         )
-        final = _select_with_faq_reservation(candidates, top_k)
+        final = _select_with_source_priority(candidates, top_k)
         sources = ()
 
     record_retrieval_ids([c.key for c in final[:_RETRIEVAL_IDS_CAP]])
@@ -603,7 +573,7 @@ def _render_passage(chunks: list[ChunkSchema]) -> str:
         else title
     )
     body = "\n".join(c.content for c in chunks)
-    return f"Извор: {label}\nСодржина: {body}"
+    return f"Тип на извор: Документ\nИзвор: {label}\nСодржина: {body}"
 
 
 def _render_blocks(
