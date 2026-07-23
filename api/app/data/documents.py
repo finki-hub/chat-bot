@@ -136,6 +136,7 @@ async def get_closest_chunks(
         c.section,
         d.name AS document_name,
         d.title AS document_title,
+        d.metadata->>'source_url' AS document_url,
         {embedding.distance_operand} <=> {embedding.query_operand} AS distance
     FROM chunk c
     JOIN document d ON d.id = c.document_id
@@ -159,6 +160,7 @@ async def get_closest_chunks(
             document_id=row["document_id"],
             document_name=row["document_name"],
             document_title=row["document_title"],
+            document_url=row.get("document_url"),
             chunk_index=row["chunk_index"],
             section=row["section"],
             content=row["content"],
@@ -200,7 +202,8 @@ async def get_chunks_window(
     )
     window_sql = f"""
         SELECT c.id, c.document_id, c.chunk_index, c.content, c.section,
-               d.name AS document_name, d.title AS document_title
+               d.name AS document_name, d.title AS document_title,
+               d.metadata->>'source_url' AS document_url
         FROM chunk c
         JOIN document d ON d.id = c.document_id
         WHERE c.document_id = ANY($1::uuid[]) AND c.chunk_index = ANY($2::int[])
@@ -226,6 +229,7 @@ def _window_chunk(row: Record) -> ChunkSchema:
         document_id=row["document_id"],
         document_name=row["document_name"],
         document_title=row["document_title"],
+        document_url=row.get("document_url"),
         chunk_index=row["chunk_index"],
         section=row["section"],
         content=row["content"],

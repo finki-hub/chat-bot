@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.llms.models import Model
@@ -53,6 +53,10 @@ class ChunkSchema(BaseModel):
     document_id: UUID = Field(examples=["3fa85f64-5717-4562-b3fc-2c963f66afa6"])
     document_name: str = Field(examples=["statut-finki-2019"])
     document_title: str = Field(examples=["Статут на ФИНКИ"])
+    document_url: HttpUrl | None = Field(
+        default=None,
+        description="Canonical URL for the original document",
+    )
     chunk_index: int = Field(examples=[0])
     section: str | None = Field(
         default=None,

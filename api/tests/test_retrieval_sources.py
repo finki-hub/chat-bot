@@ -8,6 +8,7 @@ import pytest
 from pydantic import HttpUrl
 
 from app.data.connection import Database
+from app.data.documents import get_closest_chunks
 from app.llms.agents import sources_event
 from app.llms.context import (
     _chunk_candidate,
@@ -22,9 +23,11 @@ from app.schemas.questions import QuestionSchema
 
 class WindowState:
     def __init__(self, rows: list[dict[str, object]]) -> None:
-        self.rows = rows
+        self.rows: list[dict[str, object]] = rows
+        self.last_query: str | None = None
 
     def fetch(self, query: str, *_args: object) -> list[dict[str, object]]:
+        self.last_query = query
         return self.rows[:1] if "embedding_bge_m3_version" in query else self.rows
 
 
@@ -160,7 +163,7 @@ def test_question_candidate_keeps_structured_links():
     }
 
 
-def test_chunk_candidate_keeps_document_section_and_index():
+def test_chunk_candidate_keeps_document_link_section_and_index():
     chunk_id = uuid4()
     doc_id = uuid4()
     c = ChunkSchema(
@@ -168,6 +171,9 @@ def test_chunk_candidate_keeps_document_section_and_index():
         document_id=doc_id,
         document_name="statut-finki",
         document_title="Статут на ФИНКИ",
+        document_url=HttpUrl(
+            "https://raw.githubusercontent.com/finki-hub/documents/main/raw/statut_i_delovnik.pdf",
+        ),
         chunk_index=4,
         section="Член 12",
         content="Правилата се наведени во членот.",
@@ -179,10 +185,63 @@ def test_chunk_candidate_keeps_document_section_and_index():
         "chunk_index": 4,
         "id": str(chunk_id),
         "kind": "chunk",
+        "links": [
+            {
+                "label": "Статут на ФИНКИ",
+                "url": "https://raw.githubusercontent.com/finki-hub/documents/main/raw/statut_i_delovnik.pdf",
+            },
+        ],
         "section": "Член 12",
         "snippet": "Правилата се наведени во членот.",
         "title": "Статут на ФИНКИ",
     }
+
+
+def test_chunk_candidate_omits_link_without_document_url() -> None:
+    chunk = _chunk(document_id=uuid4(), chunk_index=0, content="Содржина.")
+
+    payload = _chunk_candidate(chunk).retrieval_source.as_payload()
+
+    assert "links" not in payload
+
+
+def test_chunk_retrieval_projects_document_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document_url = (
+        "https://raw.githubusercontent.com/finki-hub/documents/main/raw/"
+        "statut_i_delovnik.pdf"
+    )
+    state = WindowState(
+        [
+            {
+                "id": uuid4(),
+                "document_id": uuid4(),
+                "document_name": "statut-finki",
+                "document_title": "Статут на ФИНКИ",
+                "document_url": document_url,
+                "chunk_index": 4,
+                "section": "Член 12",
+                "content": "Правилата се наведени во членот.",
+                "distance": 0.1,
+            },
+        ],
+    )
+    database = _database(state, monkeypatch)
+
+    async def run() -> None:
+        chunks = await get_closest_chunks(
+            database,
+            [0.0] * 3072,
+            Model.TEXT_EMBEDDING_3_LARGE,
+            limit=1,
+        )
+
+        assert str(chunks[0].document_url) == document_url
+        assert state.last_query is not None
+        assert "d.metadata->>'source_url' AS document_url" in state.last_query
+
+    anyio.run(run)
 
 
 def test_sources_event_serializes_sources_frame():
