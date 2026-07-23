@@ -486,6 +486,12 @@ describe('AssistantMessage', () => {
             chunkIndex: 4,
             id: 'c1',
             kind: 'chunk',
+            links: [
+              {
+                label: 'Статут на ФИНКИ',
+                url: 'https://raw.githubusercontent.com/finki-hub/documents/main/raw/statut_i_delovnik.pdf',
+              },
+            ],
             section: 'Член 12',
             snippet: chunkSnippet,
             title: 'Статут на ФИНКИ',
@@ -527,6 +533,9 @@ describe('AssistantMessage', () => {
 
     const iKnowLink = screen.getByRole('link', { name: 'Врска: iKnow' });
     const finkiLink = screen.getByRole('link', { name: 'Врска: ФИНКИ' });
+    const documentLink = screen.getByRole('link', {
+      name: 'Врска: Статут на ФИНКИ',
+    });
 
     expect(iKnowLink).toHaveAttribute('href', 'https://iknow.ukim.mk/');
     expect(iKnowLink).toHaveClass(
@@ -536,6 +545,10 @@ describe('AssistantMessage', () => {
       'pointer-fine:min-w-0',
     );
     expect(finkiLink).toHaveAttribute('href', 'https://www.finki.ukim.mk/');
+    expect(documentLink).toHaveAttribute(
+      'href',
+      'https://raw.githubusercontent.com/finki-hub/documents/main/raw/statut_i_delovnik.pdf',
+    );
 
     await user.click(screen.getByRole('button', { name: HIDE_SOURCES_LABEL }));
 
