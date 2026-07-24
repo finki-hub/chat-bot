@@ -19,6 +19,7 @@ from app.utils.database import embedding_to_pgvector
 
 async def upsert_diploma(
     db: Database,
+    *,
     external_id: str,
     title: str,
     description: str,
