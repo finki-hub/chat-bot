@@ -26,6 +26,7 @@ settings = Settings()
 async def handle_chat(
     payload: ChatSchema,
     context: str,
+    *,
     observation: StreamObservation | None = None,
     db: Database | None = None,
     inference_credential: ChatCredentialSecret | None = None,
