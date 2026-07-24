@@ -139,7 +139,7 @@ def test_query_transform_logs_lengths_without_raw_query(caplog, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("module", "function_name", "client_factory", "model"),
+    "case",
     [
         (
             openai_module,
@@ -165,11 +165,9 @@ def test_query_transform_logs_lengths_without_raw_query(caplog, monkeypatch):
 def test_provider_query_transform_logs_lengths_without_raw_query(
     caplog,
     monkeypatch,
-    module,
-    function_name,
-    client_factory,
-    model,
+    case,
 ):
+    module, function_name, client_factory, model = case
     monkeypatch.setattr(module, client_factory, lambda *args, **kwargs: _FakeLlm())
     caplog.set_level(logging.INFO, logger=module.__name__)
 
