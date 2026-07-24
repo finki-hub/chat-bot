@@ -15,7 +15,7 @@ _PRIVATE_PROVIDER_ERROR = (
 
 
 @pytest.mark.parametrize(
-    ("module", "function_name", "client_factory", "model"),
+    "case",
     [
         (
             google_module,
@@ -35,11 +35,10 @@ _PRIVATE_PROVIDER_ERROR = (
 def test_provider_query_failure_omits_raw_error(
     caplog,
     monkeypatch,
-    module,
-    function_name,
-    client_factory,
-    model,
+    case,
 ):
+    module, function_name, client_factory, model = case
+
     def fail_client(*args, **kwargs):
         raise RuntimeError(_PRIVATE_PROVIDER_ERROR)
 
@@ -64,7 +63,7 @@ def test_provider_query_failure_omits_raw_error(
 
 
 @pytest.mark.parametrize(
-    ("module", "function_name", "client_factory", "fallback_name", "model"),
+    "case",
     [
         (
             google_module,
@@ -92,12 +91,9 @@ def test_provider_query_failure_omits_raw_error(
 def test_provider_agent_setup_failure_omits_raw_error(
     caplog,
     monkeypatch,
-    module,
-    function_name,
-    client_factory,
-    fallback_name,
-    model,
+    case,
 ):
+    module, function_name, client_factory, fallback_name, model = case
     fallback_response = object()
 
     def fail_client(*args, **kwargs):
