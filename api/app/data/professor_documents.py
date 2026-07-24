@@ -20,6 +20,7 @@ from app.utils.database import embedding_to_pgvector
 
 async def upsert_professor_document(
     db: Database,
+    *,
     external_id: str,
     title: str,
     abstract: str | None,
