@@ -106,7 +106,7 @@ def make_app(settings: Settings) -> FastAPI:
         request: Request,
         exc: ModelNotReadyError,
     ) -> JSONResponse:
-        logger.exception("Model not ready")
+        logger.error("Model not ready", exc_info=exc)
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"detail": "The model is not ready. Please try again later."},
@@ -117,7 +117,7 @@ def make_app(settings: Settings) -> FastAPI:
         request: Request,
         exc: Exception,
     ) -> JSONResponse:
-        logger.exception("Unhandled exception")
+        logger.error("Unhandled exception", exc_info=exc)
         capture_request_exception(request, exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
