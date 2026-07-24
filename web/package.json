@@ -39,7 +39,7 @@
     "next-auth": "^5.0.0-beta.32",
     "posthog-js": "^1.407.0",
     "radix-ui": "^1.6.4",
-    "react": "^19.2.7",
+    "react": "^19.2.8",
     "react-dom": "^19.2.7",
     "react-icons": "^5.7.0",
     "redis": "^6.1.0",
