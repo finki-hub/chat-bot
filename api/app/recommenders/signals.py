@@ -202,8 +202,8 @@ def score_people(
     coauthors: CoauthorIndex | None,
     weights: ScoringWeights,
     mode: Mode,
-    given_mentor: str | None = None,
     *,
+    given_mentor: str | None = None,
     now: date | None = None,
 ) -> RankedPeople:
     defense, mentor_score, pair_score, supporting = _accumulate_defense_scores(
