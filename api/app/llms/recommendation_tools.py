@@ -42,6 +42,7 @@ def _inactive_staff_error(exc: InactiveStaffRequestedError) -> str:
 def build_recommendation_tools(db: Database) -> list[BaseTool]:
     async def recommend_diploma_committee(
         title: str,
+        *,
         abstract: str | None = None,
         keywords: list[str] | None = None,
         study_program: str | None = None,
