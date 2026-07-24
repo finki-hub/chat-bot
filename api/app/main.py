@@ -155,7 +155,7 @@ def make_app(settings: Settings) -> FastAPI:
         request: Request,
         exc: RetrievalError,
     ) -> JSONResponse:
-        logger.exception("Context retrieval failed")
+        logger.error("Context retrieval failed", exc_info=exc)
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"detail": "Failed to retrieve or re-rank context for the query."},
@@ -166,7 +166,7 @@ def make_app(settings: Settings) -> FastAPI:
         request: Request,
         exc: Exception,
     ) -> JSONResponse:
-        logger.exception("Unhandled exception")
+        logger.error("Unhandled exception", exc_info=exc)
         capture_request_exception(request, exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
