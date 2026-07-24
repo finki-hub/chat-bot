@@ -22,14 +22,7 @@ from tests.chat_models_access_support import (
 
 
 @pytest.mark.parametrize(
-    (
-        "user_id",
-        "has_key",
-        "credential_rejected",
-        "personal_remaining",
-        "global_remaining",
-        "expected",
-    ),
+    "case",
     [
         (USER_WITH_KEY, True, False, 5, 10, "both"),
         (USER_WITHOUT_KEY, False, False, 5, 10, "sponsored"),
@@ -42,13 +35,16 @@ from tests.chat_models_access_support import (
 )
 def test_models_endpoint_overlays_user_and_sponsored_capacity(
     monkeypatch,
-    user_id: UUID,
-    has_key: bool,
-    credential_rejected: bool,
-    personal_remaining: int,
-    global_remaining: int,
-    expected: str,
+    case,
 ) -> None:
+    (
+        user_id,
+        has_key,
+        credential_rejected,
+        personal_remaining,
+        global_remaining,
+        expected,
+    ) = case
     base = base_catalog()
     catalog_service = StubCatalogService(base)
     monkeypatch.setattr("app.api.chat.model_catalog_service", catalog_service)
