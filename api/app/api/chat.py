@@ -1,5 +1,4 @@
 import asyncio
-import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator, AsyncIterable
@@ -724,10 +723,18 @@ async def _chat_response_stream(
         retrieval_task = asyncio.create_task(run_retrieval())
         links_task = asyncio.create_task(get_links_context(db, query=payload.query))
 
+        def on_links_done(task: asyncio.Task[str]) -> None:
+            if not task.cancelled() and task.exception() is not None:
+                stage_queue.put_nowait(None)
+
+        links_task.add_done_callback(on_links_done)
+
         try:
             while (event := await stage_queue.get()) is not None:
                 yield event
 
+            if links_task.done():
+                links_task.result()
             retrieved = await retrieval_task
             links_context = await links_task
 
@@ -794,11 +801,13 @@ async def _chat_response_stream(
                 "Chat context build failed before streaming error_type=%s",
                 type(exc).__name__,
             )
-            links_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await links_task
             yield error_event("agent_error", _PRE_STREAM_ERROR_MSG)
             return
+        finally:
+            for task in (retrieval_task, links_task):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(retrieval_task, links_task, return_exceptions=True)
 
         response.body_iterator = _instrument_stream(
             response.body_iterator,
