@@ -80,8 +80,7 @@ def test_create_question_accepts_readable_discord_profile_link() -> None:
     payload = {
         "name": "Што е ФИНКИ Хаб",
         "content": (
-            "Започната од "
-            "[Delemangi](https://discord.com/users/198249751001563136)."
+            "Започната од [Delemangi](https://discord.com/users/198249751001563136)."
         ),
         "user_id": "198249751001563136",
         "links": {

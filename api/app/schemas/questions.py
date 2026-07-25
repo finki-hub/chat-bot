@@ -122,9 +122,7 @@ class UpdateQuestionSchema(BaseModel):
     @field_validator("name", "content")
     @classmethod
     def reject_unresolved_discord_tokens(cls, value: str | None) -> str | None:
-        return (
-            _reject_unresolved_discord_token(value) if value is not None else None
-        )
+        return _reject_unresolved_discord_token(value) if value is not None else None
 
     @field_validator("links")
     @classmethod

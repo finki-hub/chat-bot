@@ -153,8 +153,7 @@ def _question_candidate(q: QuestionSchema) -> _Candidate:
             kind="faq",
             title=name,
             links=tuple(
-                RetrievalSourceLink(label=label, url=str(url))
-                for label, url in links
+                RetrievalSourceLink(label=label, url=str(url)) for label, url in links
             ),
             snippet=content,
         ),

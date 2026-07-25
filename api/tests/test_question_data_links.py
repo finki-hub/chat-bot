@@ -21,9 +21,7 @@ def test_create_question_serializes_validated_links(
             "name": "Што е ФИНКИ Хаб",
             "content": "Започната од Delemangi.",
             "links": {
-                "Discord профил": (
-                    "https://discord.com/users/198249751001563136"
-                ),
+                "Discord профил": ("https://discord.com/users/198249751001563136"),
             },
         },
     )
@@ -50,9 +48,7 @@ def test_update_question_serializes_validated_links(
     question = UpdateQuestionSchema.model_validate(
         {
             "links": {
-                "Discord профил": (
-                    "https://discord.com/users/198249751001563136"
-                ),
+                "Discord профил": ("https://discord.com/users/198249751001563136"),
             },
         },
     )

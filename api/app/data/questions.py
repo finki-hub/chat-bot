@@ -30,9 +30,7 @@ _QUESTION_ALLOWED_COLUMNS: frozenset[str] = frozenset(
 
 def _serialize_links(links: dict[str, HttpUrl] | None) -> str:
     serializable = (
-        {label: str(url) for label, url in links.items()}
-        if links is not None
-        else None
+        {label: str(url) for label, url in links.items()} if links is not None else None
     )
     return json.dumps(serializable)
 
