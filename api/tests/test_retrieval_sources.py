@@ -161,6 +161,32 @@ def test_question_candidate_keeps_structured_links():
     }
 
 
+def test_question_candidate_redacts_legacy_discord_tokens() -> None:
+    discord_marker = "<@198249751001563136>"
+    question = QuestionSchema(
+        id=uuid4(),
+        name=f"Основач {discord_marker}",
+        content=f"ФИНКИ Хаб е започнат од {discord_marker}.",
+        links={
+            f"Discord {discord_marker}": HttpUrl("https://discord.com/users/1"),
+        },
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    candidate = _question_candidate(question)
+    payload = candidate.retrieval_source.as_payload()
+    links = payload.get("links")
+
+    assert discord_marker not in candidate.rerank_text
+    assert discord_marker not in candidate.context_text
+    assert discord_marker not in payload["title"]
+    assert discord_marker not in payload.get("snippet", "")
+    assert links is not None
+    assert discord_marker not in links[0]["label"]
+    assert "непозната Discord-ознака" in candidate.context_text
+
+
 def test_chunk_candidate_keeps_document_link_section_and_index():
     chunk_id = uuid4()
     doc_id = uuid4()

@@ -32,6 +32,7 @@ from app.llms.retrieval_result import (
 from app.llms.text_utils import _prepare_text_for_embedding
 from app.schemas.documents import ChunkSchema
 from app.schemas.questions import QuestionSchema
+from app.utils.discord_content import redact_unresolved_discord_tokens
 from app.utils.exceptions import RetrievalError
 from app.utils.settings import Settings
 from app.utils.timing import (
@@ -120,18 +121,24 @@ def _embedding_for_variant(
 
 
 def _question_candidate(q: QuestionSchema) -> _Candidate:
-    rerank_text = f"Наслов: {q.name}\nСодржина: {q.content}"
+    name = redact_unresolved_discord_tokens(q.name)
+    content = redact_unresolved_discord_tokens(q.content)
+    links = {
+        redact_unresolved_discord_tokens(label): url
+        for label, url in (q.links or {}).items()
+    }
+    rerank_text = f"Наслов: {name}\nСодржина: {content}"
     sources = (
-        "Извори: " + ", ".join(f"{k}: {v}" for k, v in q.links.items())
-        if q.links
+        "Извори: " + ", ".join(f"{label}: {url}" for label, url in links.items())
+        if links
         else None
     )
     context_text = "\n".join(
         part
         for part in [
             "Тип на извор: FAQ",
-            f"Наслов: {q.name}",
-            f"Содржина: {q.content}",
+            f"Наслов: {name}",
+            f"Содржина: {content}",
             sources,
         ]
         if part is not None
@@ -144,12 +151,12 @@ def _question_candidate(q: QuestionSchema) -> _Candidate:
         retrieval_source=RetrievalSource(
             id=str(q.id),
             kind="faq",
-            title=q.name,
+            title=name,
             links=tuple(
                 RetrievalSourceLink(label=label, url=str(url))
-                for label, url in (q.links or {}).items()
+                for label, url in links.items()
             ),
-            snippet=q.content,
+            snippet=content,
         ),
         distance=q.distance,
     )
