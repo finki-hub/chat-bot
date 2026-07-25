@@ -123,13 +123,13 @@ def _embedding_for_variant(
 def _question_candidate(q: QuestionSchema) -> _Candidate:
     name = redact_unresolved_discord_tokens(q.name)
     content = redact_unresolved_discord_tokens(q.content)
-    links = {
-        redact_unresolved_discord_tokens(label): url
+    links = [
+        (redact_unresolved_discord_tokens(label), url)
         for label, url in (q.links or {}).items()
-    }
+    ]
     rerank_text = f"Наслов: {name}\nСодржина: {content}"
     sources = (
-        "Извори: " + ", ".join(f"{label}: {url}" for label, url in links.items())
+        "Извори: " + ", ".join(f"{label}: {url}" for label, url in links)
         if links
         else None
     )
@@ -154,7 +154,7 @@ def _question_candidate(q: QuestionSchema) -> _Candidate:
             title=name,
             links=tuple(
                 RetrievalSourceLink(label=label, url=str(url))
-                for label, url in links.items()
+                for label, url in links
             ),
             snippet=content,
         ),

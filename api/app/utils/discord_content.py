@@ -2,7 +2,7 @@ from re import Pattern, compile
 from typing import Final
 
 _UNRESOLVED_DISCORD_TOKEN: Final[Pattern[str]] = compile(
-    r"<(?:@!?|@&|#)\d+>",
+    r"<(?:@!?|@&|#)[0-9]+>",
 )
 _UNRESOLVED_DISCORD_LABEL: Final = "[непозната Discord-ознака]"
 

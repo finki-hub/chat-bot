@@ -163,12 +163,14 @@ def test_question_candidate_keeps_structured_links():
 
 def test_question_candidate_redacts_legacy_discord_tokens() -> None:
     discord_marker = "<@198249751001563136>"
+    channel_marker = "<#942470742208049212>"
     question = QuestionSchema(
         id=uuid4(),
         name=f"Основач {discord_marker}",
         content=f"ФИНКИ Хаб е започнат од {discord_marker}.",
         links={
             f"Discord {discord_marker}": HttpUrl("https://discord.com/users/1"),
+            f"Discord {channel_marker}": HttpUrl("https://discord.com/channels/2"),
         },
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
@@ -183,7 +185,13 @@ def test_question_candidate_redacts_legacy_discord_tokens() -> None:
     assert discord_marker not in payload["title"]
     assert discord_marker not in payload.get("snippet", "")
     assert links is not None
+    assert len(links) == 2
     assert discord_marker not in links[0]["label"]
+    assert channel_marker not in links[1]["label"]
+    assert {link["url"] for link in links} == {
+        "https://discord.com/users/1",
+        "https://discord.com/channels/2",
+    }
     assert "непозната Discord-ознака" in candidate.context_text
 
 

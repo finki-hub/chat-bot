@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas.questions import CreateQuestionSchema, UpdateQuestionSchema
+from app.utils.discord_content import contains_unresolved_discord_token
 
 
 @pytest.mark.parametrize(
@@ -95,3 +96,8 @@ def test_create_question_accepts_readable_discord_profile_link() -> None:
     assert question.content == payload["content"]
     assert question.user_id == payload["user_id"]
     assert question.model_dump(mode="json")["links"] == payload["links"]
+
+
+def test_discord_token_detection_requires_ascii_snowflake_digits() -> None:
+    assert contains_unresolved_discord_token("<@123>")
+    assert not contains_unresolved_discord_token("<@١٢٣>")
