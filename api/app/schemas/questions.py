@@ -1,20 +1,15 @@
 from datetime import datetime
-from re import Pattern, compile
-from typing import Final
 from uuid import UUID
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.llms.models import Model
-
-_UNRESOLVED_DISCORD_TOKEN: Final[Pattern[str]] = compile(
-    r"<(?:@!?|@&|#)\d+>",
-)
+from app.utils.discord_content import contains_unresolved_discord_token
 
 
 def _reject_unresolved_discord_token(value: str) -> str:
-    if _UNRESOLVED_DISCORD_TOKEN.search(value):
+    if contains_unresolved_discord_token(value):
         raise ValueError(
             "unresolved Discord token; use a human-readable label and Discord URL",
         )

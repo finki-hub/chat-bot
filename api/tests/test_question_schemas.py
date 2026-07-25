@@ -51,9 +51,23 @@ def test_create_question_rejects_discord_tokens_in_labels(
         CreateQuestionSchema.model_validate(payload)
 
 
-def test_update_question_rejects_unresolved_discord_tokens() -> None:
-    # Given: an update containing a raw Discord mention.
-    payload = {"content": "Започната од <@198249751001563136>."}
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("name", "Основач <@198249751001563136>"),
+        ("content", "Започната од <@198249751001563136>."),
+        (
+            "links",
+            {"Discord <#942470742208049212>": "https://discord.com/channels/1/2"},
+        ),
+    ],
+)
+def test_update_question_rejects_unresolved_discord_tokens(
+    field: str,
+    value: str | dict[str, str],
+) -> None:
+    # Given: an update containing a raw Discord token in a user-facing field.
+    payload = {field: value}
 
     # When/Then: parsing the partial update rejects it.
     with pytest.raises(ValidationError, match="unresolved Discord token"):
@@ -80,3 +94,4 @@ def test_create_question_accepts_readable_discord_profile_link() -> None:
     # Then: readable content, profile URL, and author metadata remain valid.
     assert question.content == payload["content"]
     assert question.user_id == payload["user_id"]
+    assert question.model_dump(mode="json")["links"] == payload["links"]
