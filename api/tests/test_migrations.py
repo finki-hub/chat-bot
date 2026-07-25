@@ -128,7 +128,7 @@ def test_embedding_invalidation_migration_declares_lifecycle_contract() -> None:
     # Given: all corpus invalidation behavior is owned by one forward migration.
     migration_path = Path("resources/migrations/0010_add_embedding_invalidation.sql")
     assert migration_path.is_file(), "missing 0010 lifecycle DDL migration"
-    migration = migration_path.read_text()
+    migration = migration_path.read_text(encoding="utf-8")
 
     # When / Then: each corpus receives durable lifecycle state and safe triggers.
     assert migration.count("embedding_revision BIGINT NOT NULL DEFAULT 1") == 4
@@ -140,6 +140,16 @@ def test_embedding_invalidation_migration_declares_lifecycle_contract() -> None:
     assert "IS DISTINCT FROM" in migration
     assert "pg_notify('embedding_dirty'" in migration
     assert "document_title_invalidate_chunks" in migration
+
+
+def test_discord_identity_migration_tracks_readable_founder_attribution() -> None:
+    migration_path = Path("resources/migrations/0011_fix_discord_identity_content.sql")
+    assert migration_path.is_file(), "missing Discord identity content migration"
+    migration = migration_path.read_text(encoding="utf-8")
+
+    assert "Што е ФИНКИ Хаб" in migration
+    assert "Delemangi" in migration
+    assert "https://discord.com/users/198249751001563136" in migration
 
 
 def test_run_migrations_applies_only_pending_versions(
