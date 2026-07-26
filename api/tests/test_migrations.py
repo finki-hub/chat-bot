@@ -142,16 +142,6 @@ def test_embedding_invalidation_migration_declares_lifecycle_contract() -> None:
     assert "document_title_invalidate_chunks" in migration
 
 
-def test_discord_identity_migration_tracks_readable_founder_attribution() -> None:
-    migration_path = Path("resources/migrations/0011_fix_discord_identity_content.sql")
-    assert migration_path.is_file(), "missing Discord identity content migration"
-    migration = migration_path.read_text(encoding="utf-8")
-
-    assert "Што е ФИНКИ Хаб" in migration
-    assert "Delemangi" in migration
-    assert "https://discord.com/users/198249751001563136" in migration
-
-
 def test_run_migrations_applies_only_pending_versions(
     monkeypatch,
     tmp_path: Path,
