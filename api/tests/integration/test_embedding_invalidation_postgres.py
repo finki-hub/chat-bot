@@ -87,7 +87,7 @@ def test_real_postgres_adds_exact_lifecycle_columns_when_migrations_run() -> Non
                 for column, data_type, nullable, default in LIFECYCLE_COLUMNS
             }
             assert {tuple(row) for row in rows} == expected
-            assert applied_version == "0011_fix_discord_identity_content.sql"
+            assert applied_version == "0010_add_embedding_invalidation.sql"
 
     anyio.run(run)
 
