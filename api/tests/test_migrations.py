@@ -128,7 +128,7 @@ def test_embedding_invalidation_migration_declares_lifecycle_contract() -> None:
     # Given: all corpus invalidation behavior is owned by one forward migration.
     migration_path = Path("resources/migrations/0010_add_embedding_invalidation.sql")
     assert migration_path.is_file(), "missing 0010 lifecycle DDL migration"
-    migration = migration_path.read_text()
+    migration = migration_path.read_text(encoding="utf-8")
 
     # When / Then: each corpus receives durable lifecycle state and safe triggers.
     assert migration.count("embedding_revision BIGINT NOT NULL DEFAULT 1") == 4

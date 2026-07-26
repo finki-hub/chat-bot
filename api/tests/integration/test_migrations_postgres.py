@@ -13,6 +13,8 @@ from anyio.abc import TaskStatus
 
 from app.data import connection as connection_module
 from app.data.connection import Database
+from app.data.questions import create_question_query, update_question_query
+from app.schemas.questions import CreateQuestionSchema, UpdateQuestionSchema
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 
@@ -111,3 +113,59 @@ def test_real_postgres_concurrent_migrations_apply_each_version_once(
 
     # Then: both calls succeed and every migration is recorded exactly once.
     assert versions == ["0001_create_probe.sql", "0002_seed_probe.sql"]
+
+
+def test_question_links_round_trip_through_real_postgres() -> None:
+    async def run() -> tuple[dict[str, str], dict[str, str]]:
+        # Given: a migrated disposable database and a readable Discord profile link.
+        async with _temporary_database() as database_url:
+            database = Database(database_url, min_size=1, max_size=1)
+            await database.init()
+            try:
+                await database.run_migrations()
+                created = await create_question_query(
+                    database,
+                    CreateQuestionSchema.model_validate(
+                        {
+                            "name": "Discord identity integration",
+                            "content": "Started by Delemangi.",
+                            "links": {
+                                "Discord profile": (
+                                    "https://discord.com/users/198249751001563136"
+                                ),
+                            },
+                        },
+                    ),
+                )
+                assert created is not None
+
+                # When: the link is replaced through the partial update path.
+                updated = await update_question_query(
+                    database,
+                    created.name,
+                    UpdateQuestionSchema.model_validate(
+                        {
+                            "links": {
+                                "Discord server": "https://discord.gg/finki-studenti",
+                            },
+                        },
+                    ),
+                )
+                assert updated is not None
+
+                # Then: both writes decode from JSONB as the expected URL maps.
+                return (
+                    {label: str(url) for label, url in (created.links or {}).items()},
+                    {label: str(url) for label, url in (updated.links or {}).items()},
+                )
+            finally:
+                await database.disconnect()
+
+    created_links, updated_links = anyio.run(run)
+
+    assert created_links == {
+        "Discord profile": "https://discord.com/users/198249751001563136",
+    }
+    assert updated_links == {
+        "Discord server": "https://discord.gg/finki-studenti",
+    }

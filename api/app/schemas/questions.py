@@ -1,10 +1,28 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.llms.models import Model
+from app.utils.discord_content import contains_unresolved_discord_token
+
+
+def _reject_unresolved_discord_token(value: str) -> str:
+    if contains_unresolved_discord_token(value):
+        raise ValueError(
+            "unresolved Discord token; use a human-readable label and Discord URL",
+        )
+    return value
+
+
+def _reject_unresolved_discord_link_labels(
+    links: dict[str, HttpUrl] | None,
+) -> dict[str, HttpUrl] | None:
+    if links is not None:
+        for label in links:
+            _reject_unresolved_discord_token(label)
+    return links
 
 
 class QuestionSchema(BaseModel):
@@ -65,6 +83,19 @@ class CreateQuestionSchema(BaseModel):
         description="Optional links to associate with the question",
     )
 
+    @field_validator("name", "content")
+    @classmethod
+    def reject_unresolved_discord_tokens(cls, value: str) -> str:
+        return _reject_unresolved_discord_token(value)
+
+    @field_validator("links")
+    @classmethod
+    def reject_unresolved_discord_link_labels(
+        cls,
+        links: dict[str, HttpUrl] | None,
+    ) -> dict[str, HttpUrl] | None:
+        return _reject_unresolved_discord_link_labels(links)
+
 
 class UpdateQuestionSchema(BaseModel):
     name: str | None = Field(
@@ -87,6 +118,19 @@ class UpdateQuestionSchema(BaseModel):
         examples=[{"help": "https://example.com/help"}],
         description="Updated set of associated links",
     )
+
+    @field_validator("name", "content")
+    @classmethod
+    def reject_unresolved_discord_tokens(cls, value: str | None) -> str | None:
+        return _reject_unresolved_discord_token(value) if value is not None else None
+
+    @field_validator("links")
+    @classmethod
+    def reject_unresolved_discord_link_labels(
+        cls,
+        links: dict[str, HttpUrl] | None,
+    ) -> dict[str, HttpUrl] | None:
+        return _reject_unresolved_discord_link_labels(links)
 
 
 class FillEmbeddingsSchema(BaseModel):

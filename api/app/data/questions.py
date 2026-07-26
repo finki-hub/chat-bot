@@ -3,6 +3,7 @@
 import json
 
 from asyncpg import Record
+from pydantic import HttpUrl
 
 from app.data.connection import Database
 from app.data.embedding_sql import (
@@ -25,6 +26,13 @@ from app.utils.database import embedding_to_pgvector
 _QUESTION_ALLOWED_COLUMNS: frozenset[str] = frozenset(
     {"name", "content", "user_id", "links"},
 )
+
+
+def _serialize_links(links: dict[str, HttpUrl] | None) -> str:
+    serializable = (
+        {label: str(url) for label, url in links.items()} if links is not None else None
+    )
+    return json.dumps(serializable)
 
 
 async def get_questions_query(db: Database) -> list[QuestionSchema]:
@@ -107,7 +115,7 @@ async def create_question_query(
         question.name,
         question.content,
         question.user_id,
-        json.dumps(question.links),
+        _serialize_links(question.links),
     )
 
     if not result:
@@ -144,7 +152,7 @@ async def update_question_query(
     update_values = []
     for i, (key, value) in enumerate(updates.items()):
         if key == "links":
-            value = json.dumps(value)  # noqa: PLW2901
+            value = _serialize_links(question.links)  # noqa: PLW2901
             query += f"{key} = ${i + 1}::jsonb, "
         else:
             query += f"{key} = ${i + 1}, "
