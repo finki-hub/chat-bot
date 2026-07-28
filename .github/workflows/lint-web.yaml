@@ -14,11 +14,13 @@ jobs:
   tsc:
     uses: finki-hub/.github/.github/workflows/tsc.yaml@main
     with:
+      node-version: "26"
       working-directory: ./web
     secrets: inherit
 
   eslint:
     uses: finki-hub/.github/.github/workflows/eslint.yaml@main
     with:
+      node-version: "26"
       working-directory: ./web
     secrets: inherit
