@@ -264,7 +264,7 @@ wheels = [
 
 [[package]]
 name = "fastapi"
-version = "0.140.0"
+version = "0.140.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -273,9 +273,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0d/fb/fd7671137d9fa3df1d93a2f5111eb982709201724b29f211e4beb2d58688/fastapi-0.140.0.tar.gz", hash = "sha256:f338951b82fd74ca8f843163aec43ea1a1ce84d515415a50fa98fa25572a5544", size = 420968, upload-time = "2026-07-24T21:16:41.187Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e1/33/e0dfa29ccce4eb8c9a073f9e557b0d6bacbb3aa32e7ad595f678de4d036a/fastapi-0.140.7.tar.gz", hash = "sha256:09a640af2d29006345e1f28e4f031fa60f89b1a75d29f26070f3afa677d66cce", size = 422051, upload-time = "2026-07-27T17:34:45.908Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/76/6d9e25ad88da9d3ff744bcdbec4736e38c2288611d43f673a5d9bfa27c07/fastapi-0.140.0-py3-none-any.whl", hash = "sha256:e951c0a0d9540bf5d9a2a9e078fd415da2ab7e312d435139e7d9e2e7fe9f0b23", size = 130863, upload-time = "2026-07-24T21:16:42.89Z" },
+    { url = "https://files.pythonhosted.org/packages/7b/0e/00cddd6b8668884e9c7588ab0eeb73becbd1efa3eaead34397f2e9a8de49/fastapi-0.140.7-py3-none-any.whl", hash = "sha256:960bb9696d8fd19dff488aa4f67f276364542cfcce9f7e68a82fe49dce126626", size = 131085, upload-time = "2026-07-27T17:34:47.036Z" },
 ]
 
 [package.optional-dependencies]
@@ -415,10 +415,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi", extras = ["all"], specifier = ">=0.140.0" },
+    { name = "fastapi", extras = ["all"], specifier = ">=0.140.7" },
     { name = "gunicorn", specifier = ">=26.0.0" },
     { name = "langchain-huggingface", specifier = ">=1.2.2" },
-    { name = "posthog", specifier = ">=7.29.0" },
+    { name = "posthog", specifier = ">=7.31.0" },
     { name = "sentence-transformers", specifier = ">=5.6.1" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.11.0" },
     { name = "torch", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = ">=2.11.0", index = "https://download.pytorch.org/whl/cu128" },
@@ -1072,7 +1072,7 @@ wheels = [
 
 [[package]]
 name = "posthog"
-version = "7.29.0"
+version = "7.31.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "backoff" },
@@ -1080,9 +1080,9 @@ dependencies = [
     { name = "requests" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d3/09/43ae0e27bafe031d307921cdeadcd3af8a7370c887177df7c43cfd903adf/posthog-7.29.0.tar.gz", hash = "sha256:673f201e2d204f0664bb0cec86f8adfca97ba3a94488fb7857bb11c4a35fb017", size = 360483, upload-time = "2026-07-23T15:26:28.225Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ca/95/5d50c6add73aad334dcb7f1d5c63c8e24ec22582190076e292cc03dfc294/posthog-7.31.0.tar.gz", hash = "sha256:f9c705e906d5d096589bfcf2ade4ad0c884db37d4e25cc3e73c18a59e2206b2f", size = 387357, upload-time = "2026-07-27T18:36:41.336Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ac/4a/01c3e9f44a2f167977b5fafc9ba5b4ed5a027881da4b2ee1f4987a621758/posthog-7.29.0-py3-none-any.whl", hash = "sha256:8269afec8439e0177fd9d660b88d0a580497b617ee6aa213850ae9244ad46111", size = 429592, upload-time = "2026-07-23T15:26:26.343Z" },
+    { url = "https://files.pythonhosted.org/packages/c6/c2/67e7d8d0c2223a911668cf47cda45d2eb643b480da2f412d5f808c527f58/posthog-7.31.0-py3-none-any.whl", hash = "sha256:d9f2c383c768d9fd723a83614ed14e0ccba28d7f80602a04e271925d9439f515", size = 460486, upload-time = "2026-07-27T18:36:39.596Z" },
 ]
 
 [[package]]
