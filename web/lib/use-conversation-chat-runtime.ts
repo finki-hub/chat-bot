@@ -26,6 +26,24 @@ type UseConversationChatRuntimeOptions = {
   readonly setActiveId: (id: null | string) => void;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isOptionalString = (value: unknown): value is string | undefined =>
+  value === undefined || typeof value === 'string';
+
+const isErrorNotice = (value: unknown): value is ErrorNotice =>
+  isRecord(value) &&
+  typeof value['code'] === 'string' &&
+  typeof value['message'] === 'string' &&
+  isOptionalString(value['resets_at']);
+
+const isStatusPart = (value: unknown): value is StatusPart =>
+  isRecord(value) &&
+  typeof value['label'] === 'string' &&
+  isOptionalString(value['stage']) &&
+  isOptionalString(value['tool']);
+
 export const useConversationChatRuntime = ({
   activeId,
   model,
@@ -80,8 +98,10 @@ export const useConversationChatRuntime = ({
       onData: (part) => {
         switch (part.type) {
           case 'data-error':
-            setActiveError(part.data);
-            activeErrorRef.current = part.data;
+            if (isErrorNotice(part.data)) {
+              setActiveError(part.data);
+              activeErrorRef.current = part.data;
+            }
             break;
 
           case 'data-reset':
@@ -89,7 +109,12 @@ export const useConversationChatRuntime = ({
             break;
 
           case 'data-status':
-            setActiveStatus(part.data);
+            if (isStatusPart(part.data)) {
+              setActiveStatus(part.data);
+            }
+            break;
+
+          default:
             break;
         }
       },

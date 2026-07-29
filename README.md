@@ -29,7 +29,7 @@ The API runs on port `8880`, the GPU API on `8888`, and the web front-end on `30
 
 ## Quick Setup (Development)
 
-Requires Python 3.14 (`>=3.14,<3.15`) and [`uv`](https://github.com/astral-sh/uv) for local API/GPU API tooling. The web app requires Node `^24 || ^26`.
+Requires Python 3.14 (`>=3.14,<3.15`) and [`uv`](https://github.com/astral-sh/uv) for local API/GPU API tooling. The web app requires Node 26 (`^26`).
 
 1. Clone the repository: `git clone https://github.com/finki-hub/chat-bot.git`
 2. Install dependencies: in each directory (`api` and `gpu-api`), run `uv sync`

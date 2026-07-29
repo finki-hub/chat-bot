@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24-slim AS base
+FROM node:26-slim AS base
 ENV NEXT_TELEMETRY_DISABLED=1
 
 FROM base AS deps

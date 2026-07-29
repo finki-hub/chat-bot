@@ -1,18 +1,20 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
+import type { MyUIMessage } from '@/lib/api-types';
 
 import { useConversationChatRuntime } from '@/lib/use-conversation-chat-runtime';
+
+const SPONSORED_MODEL_ID = 'gpt-5.6-luna';
 
 type MessageUpdate =
   | ((messages: MyUIMessage[]) => MyUIMessage[])
   | MyUIMessage[];
 
-type RuntimeDataPart =
-  | { readonly data: ErrorNotice; readonly type: 'data-error' }
-  | { readonly data: Record<string, never>; readonly type: 'data-reset' }
-  | { readonly data: { label: string }; readonly type: 'data-status' };
+type RuntimeDataPart = {
+  readonly data: unknown;
+  readonly type: `data-${string}`;
+};
 
 type RuntimeFinish = {
   readonly isAbort: boolean;
@@ -69,7 +71,7 @@ vi.mock('@/lib/transport', () => ({
 
 vi.mock('@/lib/use-models', () => ({
   useModels: () => ({
-    models: [{ availability: 'sponsored', id: 'gpt-5.6-luna' }],
+    models: [{ availability: 'sponsored', id: SPONSORED_MODEL_ID }],
     refetch: refetchModels,
   }),
 }));
@@ -98,7 +100,7 @@ describe('useConversationChatRuntime sponsored errors', () => {
     const { result } = renderHook(() =>
       useConversationChatRuntime({
         activeId: 'conversation-1',
-        model: 'gpt-5.6-luna',
+        model: SPONSORED_MODEL_ID,
         preserveEmptyHydrationIdRef: { current: null },
         reasoning: false,
         refreshConversations,
@@ -153,7 +155,7 @@ describe('useConversationChatRuntime sponsored errors', () => {
     renderHook(() =>
       useConversationChatRuntime({
         activeId: 'conversation-1',
-        model: 'gpt-5.6-luna',
+        model: SPONSORED_MODEL_ID,
         preserveEmptyHydrationIdRef: { current: null },
         reasoning: false,
         refreshConversations,
@@ -178,13 +180,42 @@ describe('useConversationChatRuntime sponsored errors', () => {
     expect(refetchModels).not.toHaveBeenCalled();
   });
 
+  it('ignores malformed streamed data parts', () => {
+    const { result } = renderHook(() =>
+      useConversationChatRuntime({
+        activeId: 'conversation-1',
+        model: SPONSORED_MODEL_ID,
+        preserveEmptyHydrationIdRef: { current: null },
+        reasoning: false,
+        refreshConversations,
+        setActiveId: vi.fn<(id: null | string) => void>(),
+      }),
+    );
+    const options = useChatOptions.at(-1);
+    if (options?.onData === undefined) {
+      throw new Error('Chat runtime data callback was not registered');
+    }
+
+    act(() => {
+      options.onData?.({ data: 'invalid error', type: 'data-error' });
+      options.onData?.({
+        data: { stage: 'missing label' },
+        type: 'data-status',
+      });
+      options.onData?.({ data: {}, type: 'data-unknown' });
+    });
+
+    expect(result.current.activeError).toBeUndefined();
+    expect(result.current.activeStatus).toBeUndefined();
+  });
+
   it('finalizes client timing when a regenerated message keeps its target id', () => {
     getChatStatus.mockReturnValue('submitted');
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000);
     renderHook(() =>
       useConversationChatRuntime({
         activeId: 'conversation-1',
-        model: 'gpt-5.6-luna',
+        model: SPONSORED_MODEL_ID,
         preserveEmptyHydrationIdRef: { current: null },
         reasoning: false,
         refreshConversations,
