@@ -20,9 +20,6 @@ const ARIA_EXPANDED = 'aria-expanded';
 const ANSWER_TEXT_TESTID = 'answer-text';
 const CHUNK_SOURCE_TITLE = 'Статут на ФИНКИ · Член 12';
 const CHUNK_SOURCE_TITLE_RE = /Статут на ФИНКИ · Член 12/u;
-const COLLAPSED_CHUNK_TEXT =
-  'Правилата за запишување и заверка на семестарот се наведени во овој член…';
-const EXPANDED_CHUNK_TEXT_RE = /Вториот став/u;
 const FIRST_SOURCE_TITLE = 'Прв извор';
 const SECOND_SOURCE_TITLE = 'Втор извор';
 const THIRD_SOURCE_TITLE = 'Трет извор';
@@ -517,19 +514,23 @@ describe('AssistantMessage', () => {
     const chunkButton = screen.getByRole('button', {
       name: CHUNK_SOURCE_TITLE_RE,
     });
-    const chunkText = screen.getByText(COLLAPSED_CHUNK_TEXT);
+    const chunkText = screen.getByText(chunkSnippet);
+    const chunkPanel = document.querySelector(
+      `#${chunkButton.getAttribute('aria-controls') ?? ''}`,
+    );
 
     expect(chunkButton).toHaveAttribute(ARIA_EXPANDED, 'false');
-    expect(chunkText).toHaveClass('line-clamp-2');
-    expect(screen.queryByText(EXPANDED_CHUNK_TEXT_RE)).toBeNull();
+    expect(chunkButton).toHaveClass('min-h-11', 'pointer-fine:min-h-0');
+    expect(chunkPanel).toHaveAttribute('aria-hidden', 'true');
+    expect(chunkPanel).toHaveClass('line-clamp-2');
+    expect(chunkText).toBeInTheDocument();
 
     await user.click(chunkButton);
 
-    const expandedChunkText = screen.getByText(EXPANDED_CHUNK_TEXT_RE);
-
     expect(chunkButton).toHaveAttribute(ARIA_EXPANDED, 'true');
-    expect(expandedChunkText).not.toHaveClass('line-clamp-2');
-    expect(expandedChunkText).toHaveClass('whitespace-pre-wrap');
+    expect(chunkPanel).not.toHaveAttribute('aria-hidden');
+    expect(chunkPanel).not.toHaveClass('line-clamp-2');
+    expect(chunkPanel).toHaveClass('whitespace-pre-wrap');
 
     const iKnowLink = screen.getByRole('link', { name: 'Врска: iKnow' });
     const finkiLink = screen.getByRole('link', { name: 'Врска: ФИНКИ' });
