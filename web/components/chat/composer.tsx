@@ -20,6 +20,9 @@ import {
   isSponsoredModel,
 } from '@/lib/model-catalog';
 
+const TYPEAHEAD_CONTROL_SELECTOR =
+  'input, textarea, select, [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"], [role="tree"], [role="treeitem"]';
+
 export type ComposerProps = {
   availableProviders: ReadonlySet<string>;
   credentialsError?: boolean;
@@ -115,13 +118,19 @@ export const Composer = ({
         return;
       }
       const active = document.activeElement;
-      const isEditable =
+      const hasFocusedControl =
+        active !== null &&
+        active !== document.body &&
+        active !== document.documentElement;
+      const consumesTyping =
         active instanceof HTMLElement &&
         (active.isContentEditable ||
-          active.tagName === 'INPUT' ||
-          active.tagName === 'TEXTAREA' ||
-          active.tagName === 'SELECT');
-      if (isEditable || document.querySelector('[role="dialog"]') !== null) {
+          active.matches(TYPEAHEAD_CONTROL_SELECTOR));
+      if (
+        consumesTyping ||
+        (e.key === ' ' && hasFocusedControl) ||
+        document.querySelector('[role="dialog"]') !== null
+      ) {
         return;
       }
       textareaRef.current?.focus();

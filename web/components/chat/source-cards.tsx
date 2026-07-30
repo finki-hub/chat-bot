@@ -5,21 +5,37 @@ import { useId, useState } from 'react';
 
 import type { RetrievedSource } from '@/lib/api-types';
 
+import {
+  MessageResponse,
+  type MessageResponseProps,
+} from '@/components/ai-elements/message';
 import { t } from '@/lib/i18n';
 
-const PREVIEW_WORD_LIMIT = 12;
 const AUTO_EXPAND_SOURCE_LIMIT = 2;
-const SENTENCE_END_RE = /[.!?]/u;
-const WHITESPACE_RE = /\s+/u;
+type MarkdownComponents = NonNullable<MessageResponseProps['components']>;
 
-const snippetPreview = (snippet: string): string => {
-  const sentenceEnd = snippet.search(SENTENCE_END_RE);
-  const sentencePreview =
-    sentenceEnd >= 0 ? snippet.slice(0, sentenceEnd + 1) : snippet;
-  const words = sentencePreview.trim().split(WHITESPACE_RE);
-  const preview = words.slice(0, PREVIEW_WORD_LIMIT).join(' ');
-  return words.length > PREVIEW_WORD_LIMIT ? `${preview}…` : preview;
-};
+const sourceMarkdownComponents = {
+  img: () => null,
+  strong: ({ children }) => <strong>{children}</strong>,
+} satisfies MarkdownComponents;
+
+const collapsedSourceMarkdownComponents = {
+  ...sourceMarkdownComponents,
+  a: ({ children }) => (
+    <span className="wrap-anywhere font-medium text-primary underline">
+      {children}
+    </span>
+  ),
+} satisfies MarkdownComponents;
+
+const sourceMarkdownPlugins = {} satisfies NonNullable<
+  MessageResponseProps['plugins']
+>;
+const disallowedSourceMarkdownElements = [
+  'img',
+  'picture',
+  'source',
+] as const satisfies NonNullable<MessageResponseProps['disallowedElements']>;
 
 const SourceKindLabel = ({ source }: { source: RetrievedSource }) => (
   <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -33,13 +49,12 @@ const SourceCard = ({ source }: { source: RetrievedSource }) => {
   const hasSnippet = snippet.length > 0;
   const links = source.links ?? [];
   const snippetId = useId();
-  const visibleSnippet = expanded ? snippet : snippetPreview(snippet);
   const title = source.section
     ? `${source.title} · ${source.section}`
     : source.title;
   const content = (
     <>
-      <div className="flex flex-wrap items-center gap-2">
+      <span className="flex flex-wrap items-center gap-2">
         <SourceKindLabel source={source} />
         {typeof source.chunkIndex === 'number' ? (
           <span className="text-[10px] text-muted-foreground/70">
@@ -52,18 +67,10 @@ const SourceCard = ({ source }: { source: RetrievedSource }) => {
             className={`size-3 text-muted-foreground/70 transition-transform ${expanded ? 'rotate-90' : ''}`}
           />
         ) : null}
-      </div>
-      <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
+      </span>
+      <span className="block line-clamp-2 text-sm font-medium leading-snug text-foreground">
         {title}
-      </p>
-      {hasSnippet ? (
-        <p
-          className={`mt-2 text-xs leading-relaxed text-muted-foreground ${expanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}
-          id={snippetId}
-        >
-          {visibleSnippet}
-        </p>
-      ) : null}
+      </span>
     </>
   );
 
@@ -71,17 +78,40 @@ const SourceCard = ({ source }: { source: RetrievedSource }) => {
     <li className="min-w-0 rounded-lg border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/35">
       <div className="flex items-start justify-between gap-3">
         {hasSnippet ? (
-          <button
-            aria-controls={snippetId}
-            aria-expanded={expanded}
-            className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => {
-              setExpanded((current) => !current);
-            }}
-            type="button"
-          >
-            {content}
-          </button>
+          <div className="min-w-0 flex-1">
+            <button
+              aria-controls={snippetId}
+              aria-expanded={expanded}
+              className="min-h-11 w-full rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0"
+              onClick={() => {
+                setExpanded((current) => !current);
+              }}
+              type="button"
+            >
+              {content}
+            </button>
+            <div
+              aria-hidden={expanded ? undefined : true}
+              className={`mt-2 text-xs leading-relaxed text-muted-foreground ${expanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}
+              id={snippetId}
+            >
+              <MessageResponse
+                className="h-auto"
+                components={
+                  expanded
+                    ? sourceMarkdownComponents
+                    : collapsedSourceMarkdownComponents
+                }
+                controls={false}
+                disallowedElements={disallowedSourceMarkdownElements}
+                key={expanded ? 'expanded' : 'collapsed'}
+                mode="static"
+                plugins={sourceMarkdownPlugins}
+              >
+                {snippet}
+              </MessageResponse>
+            </div>
+          </div>
         ) : (
           <div className="min-w-0 flex-1 space-y-1">{content}</div>
         )}
@@ -165,7 +195,7 @@ export const SourceCards = ({
       </button>
       {open ? (
         <ul
-          className="grid gap-2 sm:grid-cols-2"
+          className="grid items-start gap-2 sm:grid-cols-2"
           id={panelId}
         >
           {sources.map((source) => (
