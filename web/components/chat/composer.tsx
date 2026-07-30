@@ -115,13 +115,14 @@ export const Composer = ({
         return;
       }
       const active = document.activeElement;
-      const isEditable =
-        active instanceof HTMLElement &&
-        (active.isContentEditable ||
-          active.tagName === 'INPUT' ||
-          active.tagName === 'TEXTAREA' ||
-          active.tagName === 'SELECT');
-      if (isEditable || document.querySelector('[role="dialog"]') !== null) {
+      const hasFocusedElement =
+        active !== null &&
+        ((active instanceof HTMLElement && active.isContentEditable) ||
+          (active !== document.body && active !== document.documentElement));
+      if (
+        hasFocusedElement ||
+        document.querySelector('[role="dialog"]') !== null
+      ) {
         return;
       }
       textareaRef.current?.focus();

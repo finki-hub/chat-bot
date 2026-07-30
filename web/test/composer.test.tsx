@@ -208,6 +208,26 @@ describe('Composer', () => {
     expect(textarea).not.toHaveFocus();
   });
 
+  it('does not steal typing from a programmatically focused control', () => {
+    setup({ status: 'error' });
+    render(
+      <button
+        tabIndex={-1}
+        type="button"
+      >
+        Контрола
+      </button>,
+    );
+    const textarea = screen.getByTestId('composer-input');
+    const control = screen.getByRole('button', { name: 'Контрола' });
+
+    control.focus();
+    fireEvent.keyDown(control, { key: 'к' });
+
+    expect(control).toHaveFocus();
+    expect(textarea).not.toHaveFocus();
+  });
+
   it('reports model changes', async () => {
     const { onModelChange } = setup();
     const user = userEvent.setup();
