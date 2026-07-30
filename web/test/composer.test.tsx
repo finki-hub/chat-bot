@@ -23,6 +23,7 @@ const OLLAMA_OPTION_NAME = /llama3\.2:latest/u;
 const OLLAMA_UNKNOWN_ID = 'qwen3:14b';
 const OLLAMA_UNKNOWN_NAME = 'qwen3:14b';
 const MODEL_SELECTOR_TEST_ID = 'composer-model';
+const COMPOSER_INPUT_TEST_ID = 'composer-input';
 const LUNA_ID = 'gpt-5.6-luna';
 const LUNA_NAME = 'GPT-5.6 Luna';
 
@@ -149,7 +150,7 @@ describe('Composer', () => {
   it('disables the input and submit button when disabled and idle', () => {
     setup({ disabled: true, status: 'ready' });
 
-    expect(screen.getByTestId('composer-input')).toBeDisabled();
+    expect(screen.getByTestId(COMPOSER_INPUT_TEST_ID)).toBeDisabled();
     expect(screen.getByTestId('composer-submit')).toBeDisabled();
   });
 
@@ -189,7 +190,7 @@ describe('Composer', () => {
 
   it('focuses the input when typing starts elsewhere on the page', () => {
     setup({ status: 'error' });
-    const textarea = screen.getByTestId('composer-input');
+    const textarea = screen.getByTestId(COMPOSER_INPUT_TEST_ID);
 
     expect(textarea).not.toHaveFocus();
 
@@ -200,7 +201,7 @@ describe('Composer', () => {
 
   it('ignores shortcuts and non-character keys for type-to-focus', () => {
     setup({ status: 'error' });
-    const textarea = screen.getByTestId('composer-input');
+    const textarea = screen.getByTestId(COMPOSER_INPUT_TEST_ID);
 
     fireEvent.keyDown(document.body, { ctrlKey: true, key: 'a' });
     fireEvent.keyDown(document.body, { key: 'ArrowDown' });
@@ -208,7 +209,7 @@ describe('Composer', () => {
     expect(textarea).not.toHaveFocus();
   });
 
-  it('does not steal typing from a programmatically focused control', () => {
+  it('does not steal typing from a programmatically focused option', () => {
     setup({ status: 'error' });
     render(
       <button
@@ -218,14 +219,27 @@ describe('Composer', () => {
         Контрола
       </button>,
     );
-    const textarea = screen.getByTestId('composer-input');
+    const textarea = screen.getByTestId(COMPOSER_INPUT_TEST_ID);
     const control = screen.getByRole('button', { name: 'Контрола' });
 
+    control.setAttribute('role', 'option');
     control.focus();
     fireEvent.keyDown(control, { key: 'к' });
 
     expect(control).toHaveFocus();
     expect(textarea).not.toHaveFocus();
+  });
+
+  it('focuses the input when typing after using an ordinary button', () => {
+    setup({ status: 'error' });
+    render(<button type="button">Контрола</button>);
+    const textarea = screen.getByTestId(COMPOSER_INPUT_TEST_ID);
+    const control = screen.getByRole('button', { name: 'Контрола' });
+
+    control.focus();
+    fireEvent.keyDown(control, { key: 'к' });
+
+    expect(textarea).toHaveFocus();
   });
 
   it('reports model changes', async () => {
