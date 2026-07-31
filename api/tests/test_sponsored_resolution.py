@@ -52,7 +52,7 @@ def test_sponsored_resolution_builds_inference_only_sponsored_credential() -> No
     )
     assert resolved.sponsored is True
     assert resolved.upstream_model == "upstream-luna"
-    assert resolved.max_output_tokens == 1024
+    assert resolved.max_output_tokens == 1536
 
 
 def test_sponsored_resolution_does_not_sponsor_a_rejected_user_credential() -> None:

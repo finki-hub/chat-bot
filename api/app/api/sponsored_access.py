@@ -5,7 +5,7 @@ from app.llms.models import Model, model_id
 from app.schemas.chat_credentials import ChatCredentialSecret
 from app.utils.settings import Settings
 
-_SPONSORED_OUTPUT_TOKEN_HARD_CAP: Final = 1024
+_SPONSORED_OUTPUT_TOKEN_HARD_CAP: Final = 1536
 
 
 @dataclass(frozen=True, slots=True)
