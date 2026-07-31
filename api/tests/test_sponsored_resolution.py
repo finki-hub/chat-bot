@@ -39,7 +39,7 @@ def test_sponsored_resolution_builds_inference_only_sponsored_credential() -> No
         SPONSORED_MODEL_API_KEY=SecretStr("sponsored-key"),
         SPONSORED_MODEL_BASE_URL="HTTPS://Sponsored.EXAMPLE/v1/",
         SPONSORED_MODEL_UPSTREAM_MODEL="upstream-luna",
-        SPONSORED_MAX_OUTPUT_TOKENS=2048,
+        SPONSORED_MAX_OUTPUT_TOKENS=16384,
         SPONSORED_DAILY_GLOBAL_LIMIT=10,
     )
 
@@ -52,7 +52,7 @@ def test_sponsored_resolution_builds_inference_only_sponsored_credential() -> No
     )
     assert resolved.sponsored is True
     assert resolved.upstream_model == "upstream-luna"
-    assert resolved.max_output_tokens == 1024
+    assert resolved.max_output_tokens == 8192
 
 
 def test_sponsored_resolution_does_not_sponsor_a_rejected_user_credential() -> None:
