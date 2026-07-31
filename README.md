@@ -100,9 +100,9 @@ is unchanged.
 | `SPONSORED_MODEL_API_KEY` | empty | Dedicated provider secret for sponsored inference. It must not be copied from or substituted with `API_KEY`, a user BYOK key, or a Discord secret. |
 | `SPONSORED_MODEL_BASE_URL` | empty | Optional dedicated HTTPS OpenAI-compatible endpoint for sponsored inference only. It is canonicalized and validated separately from `BYOK_ALLOWED_BASE_URLS`; it must not be used as a user endpoint allowlist. |
 | `SPONSORED_MODEL_UPSTREAM_MODEL` | empty | Upstream model name sent to the provider; it may differ from the public catalog ID. |
-| `SPONSORED_DAILY_USER_LIMIT` | `5` | Sponsored requests per user per UTC calendar day. Values from 1 through 8 are accepted; BYOK requests are not counted. |
+| `SPONSORED_DAILY_USER_LIMIT` | `5` | Sponsored requests per user per UTC calendar day. Values from 1 through 50 are accepted; BYOK requests are not counted. |
 | `SPONSORED_DAILY_GLOBAL_LIMIT` | empty | Required positive global sponsored-request cap when enabled. Leaving it empty is fail-closed and is valid only while the feature is disabled. |
-| `SPONSORED_MAX_OUTPUT_TOKENS` | `1024` | Deployment-level cap applied to sponsored output-token requests, hard-limited to 1536. |
+| `SPONSORED_MAX_OUTPUT_TOKENS` | `1024` | Deployment-level cap applied to sponsored output-token requests, hard-limited to 8192. |
 | `SPONSORED_REQUEST_LEASE_SECONDS` | `600` | Active-request lease duration. A second concurrent sponsored request for the same user is rejected until the lease expires or is released. |
 
 The user and global counters use UTC dates and reset at the next UTC midnight.
