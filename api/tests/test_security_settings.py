@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import SecretStr
 
 from app.main import (
     _warn_on_insecure_defaults,
@@ -159,9 +160,15 @@ def test_disabled_sponsored_model_treats_blank_global_limit_as_unset(monkeypatch
     assert settings.SPONSORED_DAILY_GLOBAL_LIMIT is None
 
 
-def test_sponsored_user_limit_cannot_exceed_five():
+def test_sponsored_user_limit_accepts_eight():
+    settings = Settings(SPONSORED_DAILY_USER_LIMIT=8)
+
+    assert settings.SPONSORED_DAILY_USER_LIMIT == 8
+
+
+def test_sponsored_user_limit_cannot_exceed_eight():
     with pytest.raises(ValueError, match="SPONSORED_DAILY_USER_LIMIT"):
-        Settings(SPONSORED_DAILY_USER_LIMIT=6)
+        Settings(SPONSORED_DAILY_USER_LIMIT=9)
 
 
 def test_enabled_sponsored_model_requires_api_key():
@@ -178,14 +185,14 @@ def test_enabled_sponsored_model_requires_positive_global_limit():
     with pytest.raises(ValueError, match="SPONSORED_DAILY_GLOBAL_LIMIT"):
         Settings(
             SPONSORED_MODEL_ENABLED=True,
-            SPONSORED_MODEL_API_KEY="sponsored-secret",
+            SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
         )
 
 
 def test_enabled_sponsored_model_valid_key_uses_default_endpoint_and_masks_secret():
     settings = Settings(
         SPONSORED_MODEL_ENABLED=True,
-        SPONSORED_MODEL_API_KEY="sponsored-secret",
+        SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
         SPONSORED_DAILY_GLOBAL_LIMIT=10,
     )
 
@@ -197,7 +204,7 @@ def test_enabled_sponsored_model_valid_key_uses_default_endpoint_and_masks_secre
 def test_sponsored_base_url_is_normalized():
     settings = Settings(
         SPONSORED_MODEL_ENABLED=True,
-        SPONSORED_MODEL_API_KEY="sponsored-secret",
+        SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
         SPONSORED_MODEL_BASE_URL=" HTTPS://Example.COM/v1/ ",
         SPONSORED_DAILY_GLOBAL_LIMIT=10,
     )
@@ -228,7 +235,7 @@ def test_sponsored_model_rejects_ollama_model_tags_as_out_of_catalog():
             SPONSORED_MODEL_ENABLED=True,
             SPONSORED_MODEL_ID="qwen3:14b-q4_K_M",
             SPONSORED_MODEL_PROVIDER="ollama",
-            SPONSORED_MODEL_API_KEY="sponsored-secret",
+            SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
             SPONSORED_DAILY_GLOBAL_LIMIT=10,
         )
 
@@ -241,7 +248,7 @@ def test_sponsored_model_rejects_provider_mismatch():
             SPONSORED_MODEL_ENABLED=True,
             SPONSORED_MODEL_ID="gpt-5.6-luna",
             SPONSORED_MODEL_PROVIDER="google",
-            SPONSORED_MODEL_API_KEY="sponsored-secret",
+            SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
             SPONSORED_DAILY_GLOBAL_LIMIT=10,
         )
 
@@ -257,7 +264,7 @@ def test_sponsored_model_reports_derived_provider_mismatch_before_configured_oll
             SPONSORED_MODEL_ENABLED=True,
             SPONSORED_MODEL_ID="gpt-5.6-luna",
             SPONSORED_MODEL_PROVIDER="ollama",
-            SPONSORED_MODEL_API_KEY="sponsored-secret",
+            SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
             SPONSORED_DAILY_GLOBAL_LIMIT=10,
         )
 
@@ -270,7 +277,7 @@ def test_sponsored_model_rejects_out_of_catalog_id():
             SPONSORED_MODEL_ENABLED=True,
             SPONSORED_MODEL_ID="gpt-4.1",
             SPONSORED_MODEL_PROVIDER="openai",
-            SPONSORED_MODEL_API_KEY="sponsored-secret",
+            SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
             SPONSORED_DAILY_GLOBAL_LIMIT=10,
         )
 
@@ -280,7 +287,7 @@ def test_sponsored_model_accepts_non_luna_profile():
         SPONSORED_MODEL_ENABLED=True,
         SPONSORED_MODEL_ID="gemini-3.5-flash",
         SPONSORED_MODEL_PROVIDER="google",
-        SPONSORED_MODEL_API_KEY="sponsored-secret",
+        SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
         SPONSORED_DAILY_GLOBAL_LIMIT=10,
     )
 

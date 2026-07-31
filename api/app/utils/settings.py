@@ -126,7 +126,7 @@ class Settings(BaseSettings):
     SPONSORED_MODEL_API_KEY: SecretStr | None = None
     SPONSORED_MODEL_BASE_URL: str | None = None
     SPONSORED_MODEL_UPSTREAM_MODEL: str = ""
-    SPONSORED_DAILY_USER_LIMIT: int = Field(default=5, gt=0, le=5)
+    SPONSORED_DAILY_USER_LIMIT: int = Field(default=5, gt=0, le=8)
     SPONSORED_DAILY_GLOBAL_LIMIT: int | None = Field(default=None, gt=0)
     SPONSORED_MAX_OUTPUT_TOKENS: int = Field(default=1024, gt=0)
     SPONSORED_REQUEST_LEASE_SECONDS: int = Field(default=600, gt=0)
