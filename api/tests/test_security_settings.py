@@ -160,15 +160,15 @@ def test_disabled_sponsored_model_treats_blank_global_limit_as_unset(monkeypatch
     assert settings.SPONSORED_DAILY_GLOBAL_LIMIT is None
 
 
-def test_sponsored_user_limit_accepts_eight():
-    settings = Settings(SPONSORED_DAILY_USER_LIMIT=8)
+def test_sponsored_user_limit_accepts_fifty():
+    settings = Settings(SPONSORED_DAILY_USER_LIMIT=50)
 
-    assert settings.SPONSORED_DAILY_USER_LIMIT == 8
+    assert settings.SPONSORED_DAILY_USER_LIMIT == 50
 
 
-def test_sponsored_user_limit_cannot_exceed_eight():
+def test_sponsored_user_limit_cannot_exceed_fifty():
     with pytest.raises(ValueError, match="SPONSORED_DAILY_USER_LIMIT"):
-        Settings(SPONSORED_DAILY_USER_LIMIT=9)
+        Settings(SPONSORED_DAILY_USER_LIMIT=51)
 
 
 def test_enabled_sponsored_model_requires_api_key():
