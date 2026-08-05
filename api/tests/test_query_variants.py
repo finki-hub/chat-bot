@@ -39,8 +39,18 @@ def test_rewrite_hyde_omits_variants_unchanged_from_search_query(
     ("rewrite_result", "hyde_result", "expected_kinds", "expected_rerank_query"),
     [
         (RuntimeError("rewrite failed"), "Хипотетички пасус", ("hyde", "raw"), "query"),
-        ("rewritten query", RuntimeError("hyde failed"), ("rewrite", "raw"), "rewritten query"),
-        (RuntimeError("rewrite failed"), RuntimeError("hyde failed"), ("raw",), "query"),
+        (
+            "rewritten query",
+            RuntimeError("hyde failed"),
+            ("rewrite", "raw"),
+            "rewritten query",
+        ),
+        (
+            RuntimeError("rewrite failed"),
+            RuntimeError("hyde failed"),
+            ("raw",),
+            "query",
+        ),
     ],
 )
 def test_rewrite_hyde_omits_each_failed_transform_independently(

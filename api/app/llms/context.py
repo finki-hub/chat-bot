@@ -510,9 +510,7 @@ async def _contextualize_query(
     """
     if not history_text:
         return query
-    transform_input = (
-        f"Претходен разговор:\n{history_text}\n\nНово прашање: {query}"
-    )
+    transform_input = f"Претходен разговор:\n{history_text}\n\nНово прашање: {query}"
     try:
         condensed = await transform_query(
             transform_input,
