@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Literal, assert_never
 
@@ -10,6 +11,8 @@ from app.llms.query_transform import transform_query
 from app.utils.timing import timed
 
 QueryVariantKind = Literal["raw", "rewrite", "hyde"]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +39,7 @@ class QueryVariantBundle:
                 return QueryTransformMode.HYDE
             case True, True:
                 return QueryTransformMode.REWRITE_HYDE
+        raise AssertionError("Unreachable query variant mode")
 
 
 def query_variant_count(mode: QueryTransformMode) -> int:
@@ -144,15 +148,22 @@ async def _rewrite_query(
     query_transform_model: ChatModel,
     credentials: LlmProviderCredentials | None = None,
 ) -> str | None:
-    with timed("retrieval.query_rewrite"):
-        rewritten = await transform_query(
-            search_query,
-            query_transform_model,
-            temperature=0.0,
-            top_p=1.0,
-            max_tokens=128,
-            credentials=credentials,
+    try:
+        with timed("retrieval.query_rewrite"):
+            rewritten = await transform_query(
+                search_query,
+                query_transform_model,
+                temperature=0.0,
+                top_p=1.0,
+                max_tokens=128,
+                credentials=credentials,
+            )
+    except Exception as exc:
+        logger.warning(
+            "Query rewrite failed; omitting variant error_type=%s",
+            type(exc).__name__,
         )
+        return None
     rewritten = rewritten.strip()
     return rewritten if rewritten and rewritten != search_query.strip() else None
 
@@ -162,15 +173,22 @@ async def _hyde_passage(
     query_transform_model: ChatModel,
     credentials: LlmProviderCredentials | None = None,
 ) -> str | None:
-    with timed("retrieval.hyde"):
-        hyde = await transform_query(
-            search_query,
-            query_transform_model,
-            system_prompt=HYDE_SYSTEM_PROMPT,
-            temperature=0.2,
-            top_p=1.0,
-            max_tokens=200,
-            credentials=credentials,
+    try:
+        with timed("retrieval.hyde"):
+            hyde = await transform_query(
+                search_query,
+                query_transform_model,
+                system_prompt=HYDE_SYSTEM_PROMPT,
+                temperature=0.2,
+                top_p=1.0,
+                max_tokens=200,
+                credentials=credentials,
+            )
+    except Exception as exc:
+        logger.warning(
+            "HyDE generation failed; omitting variant error_type=%s",
+            type(exc).__name__,
         )
+        return None
     hyde = hyde.strip()
     return hyde if hyde and hyde != search_query.strip() else None
