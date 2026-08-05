@@ -474,10 +474,15 @@ async def main_async(ns: argparse.Namespace) -> int:
     print(agg.report())
 
     if ns.json:
+        requested_budget = retrieval_budget(transform_mode, ns.initial_k)
         out = {
             "config": {
                 "embedding_model": embedding_model.value,
                 "query_transform_model": qt_model.value,
+                "query_transform_mode": transform_mode.value,
+                "initial_k": requested_budget.initial_k,
+                "per_query_k": requested_budget.per_query_k,
+                "ideal_limit": max(ns.ideal_limit, requested_budget.per_query_k),
                 "requested_query_transform_mode": transform_mode.value,
                 "requested_initial_k": ns.initial_k,
                 "budget_scope": "per_example_effective_mode",
