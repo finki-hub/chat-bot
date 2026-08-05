@@ -253,7 +253,7 @@ async def evaluate_one(
     variants = [
         (variant.text, variant.is_document) for variant in variant_bundle.variants
     ]
-    budget = retrieval_budget(transform_mode, initial_k)
+    budget = retrieval_budget(variant_bundle.mode, initial_k)
     ideal_probe_limit = max(ideal_limit, budget.per_query_k)
 
     embeddings = await asyncio.gather(
