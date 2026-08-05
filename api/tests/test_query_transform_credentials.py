@@ -1,3 +1,5 @@
+import logging
+
 import anyio
 import pytest
 
@@ -84,6 +86,7 @@ def test_contextualization_uses_latest_query_when_provider_returns_input(
 
 
 def test_retrieval_uses_raw_depth_when_transformed_variants_are_omitted(
+    caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     search_limits: list[int] = []
@@ -107,6 +110,7 @@ def test_retrieval_uses_raw_depth_when_transformed_variants_are_omitted(
     monkeypatch.setattr(context_module, "build_query_variants", return_raw_bundle)
     monkeypatch.setattr(context_module, "_embed_variant", fake_embed_variant)
     monkeypatch.setattr(context_module, "_search_both", capture_search_limit)
+    caplog.set_level(logging.INFO, logger="app.llms.context")
 
     async def collect():
         return await get_retrieved_context_with_sources(
@@ -122,3 +126,4 @@ def test_retrieval_uses_raw_depth_when_transformed_variants_are_omitted(
     assert result.text == ""
     assert result.effective_transform_mode == QueryTransformMode.RAW
     assert search_limits == [31]
+    assert "Query transform mode raw produced variants" in caplog.text

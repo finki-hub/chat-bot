@@ -319,7 +319,7 @@ async def get_retrieved_context_with_sources(
 
     logger.info(
         "Query transform mode %s produced variants: %s",
-        effective_transform_mode.value,
+        variant_bundle.mode.value,
         [(variant.kind, len(variant.text)) for variant in variant_bundle.variants],
     )
 
