@@ -18,6 +18,7 @@ from app.data.sponsored_usage import (
     SponsoredUsageAdmission,
 )
 from app.llms.models import Model
+from app.llms.query_modes import QueryTransformMode
 from app.llms.retrieval_result import RetrievedContext
 from app.utils import posthog_client
 from tests.chat_models_access_support import credentials, settings, usage_snapshot
@@ -102,7 +103,10 @@ async def _run_stream(
     async def get_context(*args, **kwargs):
         if retrieve is not None:
             return await retrieve(*args, **kwargs)
-        return RetrievedContext(text="context")
+        return RetrievedContext(
+            text="context",
+            effective_transform_mode=QueryTransformMode.REWRITE_HYDE,
+        )
 
     monkeypatch.setattr(chat_api, "resolve_provider_credentials", resolve_credentials)
     monkeypatch.setattr(chat_api, "admit_sponsored_request", admit)

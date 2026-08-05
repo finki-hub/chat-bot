@@ -376,7 +376,10 @@ async def get_retrieved_context_with_sources(
             )
 
         if not candidates:
-            return RetrievedContext(text="")
+            return RetrievedContext(
+                text="",
+                effective_transform_mode=variant_bundle.mode,
+            )
 
     except Exception as e:
         raise RetrievalError("Failed during multi-query vector search") from e
@@ -490,6 +493,7 @@ async def get_retrieved_context_with_sources(
         text = await _expand_and_render(db, final, embedding_model)
     return RetrievedContext(
         text=text,
+        effective_transform_mode=variant_bundle.mode,
         sources=sources,
     )
 

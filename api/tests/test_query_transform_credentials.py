@@ -59,6 +59,7 @@ def test_retrieval_uses_raw_query_when_hosted_transform_credential_is_missing(
     result = anyio.run(collect)
 
     assert result.text == ""
+    assert result.effective_transform_mode == QueryTransformMode.RAW
     assert seen_modes == [QueryTransformMode.RAW]
 
 
@@ -119,4 +120,5 @@ def test_retrieval_uses_raw_depth_when_transformed_variants_are_omitted(
     result = anyio.run(collect)
 
     assert result.text == ""
+    assert result.effective_transform_mode == QueryTransformMode.RAW
     assert search_limits == [31]
