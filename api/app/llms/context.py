@@ -526,7 +526,7 @@ async def _contextualize_query(
         )
         return query
     condensed = condensed.strip()
-    if condensed == transform_input:
+    if condensed == transform_input.strip():
         return query
     if condensed and condensed != query:
         logger.info(

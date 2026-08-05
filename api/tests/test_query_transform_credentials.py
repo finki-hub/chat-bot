@@ -65,10 +65,10 @@ def test_retrieval_uses_raw_query_when_hosted_transform_credential_is_missing(
 def test_contextualization_uses_latest_query_when_provider_returns_input(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    latest_query = "Колку чини тоа?"
+    latest_query = "Колку чини тоа?   "
 
     async def return_input(query, *args, **kwargs):
-        return query
+        return query.strip()
 
     monkeypatch.setattr(context_module, "transform_query", return_input)
 
