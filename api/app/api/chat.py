@@ -47,6 +47,7 @@ from app.llms.models import model_id
 from app.llms.ollama import fetch_ollama_catalog
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.llms.provider_credentials import provider_for_model
+from app.llms.query_modes import QueryTransformMode
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
 from app.schemas.sponsored_access import SponsoredQuotaSnapshot
@@ -237,6 +238,7 @@ def _capture_chat_response(
     observation: StreamObservation,
     answer_text: str,
     session_id: str | None,
+    effective_transform_mode: QueryTransformMode,
 ) -> None:
     model = payload.inference_model
     generation_ms: float | None = None
@@ -272,7 +274,8 @@ def _capture_chat_response(
         "query_transform_ms": _ms(_query_transform_ms(timings)),
         "query_rewrite_ms": _ms(timings.spans.get("retrieval.query_rewrite")),
         "hyde_ms": _ms(timings.spans.get("retrieval.hyde")),
-        "query_transform_mode": payload.query_transform_mode.value,
+        "requested_query_transform_mode": payload.query_transform_mode.value,
+        "query_transform_mode": effective_transform_mode.value,
         "candidate_count": timings.candidate_count,
         "top_distance": timings.top_distance,
         "context_char_len": observation.context_chars,
@@ -387,6 +390,7 @@ async def _instrument_stream(
     distinct_id: str,
     session_id: str | None,
     observation: StreamObservation,
+    effective_transform_mode: QueryTransformMode,
     sponsored_mode: str | None = None,
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
@@ -462,7 +466,8 @@ async def _instrument_stream(
                     "inference_model": model_id(payload.inference_model),
                     "embeddings_model": payload.embeddings_model.value,
                     "query_transform_model": model_id(payload.query_transform_model),
-                    "query_transform_mode": payload.query_transform_mode.value,
+                    "requested_query_transform_mode": payload.query_transform_mode.value,
+                    "query_transform_mode": effective_transform_mode.value,
                     "retrieval_hit": retrieval_hit,
                     "outcome": outcome,
                     **record,
@@ -483,6 +488,7 @@ async def _instrument_stream(
             observation=observation,
             answer_text="".join(answer_parts),
             session_id=session_id,
+            effective_transform_mode=effective_transform_mode,
         )
         if sponsored_mode is not None:
             capture_sponsored_event(
@@ -748,7 +754,8 @@ async def _chat_response_stream(
                         "query_transform_model": model_id(
                             payload.query_transform_model,
                         ),
-                        "query_transform_mode": payload.query_transform_mode.value,
+                        "requested_query_transform_mode": payload.query_transform_mode.value,
+                        "query_transform_mode": retrieved.effective_transform_mode.value,
                         "candidate_count": timings.candidate_count,
                         "top_distance": timings.top_distance,
                         "query_len": len(payload.query),
@@ -818,6 +825,7 @@ async def _chat_response_stream(
             distinct_id=distinct_id,
             observation=observation,
             session_id=session_id,
+            effective_transform_mode=retrieved.effective_transform_mode,
             sponsored_mode=sponsored_mode,
         )
 

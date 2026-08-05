@@ -62,6 +62,7 @@ def _run_captured_stream(
             distinct_id="user-1",
             session_id="session-1",
             observation=observation,
+            effective_transform_mode=payload.query_transform_mode,
         )
         return [str(chunk) async for chunk in stream]
 
