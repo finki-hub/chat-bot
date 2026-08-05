@@ -67,6 +67,13 @@ Useful flags: `--transform-mode raw|rewrite|hyde|rewrite_hyde`, `--no-transform`
 (legacy alias for `--transform-mode raw`), `--top-k`, `--initial-k`, `--ideal-limit`,
 `--concurrency`, `--json out.json` (per-example dump for diffing across runs).
 
+JSON output keeps the legacy config keys `query_transform_mode`, `initial_k`,
+`per_query_k`, and `ideal_limit` for existing comparison tooling. Those values describe
+the requested mode's nominal budget. The explicit `requested_*` config keys preserve the
+CLI inputs, while each result's `effective_transform_mode`, `effective_initial_k`, and
+`effective_per_query_k` record the variants and retrieval budget actually used after a
+transform is omitted or fails.
+
 ## Comparing two runs
 
 Use the committed golden set as a decision tool by saving a known-good baseline and
