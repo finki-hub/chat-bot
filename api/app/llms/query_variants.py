@@ -24,6 +24,19 @@ class QueryVariantBundle:
     variants: tuple[QueryVariant, ...]
     rerank_query: str
 
+    @property
+    def mode(self) -> QueryTransformMode:
+        kinds = {variant.kind for variant in self.variants}
+        match ("rewrite" in kinds, "hyde" in kinds):
+            case False, False:
+                return QueryTransformMode.RAW
+            case True, False:
+                return QueryTransformMode.REWRITE
+            case False, True:
+                return QueryTransformMode.HYDE
+            case True, True:
+                return QueryTransformMode.REWRITE_HYDE
+
 
 def query_variant_count(mode: QueryTransformMode) -> int:
     match mode:
@@ -55,35 +68,71 @@ async def build_query_variants(
                 query_transform_model,
                 credentials,
             )
-            return QueryVariantBundle(
-                variants=(
-                    QueryVariant(kind="rewrite", text=rewritten, is_document=False),
-                    raw,
-                ),
-                rerank_query=rewritten,
-            )
+            match rewritten:
+                case None:
+                    return QueryVariantBundle(
+                        variants=(raw,),
+                        rerank_query=search_query,
+                    )
+                case str():
+                    return QueryVariantBundle(
+                        variants=(
+                            QueryVariant(
+                                kind="rewrite",
+                                text=rewritten,
+                                is_document=False,
+                            ),
+                            raw,
+                        ),
+                        rerank_query=rewritten,
+                    )
         case QueryTransformMode.HYDE:
             hyde = await _hyde_passage(
                 search_query,
                 query_transform_model,
                 credentials,
             )
-            return QueryVariantBundle(
-                variants=(QueryVariant(kind="hyde", text=hyde, is_document=True), raw),
-                rerank_query=search_query,
-            )
+            match hyde:
+                case None:
+                    return QueryVariantBundle(
+                        variants=(raw,),
+                        rerank_query=search_query,
+                    )
+                case str():
+                    return QueryVariantBundle(
+                        variants=(
+                            QueryVariant(kind="hyde", text=hyde, is_document=True),
+                            raw,
+                        ),
+                        rerank_query=search_query,
+                    )
         case QueryTransformMode.REWRITE_HYDE:
             rewritten, hyde = await asyncio.gather(
                 _rewrite_query(search_query, query_transform_model, credentials),
                 _hyde_passage(search_query, query_transform_model, credentials),
             )
-            return QueryVariantBundle(
-                variants=(
-                    QueryVariant(kind="hyde", text=hyde, is_document=True),
-                    QueryVariant(kind="rewrite", text=rewritten, is_document=False),
-                    raw,
+            variants = (
+                *(
+                    (QueryVariant(kind="hyde", text=hyde, is_document=True),)
+                    if hyde is not None
+                    else ()
                 ),
-                rerank_query=rewritten,
+                *(
+                    (
+                        QueryVariant(
+                            kind="rewrite",
+                            text=rewritten,
+                            is_document=False,
+                        ),
+                    )
+                    if rewritten is not None
+                    else ()
+                ),
+                raw,
+            )
+            return QueryVariantBundle(
+                variants=variants,
+                rerank_query=rewritten or search_query,
             )
         case unreachable:
             assert_never(unreachable)
@@ -94,7 +143,7 @@ async def _rewrite_query(
     search_query: str,
     query_transform_model: ChatModel,
     credentials: LlmProviderCredentials | None = None,
-) -> str:
+) -> str | None:
     with timed("retrieval.query_rewrite"):
         rewritten = await transform_query(
             search_query,
@@ -104,14 +153,15 @@ async def _rewrite_query(
             max_tokens=128,
             credentials=credentials,
         )
-    return rewritten.strip() or search_query
+    rewritten = rewritten.strip()
+    return rewritten if rewritten and rewritten != search_query.strip() else None
 
 
 async def _hyde_passage(
     search_query: str,
     query_transform_model: ChatModel,
     credentials: LlmProviderCredentials | None = None,
-) -> str:
+) -> str | None:
     with timed("retrieval.hyde"):
         hyde = await transform_query(
             search_query,
@@ -122,4 +172,5 @@ async def _hyde_passage(
             max_tokens=200,
             credentials=credentials,
         )
-    return hyde.strip() or search_query
+    hyde = hyde.strip()
+    return hyde if hyde and hyde != search_query.strip() else None
