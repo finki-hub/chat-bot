@@ -36,8 +36,8 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9.0.0
       - run: uv sync --frozen
         working-directory: ./api
       - run: uv run pytest tests/integration -q

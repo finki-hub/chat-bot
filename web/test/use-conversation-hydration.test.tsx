@@ -7,8 +7,7 @@ import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
 import { useConversationHydration } from '@/lib/use-conversation-hydration';
 
 type ActiveStatus =
-  | undefined
-  | { readonly label: string; readonly tool?: string };
+  undefined | { readonly label: string; readonly tool?: string };
 
 const ACTIVE_ID = 'conversation-b';
 const PREVIOUS_ID = 'previous-a';

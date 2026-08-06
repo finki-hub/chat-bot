@@ -100,7 +100,7 @@ services:
       - ./pgdata:/var/lib/postgresql/data
 
   stream-store:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:9.1-alpine
     command: valkey-server --appendonly yes
     healthcheck:
       interval: 10s

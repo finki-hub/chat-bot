@@ -8,8 +8,7 @@ import { useConversationChatRuntime } from '@/lib/use-conversation-chat-runtime'
 const SPONSORED_MODEL_ID = 'gpt-5.6-luna';
 
 type MessageUpdate =
-  | ((messages: MyUIMessage[]) => MyUIMessage[])
-  | MyUIMessage[];
+  ((messages: MyUIMessage[]) => MyUIMessage[]) | MyUIMessage[];
 
 type RuntimeDataPart = {
   readonly data: unknown;
