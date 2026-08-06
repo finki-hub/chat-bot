@@ -103,7 +103,7 @@ services:
         - valkey-cli
         - ping
       timeout: 5s
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:9.1-alpine
     networks:
       - finki_stack
     restart: unless-stopped
