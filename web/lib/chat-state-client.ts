@@ -11,11 +11,7 @@ import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
 /* eslint-disable camelcase -- Python chat state API uses snake_case fields. */
 
 export type ChatStateActiveStreamStatus =
-  | 'completed'
-  | 'error'
-  | 'pending'
-  | 'stopped'
-  | 'streaming';
+  'completed' | 'error' | 'pending' | 'stopped' | 'streaming';
 
 export type ChatStateClient = {
   readonly clearActiveStreamIfCurrent: (

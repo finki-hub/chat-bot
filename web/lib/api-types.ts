@@ -5,10 +5,7 @@ export type CatalogProvider = 'anthropic' | 'google' | 'ollama' | 'openai';
 export type CatalogSource = 'error' | 'live' | 'snapshot' | 'stale';
 
 export type ChatCredentialProvider =
-  | 'anthropic'
-  | 'google'
-  | 'ollama'
-  | 'openai';
+  'anthropic' | 'google' | 'ollama' | 'openai';
 
 export type ChatCredentialPublic = {
   readonly base_url: null | string;
