@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Literal, NotRequired, TypedDict
 
+from app.llms.query_modes import QueryTransformMode
+
 
 class RetrievalSourceLinkPayload(TypedDict):
     label: str
@@ -56,6 +58,7 @@ class RetrievalSource:
 @dataclass(frozen=True, slots=True)
 class RetrievedContext:
     text: str
+    effective_transform_mode: QueryTransformMode
     sources: tuple[RetrievalSource, ...] = ()
 
     def sources_payload(self) -> list[RetrievalSourcePayload]:

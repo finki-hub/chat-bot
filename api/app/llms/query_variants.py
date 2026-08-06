@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Literal, assert_never
 
@@ -10,6 +11,8 @@ from app.llms.query_transform import transform_query
 from app.utils.timing import timed
 
 QueryVariantKind = Literal["raw", "rewrite", "hyde"]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +26,20 @@ class QueryVariant:
 class QueryVariantBundle:
     variants: tuple[QueryVariant, ...]
     rerank_query: str
+
+    @property
+    def mode(self) -> QueryTransformMode:
+        kinds = {variant.kind for variant in self.variants}
+        match ("rewrite" in kinds, "hyde" in kinds):
+            case False, False:
+                return QueryTransformMode.RAW
+            case True, False:
+                return QueryTransformMode.REWRITE
+            case False, True:
+                return QueryTransformMode.HYDE
+            case True, True:
+                return QueryTransformMode.REWRITE_HYDE
+        raise AssertionError("Unreachable query variant mode")
 
 
 def query_variant_count(mode: QueryTransformMode) -> int:
@@ -55,35 +72,71 @@ async def build_query_variants(
                 query_transform_model,
                 credentials,
             )
-            return QueryVariantBundle(
-                variants=(
-                    QueryVariant(kind="rewrite", text=rewritten, is_document=False),
-                    raw,
-                ),
-                rerank_query=rewritten,
-            )
+            match rewritten:
+                case None:
+                    return QueryVariantBundle(
+                        variants=(raw,),
+                        rerank_query=search_query,
+                    )
+                case str():
+                    return QueryVariantBundle(
+                        variants=(
+                            QueryVariant(
+                                kind="rewrite",
+                                text=rewritten,
+                                is_document=False,
+                            ),
+                            raw,
+                        ),
+                        rerank_query=rewritten,
+                    )
         case QueryTransformMode.HYDE:
             hyde = await _hyde_passage(
                 search_query,
                 query_transform_model,
                 credentials,
             )
-            return QueryVariantBundle(
-                variants=(QueryVariant(kind="hyde", text=hyde, is_document=True), raw),
-                rerank_query=search_query,
-            )
+            match hyde:
+                case None:
+                    return QueryVariantBundle(
+                        variants=(raw,),
+                        rerank_query=search_query,
+                    )
+                case str():
+                    return QueryVariantBundle(
+                        variants=(
+                            QueryVariant(kind="hyde", text=hyde, is_document=True),
+                            raw,
+                        ),
+                        rerank_query=search_query,
+                    )
         case QueryTransformMode.REWRITE_HYDE:
             rewritten, hyde = await asyncio.gather(
                 _rewrite_query(search_query, query_transform_model, credentials),
                 _hyde_passage(search_query, query_transform_model, credentials),
             )
-            return QueryVariantBundle(
-                variants=(
-                    QueryVariant(kind="hyde", text=hyde, is_document=True),
-                    QueryVariant(kind="rewrite", text=rewritten, is_document=False),
-                    raw,
+            variants = (
+                *(
+                    (QueryVariant(kind="hyde", text=hyde, is_document=True),)
+                    if hyde is not None
+                    else ()
                 ),
-                rerank_query=rewritten,
+                *(
+                    (
+                        QueryVariant(
+                            kind="rewrite",
+                            text=rewritten,
+                            is_document=False,
+                        ),
+                    )
+                    if rewritten is not None
+                    else ()
+                ),
+                raw,
+            )
+            return QueryVariantBundle(
+                variants=variants,
+                rerank_query=rewritten or search_query,
             )
         case unreachable:
             assert_never(unreachable)
@@ -94,32 +147,48 @@ async def _rewrite_query(
     search_query: str,
     query_transform_model: ChatModel,
     credentials: LlmProviderCredentials | None = None,
-) -> str:
-    with timed("retrieval.query_rewrite"):
-        rewritten = await transform_query(
-            search_query,
-            query_transform_model,
-            temperature=0.0,
-            top_p=1.0,
-            max_tokens=128,
-            credentials=credentials,
+) -> str | None:
+    try:
+        with timed("retrieval.query_rewrite"):
+            rewritten = await transform_query(
+                search_query,
+                query_transform_model,
+                temperature=0.0,
+                top_p=1.0,
+                max_tokens=128,
+                credentials=credentials,
+            )
+    except Exception as exc:
+        logger.warning(
+            "Query rewrite failed; omitting variant error_type=%s",
+            type(exc).__name__,
         )
-    return rewritten.strip() or search_query
+        return None
+    rewritten = rewritten.strip()
+    return rewritten if rewritten and rewritten != search_query.strip() else None
 
 
 async def _hyde_passage(
     search_query: str,
     query_transform_model: ChatModel,
     credentials: LlmProviderCredentials | None = None,
-) -> str:
-    with timed("retrieval.hyde"):
-        hyde = await transform_query(
-            search_query,
-            query_transform_model,
-            system_prompt=HYDE_SYSTEM_PROMPT,
-            temperature=0.2,
-            top_p=1.0,
-            max_tokens=200,
-            credentials=credentials,
+) -> str | None:
+    try:
+        with timed("retrieval.hyde"):
+            hyde = await transform_query(
+                search_query,
+                query_transform_model,
+                system_prompt=HYDE_SYSTEM_PROMPT,
+                temperature=0.2,
+                top_p=1.0,
+                max_tokens=200,
+                credentials=credentials,
+            )
+    except Exception as exc:
+        logger.warning(
+            "HyDE generation failed; omitting variant error_type=%s",
+            type(exc).__name__,
         )
-    return hyde.strip() or search_query
+        return None
+    hyde = hyde.strip()
+    return hyde if hyde and hyde != search_query.strip() else None

@@ -125,6 +125,9 @@ class Result:
     rank: int | None = None
     n_candidates: int = 0
     best_distance: float | None = None
+    effective_transform_mode: QueryTransformMode | None = None
+    effective_initial_k: int | None = None
+    effective_per_query_k: int | None = None
 
 
 @dataclass
@@ -253,7 +256,7 @@ async def evaluate_one(
     variants = [
         (variant.text, variant.is_document) for variant in variant_bundle.variants
     ]
-    budget = retrieval_budget(transform_mode, initial_k)
+    budget = retrieval_budget(variant_bundle.mode, initial_k)
     ideal_probe_limit = max(ideal_limit, budget.per_query_k)
 
     embeddings = await asyncio.gather(
@@ -394,6 +397,9 @@ async def evaluate_one(
         rank=rank,
         n_candidates=len(cand_keys),
         best_distance=round(best_distance, 4) if best_distance is not None else None,
+        effective_transform_mode=variant_bundle.mode,
+        effective_initial_k=budget.initial_k,
+        effective_per_query_k=budget.per_query_k,
     )
 
 
@@ -423,8 +429,6 @@ async def main_async(ns: argparse.Namespace) -> int:
     embedding_model = Model(ns.embedding_model)
     qt_model = Model(ns.query_transform_model)
     transform_mode = QueryTransformMode.RAW if ns.no_transform else ns.transform_mode
-    budget = retrieval_budget(transform_mode, ns.initial_k)
-    ideal_probe_limit = max(ns.ideal_limit, budget.per_query_k)
 
     init_http_client()
     db = Database(dsn=settings.DATABASE_URL)
@@ -444,7 +448,7 @@ async def main_async(ns: argparse.Namespace) -> int:
                         qt_model=qt_model,
                         initial_k=ns.initial_k,
                         top_k=ns.top_k,
-                        ideal_limit=ideal_probe_limit,
+                        ideal_limit=ns.ideal_limit,
                         transform_mode=transform_mode,
                     )
                 except Exception as exc:  # one bad example shouldn't abort the run
@@ -461,21 +465,28 @@ async def main_async(ns: argparse.Namespace) -> int:
 
     header = (
         f"golden={ns.golden}  n={len(examples)}  embed={embedding_model.value}  "
-        f"qt={qt_model.value}  transform_mode={transform_mode.value}  "
-        f"initial_k={budget.initial_k}  per_query_k={budget.per_query_k}  ideal_limit={ideal_probe_limit}  top_k={ns.top_k}  reranker_min={settings.RERANKER_MIN_SCORE}"
+        f"qt={qt_model.value}  requested_transform_mode={transform_mode.value}  "
+        f"requested_initial_k={ns.initial_k}  budget=per-example-effective-mode  "
+        f"ideal_limit_floor={ns.ideal_limit}  top_k={ns.top_k}  "
+        f"reranker_min={settings.RERANKER_MIN_SCORE}"
     )
     print(header)
     print(agg.report())
 
     if ns.json:
+        requested_budget = retrieval_budget(transform_mode, ns.initial_k)
         out = {
             "config": {
                 "embedding_model": embedding_model.value,
                 "query_transform_model": qt_model.value,
                 "query_transform_mode": transform_mode.value,
-                "initial_k": budget.initial_k,
-                "per_query_k": budget.per_query_k,
-                "ideal_limit": ideal_probe_limit,
+                "initial_k": requested_budget.initial_k,
+                "per_query_k": requested_budget.per_query_k,
+                "ideal_limit": max(ns.ideal_limit, requested_budget.per_query_k),
+                "requested_query_transform_mode": transform_mode.value,
+                "requested_initial_k": ns.initial_k,
+                "budget_scope": "per_example_effective_mode",
+                "ideal_limit_floor": ns.ideal_limit,
                 "top_k": ns.top_k,
                 "reranker_min_score": settings.RERANKER_MIN_SCORE,
             },
@@ -490,6 +501,13 @@ async def main_async(ns: argparse.Namespace) -> int:
                     "final": r.final,
                     "rank": r.rank,
                     "best_distance": r.best_distance,
+                    "effective_transform_mode": (
+                        r.effective_transform_mode.value
+                        if r.effective_transform_mode is not None
+                        else None
+                    ),
+                    "effective_initial_k": r.effective_initial_k,
+                    "effective_per_query_k": r.effective_per_query_k,
                 }
                 for r in agg.results
             ],

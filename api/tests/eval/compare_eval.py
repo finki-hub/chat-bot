@@ -1,14 +1,17 @@
 import argparse
-import json
 import sys
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Final, Literal
+from typing import Final
 
-from . import eval_json_path, resolve_eval_json_path
-
-AnchorType = Literal["Q", "C", "none"]
-JsonValue = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+from . import eval_json_path
+from .compare_eval_models import (
+    EffectiveRetrievalConfig,
+    EvalCase,
+    EvalJsonError,
+    JsonValue,
+    load_eval,
+    parse_cases,
+)
 
 BUCKETS: Final = (
     "overall",
@@ -18,42 +21,6 @@ BUCKETS: Final = (
     "difficulty=hard",
     "abstain",
 )
-
-
-class EvalJsonError(Exception):
-    pass
-
-
-@dataclass(frozen=True, slots=True)
-class EvalCase:
-    id: str
-    anchor_type: AnchorType
-    difficulty: str
-    category: str
-    ann_ideal: bool
-    ann_prod: bool
-    final: bool
-    rank: int | None
-
-    @property
-    def is_abstain(self) -> bool:
-        return self.anchor_type == "none"
-
-    @property
-    def succeeded(self) -> bool:
-        return not self.final if self.is_abstain else self.final
-
-    @property
-    def failure_reason(self) -> str:
-        if self.succeeded:
-            return "PASS"
-        if self.is_abstain:
-            return "ABSTAIN-LEAK"
-        if not self.ann_ideal:
-            return "ANN-MISS"
-        if not self.ann_prod:
-            return "ANN-PROD-MISS"
-        return "RERANK-MISS"
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,78 +46,7 @@ class EvalComparison:
     fixed: list[CaseDelta]
     new_regressions: list[CaseDelta]
     unchanged_misses: list[CaseDelta]
-
-
-def _mapping(value: JsonValue, path: str) -> dict[str, JsonValue]:
-    if isinstance(value, dict):
-        return value
-    raise EvalJsonError(f"{path}: expected object")
-
-
-def _items(value: JsonValue, path: str) -> list[JsonValue]:
-    if isinstance(value, list):
-        return value
-    raise EvalJsonError(f"{path}: expected array")
-
-
-def _text(value: JsonValue, path: str) -> str:
-    if isinstance(value, str):
-        return value
-    raise EvalJsonError(f"{path}: expected string")
-
-
-def _flag(value: JsonValue, path: str) -> bool:
-    if isinstance(value, bool):
-        return value
-    raise EvalJsonError(f"{path}: expected boolean")
-
-
-def _rank(value: JsonValue, path: str) -> int | None:
-    if value is None:
-        return None
-    if isinstance(value, int):
-        return value
-    raise EvalJsonError(f"{path}: expected integer or null")
-
-
-def _anchor_type(value: JsonValue, path: str) -> AnchorType:
-    raw = _text(_mapping(value, path).get("type"), f"{path}.type")
-    if raw == "Q":
-        return "Q"
-    if raw == "C":
-        return "C"
-    if raw == "none":
-        return "none"
-    raise EvalJsonError(f"{path}.type: expected Q, C, or none")
-
-
-def _case(value: JsonValue, path: str) -> EvalCase:
-    row = _mapping(value, path)
-    return EvalCase(
-        id=_text(row.get("id"), f"{path}.id"),
-        anchor_type=_anchor_type(row.get("anchor"), f"{path}.anchor"),
-        difficulty=_text(row.get("difficulty", ""), f"{path}.difficulty"),
-        category=_text(row.get("category", ""), f"{path}.category"),
-        ann_ideal=_flag(row.get("ann_ideal"), f"{path}.ann_ideal"),
-        ann_prod=_flag(row.get("ann_prod"), f"{path}.ann_prod"),
-        final=_flag(row.get("final"), f"{path}.final"),
-        rank=_rank(row.get("rank"), f"{path}.rank"),
-    )
-
-
-def _cases(data: dict[str, JsonValue], path: str) -> dict[str, EvalCase]:
-    rows = _items(data.get("results"), f"{path}.results")
-    parsed = [_case(row, f"{path}.results[{index}]") for index, row in enumerate(rows)]
-    return {case.id: case for case in parsed}
-
-
-def load_eval(path: Path) -> dict[str, EvalCase]:
-    try:
-        safe_path = resolve_eval_json_path(path)
-        data: JsonValue = json.loads(safe_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        raise EvalJsonError(f"{path}: {exc}") from exc
-    return _cases(_mapping(data, str(safe_path)), str(safe_path))
+    incomparable_configs: list[CaseDelta]
 
 
 def _in_bucket(case: EvalCase, bucket: str) -> bool:
@@ -185,7 +81,10 @@ def compare_runs(
     baseline: dict[str, JsonValue],
     current: dict[str, JsonValue],
 ) -> EvalComparison:
-    return compare_cases(_cases(baseline, "baseline"), _cases(current, "current"))
+    return compare_cases(
+        parse_cases(baseline, "baseline"),
+        parse_cases(current, "current"),
+    )
 
 
 def compare_cases(
@@ -201,25 +100,37 @@ def compare_cases(
     pairs = [
         (baseline[id_], current[id_]) for id_ in sorted(baseline_ids & current_ids)
     ]
-    baseline_cases = [baseline_case for baseline_case, _current_case in pairs]
-    current_cases = [current_case for _baseline_case, current_case in pairs]
+    incomparable_configs = [
+        CaseDelta(base, cur)
+        for base, cur in pairs
+        if not base.used_requested_config or not cur.used_requested_config
+    ]
+    comparable_pairs = [
+        (base, cur)
+        for base, cur in pairs
+        if base.used_requested_config and cur.used_requested_config
+    ]
+    baseline_cases = [
+        baseline_case for baseline_case, _current_case in comparable_pairs
+    ]
+    current_cases = [current_case for _baseline_case, current_case in comparable_pairs]
     bucket_deltas = {
         bucket: (_summary(baseline_cases, bucket), _summary(current_cases, bucket))
         for bucket in BUCKETS
     }
     fixed = [
         CaseDelta(base, cur)
-        for base, cur in pairs
+        for base, cur in comparable_pairs
         if not base.succeeded and cur.succeeded
     ]
     regressions = [
         CaseDelta(base, cur)
-        for base, cur in pairs
+        for base, cur in comparable_pairs
         if base.succeeded and not cur.succeeded
     ]
     unchanged = [
         CaseDelta(base, cur)
-        for base, cur in pairs
+        for base, cur in comparable_pairs
         if not base.succeeded and not cur.succeeded
     ]
     return EvalComparison(
@@ -227,6 +138,7 @@ def compare_cases(
         fixed=fixed,
         new_regressions=regressions,
         unchanged_misses=unchanged,
+        incomparable_configs=incomparable_configs,
     )
 
 
@@ -250,6 +162,15 @@ def _append_cases(lines: list[str], title: str, cases: list[CaseDelta]) -> None:
     )
 
 
+def _format_config(config: EffectiveRetrievalConfig | None) -> str:
+    if config is None:
+        return "unavailable"
+    return (
+        f"{config.transform_mode}(initial_k={config.initial_k}, "
+        f"per_query_k={config.per_query_k})"
+    )
+
+
 def render_report(comparison: EvalComparison, *, max_regressions: int = 0) -> str:
     lines = ["Retrieval eval comparison", "", "Buckets"]
     for bucket, (baseline, current) in comparison.bucket_deltas.items():
@@ -264,10 +185,31 @@ def render_report(comparison: EvalComparison, *, max_regressions: int = 0) -> st
     _append_cases(lines, "New regressions", comparison.new_regressions)
     lines.append("")
     _append_cases(lines, "Unchanged misses", comparison.unchanged_misses)
-    decision = "FAIL" if len(comparison.new_regressions) > max_regressions else "PASS"
+    lines.append("")
+    lines.append("Incomparable effective retrieval configurations")
+    lines.extend(
+        [
+            f"  {case.current.id}: baseline requested="
+            f"{_format_config(case.baseline.requested_config)} effective="
+            f"{_format_config(case.baseline.effective_config)}; current requested="
+            f"{_format_config(case.current.requested_config)} effective="
+            f"{_format_config(case.current.effective_config)}"
+            for case in comparison.incomparable_configs
+        ]
+        if comparison.incomparable_configs
+        else ["  none"],
+    )
+    if comparison.incomparable_configs:
+        decision = "INVALID"
+    elif len(comparison.new_regressions) > max_regressions:
+        decision = "FAIL"
+    else:
+        decision = "PASS"
     lines.append("")
     lines.append(
-        f"Decision: {decision} ({len(comparison.new_regressions)} new regressions, budget {max_regressions})",
+        f"Decision: {decision} ({len(comparison.new_regressions)} new regressions, "
+        f"{len(comparison.incomparable_configs)} incomparable configurations, "
+        f"budget {max_regressions})",
     )
     return "\n".join(lines)
 
@@ -284,6 +226,8 @@ def main(argv: list[str] | None = None) -> int:
         print(exc, file=sys.stderr)
         return 2
     print(render_report(comparison, max_regressions=ns.max_regressions))
+    if comparison.incomparable_configs:
+        return 2
     return 1 if len(comparison.new_regressions) > ns.max_regressions else 0
 
 

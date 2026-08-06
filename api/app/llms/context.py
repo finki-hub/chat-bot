@@ -319,11 +319,11 @@ async def get_retrieved_context_with_sources(
 
     logger.info(
         "Query transform mode %s produced variants: %s",
-        effective_transform_mode.value,
+        variant_bundle.mode.value,
         [(variant.kind, len(variant.text)) for variant in variant_bundle.variants],
     )
 
-    budget = retrieval_budget(effective_transform_mode, initial_k)
+    budget = retrieval_budget(variant_bundle.mode, initial_k)
 
     _stage("retrieve")
 
@@ -376,7 +376,10 @@ async def get_retrieved_context_with_sources(
             )
 
         if not candidates:
-            return RetrievedContext(text="")
+            return RetrievedContext(
+                text="",
+                effective_transform_mode=variant_bundle.mode,
+            )
 
     except Exception as e:
         raise RetrievalError("Failed during multi-query vector search") from e
@@ -490,6 +493,7 @@ async def get_retrieved_context_with_sources(
         text = await _expand_and_render(db, final, embedding_model)
     return RetrievedContext(
         text=text,
+        effective_transform_mode=variant_bundle.mode,
         sources=sources,
     )
 
@@ -506,9 +510,10 @@ async def _contextualize_query(
     """
     if not history_text:
         return query
+    transform_input = f"Претходен разговор:\n{history_text}\n\nНово прашање: {query}"
     try:
         condensed = await transform_query(
-            f"Претходен разговор:\n{history_text}\n\nНово прашање: {query}",
+            transform_input,
             query_transform_model,
             system_prompt=CONTEXTUALIZE_SYSTEM_PROMPT,
             temperature=0.0,
@@ -523,6 +528,8 @@ async def _contextualize_query(
         )
         return query
     condensed = condensed.strip()
+    if condensed == transform_input.strip():
+        return query
     if condensed and condensed != query:
         logger.info(
             "Contextualized query: query_len=%d condensed_len=%d history_char_len=%d",
