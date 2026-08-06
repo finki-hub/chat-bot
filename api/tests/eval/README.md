@@ -103,6 +103,10 @@ The comparison report shows bucket deltas, fixed cases, newly broken cases, and
 unchanged misses. It exits non-zero when new regressions exceed `--max-regressions`
 (default `0`), so it can be used as a manual release gate before changing embeddings,
 thresholds, reranking, query transformation, chunking, or corpus ingestion.
+Cases whose effective query-transform mode or retrieval budget differs from that run's
+requested configuration are reported as incomparable and make the comparison invalid
+instead of being counted as retrieval regressions. Intentional comparisons between two
+different requested modes remain valid when each run actually used its requested mode.
 
 Run the same golden set across modes to isolate query-transformation impact:
 
