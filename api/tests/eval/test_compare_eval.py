@@ -4,6 +4,7 @@ from math import isclose
 
 from . import eval_json_path
 from .compare_eval import (
+    JsonValue,
     _non_negative_int,
     compare_runs,
     main,
@@ -20,15 +21,15 @@ def _result(
     ann_ideal: bool = True,
     ann_prod: bool = True,
     difficulty: str = "easy",
-) -> dict:
-    anchor: dict[str, int | str] = {"type": anchor_type}
+) -> dict[str, JsonValue]:
+    anchor: dict[str, JsonValue] = {"type": anchor_type}
     if anchor_type == "Q":
         anchor["name"] = f"question-{example_id}"
     if anchor_type == "C":
         anchor["document_name"] = f"document-{example_id}"
         anchor["chunk_index"] = 1
 
-    return {
+    result: dict[str, JsonValue] = {
         "id": example_id,
         "difficulty": difficulty,
         "category": "test",
@@ -39,16 +40,19 @@ def _result(
         "rank": 1 if final else None,
         "best_distance": 0.24,
     }
+    return result
 
 
-def _run(results: list[dict]) -> dict:
-    return {
-        "config": {
-            "embedding_model": "BAAI/bge-m3",
-            "query_transform_mode": "rewrite_hyde",
-        },
-        "results": results,
+def _run(results: list[dict[str, JsonValue]]) -> dict[str, JsonValue]:
+    config: dict[str, JsonValue] = {
+        "embedding_model": "BAAI/bge-m3",
+        "query_transform_mode": "rewrite_hyde",
+        "initial_k": 40,
+        "per_query_k": 10,
     }
+    result_values: list[JsonValue] = []
+    result_values.extend(results)
+    return {"config": config, "results": result_values}
 
 
 def test_compare_runs_identifies_decision_cases_by_bucket():
