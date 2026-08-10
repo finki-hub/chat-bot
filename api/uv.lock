@@ -97,7 +97,7 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=1.4.1" },
     { name = "langchain-text-splitters", specifier = ">=1.1.2" },
     { name = "langgraph", specifier = ">=1.2.10" },
-    { name = "posthog", specifier = ">=7.38.0" },
+    { name = "posthog", specifier = ">=7.38.1" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "tzdata", specifier = ">=2026.3" },
 ]
@@ -1234,7 +1234,7 @@ wheels = [
 
 [[package]]
 name = "posthog"
-version = "7.38.0"
+version = "7.38.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "backoff" },
@@ -1242,9 +1242,9 @@ dependencies = [
     { name = "requests" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5e/4a/85eb89b53601e535576946574d6fd47adfd0b60d7041ec2050943847d09b/posthog-7.38.0.tar.gz", hash = "sha256:af2d221cd43421d0aefe563e9c688a73b568f6675466e5e4c7e085ce8aa34e43", size = 408748, upload-time = "2026-08-05T19:15:43.958Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/89/89/56f74e20223ed5794c3a0eb4596b90f3b94d5a69ced0b7981e6314569842/posthog-7.38.1.tar.gz", hash = "sha256:ce1f2e0f1abc10a1e66167b08c008ab6243d3b7d2271d85c4f337e37fc3cc4d4", size = 421381, upload-time = "2026-08-06T23:52:06.88Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a9/b8/a868543762a60af7fc82b1368bd192d5763a1c351a8b6aedb61320394374/posthog-7.38.0-py3-none-any.whl", hash = "sha256:5d767fcc72dad6adf5c18eac85b499010e11a49342ce898a94b6989b5d0405c1", size = 482750, upload-time = "2026-08-05T19:15:41.721Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/b4/f4784924335356f410cdbee3c2710fa3ef69cd4a4ca1b63605e33676d0e0/posthog-7.38.1-py3-none-any.whl", hash = "sha256:147e225371ffa52c7591b6e6784950ce07debd12da886ae131a2b10516c6da8a", size = 496146, upload-time = "2026-08-06T23:52:05.128Z" },
 ]
 
 [[package]]
