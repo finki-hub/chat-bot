@@ -13,6 +13,7 @@ from app.llms.context import get_retrieved_context_with_sources
 from app.llms.models import Model
 from app.llms.query_modes import QueryTransformMode
 from app.llms.query_variants import QueryVariant, QueryVariantBundle
+from app.schemas.documents import ChunkSchema
 from app.schemas.questions import QuestionSchema
 
 
@@ -210,3 +211,57 @@ def test_lexical_faq_search_is_skipped_without_vector_domain_signal(
 
     assert result.text == ""
     assert lexical_calls == 0
+
+
+def test_reranker_failure_falls_back_to_dense_candidates_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lexical_faq = QuestionSchema(
+        id=uuid4(),
+        name="Студиски програми",
+        content="Лексички FAQ кандидат.",
+        links={},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    dense_chunk = ChunkSchema(
+        id=uuid4(),
+        document_id=uuid4(),
+        document_name="rules",
+        document_title="Правилник",
+        chunk_index=0,
+        content="Густо пронајден документ.",
+        distance=0.2,
+    )
+
+    async def embed(*args, **kwargs):
+        return [0.1]
+
+    async def vector_search(*args, **kwargs):
+        return [], [dense_chunk]
+
+    async def lexical_search(*args, **kwargs):
+        return [lexical_faq]
+
+    async def failing_reranker(*args, **kwargs):
+        raise RuntimeError("reranker unavailable")
+
+    monkeypatch.setattr(context_module, "_embed_variant", embed)
+    monkeypatch.setattr(context_module, "_search_both", vector_search)
+    monkeypatch.setattr(context_module, "get_matching_questions", lexical_search)
+    monkeypatch.setattr(context_module, "_post_rerank", failing_reranker)
+
+    async def run():
+        return await get_retrieved_context_with_sources(
+            Database("postgresql://unused"),
+            "smerovi na finki",
+            Model.BGE_M3_LOCAL,
+            Model.GPT_5_4_MINI,
+            query_transform_mode=QueryTransformMode.RAW,
+            top_k=1,
+        )
+
+    result = anyio.run(run)
+
+    assert dense_chunk.content in result.text
+    assert lexical_faq.content not in result.text

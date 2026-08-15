@@ -524,7 +524,10 @@ async def get_retrieved_context_with_sources(
             "Reranking failed; using vector order error_type=%s",
             type(exc).__name__,
         )
-        final = _select_with_source_priority(candidates, top_k)
+        dense_candidates = [
+            candidate for candidate in candidates if candidate.distance is not None
+        ]
+        final = _select_with_source_priority(dense_candidates, top_k)
         sources = ()
 
     record_retrieval_ids([c.key for c in final[:_RETRIEVAL_IDS_CAP]])
