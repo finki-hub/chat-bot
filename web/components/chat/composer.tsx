@@ -231,7 +231,7 @@ export const Composer = ({
             }
           />
         </div>
-        <p className="mt-2 text-center text-xs text-muted-foreground">
+        <p className="mt-2 text-balance text-center text-xs text-muted-foreground">
           {t('composer.disclaimer')}
         </p>
       </div>
