@@ -225,16 +225,17 @@ async def get_matching_questions(
             q.created_at,
             q.updated_at,
             ts_rank_cd(
-                setweight(to_tsvector('simple', q.name), 'A') ||
-                setweight(to_tsvector('simple', q.content), 'B'),
+                lexical_document.value,
                 lexical_query.value
             ) AS lexical_score
         FROM question q
         CROSS JOIN lexical_query
-        WHERE lexical_query.value @@ (
-            setweight(to_tsvector('simple', q.name), 'A') ||
-            setweight(to_tsvector('simple', q.content), 'B')
-        )
+        CROSS JOIN LATERAL (
+            SELECT
+                setweight(to_tsvector('simple', q.name), 'A') ||
+                setweight(to_tsvector('simple', q.content), 'B') AS value
+        ) AS lexical_document
+        WHERE lexical_document.value @@ lexical_query.value
     )
     SELECT id, name, content, user_id, links, created_at, updated_at
     FROM ranked

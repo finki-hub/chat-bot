@@ -49,6 +49,8 @@ def test_lexical_faq_search_uses_weighted_or_query(
     assert "websearch_to_tsquery" in sql
     assert "'simple'" in sql
     assert "setweight" in sql
+    assert sql.count("setweight") == 2
+    assert "lexical_document.value @@ lexical_query.value" in sql
     assert " OR " in sql
     assert query == "smerovi SEIS23"
     assert limit == 7
