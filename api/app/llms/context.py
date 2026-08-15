@@ -360,14 +360,10 @@ async def get_retrieved_context_with_sources(
         if lexical_faq_expansion_allowed(
             (
                 question.distance
-                for questions, _chunks in search_results
+                for questions, _ in search_results
                 for question in questions
             ),
-            (
-                chunk.distance
-                for _questions, chunks in search_results
-                for chunk in chunks
-            ),
+            (chunk.distance for _, chunks in search_results for chunk in chunks),
             has_transliterated_query=len(lexical_queries) > 1,
         ):
             with timed("retrieval.lexical_search"):
@@ -385,16 +381,17 @@ async def get_retrieved_context_with_sources(
                 except PostgresError:
                     logger.warning(
                         "Lexical FAQ search unavailable; continuing with vector candidates",
+                        exc_info=True,
                     )
 
         candidates = _build_candidates(
             [
-                *[questions for questions, _chunks in search_results],
+                *[questions for questions, _ in search_results],
                 *lexical_results,
             ],
             [
-                *[chunks for _questions, chunks in search_results],
-                *[[] for _questions in lexical_results],
+                *[chunks for _, chunks in search_results],
+                *[[] for _ in lexical_results],
             ],
         )
 

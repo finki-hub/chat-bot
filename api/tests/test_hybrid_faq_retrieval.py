@@ -133,6 +133,7 @@ def test_normalized_lexical_faq_reaches_existing_reranker(
 
 
 def test_lexical_faq_failure_preserves_dense_retrieval(
+    caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     vector_faq = QuestionSchema(
@@ -178,6 +179,7 @@ def test_lexical_faq_failure_preserves_dense_retrieval(
     result = anyio.run(run)
 
     assert result.sources[0].title == vector_faq.name
+    assert any(record.exc_info is not None for record in caplog.records)
 
 
 def test_lexical_faq_search_is_skipped_without_vector_domain_signal(
