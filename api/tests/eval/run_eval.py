@@ -40,9 +40,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from asyncpg import PostgresError
+
 from app.data.connection import Database
 from app.data.documents import get_closest_chunks
-from app.data.questions import get_closest_questions
+from app.data.questions import get_closest_questions, get_matching_questions
 from app.llms.context import (
     _Candidate,
     _chunk_candidate,
@@ -53,10 +55,12 @@ from app.llms.context import (
 )
 from app.llms.models import MODEL_DISTANCE_THRESHOLDS, Model
 from app.llms.query_modes import QueryTransformMode
+from app.llms.query_normalization import query_search_variants
 from app.llms.query_variants import (
     build_query_variants,
 )
 from app.llms.retrieval_budget import retrieval_budget
+from app.llms.retrieval_routing import lexical_faq_expansion_allowed
 from app.schemas.documents import ChunkSchema
 from app.schemas.questions import QuestionSchema
 from app.utils.http_client import close_http_client, init_http_client
@@ -80,6 +84,7 @@ class Example:
     anchor: Mapping[str, str | int]
     category: str = ""
     difficulty: str = ""
+    cohort: str = ""
 
     @property
     def is_abstain(self) -> bool:
@@ -204,6 +209,15 @@ class Aggregate:
                 lambda r: not r.example.is_abstain and r.example.difficulty == "hard",
             ),
         )
+        for cohort in sorted({r.example.cohort for r in retr if r.example.cohort}):
+            block(
+                f"cohort={cohort}",
+                self._subset(
+                    lambda r, cohort=cohort: (
+                        not r.example.is_abstain and r.example.cohort == cohort
+                    ),
+                ),
+            )
 
         if abst:
             n = len(abst)
@@ -330,6 +344,30 @@ async def evaluate_one(
             for emb in embeddings
         ),
     )
+    lexical_lists: list[list[QuestionSchema]] = []
+    lexical_queries = query_search_variants(ex.query)
+    if lexical_faq_expansion_allowed(
+        (
+            question.distance
+            for questions, _chunks in prod_lists
+            for question in questions
+        ),
+        (
+            chunk.distance
+            for _questions, chunks in prod_lists
+            for chunk in chunks
+        ),
+        has_transliterated_query=len(lexical_queries) > 1,
+    ):
+        try:
+            lexical_lists = await asyncio.gather(
+                *(
+                    get_matching_questions(db, query, limit=budget.per_query_k)
+                    for query in lexical_queries
+                ),
+            )
+        except PostgresError:
+            lexical_lists = []
 
     seen: set[str] = set()
     cand_keys: list[str] = []
@@ -360,6 +398,17 @@ async def evaluate_one(
             cand_nat.append(chunk_key(ch))
             if chunk_key(ch) == want:
                 ann_prod = True
+
+    for questions in lexical_lists:
+        for question in questions:
+            candidate = _question_candidate(question)
+            if candidate.key in seen:
+                continue
+            seen.add(candidate.key)
+            cand_keys.append(candidate.key)
+            candidates.append(candidate)
+            cand_rerank.append(candidate.rerank_text)
+            cand_nat.append(question_key(question))
 
     final_hit = False
     rank: int | None = None
@@ -417,6 +466,7 @@ def load_golden(path: Path) -> list[Example]:
                 anchor=row["anchor"],
                 category=row.get("category", ""),
                 difficulty=row.get("difficulty", ""),
+                cohort=row.get("cohort", ""),
             ),
         )
     return examples
@@ -495,6 +545,7 @@ async def main_async(ns: argparse.Namespace) -> int:
                     "id": r.example.id,
                     "difficulty": r.example.difficulty,
                     "category": r.example.category,
+                    "cohort": r.example.cohort,
                     "anchor": r.example.anchor,
                     "ann_ideal": r.ann_ideal,
                     "ann_prod": r.ann_prod,
