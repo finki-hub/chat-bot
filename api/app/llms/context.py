@@ -5,9 +5,11 @@ from dataclasses import dataclass
 from typing import assert_never
 from uuid import UUID
 
+from asyncpg import PostgresError
+
 from app.data.connection import Database
 from app.data.documents import get_chunks_window, get_closest_chunks
-from app.data.questions import get_closest_questions
+from app.data.questions import get_closest_questions, get_matching_questions
 from app.llms.embeddings import generate_embeddings
 from app.llms.models import ChatModel, Model
 from app.llms.prompts import CONTEXTUALIZE_SYSTEM_PROMPT
@@ -16,6 +18,7 @@ from app.llms.provider_credentials import (
     has_provider_credential,
 )
 from app.llms.query_modes import QueryTransformMode
+from app.llms.query_normalization import query_search_variants
 from app.llms.query_transform import transform_query
 from app.llms.query_variants import (
     QueryVariantKind,
@@ -29,6 +32,7 @@ from app.llms.retrieval_result import (
     RetrievedContext,
     visible_sources,
 )
+from app.llms.retrieval_routing import lexical_faq_expansion_allowed
 from app.llms.text_utils import _prepare_text_for_embedding
 from app.schemas.documents import ChunkSchema
 from app.schemas.questions import QuestionSchema
@@ -351,9 +355,47 @@ async def get_retrieved_context_with_sources(
                 ),
             )
 
+        lexical_results: list[list[QuestionSchema]] = []
+        lexical_queries = query_search_variants(search_query)
+        if lexical_faq_expansion_allowed(
+            (
+                question.distance
+                for questions, _chunks in search_results
+                for question in questions
+            ),
+            (
+                chunk.distance
+                for _questions, chunks in search_results
+                for chunk in chunks
+            ),
+            has_transliterated_query=len(lexical_queries) > 1,
+        ):
+            with timed("retrieval.lexical_search"):
+                try:
+                    lexical_results = await asyncio.gather(
+                        *(
+                            get_matching_questions(
+                                db,
+                                lexical_query,
+                                limit=budget.per_query_k,
+                            )
+                            for lexical_query in lexical_queries
+                        ),
+                    )
+                except PostgresError:
+                    logger.warning(
+                        "Lexical FAQ search unavailable; continuing with vector candidates",
+                    )
+
         candidates = _build_candidates(
-            [questions for questions, _chunks in search_results],
-            [chunks for _questions, chunks in search_results],
+            [
+                *[questions for questions, _chunks in search_results],
+                *lexical_results,
+            ],
+            [
+                *[chunks for _questions, chunks in search_results],
+                *[[] for _questions in lexical_results],
+            ],
         )
 
         distances = [c.distance for c in candidates if c.distance is not None]
