@@ -18,7 +18,9 @@ def test_lexical_faq_expansion_rejects_closer_document_signal() -> None:
     assert lexical_faq_expansion_allowed([0.4], [0.2, 0.3]) is False
 
 
-def test_lexical_faq_expansion_accepts_document_signal_for_transliterated_query() -> None:
+def test_lexical_faq_expansion_accepts_document_signal_for_transliterated_query() -> (
+    None
+):
     assert (
         lexical_faq_expansion_allowed(
             [],

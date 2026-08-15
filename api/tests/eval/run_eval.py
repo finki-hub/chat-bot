@@ -352,11 +352,7 @@ async def evaluate_one(
             for questions, _chunks in prod_lists
             for question in questions
         ),
-        (
-            chunk.distance
-            for _questions, chunks in prod_lists
-            for chunk in chunks
-        ),
+        (chunk.distance for _questions, chunks in prod_lists for chunk in chunks),
         has_transliterated_query=len(lexical_queries) > 1,
     ):
         try:
