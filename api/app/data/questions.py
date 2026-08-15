@@ -200,6 +200,62 @@ async def get_nth_question_query(db: Database, n: int) -> QuestionSchema | None:
     )
 
 
+async def get_matching_questions(
+    db: Database,
+    query: str,
+    limit: int = 8,
+) -> list[QuestionSchema]:
+    """Return FAQ rows matching any normalized lexical query token."""
+    sql = """
+    WITH lexical_query AS (
+        SELECT websearch_to_tsquery(
+            'simple',
+            array_to_string(
+                tsvector_to_array(to_tsvector('simple', $1)),
+                ' OR '
+            )
+        ) AS value
+    ), ranked AS (
+        SELECT
+            q.id,
+            q.name,
+            q.content,
+            q.user_id,
+            q.links,
+            q.created_at,
+            q.updated_at,
+            ts_rank_cd(
+                setweight(to_tsvector('simple', q.name), 'A') ||
+                setweight(to_tsvector('simple', q.content), 'B'),
+                lexical_query.value
+            ) AS lexical_score
+        FROM question q
+        CROSS JOIN lexical_query
+        WHERE lexical_query.value @@ (
+            setweight(to_tsvector('simple', q.name), 'A') ||
+            setweight(to_tsvector('simple', q.content), 'B')
+        )
+    )
+    SELECT id, name, content, user_id, links, created_at, updated_at
+    FROM ranked
+    ORDER BY lexical_score DESC, name ASC
+    LIMIT $2
+    """
+    result = await db.fetch(sql, query, limit)
+    return [
+        QuestionSchema(
+            id=row["id"],
+            name=row["name"],
+            content=row["content"],
+            user_id=row["user_id"],
+            links=json.loads(row["links"]) if row["links"] else {},
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+        for row in result
+    ]
+
+
 async def get_closest_questions(
     db: Database,
     embedded_query: list[float],
