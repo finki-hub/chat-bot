@@ -7,7 +7,11 @@ def lexical_faq_expansion_allowed(
     *,
     has_transliterated_query: bool = False,
 ) -> bool:
-    """Return whether dense retrieval identifies FAQ as the nearest source type."""
+    """Return whether dense results support lexical FAQ expansion.
+
+    Romanized queries may expand when either dense source type confirms the domain.
+    Other queries expand only when FAQ is the nearest dense source type.
+    """
     scored_faqs = [distance for distance in faq_distances if distance is not None]
     scored_chunks = [distance for distance in chunk_distances if distance is not None]
     if has_transliterated_query:
