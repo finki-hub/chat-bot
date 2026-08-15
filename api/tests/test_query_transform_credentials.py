@@ -35,6 +35,9 @@ def test_retrieval_uses_raw_query_when_hosted_transform_credential_is_missing(
     async def fake_search_both(*args, **kwargs):
         return [], []
 
+    async def fake_lexical_search(*args, **kwargs):
+        return []
+
     monkeypatch.setattr(
         context_module,
         "_contextualize_query",
@@ -47,6 +50,7 @@ def test_retrieval_uses_raw_query_when_hosted_transform_credential_is_missing(
     )
     monkeypatch.setattr(context_module, "_embed_variant", fake_embed_variant)
     monkeypatch.setattr(context_module, "_search_both", fake_search_both)
+    monkeypatch.setattr(context_module, "get_matching_questions", fake_lexical_search)
 
     async def collect():
         return await get_retrieved_context_with_sources(
@@ -105,11 +109,15 @@ def test_retrieval_uses_raw_depth_when_transformed_variants_are_omitted(
         search_limits.append(limit)
         return [], []
 
+    async def fake_lexical_search(*args, **kwargs):
+        return []
+
     monkeypatch.setattr(context_module, "has_provider_credential", lambda *args: True)
     monkeypatch.setattr(context_module, "_contextualize_query", return_query)
     monkeypatch.setattr(context_module, "build_query_variants", return_raw_bundle)
     monkeypatch.setattr(context_module, "_embed_variant", fake_embed_variant)
     monkeypatch.setattr(context_module, "_search_both", capture_search_limit)
+    monkeypatch.setattr(context_module, "get_matching_questions", fake_lexical_search)
     caplog.set_level(logging.INFO, logger="app.llms.context")
 
     async def collect():
