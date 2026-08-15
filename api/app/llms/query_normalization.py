@@ -79,4 +79,4 @@ def query_search_variants(query: str) -> tuple[str, ...]:
     """Return the original query and a distinct local Cyrillic variant."""
     normalized_query = normalize("NFC", query)
     transliterated = _WORD_RE.sub(_transliterate_token, normalized_query)
-    return (query, transliterated) if transliterated != query else (query,)
+    return (query, transliterated) if transliterated != normalized_query else (query,)

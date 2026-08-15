@@ -73,3 +73,11 @@ def test_decomposed_unsupported_token_is_preserved_whole() -> None:
     variants = query_search_variants(query)
 
     assert variants == (query, "café смерови")
+
+
+def test_normalization_only_change_does_not_add_search_variant() -> None:
+    query = "cafe\u0301"
+
+    variants = query_search_variants(query)
+
+    assert variants == (query,)
