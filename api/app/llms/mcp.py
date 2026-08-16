@@ -37,7 +37,7 @@ def build_mcp_client() -> MultiServerMCPClient:
     If the client is not already created, it initializes a new one.
     The client is configured for all provided MCP servers.
     """
-    global mcp_client  # noqa: PLW0603
+    global mcp_client  # ruff: ignore[PLW0603] -- this function owns the process-local client
 
     if mcp_client is not None:
         return mcp_client
@@ -105,7 +105,7 @@ async def get_mcp_tools() -> list[BaseTool]:
     This avoids creating a new MCP session on every request while still picking
     up newly registered tools once the TTL expires.
     """
-    global mcp_tools, mcp_tools_fetched_at  # noqa: PLW0603
+    global mcp_tools, mcp_tools_fetched_at  # ruff: ignore[PLW0603] -- this function owns the process-local TTL cache
 
     now = time.monotonic()
     ttl = settings.MCP_TOOLS_TTL
