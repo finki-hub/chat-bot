@@ -67,7 +67,7 @@ from app.utils.timing import (
     start_request_timings,
     timed,
 )
-from app.utils.topic import classify_language, classify_topic
+from app.utils.topic import classify_language, classify_script, classify_topic
 
 logger = logging.getLogger(__name__)
 
@@ -265,6 +265,7 @@ def _capture_chat_response(
         "retrieval_hit": retrieval_hit,
         "outcome": outcome,
         "language": classify_language(payload.query),
+        "query_script": classify_script(payload.query),
         "ttft_ms": _ms(timings.ttft_ms),
         "thinking_ms": _ms(timings.thinking_ms),
         "llm_generation_ms": _ms(generation_ms),
@@ -278,6 +279,16 @@ def _capture_chat_response(
         "query_transform_mode": effective_transform_mode.value,
         "candidate_count": timings.candidate_count,
         "top_distance": timings.top_distance,
+        "transliteration_variant_added": timings.transliteration_variant_added,
+        "lexical_search_outcome": timings.lexical_search_outcome,
+        "dense_faq_candidate_count": timings.dense_faq_candidate_count,
+        "dense_document_candidate_count": timings.dense_document_candidate_count,
+        "lexical_faq_candidate_count": timings.lexical_faq_candidate_count,
+        "final_faq_count": timings.final_faq_count,
+        "final_document_count": timings.final_document_count,
+        "lexical_only_final_count": timings.lexical_only_final_count,
+        "retrieval_path": timings.retrieval_path,
+        "reranker_fallback": timings.reranker_fallback,
         "context_char_len": observation.context_chars,
         "context_chunk_count": len(timings.retrieval_ids),
         "answer_char_len": observation.answer_chars,
