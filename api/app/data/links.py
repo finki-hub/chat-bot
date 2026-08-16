@@ -1,5 +1,5 @@
 from asyncpg import Record
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, JsonValue
 
 from app.data.connection import Database
 from app.schemas.links import CreateLinkSchema, LinkSchema
@@ -7,6 +7,8 @@ from app.schemas.links import CreateLinkSchema, LinkSchema
 _LINK_ALLOWED_COLUMNS: frozenset[str] = frozenset(
     {"name", "url", "description", "user_id"},
 )
+
+type LinkUpdateValue = JsonValue | BaseModel | HttpUrl
 
 
 async def get_links_query(db: Database) -> list[LinkSchema]:
@@ -66,7 +68,7 @@ async def create_link_query(
 async def update_link_query(
     db: Database,
     name: str,
-    updates: dict,
+    updates: dict[str, LinkUpdateValue],
 ) -> LinkSchema | None:
     if not updates:
         raise ValueError("No fields to update")
@@ -94,12 +96,13 @@ async def update_link_query(
     values.append(name)
     where_placeholder = f"${param_index}"
 
+    # ruff: ignore[S608] -- columns are checked against _LINK_ALLOWED_COLUMNS
     query = f"""
     UPDATE link
     SET {", ".join(set_clauses)}
     WHERE name = {where_placeholder}
     RETURNING *
-    """  # noqa: S608
+    """
 
     result = await db.fetchrow(query, *values)
     if not result:

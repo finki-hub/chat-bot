@@ -27,7 +27,7 @@ _active_staff_cache: tuple[float, frozenset[str]] | None = None
 
 
 async def get_active_staff_names() -> frozenset[str]:
-    global _active_staff_cache  # noqa: PLW0603
+    global _active_staff_cache  # ruff: ignore[PLW0603] -- this function owns the process-local TTL cache
 
     now = time.monotonic()
     cached = _active_staff_cache
