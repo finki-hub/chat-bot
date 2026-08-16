@@ -1,5 +1,10 @@
 """Residency-safe coarse topic labelling for chat queries (keyword match; label only)."""
 
+from typing import Literal
+from unicodedata import name
+
+type QueryScript = Literal["latin", "cyrillic", "mixed", "other"]
+
 OTHER_TOPIC = "other"
 
 _TOPIC_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -176,3 +181,19 @@ def classify_language(query: str) -> str:
     if cyrillic >= latin:
         return "mk"
     return "en"
+
+
+def classify_script(query: str) -> QueryScript:
+    has_cyrillic = False
+    has_latin = False
+    for character in query:
+        character_name = name(character, "")
+        has_cyrillic = has_cyrillic or "CYRILLIC" in character_name
+        has_latin = has_latin or "LATIN" in character_name
+        if has_cyrillic and has_latin:
+            return "mixed"
+    if has_cyrillic:
+        return "cyrillic"
+    if has_latin:
+        return "latin"
+    return "other"
