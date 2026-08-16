@@ -12,13 +12,11 @@ permissions:
 
 jobs:
   ruff:
-    uses: finki-hub/.github/.github/workflows/ruff.yaml@main
+    uses: ./.github/workflows/python-ruff.yaml
     with:
       working-directory: ./gpu-api
-    secrets: inherit
 
   mypy:
-    uses: finki-hub/.github/.github/workflows/mypy.yaml@main
+    uses: ./.github/workflows/python-mypy.yaml
     with:
       working-directory: ./gpu-api
-    secrets: inherit
