@@ -35,63 +35,83 @@ torchvision = [
 
 [tool.mypy]
 python_version = "3.14"
+plugins = ["pydantic.mypy"]
+check_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["app", "app.*", "gunicorn.conf"]
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_untyped_defs = true
+extra_checks = true
+no_implicit_reexport = true
+strict_equality = true
+strict_equality_for_none = true
+warn_unreachable = true
+warn_return_any = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
+xfail_strict = true
 
 [tool.ruff]
 target-version = "py314"
+line-length = 88
 
 [tool.ruff.lint]
-select = [
-  "F",
-  "E",
-  "W",
-  "I",
-  "N",
-  "UP",
-  "YTT",
-  "ANN",
-  "ASYNC",
-  "S",
-  "B",
-  "COM",
-  "C4",
-  "DTZ",
-  "FA",
-  "ISC",
-  "ICN",
-  "G",
-  "INP",
-  "PIE",
-  "PT",
-  "Q",
-  "RSE",
-  "RET",
-  "SLF",
-  "SIM",
-  "TID",
-  "PTH",
-  "PGH",
-  "PL",
-  "TRY",
-  "FLY",
-  "PERF",
-  "FURB",
-  "LOG",
-  "RUF",
-]
+select = ["ALL"]
+preview = true
+explicit-preview-rules = true
+extend-select = ["fast-api-non-annotated-dependency", "fallible-context-manager", "noqa-comments", "rule-codes-in-selectors"]
 ignore = [
-  "PLR2004",
-  "PLR0912",
-  "PLR0915",
-  "TRY003",
-  "PLR0911",
-  "RET504",
-  "RUF001",
-  "E501",
-  "PLR0913",
+  "missing-trailing-comma",
+  "missing-copyright-notice",
+  "D",
+  "DOC",
+  "line-too-long",
+  "EM",
+  "FBT",
+  "single-line-implicit-string-concatenation",
+  "complex-structure",
+  "too-many-return-statements",
+  "too-many-branches",
+  "too-many-arguments",
+  "too-many-locals",
+  "too-many-statements",
+  "magic-value-comparison",
+  "too-many-statements-in-try-clause",
+  "unnecessary-assign",
+  "ambiguous-unicode-character-string",
+  "unused-async",
+  "TC",
+  "raise-vanilla-args",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["INP001", "ANN", "S101"]
+"tests/**" = [
+  "ANN",
+  "ARG",
+  "implicit-namespace-package",
+  "import-private-name",
+  "no-self-use",
+  "assert",
+  "private-member-access",
+  "print",
+]
+
+[tool.ruff.format]
+docstring-code-format = true
