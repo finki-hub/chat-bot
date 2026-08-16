@@ -383,6 +383,7 @@ def _log_sponsored_release_failure(task: asyncio.Task[None]) -> None:
         task.result()
     except asyncio.CancelledError:
         return
+    # ruff: ignore[BLE001] -- task callbacks must observe and log every release failure
     except Exception as exc:
         logger.log(
             logging.ERROR,
@@ -813,6 +814,7 @@ async def _chat_response_stream(
                         else None
                     ),
                 )
+        # ruff: ignore[BLE001] -- the stream boundary converts every provider failure to a safe event
         except Exception as exc:
             logger.log(
                 logging.ERROR,
@@ -859,6 +861,7 @@ async def _chat_response_stream(
             except asyncio.CancelledError:
                 release_task.add_done_callback(_log_sponsored_release_failure)
                 raise
+            # ruff: ignore[BLE001] -- lease cleanup must log every backend failure without masking cancellation
             except Exception as exc:
                 logger.log(
                     logging.ERROR,

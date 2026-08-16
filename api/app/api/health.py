@@ -76,6 +76,7 @@ async def health_check(db: Database = db_dep) -> JSONResponse:
             if result != 1:
                 db_status = "database_query_unexpected_result"
                 healthy = False
+        # ruff: ignore[BLE001] -- health checks report any database failure as unhealthy
         except Exception:
             db_status = "database_query_error"
             healthy = False
