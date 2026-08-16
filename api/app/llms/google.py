@@ -33,7 +33,8 @@ def get_google_embedder(
 ) -> GoogleGenerativeAIEmbeddings:
     task_type = "RETRIEVAL_DOCUMENT" if is_document else "RETRIEVAL_QUERY"
     credential = require_provider_credential("google", credential)
-    return GoogleGenerativeAIEmbeddings(
+    # LangChain's generated Pydantic signature omits the documented api_key alias.
+    return GoogleGenerativeAIEmbeddings(  # type: ignore[call-arg]
         model=model.value,
         api_key=SecretStr(credential.api_key),
         task_type=task_type,
@@ -192,6 +193,7 @@ async def transform_query_with_google(
 
         response = await llm.ainvoke(messages)
         return content_to_text(response.content).strip()
+    # ruff: ignore[BLE001] -- query transformation is an optional upstream fallback
     except Exception as exc:
         logger.warning(
             "Google query transformation failed; using original query model=%s error_type=%s",
@@ -253,6 +255,7 @@ async def stream_google_agent_response(
             media_type="text/event-stream",
         )
 
+    # ruff: ignore[BLE001] -- agent setup falls back to the regular provider stream
     except Exception as exc:
         logger.warning(
             "Google agent setup failed; using regular response model=%s error_type=%s",

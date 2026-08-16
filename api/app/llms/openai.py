@@ -34,9 +34,10 @@ def get_openai_embedder(
     credential: ChatCredentialSecret | None = None,
 ) -> OpenAIEmbeddings:
     credential = require_provider_credential("openai", credential)
-    return OpenAIEmbeddings(
+    # LangChain's generated Pydantic signature omits documented constructor aliases.
+    return OpenAIEmbeddings(  # type: ignore[call-arg]
         model=model.value,
-        api_key=SecretStr(credential.api_key),  # type: ignore[call-arg]
+        api_key=SecretStr(credential.api_key),
         base_url=credential.base_url or None,
     )
 
@@ -77,15 +78,16 @@ def get_openai_llm(
         client_kwargs["top_p"] = top_p
 
     credential = require_provider_credential("openai", credential)
-    return ChatOpenAI(
+    # LangChain's generated Pydantic signature omits documented constructor aliases.
+    return ChatOpenAI(  # type: ignore[call-arg]
         model=model.value if upstream_model is None else upstream_model,
         api_key=SecretStr(credential.api_key),
         base_url=credential.base_url or None,
         temperature=temperature,
         streaming=True,
         stream_usage=True,
-        max_tokens=max_tokens,  # type: ignore[call-arg]
-        **client_kwargs,
+        max_tokens=max_tokens,
+        **client_kwargs,  # type: ignore[arg-type]
     )
 
 
@@ -221,6 +223,7 @@ async def stream_openai_agent_response(
             media_type="text/event-stream",
         )
 
+    # ruff: ignore[BLE001] -- agent setup falls back to the regular provider stream
     except Exception as exc:
         logger.warning(
             "OpenAI agent setup failed; using regular response model=%s error_type=%s",
@@ -284,6 +287,7 @@ async def transform_query_with_openai(
 
         response = await llm.ainvoke(messages)
         return content_to_text(response.content).strip()
+    # ruff: ignore[BLE001] -- query transformation is an optional upstream fallback
     except Exception as exc:
         logger.warning(
             "OpenAI query transformation failed; using original query model=%s error_type=%s",
