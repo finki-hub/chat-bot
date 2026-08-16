@@ -2,7 +2,7 @@ import logging
 
 import torch
 from sentence_transformers import CrossEncoder
-from sentence_transformers.cross_encoder.model import PairInput
+from sentence_transformers.base.modality_types import PairInput
 
 from app.utils.exceptions import ModelNotReadyError
 
@@ -17,7 +17,7 @@ def init_reranker(model_name: str) -> None:
     Called from the lifespan manager. The default (bge-reranker-v2-m3) is
     multilingual; the v1 "large" was tuned for Chinese/English only.
     """
-    global _reranker_model  # noqa: PLW0603
+    global _reranker_model  # ruff: ignore[PLW0603] -- initializer owns process-local model state
 
     logger.info("Initializing reranker model: %s", model_name)
 

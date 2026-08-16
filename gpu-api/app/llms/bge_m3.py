@@ -27,7 +27,7 @@ def get_bge_m3_embeddings(text: str | list[str]) -> list[float] | list[list[floa
     Get embeddings using BGE M3.  If the model is not yet initialized,
     spin up initialization in background (once) and raise ModelNotReady.
     """
-    global _bge_m3_init_thread, _bge_m3_embedder  # noqa: PLW0602, PLW0603
+    global _bge_m3_init_thread, _bge_m3_embedder  # ruff: ignore[PLW0602, PLW0603] -- process-local lazy model state
 
     if _bge_m3_embedder is None:
         with _bge_m3_lock:
@@ -51,7 +51,7 @@ def init_bge_m3_embedder() -> None:
     """
     Blocking init of the BGE M3 embedder. Runs in a background thread.
     """
-    global _bge_m3_embedder  # noqa: PLW0603
+    global _bge_m3_embedder  # ruff: ignore[PLW0603] -- initializer owns process-local model state
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
