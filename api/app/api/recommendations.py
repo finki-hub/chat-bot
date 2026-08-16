@@ -35,9 +35,6 @@ def _inactive_staff_detail(exc: InactiveStaffRequestedError) -> str:
                 "include_professors must contain only active staff members: "
                 f"{', '.join(exc.names)}"
             )
-        case _:
-            msg = "Unexpected inactive staff field"
-            raise AssertionError(msg)
 
 
 @router.post(
