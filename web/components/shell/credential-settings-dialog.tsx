@@ -180,6 +180,7 @@ export const CredentialSettingsDialog = ({
   useEffect(() => {
     if (!open) {
       setCredentialToDelete(null);
+      setError(null);
       setForms(EMPTY_FORMS);
       return;
     }

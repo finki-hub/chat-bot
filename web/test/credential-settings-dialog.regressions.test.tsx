@@ -76,11 +76,11 @@ const renderDialog = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  const dialog = () => (
+  const dialog = (open = true) => (
     <QueryClientProvider client={queryClient}>
       <CredentialSettingsDialog
         onOpenChangeAction={vi.fn<(open: boolean) => void>()}
-        open
+        open={open}
       />
     </QueryClientProvider>
   );
@@ -88,8 +88,8 @@ const renderDialog = () => {
   return {
     queryClient,
     ...view,
-    rerenderDialog: () => {
-      view.rerender(dialog());
+    rerenderDialog: (open = true) => {
+      view.rerender(dialog(open));
     },
   };
 };
@@ -152,6 +152,27 @@ describe('CredentialSettingsDialog regressions', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(OPENAI_API_KEY_LABEL)).toHaveValue('');
     });
+  });
+
+  it('clears a save error when the dialog closes', async () => {
+    saveCredentialMock.mockResolvedValueOnce(null);
+    const { rerenderDialog } = renderDialog();
+    const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+    fireEvent.change(keyInput, { target: { value: 'invalid-secret' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Зачувај' }));
+
+    await expect(screen.findByRole('alert')).resolves.toBeInTheDocument();
+
+    rerenderDialog(false);
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: 'Лични API клучеви' }),
+      ).not.toBeInTheDocument();
+    });
+    rerenderDialog();
+    await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('updates only the active session credential cache after saving', async () => {
