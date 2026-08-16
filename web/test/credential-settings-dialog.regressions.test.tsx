@@ -159,7 +159,7 @@ describe('CredentialSettingsDialog regressions', () => {
     });
   });
 
-  it('ignores a delete error that settles after the session changes', async () => {
+  it('ignores a delete error after the session changes away and back', async () => {
     const pendingDelete = Promise.withResolvers<boolean>();
     deleteCredentialMock.mockReturnValueOnce(pendingDelete.promise);
     loadCredentialsMock.mockResolvedValueOnce([
@@ -172,6 +172,8 @@ describe('CredentialSettingsDialog regressions', () => {
     fireEvent.click(await screen.findByTestId('confirm-action'));
 
     sessionKeyMock.mockReturnValue(SESSION_B);
+    rerenderDialog();
+    sessionKeyMock.mockReturnValue(SESSION_A);
     rerenderDialog();
     const requestError = new TypeError('Delete request failed');
     await act(async () => {
@@ -191,7 +193,6 @@ describe('CredentialSettingsDialog regressions', () => {
     fireEvent.change(keyInput, { target: { value: 'invalid-secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Зачувај' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Затвори' }));
     rerenderDialog(false);
     await waitFor(() => {
       expect(

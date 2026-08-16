@@ -1,7 +1,13 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { type SyntheticEvent, useEffect, useRef, useState } from 'react';
+import {
+  type SyntheticEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import type {
   ChatCredentialProvider,
@@ -48,6 +54,8 @@ type DialogOperation = {
 };
 
 const providerList: readonly ProviderConfig[] = PROVIDERS;
+const useIsomorphicLayoutEffect =
+  typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 type CredentialProviderListProps = {
   readonly busyProvider: ChatCredentialProvider | null;
@@ -174,14 +182,16 @@ export const CredentialSettingsDialog = ({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<null | string>(null);
   const dialogCycleRef = useRef(0);
+  const lifecycleRef = useRef({ open, sessionKey });
   const sessionKeyRef = useRef(sessionKey);
   sessionKeyRef.current = sessionKey;
-  const changeOpen = (nextOpen: boolean) => {
-    if (!nextOpen) {
+  useIsomorphicLayoutEffect(() => {
+    const previous = lifecycleRef.current;
+    if (previous.open !== open || previous.sessionKey !== sessionKey) {
       dialogCycleRef.current += 1;
+      lifecycleRef.current = { open, sessionKey };
     }
-    onOpenChangeAction(nextOpen);
-  };
+  }, [open, sessionKey]);
   const runForCurrentDialogOperation = (
     operation: DialogOperation,
     update: () => void,
@@ -356,7 +366,7 @@ export const CredentialSettingsDialog = ({
   return (
     <>
       <Dialog
-        onOpenChange={changeOpen}
+        onOpenChange={onOpenChangeAction}
         open={open}
       >
         <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
@@ -402,7 +412,7 @@ export const CredentialSettingsDialog = ({
               <Button
                 disabled={saving}
                 onClick={() => {
-                  changeOpen(false);
+                  onOpenChangeAction(false);
                 }}
                 type="button"
                 variant="outline"
