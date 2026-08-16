@@ -34,7 +34,7 @@ setup_logging(level=settings.LOG_LEVEL)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     cuda_available = torch.cuda.is_available()
     if cuda_available:
         logger.info(
@@ -46,19 +46,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         logger.warning("gpu.cuda available=False - models will run on CPU")
 
     init_analytics(settings)
-    if not cuda_available:
-        capture("gpu-api", "cuda_fallback", {"device": "cpu"})
+    try:
+        if not cuda_available:
+            capture("gpu-api", "cuda_fallback", {"device": "cpu"})
 
-    tasks = [
-        to_thread(init_reranker, settings.RERANKER_MODEL),
-        to_thread(init_bge_m3_embedder),
-    ]
+        tasks = [
+            to_thread(init_reranker, settings.RERANKER_MODEL),
+            to_thread(init_bge_m3_embedder),
+        ]
 
-    await gather(*tasks)
-
-    yield
-
-    shutdown_analytics()
+        await gather(*tasks)
+        yield
+    finally:
+        shutdown_analytics()
 
 
 def make_app(settings: Settings) -> FastAPI:
@@ -93,7 +93,7 @@ def make_app(settings: Settings) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
-        request: Request,
+        _request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
         return JSONResponse(
@@ -103,7 +103,7 @@ def make_app(settings: Settings) -> FastAPI:
 
     @app.exception_handler(ModelNotReadyError)
     async def model_not_ready_exception_handler(
-        request: Request,
+        _request: Request,
         exc: ModelNotReadyError,
     ) -> JSONResponse:
         logger.error("Model not ready", exc_info=exc)
