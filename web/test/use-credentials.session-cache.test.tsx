@@ -72,6 +72,11 @@ describe('useCredentials session cache', () => {
       expect(result.current.credentials).toStrictEqual([credential(USER_A)]);
     });
 
+    expect(result.current.queryKey).toStrictEqual([
+      'credentials',
+      'test:user-a',
+    ]);
+
     sessionMock.mockReturnValue({
       data: { user: { provider: 'test', providerSubject: USER_B } },
       status: 'authenticated',
@@ -82,6 +87,11 @@ describe('useCredentials session cache', () => {
     await waitFor(() => {
       expect(result.current.credentials).toStrictEqual([credential(USER_B)]);
     });
+
+    expect(result.current.queryKey).toStrictEqual([
+      'credentials',
+      'test:user-b',
+    ]);
 
     expect(loadCredentialsMock).toHaveBeenCalledTimes(2);
   });
