@@ -5,12 +5,12 @@ from fastapi import APIRouter, Depends, status
 from app.data.connection import Database
 from app.data.db import get_db
 from app.data.embedding_lifecycle import (
-    EmbeddingCorpus,
     EmbeddingLifecycleCount,
     lifecycle_counts,
     rebuild_embedding_lifecycle,
     wake_embedding_worker,
 )
+from app.data.embedding_lifecycle_sql import EmbeddingCorpus
 from app.schemas.embedding_administration import (
     EmbeddingCorpusCountResponse,
     EmbeddingFillDirtyResponse,
