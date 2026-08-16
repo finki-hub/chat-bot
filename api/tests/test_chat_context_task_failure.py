@@ -7,6 +7,7 @@ import pytest
 from app.api import chat as chat_api
 from app.data.connection import Database
 from app.llms.models import Model
+from app.schemas.chat import ChatSchema
 from tests.chat_models_access_support import credentials, settings
 
 USER_ID = UUID("00000000-0000-4000-8000-000000000002")
@@ -19,8 +20,8 @@ def _request():
     )
 
 
-def _payload() -> chat_api.ChatSchema:
-    return chat_api.ChatSchema.model_validate(
+def _payload() -> ChatSchema:
+    return ChatSchema.model_validate(
         {
             "user_id": USER_ID,
             "interface": "web",
