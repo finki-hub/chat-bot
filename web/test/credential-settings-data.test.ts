@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseCredentials } from '@/components/shell/credential-settings-data';
+import {
+  parseCredentials,
+  PROVIDERS,
+} from '@/components/shell/credential-settings-data';
 
 const BASE_URL_FIELD = 'base_url';
 const HAS_API_KEY_FIELD = 'has_api_key';
@@ -38,5 +41,20 @@ describe('parseCredentials', () => {
     };
 
     expect(parseCredentials([credential])).toStrictEqual([credential]);
+  });
+});
+
+describe('credential provider configuration', () => {
+  it('points every provider to its official API-key dashboard', () => {
+    expect(
+      Object.fromEntries(
+        PROVIDERS.map(({ keyUrl, provider }) => [provider, keyUrl]),
+      ),
+    ).toStrictEqual({
+      anthropic: 'https://platform.claude.com/settings/keys',
+      google: 'https://aistudio.google.com/api-keys',
+      ollama: 'https://ollama.com/settings/keys',
+      openai: 'https://platform.openai.com/api-keys',
+    });
   });
 });

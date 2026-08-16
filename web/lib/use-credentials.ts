@@ -11,19 +11,25 @@ import { getModelsSessionKey } from '@/lib/use-models';
 export const CREDENTIALS_QUERY_KEY = ['credentials'] as const;
 const EMPTY_CREDENTIALS: readonly ChatCredentialPublic[] = [];
 
+export const getCredentialsQueryKey = (sessionKey: null | string) =>
+  [...CREDENTIALS_QUERY_KEY, sessionKey] as const;
+
 export const useCredentials = () => {
   const { data: session, status } = useSession();
   const sessionKey = getModelsSessionKey(status, session);
+  const queryKey = getCredentialsQueryKey(sessionKey);
   const query = useQuery({
     enabled: sessionKey !== null,
     queryFn: ({ signal }) => loadCredentials(signal),
-    queryKey: [...CREDENTIALS_QUERY_KEY, sessionKey],
+    queryKey,
     staleTime: 5 * 60 * 1_000,
   });
   return {
     credentials: query.data ?? EMPTY_CREDENTIALS,
     isError: query.isError || query.data === null,
     isLoading: query.isLoading,
+    queryKey,
     refetch: query.refetch,
+    sessionKey,
   };
 };

@@ -115,12 +115,13 @@ export const messages = {
   'settings.credentialDeleteError': 'Клучот не можеше да се избрише.',
   'settings.credentialSaveError': 'Клучот не можеше да се зачува.',
   'settings.credentialsDescription':
-    'Зачувај лични OpenAI, Google/Gemini, Anthropic или Ollama клучеви. Тие се користат само за твоите разговори и за пребарувачките LLM чекори.',
+    'Зачувај лични OpenAI, Google/Gemini, Anthropic или Ollama клучеви. Тие се користат само за\u{00A0}твоите разговори и\u{00A0}за\u{00A0}пребарувачките LLM чекори.',
   'settings.credentialsError': 'Клучевите не можеа да се вчитаат.',
   'settings.credentialsTitle': 'Лични API клучеви',
   'settings.deleteCredential': 'Избриши клуч',
   'settings.deleteCredentialDescription':
     'Зачуваниот клуч ќе биде отстранет и ќе треба повторно да го внесеш за да го користиш провајдерот.',
+  'settings.getApiKey': 'Добиј API клуч',
   'settings.keyPlaceholder': 'Внеси API клуч',
   'settings.noCredential': 'Не е зачуван клуч',
   'settings.provider.anthropic': 'Anthropic',
