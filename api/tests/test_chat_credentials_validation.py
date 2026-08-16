@@ -1,4 +1,3 @@
-import anyio
 import anyio.lowlevel
 import pytest
 from fastapi.testclient import TestClient

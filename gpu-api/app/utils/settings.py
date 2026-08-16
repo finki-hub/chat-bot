@@ -16,5 +16,5 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: list[str] = ["*"]
     EXPOSE_HEADERS: list[str] = ["*"]
 
-    HOST: str = "0.0.0.0"  # noqa: S104
+    HOST: str = "0.0.0.0"  # ruff: ignore[S104] -- container ingress requires all interfaces
     PORT: int = 8888

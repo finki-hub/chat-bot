@@ -35,8 +35,6 @@ def _inactive_staff_error(exc: InactiveStaffRequestedError) -> str:
                 "include_professors must contain only active staff members",
                 inactive_professors=list(exc.names),
             )
-        case _:
-            return _error_json("Unexpected inactive staff request")
 
 
 def build_recommendation_tools(db: Database) -> list[BaseTool]:

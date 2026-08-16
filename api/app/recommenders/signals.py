@@ -58,7 +58,7 @@ def _minmax[K](scores: Mapping[K, float]) -> dict[K, float]:
 def _half_life_decay(delta_days: float, half_life_days: float) -> float:
     if half_life_days <= 0:
         return 1.0
-    return 0.5 ** (delta_days / half_life_days)
+    return float(0.5 ** (delta_days / half_life_days))
 
 
 def members(diploma: RetrievedDiploma) -> list[str]:

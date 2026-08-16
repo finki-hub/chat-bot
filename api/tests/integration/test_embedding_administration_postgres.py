@@ -14,10 +14,10 @@ from app.data.embedding_lifecycle import (
     EMBEDDING_WAKE_PAYLOAD,
     EmbeddingBatch,
     EmbeddingCandidate,
-    EmbeddingCorpus,
     fetch_dirty_embeddings,
     persist_embedding_batch,
 )
+from app.data.embedding_lifecycle_sql import EmbeddingCorpus
 from app.main import make_app
 from app.utils.settings import Settings
 from tests.integration.embedding_postgres_test_support import (

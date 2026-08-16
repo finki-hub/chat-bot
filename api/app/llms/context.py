@@ -557,6 +557,7 @@ async def get_retrieved_context_with_sources(
             sum(1 for c in final if c.source == "faq"),
             sum(1 for c in final if c.source == "chunk"),
         )
+    # ruff: ignore[BLE001] -- reranking degrades to deterministic dense ordering
     except Exception as exc:
         reranker_fallback = True
         dense_fallback = True
@@ -636,6 +637,7 @@ async def _contextualize_query(
             max_tokens=128,
             credentials=credentials,
         )
+    # ruff: ignore[BLE001] -- contextualization degrades to the original user query
     except Exception as exc:
         logger.warning(
             "Query contextualization failed; using raw query error_type=%s",
@@ -681,6 +683,7 @@ async def _expand_and_render(
                 window=_NEIGHBOR_WINDOW,
             ):
                 window_map[(ch.document_id, ch.chunk_index)] = ch
+        # ruff: ignore[BLE001] -- neighbor expansion is optional enrichment
         except Exception as exc:
             logger.warning(
                 "Neighbor expansion failed; rendering unexpanded error_type=%s",

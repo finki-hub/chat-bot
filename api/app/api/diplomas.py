@@ -37,12 +37,12 @@ def _parse_submission_date(value: object | None) -> date | None:
     if not isinstance(value, str) or not value.strip():
         return None
     try:
-        return datetime.strptime(value.strip(), "%d.%m.%Y").date()  # noqa: DTZ007
+        return datetime.strptime(value.strip(), "%d.%m.%Y").date()
     except ValueError:
         return None
 
 
-def _compute_external_id(record: dict) -> str:
+def _compute_external_id(record: dict[str, object]) -> str:
     raw = (
         f"{record.get('fileId')}|{record.get('student')}"
         f"|{record.get('title')}|{record.get('dateOfSubmission')}"

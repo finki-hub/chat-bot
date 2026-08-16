@@ -23,6 +23,8 @@ from app.schemas.document_sources import resolve_document_source_url
 from app.schemas.documents import ChunkSchema, DocumentSchema, IngestDocumentSchema
 from app.utils.database import embedding_to_pgvector
 
+__all__ = ["dirty_embedding_predicate"]
+
 
 def _document_from_row(row: Record, chunk_count: int | None = None) -> DocumentSchema:
     return DocumentSchema(
@@ -128,6 +130,7 @@ async def get_closest_chunks(
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
 
+    # ruff: ignore[S608] -- fragments come from closed model mappings
     sql = f"""
     SELECT
         c.id,
@@ -146,7 +149,7 @@ async def get_closest_chunks(
         AND {embedding.distance_operand} <=> {embedding.query_operand} < $3
     ORDER BY distance
     LIMIT $2
-    """  # noqa: S608
+    """
 
     result = await db.fetch(
         sql,
@@ -205,6 +208,7 @@ async def get_chunks_window(
         if is_bge_m3_lifecycle_model(model)
         else None
     )
+    # ruff: ignore[S608] -- predicate comes from a closed model mapping
     window_sql = f"""
         SELECT c.id, c.document_id, c.chunk_index, c.content, c.section,
                d.name AS document_name, d.title AS document_title
@@ -212,7 +216,7 @@ async def get_chunks_window(
         JOIN document d ON d.id = c.document_id
         WHERE c.document_id = ANY($1::uuid[]) AND c.chunk_index = ANY($2::int[])
         {f"AND {predicate.sql}" if predicate else ""}
-        """  # noqa: S608
+        """
     rows = await db.fetch(
         window_sql,
         list({doc_id for doc_id, _ in wanted}),

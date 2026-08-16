@@ -63,7 +63,7 @@ async def fetch_professor_document_rows_for_fill(
 ) -> list[Record]:
     predicate = dirty_embedding_predicate(model, embedding_column_name(model))
     return await db.fetch(
-        f"SELECT id, title, abstract, embedding_revision FROM professor_document WHERE {predicate.sql} ORDER BY external_id ASC",  # noqa: S608
+        f"SELECT id, title, abstract, embedding_revision FROM professor_document WHERE {predicate.sql} ORDER BY external_id ASC",  # ruff: ignore[S608] -- predicate comes from a closed model mapping
         *predicate.parameters,
     )
 
@@ -95,6 +95,7 @@ async def get_closest_professor_documents(
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
 
+    # ruff: ignore[S608] -- fragments come from closed model mappings
     sql = f"""
     SELECT
         external_id,
@@ -107,7 +108,7 @@ async def get_closest_professor_documents(
         AND {embedding.distance_operand} <=> {embedding.query_operand} < $3
     ORDER BY distance
     LIMIT $2
-    """  # noqa: S608
+    """
 
     return await db.fetch(
         sql,

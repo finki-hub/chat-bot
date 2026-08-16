@@ -2,9 +2,9 @@ import logging
 
 from app.data.connection import Database
 from app.data.diplomas import get_closest_diplomas
-from app.llms.context import _post_rerank
 from app.llms.embeddings import generate_embeddings
 from app.llms.models import Model
+from app.llms.reranker import post_rerank
 from app.llms.text_utils import _prepare_text_for_embedding
 from app.recommenders.recommend import RetrievedDiploma
 from app.recommenders.text import build_proposal_text
@@ -67,7 +67,7 @@ async def retrieve_similar_diplomas(
     rerank_texts = [build_proposal_text(d.title, d.description) for d in candidates]
 
     try:
-        response = await _post_rerank(
+        response = await post_rerank(
             {"query": query_text, "documents": rerank_texts},
         )
         ranked = response.json()["reranked_documents"]
@@ -87,6 +87,7 @@ async def retrieve_similar_diplomas(
             selected.append(_to_retrieved(candidates[idx], item["score"]))
             if len(selected) >= top_k:
                 break
+    # ruff: ignore[BLE001] -- reranking degrades to the already ordered vector results
     except Exception as exc:
         logger.warning(
             "Diploma reranking failed; using vector order error_type=%s",

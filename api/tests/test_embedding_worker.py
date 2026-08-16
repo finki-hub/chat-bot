@@ -185,7 +185,7 @@ def test_worker_main_configures_logging_from_log_level(monkeypatch) -> None:
     # Given: the standalone worker entrypoint receives a non-default log level.
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
     monkeypatch.setattr(worker, "setup_logging", setup_logging, raising=False)
-    monkeypatch.setattr(worker.anyio, "run", run)
+    monkeypatch.setattr(anyio, "run", run)
 
     # When: the module entrypoint starts.
     worker.main()

@@ -53,7 +53,7 @@ async def get_professor_groups(
 
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
     sql = (
-        "SELECT source, window_start, window_end, group_index, members, size, min_weight "  # noqa: S608
+        "SELECT source, window_start, window_end, group_index, members, size, min_weight "  # ruff: ignore[S608] -- where clauses use fixed columns and bound values
         f"FROM professor_group{where} "
         "ORDER BY source, window_start, group_index"
     )

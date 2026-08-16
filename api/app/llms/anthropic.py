@@ -51,7 +51,7 @@ def _thinking_config(
 def get_anthropic_llm(
     model: Model,
     temperature: float,
-    top_p: float,
+    top_p: float,  # ruff: ignore[ARG001] -- provider factories share one call signature
     max_tokens: int,
     *,
     reasoning: bool = False,
@@ -81,13 +81,14 @@ def get_anthropic_llm(
         None if (reasoning or model in ANTHROPIC_NO_SAMPLING_MODELS) else temperature
     )
     credential = require_provider_credential("anthropic", credential)
-    return ChatAnthropic(
-        model=model.value if upstream_model is None else upstream_model,  # type: ignore[call-arg]
+    # LangChain's generated Pydantic signature omits documented constructor aliases.
+    return ChatAnthropic(  # type: ignore[call-arg]
+        model=model.value if upstream_model is None else upstream_model,
         api_key=SecretStr(credential.api_key),
         base_url=credential.base_url or None,
         temperature=temperature_arg,
-        max_tokens=effective_max,  # type: ignore[call-arg]
-        thinking=thinking,  # type: ignore[call-arg]
+        max_tokens=effective_max,
+        thinking=thinking,
     )
 
 
@@ -170,6 +171,7 @@ async def transform_query_with_anthropic(
 
         response = await llm.ainvoke(messages)
         return content_to_text(response.content).strip()
+    # ruff: ignore[BLE001] -- query transformation is an optional upstream fallback
     except Exception as exc:
         logger.warning(
             "Anthropic query transformation failed; using original query model=%s error_type=%s",
@@ -231,6 +233,7 @@ async def stream_anthropic_agent_response(
             media_type="text/event-stream",
         )
 
+    # ruff: ignore[BLE001] -- agent setup falls back to the regular provider stream
     except Exception as exc:
         logger.warning(
             "Anthropic agent setup failed; using regular response model=%s error_type=%s",

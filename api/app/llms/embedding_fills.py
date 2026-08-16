@@ -41,6 +41,7 @@ async def _process_batch(
     ]
     try:
         vectors = await generate_embeddings(texts, model, is_document=True)
+    # ruff: ignore[BLE001] -- the SSE batch boundary maps every provider failure to per-item errors
     except Exception:
         return [("error", _EMBEDDING_SSE_ERROR)] * len(candidates)
 

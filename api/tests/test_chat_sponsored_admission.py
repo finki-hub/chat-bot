@@ -20,6 +20,7 @@ from app.data.sponsored_usage import (
 from app.llms.models import Model
 from app.llms.query_modes import QueryTransformMode
 from app.llms.retrieval_result import RetrievedContext
+from app.schemas.chat import ChatSchema
 from app.utils import posthog_client
 from tests.chat_models_access_support import credentials, settings, usage_snapshot
 
@@ -43,7 +44,7 @@ def _payload(
         if inference_model == Model.GEMINI_3_5_FLASH
         else Model.GPT_5_4_MINI
     )
-    return chat_api.ChatSchema.model_validate(
+    return ChatSchema.model_validate(
         {
             "user_id": user_id,
             "interface": "web",

@@ -26,6 +26,7 @@ from app.recommenders.recommend import (
     CoauthorIndex,
     MentorPriorIndex,
     Mode,
+    RetrievedPaper,
     SelectionConstraints,
     _accumulate_coauthor_edges,
     build_coauthor_prior,
@@ -111,7 +112,14 @@ def _check_active_staff(
         raise InactiveStaffRequestedError("include_professors", inactive_includes)
 
 
-async def _cancel_background_tasks(tasks: list[asyncio.Task]) -> None:
+type RecommendationBackgroundTask = (
+    asyncio.Task[MentorPriorIndex] | asyncio.Task[list[RetrievedPaper]]
+)
+
+
+async def _cancel_background_tasks(
+    tasks: list[RecommendationBackgroundTask],
+) -> None:
     for task in tasks:
         if not task.done():
             task.cancel()
@@ -167,7 +175,7 @@ async def generate_committee_recommendation(
         if weights.coauthor_prior_weight > 0
         else None
     )
-    background_tasks: list[asyncio.Task] = [mentor_prior_task]
+    background_tasks: list[RecommendationBackgroundTask] = [mentor_prior_task]
     if paper_task is not None:
         background_tasks.append(paper_task)
     if coauthor_prior_task is not None:

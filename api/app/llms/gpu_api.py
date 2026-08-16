@@ -1,8 +1,10 @@
 import logging
+from typing import Annotated
 
 import httpx
+from pydantic import Field, TypeAdapter
 
-from app.llms.models import GPU_API_MODELS, Model
+from app.llms.models import GPU_API_MODELS, MODEL_EMBEDDING_DIMENSIONS, Model
 from app.utils.http_client import get_http_client
 from app.utils.settings import Settings
 from app.utils.timing import current_distinct_id, current_response_id
@@ -12,6 +14,10 @@ logger = logging.getLogger(__name__)
 settings = Settings()
 
 _EMBEDDINGS_TIMEOUT = httpx.Timeout(timeout=60.0)
+type EmbeddingValue = Annotated[float, Field(strict=True, allow_inf_nan=False)]
+type Embedding = list[EmbeddingValue]
+_EMBEDDING_ADAPTER: TypeAdapter[Embedding] = TypeAdapter(Embedding)
+_EMBEDDING_BATCH_ADAPTER: TypeAdapter[list[Embedding]] = TypeAdapter(list[Embedding])
 
 
 def _forwarded_headers() -> dict[str, str]:
@@ -61,4 +67,28 @@ async def generate_gpu_api_embeddings(
     if embeddings is None:
         raise ValueError(f"GPU API response missing 'embeddings' key: {result}")
 
-    return embeddings
+    expected_dimensions = MODEL_EMBEDDING_DIMENSIONS[model]
+    if isinstance(text, str):
+        embedding = _EMBEDDING_ADAPTER.validate_python(embeddings)
+        if len(embedding) != expected_dimensions:
+            msg = (
+                "GPU API returned an embedding with "
+                f"{len(embedding)} dimensions; expected {expected_dimensions}"
+            )
+            raise ValueError(msg)
+        return embedding
+
+    embedding_batch = _EMBEDDING_BATCH_ADAPTER.validate_python(embeddings)
+    if len(embedding_batch) != len(text):
+        msg = (
+            f"GPU API returned {len(embedding_batch)} embeddings for {len(text)} inputs"
+        )
+        raise ValueError(msg)
+    for embedding in embedding_batch:
+        if len(embedding) != expected_dimensions:
+            msg = (
+                "GPU API returned an embedding with "
+                f"{len(embedding)} dimensions; expected {expected_dimensions}"
+            )
+            raise ValueError(msg)
+    return embedding_batch

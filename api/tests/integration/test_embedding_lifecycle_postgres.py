@@ -9,13 +9,13 @@ from app.data.embedding_lifecycle import (
     BGE_M3_DIMENSIONS,
     EMBEDDING_WAKE_PAYLOAD,
     EmbeddingBatch,
-    EmbeddingCorpus,
     fetch_dirty_embeddings,
     lifecycle_counts,
     persist_embedding_batch,
     rebuild_embedding_lifecycle,
     wake_embedding_worker,
 )
+from app.data.embedding_lifecycle_sql import EmbeddingCorpus
 from app.llms.models import BGE_M3_EMBEDDING_SPEC_VERSION
 from tests.integration.embedding_postgres_test_support import database as _database
 from tests.integration.embedding_postgres_test_support import (

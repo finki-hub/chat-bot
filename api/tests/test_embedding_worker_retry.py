@@ -54,7 +54,7 @@ def test_listener_retries_failed_drain_without_notification(monkeypatch) -> None
             return DirtyDrainReport(0, 0, 0, 0)
 
         # When: the session starts with a retry delay that does not wait in the test.
-        monkeypatch.setattr(worker.anyio, "sleep", no_delay)
+        monkeypatch.setattr(anyio, "sleep", no_delay)
         monkeypatch.setattr(worker, "_FAILED_DRAIN_RETRY_MIN_SECONDS", 0.001)
         async with anyio.create_task_group() as task_group:
             task_group.start_soon(
@@ -96,7 +96,7 @@ def test_listener_preserves_failed_full_scan_retry_after_targeted_notification(
             return DirtyDrainReport(0, 0, 0, 0)
 
         # When: a targeted wake arrives while failed durable work is awaiting retry.
-        monkeypatch.setattr(worker.anyio, "sleep", no_delay)
+        monkeypatch.setattr(anyio, "sleep", no_delay)
         monkeypatch.setattr(worker, "_FAILED_DRAIN_RETRY_MIN_SECONDS", 30.0)
         async with anyio.create_task_group() as task_group:
             task_group.start_soon(

@@ -99,6 +99,7 @@ async def get_closest_diplomas(
     if exclude_external_id is not None:
         exclude_clause = "AND external_id <> $4"
 
+    # ruff: ignore[S608] -- fragments come from closed model mappings
     sql = f"""
     SELECT
         id,
@@ -120,7 +121,7 @@ async def get_closest_diplomas(
         {exclude_clause}
     ORDER BY distance
     LIMIT $2
-    """  # noqa: S608
+    """
 
     args: list[object] = [
         embedding_to_pgvector(embedded_query),
@@ -158,7 +159,7 @@ async def get_diplomas_without_embeddings(
 ) -> list[DiplomaSchema]:
     embedding_column = embedding_column_name(model)
     predicate = dirty_embedding_predicate(model, embedding_column)
-    query = f"SELECT * FROM diploma WHERE {predicate.sql} ORDER BY external_id ASC"  # noqa: S608
+    query = f"SELECT * FROM diploma WHERE {predicate.sql} ORDER BY external_id ASC"  # ruff: ignore[S608] -- predicate comes from a closed model mapping
     result = await db.fetch(query, *predicate.parameters)
 
     return [
@@ -185,7 +186,7 @@ async def fetch_diploma_rows_for_fill(
 ) -> list[Record]:
     predicate = dirty_embedding_predicate(model, embedding_column_name(model))
     return await db.fetch(
-        f"SELECT id, title, description, embedding_revision FROM diploma WHERE {predicate.sql} ORDER BY external_id ASC",  # noqa: S608
+        f"SELECT id, title, description, embedding_revision FROM diploma WHERE {predicate.sql} ORDER BY external_id ASC",  # ruff: ignore[S608] -- predicate comes from a closed model mapping
         *predicate.parameters,
     )
 
@@ -214,6 +215,7 @@ async def get_backtest_population(
         embedding_column,
         version_parameter=1,
     )
+    # ruff: ignore[S608] -- predicate comes from a closed model mapping
     query = f"""
     SELECT external_id, title, mentor, member1, member2
     FROM diploma
@@ -223,5 +225,5 @@ async def get_backtest_population(
         AND member1 IS NOT NULL
         AND member2 IS NOT NULL
     ORDER BY external_id ASC
-    """  # noqa: S608
+    """
     return await db.fetch(query, *predicate.parameters)

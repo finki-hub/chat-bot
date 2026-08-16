@@ -1,5 +1,6 @@
 import hashlib
 import urllib.parse
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
@@ -87,10 +88,10 @@ async def ingest_document(
     payload: IngestDocumentSchema,
     response: Response,
     db: Database = db_dep,
-    force: bool = Query(
-        default=False,
-        description="Re-chunk and replace even if the content hash is unchanged",
-    ),
+    force: Annotated[
+        bool,
+        Query(description="Re-chunk and replace even if the content hash is unchanged"),
+    ] = False,
 ) -> DocumentSchema:
     source_hash = hashlib.sha256(payload.content.encode("utf-8")).hexdigest()
 
