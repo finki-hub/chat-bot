@@ -5,6 +5,7 @@ import type {
 import type { TKey } from '@/lib/i18n';
 
 export type ProviderConfig = {
+  readonly keyUrl: string;
   readonly labelKey: TKey;
   readonly provider: ChatCredentialProvider;
 };
@@ -15,10 +16,26 @@ export type ProviderForm = {
 };
 
 export const PROVIDERS = [
-  { labelKey: 'settings.provider.openai', provider: 'openai' },
-  { labelKey: 'settings.provider.google', provider: 'google' },
-  { labelKey: 'settings.provider.anthropic', provider: 'anthropic' },
-  { labelKey: 'settings.provider.ollama', provider: 'ollama' },
+  {
+    keyUrl: 'https://platform.openai.com/api-keys',
+    labelKey: 'settings.provider.openai',
+    provider: 'openai',
+  },
+  {
+    keyUrl: 'https://aistudio.google.com/api-keys',
+    labelKey: 'settings.provider.google',
+    provider: 'google',
+  },
+  {
+    keyUrl: 'https://platform.claude.com/settings/keys',
+    labelKey: 'settings.provider.anthropic',
+    provider: 'anthropic',
+  },
+  {
+    keyUrl: 'https://ollama.com/settings/keys',
+    labelKey: 'settings.provider.ollama',
+    provider: 'ollama',
+  },
 ] as const satisfies readonly ProviderConfig[];
 
 export const EMPTY_FORMS = {
