@@ -121,6 +121,7 @@ export const messages = {
   'settings.deleteCredential': 'Избриши клуч',
   'settings.deleteCredentialDescription':
     'Зачуваниот клуч ќе биде отстранет и ќе треба повторно да го внесеш за да го користиш провајдерот.',
+  'settings.getApiKey': 'Добиј API клуч',
   'settings.keyPlaceholder': 'Внеси API клуч',
   'settings.noCredential': 'Не е зачуван клуч',
   'settings.provider.anthropic': 'Anthropic',

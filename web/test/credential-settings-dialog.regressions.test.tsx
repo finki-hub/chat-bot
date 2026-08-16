@@ -119,6 +119,28 @@ describe('CredentialSettingsDialog regressions', () => {
     expect(form).toHaveAttribute('novalidate');
   });
 
+  it('links every provider to its official API-key dashboard', async () => {
+    renderDialog();
+    await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+
+    const providerLinks = [
+      ['OpenAI', 'https://platform.openai.com/api-keys'],
+      ['Google / Gemini', 'https://aistudio.google.com/api-keys'],
+      ['Anthropic', 'https://platform.claude.com/settings/keys'],
+      ['Ollama', 'https://ollama.com/settings/keys'],
+    ] as const;
+
+    for (const [provider, href] of providerLinks) {
+      const link = screen.getByRole('link', {
+        name: `Добиј API клуч: ${provider}`,
+      });
+
+      expect(link).toHaveAttribute('href', href);
+      expect(link).toHaveAttribute('rel', 'noreferrer');
+      expect(link).toHaveAttribute('target', '_blank');
+    }
+  });
+
   it('clears plaintext drafts when the active session changes', async () => {
     const { rerenderDialog } = renderDialog();
     const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);

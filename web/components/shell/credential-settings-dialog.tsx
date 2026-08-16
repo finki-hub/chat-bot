@@ -128,12 +128,13 @@ const CredentialProviderList = ({
   saving,
 }: CredentialProviderListProps) => (
   <div className="flex flex-col gap-3">
-    {providerList.map(({ labelKey, provider }) => (
+    {providerList.map(({ keyUrl, labelKey, provider }) => (
       <CredentialProviderForm
         busy={saving || busyProvider === provider}
         credential={saved[provider]}
         form={forms[provider]}
         key={provider}
+        keyUrl={keyUrl}
         label={t(labelKey)}
         onDelete={() => {
           onDelete(provider);
