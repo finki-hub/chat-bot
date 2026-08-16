@@ -153,6 +153,7 @@ cd api
 uv sync
 uv run pytest
 uv run ruff check .
+uv run ruff format --check .
 uv run mypy .
 ```
 
@@ -163,8 +164,13 @@ cd gpu-api
 uv sync
 uv run pytest
 uv run ruff check .
+uv run ruff format --check .
 uv run mypy .
 ```
+
+Install the repository hooks once with `uv run --directory api pre-commit install`.
+Run every Python quality hook manually from the repository root with
+`uv run --directory api pre-commit run --all-files`.
 
 Web:
 
