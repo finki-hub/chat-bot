@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { type SyntheticEvent, useEffect, useState } from 'react';
+import { type SyntheticEvent, useEffect, useRef, useState } from 'react';
 
 import type {
   ChatCredentialProvider,
@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
 import { t } from '@/lib/i18n';
-import { CREDENTIALS_QUERY_KEY, useCredentials } from '@/lib/use-credentials';
+import { useCredentials } from '@/lib/use-credentials';
 import { useModels } from '@/lib/use-models';
 
 type CredentialSettingsDialogProps = {
@@ -155,7 +155,9 @@ export const CredentialSettingsDialog = ({
     credentials,
     isError: credentialsLoadError,
     isLoading: loading,
+    queryKey,
     refetch,
+    sessionKey,
   } = useCredentials();
   const { refetch: refetchModels } = useModels();
   const [forms, setForms] = useState<FormState>(EMPTY_FORMS);
@@ -165,6 +167,15 @@ export const CredentialSettingsDialog = ({
     useState<ChatCredentialProvider | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<null | string>(null);
+  const sessionKeyRef = useRef(sessionKey);
+  sessionKeyRef.current = sessionKey;
+  useEffect(() => {
+    setBusyProvider(null);
+    setCredentialToDelete(null);
+    setError(null);
+    setForms(EMPTY_FORMS);
+    setSaving(false);
+  }, [sessionKey]);
   useEffect(() => {
     if (!open) {
       setCredentialToDelete(null);
@@ -187,17 +198,27 @@ export const CredentialSettingsDialog = ({
   };
   const saveProviders = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (sessionKey === null) {
+      return;
+    }
+    const submittingSessionKey = sessionKey;
     setSaving(true);
     setError(null);
     try {
-      const { credentials: savedCredentials, failure } =
-        await saveEnteredCredentials(forms);
+      const {
+        credentials: savedCredentials,
+        failure,
+        unexpectedError,
+      } = await saveEnteredCredentials(forms);
+      if (sessionKeyRef.current !== submittingSessionKey) {
+        return;
+      }
       if (savedCredentials.length > 0) {
         const savedProviders = new Set(
           savedCredentials.map((credential) => credential.provider),
         );
-        queryClient.setQueriesData<null | readonly ChatCredentialPublic[]>(
-          { queryKey: CREDENTIALS_QUERY_KEY },
+        queryClient.setQueryData<null | readonly ChatCredentialPublic[]>(
+          queryKey,
           (current) => [
             ...(current ?? []).filter(
               (credential) => !savedProviders.has(credential.provider),
@@ -206,14 +227,21 @@ export const CredentialSettingsDialog = ({
           ],
         );
         await queryClient.invalidateQueries({
-          queryKey: CREDENTIALS_QUERY_KEY,
+          exact: true,
+          queryKey,
         });
+        if (sessionKeyRef.current !== submittingSessionKey) {
+          return;
+        }
         await refetchModels();
         setForms((current) =>
           formsWithSavedCredentials(current, savedCredentials),
         );
       }
       setError(saveFailureMessage(failure));
+      if (unexpectedError !== null) {
+        reportError(unexpectedError.reason);
+      }
     } catch (error_) {
       if (error_ instanceof TypeError) {
         setError(t('settings.credentialSaveError'));
@@ -221,13 +249,19 @@ export const CredentialSettingsDialog = ({
         throw error_;
       }
     } finally {
-      setSaving(false);
+      if (sessionKeyRef.current === submittingSessionKey) {
+        setSaving(false);
+      }
     }
   };
 
   const deleteProvider = async (
     provider: ChatCredentialProvider,
   ): Promise<boolean> => {
+    if (sessionKey === null) {
+      return false;
+    }
+    const deletingSessionKey = sessionKey;
     setBusyProvider(provider);
     setError(null);
     try {
@@ -236,14 +270,20 @@ export const CredentialSettingsDialog = ({
         setError(t('settings.credentialDeleteError'));
         return false;
       }
-      queryClient.setQueriesData<null | readonly ChatCredentialPublic[]>(
-        { queryKey: CREDENTIALS_QUERY_KEY },
+      if (sessionKeyRef.current !== deletingSessionKey) {
+        return false;
+      }
+      queryClient.setQueryData<null | readonly ChatCredentialPublic[]>(
+        queryKey,
         (current) =>
           (current ?? []).filter(
             (credential) => credential.provider !== provider,
           ),
       );
-      await queryClient.invalidateQueries({ queryKey: CREDENTIALS_QUERY_KEY });
+      await queryClient.invalidateQueries({ exact: true, queryKey });
+      if (sessionKeyRef.current !== deletingSessionKey) {
+        return false;
+      }
       await refetchModels();
       setForms((current) => ({
         ...current,
@@ -257,7 +297,9 @@ export const CredentialSettingsDialog = ({
       setError(t('settings.credentialDeleteError'));
       return false;
     } finally {
-      setBusyProvider(null);
+      if (sessionKeyRef.current === deletingSessionKey) {
+        setBusyProvider(null);
+      }
     }
   };
   const hasPendingCredentials = providerList.some(
@@ -279,6 +321,7 @@ export const CredentialSettingsDialog = ({
           </DialogHeader>
           <form
             className="grid gap-4"
+            noValidate
             onSubmit={(event) => {
               void saveProviders(event);
             }}

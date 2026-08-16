@@ -19,6 +19,7 @@ type CredentialForms = Readonly<Record<ChatCredentialProvider, ProviderForm>>;
 type CredentialSaveBatch = {
   readonly credentials: readonly ChatCredentialPublic[];
   readonly failure: CredentialSaveFailure | null;
+  readonly unexpectedError: null | { readonly reason: unknown };
 };
 
 export const saveEnteredCredentials = async (
@@ -36,8 +37,7 @@ export const saveEnteredCredentials = async (
   );
   const credentials: ChatCredentialPublic[] = [];
   let failure: CredentialSaveFailure | null = null;
-  let hasUnexpectedError = false;
-  let unexpectedError: unknown;
+  let unexpectedError: CredentialSaveBatch['unexpectedError'] = null;
   for (const result of results) {
     if (result.status === 'fulfilled') {
       if (result.value === null) {
@@ -52,13 +52,10 @@ export const saveEnteredCredentials = async (
       failure = 'base-url';
     } else if (reason instanceof TypeError) {
       failure ??= 'save';
-    } else if (!hasUnexpectedError) {
-      hasUnexpectedError = true;
-      unexpectedError = reason;
+    } else if (unexpectedError === null) {
+      failure ??= 'save';
+      unexpectedError = { reason };
     }
   }
-  if (hasUnexpectedError) {
-    throw unexpectedError;
-  }
-  return { credentials, failure };
+  return { credentials, failure, unexpectedError };
 };
