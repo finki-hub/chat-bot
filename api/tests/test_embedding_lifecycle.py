@@ -4,13 +4,13 @@ from app.data.embedding_lifecycle import (
     BGE_M3_DIMENSIONS,
     EmbeddingBatch,
     EmbeddingCandidate,
-    EmbeddingCorpus,
     canonical_chunk_text,
     canonical_diploma_text,
     canonical_professor_document_text,
     canonical_question_text,
     validate_embedding_batch,
 )
+from app.data.embedding_lifecycle_sql import EmbeddingCorpus
 from app.llms.models import (
     BGE_M3_EMBEDDING_SPEC_VERSION,
     Model,

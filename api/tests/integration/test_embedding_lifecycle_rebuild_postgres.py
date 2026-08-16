@@ -7,11 +7,11 @@ import pytest
 from app.data.embedding_lifecycle import (
     BGE_M3_DIMENSIONS,
     EmbeddingBatch,
-    EmbeddingCorpus,
     fetch_dirty_embeddings,
     persist_embedding_batch,
     rebuild_embedding_lifecycle_in_transaction,
 )
+from app.data.embedding_lifecycle_sql import EmbeddingCorpus
 from tests.integration.embedding_postgres_test_support import database as _database
 from tests.integration.embedding_postgres_test_support import (
     notifications as _notifications,
