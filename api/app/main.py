@@ -66,12 +66,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.db = db
 
     await db.init()
-    init_http_client()
-
-    yield
-
-    await db.disconnect()
-    await close_http_client()
+    try:
+        init_http_client()
+        try:
+            yield
+        finally:
+            await close_http_client()
+    finally:
+        await db.disconnect()
 
 
 def make_app(settings: Settings) -> FastAPI:
@@ -141,7 +143,7 @@ def make_app(settings: Settings) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
-        request: Request,
+        _request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
         # Don't echo the raw request body back (avoids reflecting arbitrary/oversized input).
@@ -152,7 +154,7 @@ def make_app(settings: Settings) -> FastAPI:
 
     @app.exception_handler(RetrievalError)
     async def retrieval_exception_handler(
-        request: Request,
+        _request: Request,
         exc: RetrievalError,
     ) -> JSONResponse:
         logger.error("Context retrieval failed", exc_info=exc)
