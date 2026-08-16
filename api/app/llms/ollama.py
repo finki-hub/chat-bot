@@ -193,6 +193,7 @@ async def transform_query_with_ollama(
 
         response = await llm.ainvoke(messages)
         return str(response.content).strip()
+    # ruff: ignore[BLE001] -- query transformation is an optional upstream fallback
     except Exception as exc:
         logger.warning(
             "Ollama query transformation failed; using original query model=%s error_type=%s",
@@ -252,6 +253,7 @@ async def stream_ollama_agent_response(
             media_type="text/event-stream",
         )
 
+    # ruff: ignore[BLE001] -- agent setup falls back to the regular provider stream
     except Exception as exc:
         logger.warning(
             "Ollama agent setup failed; using regular response model=%s error_type=%s",
