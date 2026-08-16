@@ -15,8 +15,10 @@ jobs:
     uses: finki-hub/.github/.github/workflows/ruff.yaml@main
     with:
       working-directory: ./gpu-api
+    secrets: inherit
 
   mypy:
     uses: finki-hub/.github/.github/workflows/mypy.yaml@main
     with:
       working-directory: ./gpu-api
+    secrets: inherit
