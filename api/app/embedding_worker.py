@@ -14,8 +14,6 @@ from app.utils.http_client import close_http_client, init_http_client
 from app.utils.logger import setup_logging
 from app.utils.settings import Settings
 
-__all__ = ["anyio"]
-
 logger = logging.getLogger(__name__)
 
 _CHANNEL = "embedding_dirty"
