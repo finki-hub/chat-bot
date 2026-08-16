@@ -158,6 +158,7 @@ async def _rewrite_query(
                 max_tokens=128,
                 credentials=credentials,
             )
+    # ruff: ignore[BLE001] -- rewrite generation is optional retrieval enrichment
     except Exception as exc:
         logger.warning(
             "Query rewrite failed; omitting variant error_type=%s",
@@ -184,6 +185,7 @@ async def _hyde_passage(
                 max_tokens=200,
                 credentials=credentials,
             )
+    # ruff: ignore[BLE001] -- HyDE generation is optional retrieval enrichment
     except Exception as exc:
         logger.warning(
             "HyDE generation failed; omitting variant error_type=%s",

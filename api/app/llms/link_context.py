@@ -137,6 +137,7 @@ async def get_links_context(db: Database, *, query: str | None = None) -> str:
     try:
         with timed("links"):
             rows = await fetch_links_for_context(db)
+    # ruff: ignore[BLE001] -- links are optional retrieval enrichment
     except Exception as exc:
         logger.warning(
             "Link catalog load failed error_type=%s",
@@ -155,6 +156,7 @@ async def get_links_context(db: Database, *, query: str | None = None) -> str:
         try:
             with timed("links.rerank"):
                 relevant = await _rank_relevant_links(query, candidates)
+        # ruff: ignore[BLE001] -- link reranking degrades to catalog order
         except Exception as exc:
             logger.warning(
                 "Link reranking failed; rendering unranked error_type=%s",
