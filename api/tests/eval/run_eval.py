@@ -49,7 +49,6 @@ from app.llms.context import (
     _Candidate,
     _chunk_candidate,
     _embed_variant,
-    _post_rerank,
     _question_candidate,
     _select_with_source_priority,
 )
@@ -59,6 +58,7 @@ from app.llms.query_normalization import query_search_variants
 from app.llms.query_variants import (
     build_query_variants,
 )
+from app.llms.reranker import post_rerank as _post_rerank
 from app.llms.retrieval_budget import retrieval_budget
 from app.llms.retrieval_routing import lexical_faq_expansion_allowed
 from app.schemas.documents import ChunkSchema
@@ -497,7 +497,8 @@ async def main_async(ns: argparse.Namespace) -> int:
                         ideal_limit=ns.ideal_limit,
                         transform_mode=transform_mode,
                     )
-                except Exception as exc:  # one bad example shouldn't abort the run
+                # ruff: ignore[BLE001] -- one failed case must not abort the evaluation run
+                except Exception as exc:
                     print(
                         f"  ! error on {ex.id}: {type(exc).__name__}: {exc}",
                         file=sys.stderr,
