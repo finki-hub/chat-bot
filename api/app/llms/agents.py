@@ -8,6 +8,11 @@ from datetime import datetime
 from typing import assert_never
 
 from fastapi.responses import StreamingResponse
+from langchain.agents.middleware.types import (
+    AgentState,
+    InputAgentState,
+    OutputAgentState,
+)
 from langchain_core.messages import AIMessageChunk, BaseMessage
 from langgraph.graph.state import CompiledStateGraph
 
@@ -216,6 +221,7 @@ def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
             if not streamed:
                 yield error_event("no_answer", _NO_ANSWER_MSG)
             yield DONE_EVENT
+        # ruff: ignore[BLE001] -- the sync stream boundary must emit a safe error for every provider failure
         except Exception as exc:
             logger.log(
                 logging.ERROR,
@@ -331,8 +337,10 @@ def _finish_reason(output: object) -> str:
     return mapping.get(str(raw), str(raw))
 
 
-async def create_agent_token_generator(
-    agent: CompiledStateGraph,
+async def create_agent_token_generator[ResponseT](
+    agent: CompiledStateGraph[
+        AgentState[ResponseT], None, InputAgentState, OutputAgentState[ResponseT]
+    ],
     messages: list[BaseMessage],
     observation: StreamObservation | None = None,
 ) -> AsyncGenerator[str]:
@@ -348,8 +356,11 @@ async def create_agent_token_generator(
     )
     tool_runs: dict[str, tuple[str, float, int]] = {}
     try:
+        agent_input = InputAgentState(
+            messages=[message.model_dump() for message in messages],
+        )
         async for event in agent.astream_events(
-            {"messages": messages},
+            agent_input,
             {"configurable": {"thread_id": "default"}},
             version="v2",
         ):
@@ -427,6 +438,7 @@ async def create_agent_token_generator(
             yield meta_event({"tokens": usage})
         yield DONE_EVENT
 
+    # ruff: ignore[BLE001] -- the async stream boundary must emit a safe error for every provider failure
     except Exception as exc:
         status_code = _error_status_code(exc)
         logger.log(
