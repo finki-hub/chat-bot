@@ -28,9 +28,15 @@ const HAS_API_KEY_FIELD = 'has_api_key';
 const USER_ID = '00000000-0000-4000-8000-000000000001';
 const USER_ID_FIELD = 'user_id';
 const OPENAI_BASE_URL = 'https://openai-proxy.example/v1';
+const OPENAI_ALT_BASE_URL = 'https://openai.example/v1';
 const OPENAI_API_KEY_LABEL = 'OpenAI API key';
 const OPENAI_FORM_NOT_FOUND = 'OpenAI credential form not found';
+const OLLAMA_BASE_URL = 'https://ollama.example';
 const REPLACEMENT_KEY = 'replacement-key';
+const ACTIVE_CREDENTIALS_QUERY_KEY = [
+  ...CREDENTIALS_QUERY_KEY,
+  'anonymous',
+] as const;
 
 const openaiCredential = (baseUrl: string): ChatCredentialPublic => ({
   [BASE_URL_FIELD]: baseUrl,
@@ -119,6 +125,97 @@ describe('CredentialSettingsDialog', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('saves every entered provider credential from one action', async () => {
+    saveCredentialMock
+      .mockResolvedValueOnce(openaiCredential(OPENAI_ALT_BASE_URL))
+      .mockResolvedValueOnce(ollamaCredential(OLLAMA_BASE_URL));
+    renderDialog();
+
+    fireEvent.change(await screen.findByLabelText(OPENAI_API_KEY_LABEL), {
+      target: { value: 'openai-user-key' },
+    });
+    fireEvent.change(screen.getByLabelText('OpenAI base URL'), {
+      target: { value: OPENAI_ALT_BASE_URL },
+    });
+    fireEvent.change(screen.getByLabelText('Ollama API key'), {
+      target: { value: 'ollama-user-key' },
+    });
+    fireEvent.change(screen.getByLabelText('Ollama base URL'), {
+      target: { value: OLLAMA_BASE_URL },
+    });
+
+    const saveButtons = screen.getAllByRole('button', { name: 'Зачувај' });
+
+    expect(saveButtons).toHaveLength(1);
+
+    const saveButton = saveButtons.at(0);
+    if (saveButton === undefined) {
+      throw new Error('Save button not found');
+    }
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(saveCredentialMock).toHaveBeenCalledTimes(2);
+    });
+
+    expect(saveCredentialMock).toHaveBeenNthCalledWith(1, {
+      apiKey: 'openai-user-key',
+      baseUrl: OPENAI_ALT_BASE_URL,
+      provider: 'openai',
+    });
+
+    expect(saveCredentialMock).toHaveBeenNthCalledWith(2, {
+      apiKey: 'ollama-user-key',
+      baseUrl: OLLAMA_BASE_URL,
+      provider: 'ollama',
+    });
+
+    expect(refetchModelsMock).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a failed provider draft retryable when another provider saves', async () => {
+    const openai = openaiCredential(OPENAI_ALT_BASE_URL);
+    loadCredentialsMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([openai]);
+    saveCredentialMock.mockImplementation(({ provider }) =>
+      provider === 'openai'
+        ? Promise.resolve(openai)
+        : Promise.reject(new TypeError('Provider request failed')),
+    );
+    const { queryClient } = renderDialog();
+
+    const openaiKey = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+    const googleKey = screen.getByLabelText('Google / Gemini API key');
+    const googleBaseUrl = screen.getByLabelText('Google / Gemini base URL');
+
+    fireEvent.change(openaiKey, { target: { value: 'openai-user-key' } });
+    fireEvent.change(screen.getByLabelText('OpenAI base URL'), {
+      target: { value: OPENAI_ALT_BASE_URL },
+    });
+    fireEvent.change(googleKey, { target: { value: 'google-user-key' } });
+    fireEvent.change(googleBaseUrl, {
+      target: { value: 'https://google.example/v1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Зачувај' }));
+
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      'Клучот не можеше да се зачува.',
+    );
+
+    expect(openaiKey).toHaveValue('');
+
+    expect(googleKey).toHaveValue('google-user-key');
+
+    expect(googleBaseUrl).toHaveValue('https://google.example/v1');
+
+    expect(
+      queryClient.getQueryData(ACTIVE_CREDENTIALS_QUERY_KEY),
+    ).toStrictEqual([openai]);
+
+    expect(screen.getByRole('button', { name: 'Зачувај' })).toBeEnabled();
+  });
+
   it('preserves a saved custom base URL when only the API key changes', async () => {
     const { queryClient } = renderDialog();
 
@@ -139,9 +236,9 @@ describe('CredentialSettingsDialog', () => {
       });
     });
 
-    expect(queryClient.getQueryData(CREDENTIALS_QUERY_KEY)).toStrictEqual([
-      openaiCredential(OPENAI_BASE_URL),
-    ]);
+    expect(
+      queryClient.getQueryData(ACTIVE_CREDENTIALS_QUERY_KEY),
+    ).toStrictEqual([openaiCredential(OPENAI_BASE_URL)]);
     expect(loadCredentialsMock).toHaveBeenCalledTimes(2);
     expect(refetchModelsMock).toHaveBeenCalledOnce();
   });
@@ -170,7 +267,9 @@ describe('CredentialSettingsDialog', () => {
       expect(baseUrlInput).toHaveValue('');
     });
 
-    expect(queryClient.getQueryData(CREDENTIALS_QUERY_KEY)).toStrictEqual([]);
+    expect(
+      queryClient.getQueryData(ACTIVE_CREDENTIALS_QUERY_KEY),
+    ).toStrictEqual([]);
     expect(loadCredentialsMock).toHaveBeenCalledTimes(2);
     expect(refetchModelsMock).toHaveBeenCalledOnce();
   });
@@ -220,9 +319,9 @@ describe('CredentialSettingsDialog', () => {
 
     await waitFor(() => {
       expect(loadCredentialsMock).toHaveBeenCalledTimes(2);
-      expect(queryClient.getQueryData(CREDENTIALS_QUERY_KEY)).toStrictEqual([
-        openaiCredential(OPENAI_BASE_URL),
-      ]);
+      expect(
+        queryClient.getQueryData(ACTIVE_CREDENTIALS_QUERY_KEY),
+      ).toStrictEqual([openaiCredential(OPENAI_BASE_URL)]);
     });
   });
 
@@ -294,9 +393,7 @@ describe('CredentialSettingsDialog', () => {
   });
 
   it('saves an Ollama key and custom endpoint', async () => {
-    saveCredentialMock.mockResolvedValueOnce(
-      ollamaCredential('https://ollama.example'),
-    );
+    saveCredentialMock.mockResolvedValueOnce(ollamaCredential(OLLAMA_BASE_URL));
     renderDialog();
 
     const keyInput = await screen.findByLabelText('Ollama API key');
@@ -308,14 +405,14 @@ describe('CredentialSettingsDialog', () => {
 
     fireEvent.change(keyInput, { target: { value: 'ollama-user-key' } });
     fireEvent.change(baseUrlInput, {
-      target: { value: 'https://ollama.example' },
+      target: { value: OLLAMA_BASE_URL },
     });
     fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
 
     await waitFor(() => {
       expect(saveCredentialMock).toHaveBeenCalledWith({
         apiKey: 'ollama-user-key',
-        baseUrl: 'https://ollama.example',
+        baseUrl: OLLAMA_BASE_URL,
         provider: 'ollama',
       });
     });

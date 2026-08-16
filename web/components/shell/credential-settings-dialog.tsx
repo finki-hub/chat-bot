@@ -10,11 +10,7 @@ import type {
 
 import { CredentialDeleteDialog } from '@/components/shell/credential-delete-dialog';
 import { CredentialProviderForm } from '@/components/shell/credential-provider-form';
-import {
-  CredentialBaseUrlRejectedError,
-  deleteCredential,
-  saveCredential,
-} from '@/components/shell/credential-settings-client';
+import { deleteCredential } from '@/components/shell/credential-settings-client';
 import {
   credentialsByProvider,
   EMPTY_FORMS,
@@ -22,6 +18,10 @@ import {
   type ProviderForm,
   PROVIDERS,
 } from '@/components/shell/credential-settings-data';
+import {
+  type CredentialSaveFailure,
+  saveEnteredCredentials,
+} from '@/components/shell/credential-settings-save';
 import { CredentialSettingsStatus } from '@/components/shell/credential-settings-status';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,6 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Spinner } from '@/components/ui/spinner';
 import { t } from '@/lib/i18n';
 import { CREDENTIALS_QUERY_KEY, useCredentials } from '@/lib/use-credentials';
 import { useModels } from '@/lib/use-models';
@@ -43,7 +44,107 @@ type CredentialSettingsDialogProps = {
 
 const providerList: readonly ProviderConfig[] = PROVIDERS;
 
+type CredentialProviderListProps = {
+  readonly busyProvider: ChatCredentialProvider | null;
+  readonly forms: FormState;
+  readonly onDelete: (provider: ChatCredentialProvider) => void;
+  readonly onFieldChange: (
+    provider: ChatCredentialProvider,
+    field: keyof ProviderForm,
+    value: string,
+  ) => void;
+  readonly saved: SavedCredentials;
+  readonly saving: boolean;
+};
+
 type FormState = Record<ChatCredentialProvider, ProviderForm>;
+
+type SavedCredentials = Partial<
+  Record<ChatCredentialProvider, ChatCredentialPublic>
+>;
+
+const saveFailureMessage = (
+  failure: CredentialSaveFailure | null,
+): null | string => {
+  if (failure === null) {
+    return null;
+  }
+  return t(
+    failure === 'base-url'
+      ? 'settings.credentialBaseUrlError'
+      : 'settings.credentialSaveError',
+  );
+};
+
+const formsForCredentials = (
+  credentials: readonly ChatCredentialPublic[],
+): FormState => {
+  const forms: FormState = { ...EMPTY_FORMS };
+  for (const credential of credentials) {
+    forms[credential.provider] = {
+      apiKey: '',
+      baseUrl: credential.base_url ?? '',
+    };
+  }
+  return forms;
+};
+
+const formsWithSavedCredentials = (
+  current: FormState,
+  credentials: readonly ChatCredentialPublic[],
+): FormState => {
+  let next = current;
+  for (const credential of credentials) {
+    next = {
+      ...next,
+      [credential.provider]: {
+        apiKey: '',
+        baseUrl: credential.base_url ?? '',
+      },
+    };
+  }
+  return next;
+};
+
+const formsWithPendingDrafts = (
+  current: FormState,
+  credentials: readonly ChatCredentialPublic[],
+): FormState => {
+  let next = formsForCredentials(credentials);
+  for (const { provider } of providerList) {
+    if (current[provider].apiKey.trim().length > 0) {
+      next = { ...next, [provider]: current[provider] };
+    }
+  }
+  return next;
+};
+
+const CredentialProviderList = ({
+  busyProvider,
+  forms,
+  onDelete,
+  onFieldChange,
+  saved,
+  saving,
+}: CredentialProviderListProps) => (
+  <div className="flex flex-col gap-3">
+    {providerList.map(({ labelKey, provider }) => (
+      <CredentialProviderForm
+        busy={saving || busyProvider === provider}
+        credential={saved[provider]}
+        form={forms[provider]}
+        key={provider}
+        label={t(labelKey)}
+        onDelete={() => {
+          onDelete(provider);
+        }}
+        onFieldChange={(field, value) => {
+          onFieldChange(provider, field, value);
+        }}
+      />
+    ))}
+  </div>
+);
 
 export const CredentialSettingsDialog = ({
   onOpenChangeAction,
@@ -62,20 +163,15 @@ export const CredentialSettingsDialog = ({
     useState<ChatCredentialProvider | null>(null);
   const [credentialToDelete, setCredentialToDelete] =
     useState<ChatCredentialProvider | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<null | string>(null);
   useEffect(() => {
     if (!open) {
       setCredentialToDelete(null);
+      setForms(EMPTY_FORMS);
       return;
     }
-    const loadedForms: FormState = { ...EMPTY_FORMS };
-    for (const credential of credentials) {
-      loadedForms[credential.provider] = {
-        apiKey: '',
-        baseUrl: credential.base_url ?? '',
-      };
-    }
-    setForms(loadedForms);
+    setForms((current) => formsWithPendingDrafts(current, credentials));
   }, [credentials, open]);
   const saved = credentialsByProvider(credentials);
 
@@ -89,51 +185,43 @@ export const CredentialSettingsDialog = ({
       [provider]: { ...current[provider], [field]: value },
     }));
   };
-  const saveProvider = async (
-    event: SyntheticEvent<HTMLFormElement>,
-    provider: ChatCredentialProvider,
-  ) => {
+  const saveProviders = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const form = forms[provider];
-    const apiKey = form.apiKey.trim();
-    if (apiKey.length === 0) {
-      return;
-    }
-    setBusyProvider(provider);
+    setSaving(true);
     setError(null);
     try {
-      const credential = await saveCredential({
-        apiKey,
-        baseUrl: form.baseUrl.trim(),
-        provider,
-      });
-      if (credential === null) {
-        setError(t('settings.credentialSaveError'));
-        return;
+      const { credentials: savedCredentials, failure } =
+        await saveEnteredCredentials(forms);
+      if (savedCredentials.length > 0) {
+        const savedProviders = new Set(
+          savedCredentials.map((credential) => credential.provider),
+        );
+        queryClient.setQueriesData<null | readonly ChatCredentialPublic[]>(
+          { queryKey: CREDENTIALS_QUERY_KEY },
+          (current) => [
+            ...(current ?? []).filter(
+              (credential) => !savedProviders.has(credential.provider),
+            ),
+            ...savedCredentials,
+          ],
+        );
+        await queryClient.invalidateQueries({
+          queryKey: CREDENTIALS_QUERY_KEY,
+        });
+        await refetchModels();
+        setForms((current) =>
+          formsWithSavedCredentials(current, savedCredentials),
+        );
       }
-      queryClient.setQueryData<null | readonly ChatCredentialPublic[]>(
-        CREDENTIALS_QUERY_KEY,
-        (current) => [
-          ...(current ?? []).filter((item) => item.provider !== provider),
-          credential,
-        ],
-      );
-      await queryClient.invalidateQueries({ queryKey: CREDENTIALS_QUERY_KEY });
-      await refetchModels();
-      setForms((current) => ({
-        ...current,
-        [provider]: { apiKey: '', baseUrl: credential.base_url ?? '' },
-      }));
+      setError(saveFailureMessage(failure));
     } catch (error_) {
-      if (error_ instanceof CredentialBaseUrlRejectedError) {
-        setError(t('settings.credentialBaseUrlError'));
-      } else if (error_ instanceof TypeError) {
+      if (error_ instanceof TypeError) {
         setError(t('settings.credentialSaveError'));
       } else {
         throw error_;
       }
     } finally {
-      setBusyProvider(null);
+      setSaving(false);
     }
   };
 
@@ -148,8 +236,8 @@ export const CredentialSettingsDialog = ({
         setError(t('settings.credentialDeleteError'));
         return false;
       }
-      queryClient.setQueryData<null | readonly ChatCredentialPublic[]>(
-        CREDENTIALS_QUERY_KEY,
+      queryClient.setQueriesData<null | readonly ChatCredentialPublic[]>(
+        { queryKey: CREDENTIALS_QUERY_KEY },
         (current) =>
           (current ?? []).filter(
             (credential) => credential.provider !== provider,
@@ -172,6 +260,9 @@ export const CredentialSettingsDialog = ({
       setBusyProvider(null);
     }
   };
+  const hasPendingCredentials = providerList.some(
+    ({ provider }) => forms[provider].apiKey.trim().length > 0,
+  );
 
   return (
     <>
@@ -186,58 +277,60 @@ export const CredentialSettingsDialog = ({
               {t('settings.credentialsDescription')}
             </DialogDescription>
           </DialogHeader>
-          <CredentialSettingsStatus
-            loadError={credentialsLoadError}
-            loading={loading}
-            onRetryAction={() => {
-              void refetch();
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              void saveProviders(event);
             }}
-          />
-          {!loading && !credentialsLoadError ? (
-            <div className="flex flex-col gap-3">
-              {providerList.map(({ labelKey, provider }) => {
-                const credential = saved[provider];
-                const busy = busyProvider === provider;
-                return (
-                  <CredentialProviderForm
-                    busy={busy}
-                    credential={credential}
-                    form={forms[provider]}
-                    key={provider}
-                    label={t(labelKey)}
-                    onDelete={() => {
-                      setCredentialToDelete(provider);
-                    }}
-                    onFieldChange={(field, value) => {
-                      updateForm(provider, field, value);
-                    }}
-                    onSubmit={(event) => {
-                      void saveProvider(event, provider);
-                    }}
-                  />
-                );
-              })}
-            </div>
-          ) : null}
-          {error === null ? null : (
-            <p
-              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              role="alert"
-            >
-              {error}
-            </p>
-          )}
-          <DialogFooter>
-            <Button
-              onClick={() => {
-                onOpenChangeAction(false);
+          >
+            <CredentialSettingsStatus
+              loadError={credentialsLoadError}
+              loading={loading}
+              onRetryAction={() => {
+                void refetch();
               }}
-              type="button"
-              variant="outline"
-            >
-              {t('common.cancel')}
-            </Button>
-          </DialogFooter>
+            />
+            {!loading && !credentialsLoadError ? (
+              <CredentialProviderList
+                busyProvider={busyProvider}
+                forms={forms}
+                onDelete={setCredentialToDelete}
+                onFieldChange={updateForm}
+                saved={saved}
+                saving={saving}
+              />
+            ) : null}
+            {error === null ? null : (
+              <p
+                className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                role="alert"
+              >
+                {error}
+              </p>
+            )}
+            <DialogFooter>
+              <Button
+                disabled={saving}
+                onClick={() => {
+                  onOpenChangeAction(false);
+                }}
+                type="button"
+                variant="outline"
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                aria-busy={saving || undefined}
+                disabled={
+                  saving || busyProvider !== null || !hasPendingCredentials
+                }
+                type="submit"
+              >
+                {saving ? <Spinner aria-hidden="true" /> : null}
+                {saving ? t('composer.modelsLoading') : t('common.save')}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
       <CredentialDeleteDialog
