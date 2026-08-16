@@ -184,10 +184,14 @@ def classify_language(query: str) -> str:
 
 
 def classify_script(query: str) -> QueryScript:
-    has_cyrillic = any("CYRILLIC" in name(character, "") for character in query)
-    has_latin = any("LATIN" in name(character, "") for character in query)
-    if has_cyrillic and has_latin:
-        return "mixed"
+    has_cyrillic = False
+    has_latin = False
+    for character in query:
+        character_name = name(character, "")
+        has_cyrillic = has_cyrillic or "CYRILLIC" in character_name
+        has_latin = has_latin or "LATIN" in character_name
+        if has_cyrillic and has_latin:
+            return "mixed"
     if has_cyrillic:
         return "cyrillic"
     if has_latin:
