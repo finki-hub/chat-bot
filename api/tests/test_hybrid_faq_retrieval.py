@@ -13,8 +13,22 @@ from app.llms.context import get_retrieved_context_with_sources
 from app.llms.models import Model
 from app.llms.query_modes import QueryTransformMode
 from app.llms.query_variants import QueryVariant, QueryVariantBundle
+from app.llms.retrieval_result import RetrievedContext
 from app.schemas.documents import ChunkSchema
 from app.schemas.questions import QuestionSchema
+from app.utils.timing import (
+    RequestTimings,
+    reset_request_timings,
+    start_request_timings,
+)
+
+
+def _run_with_timings(run) -> tuple[RetrievedContext, RequestTimings]:
+    timings, token = start_request_timings()
+    try:
+        return anyio.run(run), timings
+    finally:
+        reset_request_timings(token)
 
 
 def test_lexical_faq_search_uses_weighted_or_query(
@@ -56,8 +70,18 @@ def test_lexical_faq_search_uses_weighted_or_query(
     assert limit == 7
 
 
+@pytest.mark.parametrize(
+    ("vector_score", "expected_final_faq_count", "expected_retrieval_path"),
+    [
+        (0.05, 1, "lexical"),
+        (0.5, 2, "hybrid"),
+    ],
+)
 def test_normalized_lexical_faq_reaches_existing_reranker(
     monkeypatch: pytest.MonkeyPatch,
+    vector_score: float,
+    expected_final_faq_count: int,
+    expected_retrieval_path: str,
 ) -> None:
     faq = QuestionSchema(
         id=uuid4(),
@@ -91,14 +115,14 @@ def test_normalized_lexical_faq_reaches_existing_reranker(
 
     async def lexical_search(_db, query, *, limit):
         lexical_limits.append(limit)
-        return [faq] if query.startswith("смерови") else []
+        return [vector_faq, faq] if query.startswith("смерови") else []
 
     class RerankResponse:
         def json(self):
             return {
                 "reranked_documents": [
                     {"index": 1, "score": 0.9},
-                    {"index": 0, "score": 0.05},
+                    {"index": 0, "score": vector_score},
                 ],
             }
 
@@ -121,7 +145,7 @@ def test_normalized_lexical_faq_reaches_existing_reranker(
             query_transform_mode=QueryTransformMode.RAW,
         )
 
-    result = anyio.run(run)
+    result, timings = _run_with_timings(run)
 
     assert result.sources[0].title == faq.name
     assert faq.content in result.text
@@ -130,6 +154,16 @@ def test_normalized_lexical_faq_reaches_existing_reranker(
         f"Наслов: {faq.name}\nСодржина: {faq.content}",
     ]
     assert lexical_limits == [31, 31]
+    assert timings.transliteration_variant_added is True
+    assert timings.lexical_search_outcome == "matched"
+    assert timings.dense_faq_candidate_count == 1
+    assert timings.dense_document_candidate_count == 0
+    assert timings.lexical_faq_candidate_count == 2
+    assert timings.final_faq_count == expected_final_faq_count
+    assert timings.final_document_count == 0
+    assert timings.lexical_only_final_count == 1
+    assert timings.retrieval_path == expected_retrieval_path
+    assert timings.reranker_fallback is False
 
 
 def test_lexical_faq_failure_preserves_dense_retrieval(
@@ -176,10 +210,16 @@ def test_lexical_faq_failure_preserves_dense_retrieval(
             query_transform_mode=QueryTransformMode.RAW,
         )
 
-    result = anyio.run(run)
+    result, timings = _run_with_timings(run)
 
     assert result.sources[0].title == vector_faq.name
     assert any(record.exc_info is not None for record in caplog.records)
+    assert timings.lexical_search_outcome == "error"
+    assert timings.dense_faq_candidate_count == 1
+    assert timings.lexical_faq_candidate_count == 0
+    assert timings.final_faq_count == 1
+    assert timings.retrieval_path == "dense"
+    assert timings.reranker_fallback is False
 
 
 def test_lexical_faq_search_is_skipped_without_vector_domain_signal(
@@ -211,19 +251,92 @@ def test_lexical_faq_search_is_skipped_without_vector_domain_signal(
             query_transform_mode=QueryTransformMode.RAW,
         )
 
-    result = anyio.run(run)
+    result, timings = _run_with_timings(run)
 
     assert result.text == ""
     assert lexical_calls == 0
+    assert timings.lexical_search_outcome == "skipped"
+    assert timings.dense_faq_candidate_count == 0
+    assert timings.dense_document_candidate_count == 0
+    assert timings.lexical_faq_candidate_count == 0
+    assert timings.final_faq_count == 0
+    assert timings.final_document_count == 0
+    assert timings.lexical_only_final_count == 0
+    assert timings.retrieval_path == "none"
+    assert timings.reranker_fallback is False
+
+
+def test_lexical_faq_search_records_no_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lexical_calls = 0
+    vector_faq = QuestionSchema(
+        id=uuid4(),
+        name="Контакт",
+        content="Контакт информации.",
+        links={},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        distance=0.2,
+    )
+
+    async def embed(*args, **kwargs):
+        return [0.1]
+
+    async def vector_search(*args, **kwargs):
+        return [vector_faq], []
+
+    async def lexical_search(*args, **kwargs):
+        nonlocal lexical_calls
+        lexical_calls += 1
+        return []
+
+    class RerankResponse:
+        def json(self):
+            return {"reranked_documents": [{"index": 0, "score": 0.9}]}
+
+    async def rerank(*args, **kwargs):
+        return RerankResponse()
+
+    monkeypatch.setattr(context_module, "_embed_variant", embed)
+    monkeypatch.setattr(context_module, "_search_both", vector_search)
+    monkeypatch.setattr(context_module, "get_matching_questions", lexical_search)
+    monkeypatch.setattr(context_module, "_post_rerank", rerank)
+
+    async def run():
+        return await get_retrieved_context_with_sources(
+            Database("postgresql://unused"),
+            "smerovi na finki",
+            Model.BGE_M3_LOCAL,
+            Model.GPT_5_4_MINI,
+            query_transform_mode=QueryTransformMode.RAW,
+        )
+
+    result, timings = _run_with_timings(run)
+
+    assert vector_faq.content in result.text
+    assert lexical_calls == 2
+    assert timings.transliteration_variant_added is True
+    assert timings.lexical_search_outcome == "no_match"
+    assert timings.retrieval_path == "dense"
 
 
 def test_reranker_failure_falls_back_to_dense_candidates_only(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    lexical_faq = QuestionSchema(
+    overlapping_faq = QuestionSchema(
         id=uuid4(),
         name="Студиски програми",
-        content="Лексички FAQ кандидат.",
+        content="Густ и лексички FAQ кандидат.",
+        links={},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        distance=0.1,
+    )
+    lexical_only_faq = QuestionSchema(
+        id=uuid4(),
+        name="Изборни предмети",
+        content="Само лексички FAQ кандидат.",
         links={},
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
@@ -242,18 +355,22 @@ def test_reranker_failure_falls_back_to_dense_candidates_only(
         return [0.1]
 
     async def vector_search(*args, **kwargs):
-        return [], [dense_chunk]
+        return [overlapping_faq], [dense_chunk]
 
     async def lexical_search(*args, **kwargs):
-        return [lexical_faq]
+        return [overlapping_faq, lexical_only_faq]
 
     async def failing_reranker(*args, **kwargs):
         raise RuntimeError("reranker unavailable")
+
+    async def no_neighbor_chunks(*args, **kwargs):
+        return []
 
     monkeypatch.setattr(context_module, "_embed_variant", embed)
     monkeypatch.setattr(context_module, "_search_both", vector_search)
     monkeypatch.setattr(context_module, "get_matching_questions", lexical_search)
     monkeypatch.setattr(context_module, "_post_rerank", failing_reranker)
+    monkeypatch.setattr(context_module, "get_chunks_window", no_neighbor_chunks)
 
     async def run():
         return await get_retrieved_context_with_sources(
@@ -262,10 +379,20 @@ def test_reranker_failure_falls_back_to_dense_candidates_only(
             Model.BGE_M3_LOCAL,
             Model.GPT_5_4_MINI,
             query_transform_mode=QueryTransformMode.RAW,
-            top_k=1,
+            top_k=2,
         )
 
-    result = anyio.run(run)
+    result, timings = _run_with_timings(run)
 
+    assert overlapping_faq.content in result.text
     assert dense_chunk.content in result.text
-    assert lexical_faq.content not in result.text
+    assert lexical_only_faq.content not in result.text
+    assert timings.lexical_search_outcome == "matched"
+    assert timings.dense_faq_candidate_count == 1
+    assert timings.dense_document_candidate_count == 1
+    assert timings.lexical_faq_candidate_count == 2
+    assert timings.final_faq_count == 1
+    assert timings.final_document_count == 1
+    assert timings.lexical_only_final_count == 0
+    assert timings.retrieval_path == "dense"
+    assert timings.reranker_fallback is True

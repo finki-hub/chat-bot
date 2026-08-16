@@ -2,6 +2,29 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
+from dataclasses import dataclass
+from typing import Literal
+
+type LexicalSearchOutcome = Literal["skipped", "no_match", "matched", "error"]
+type RetrievalPath = Literal["none", "dense", "lexical", "hybrid"]
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalCandidateMetrics:
+    transliteration_variant_added: bool
+    lexical_search_outcome: LexicalSearchOutcome
+    dense_faq_candidate_count: int
+    dense_document_candidate_count: int
+    lexical_faq_candidate_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalSelectionMetrics:
+    final_faq_count: int
+    final_document_count: int
+    lexical_only_final_count: int
+    reranker_fallback: bool
+    retrieval_path: RetrievalPath
 
 
 def _round(value: float | None, digits: int = 1) -> float | None:
@@ -28,6 +51,16 @@ class RequestTimings:
         self.reranker_score_max: float | None = None
         self.reranker_score_min: float | None = None
         self.reranker_above_threshold: int | None = None
+        self.transliteration_variant_added = False
+        self.lexical_search_outcome: LexicalSearchOutcome = "skipped"
+        self.dense_faq_candidate_count = 0
+        self.dense_document_candidate_count = 0
+        self.lexical_faq_candidate_count = 0
+        self.final_faq_count = 0
+        self.final_document_count = 0
+        self.lexical_only_final_count = 0
+        self.retrieval_path: RetrievalPath = "none"
+        self.reranker_fallback = False
         self.response_id: str | None = None
         self.distinct_id: str | None = None
 
@@ -97,6 +130,26 @@ def record_reranker_scores(scores: list[float], above_threshold: int) -> None:
     timings.reranker_score_max = max(scores)
     timings.reranker_score_min = min(scores)
     timings.reranker_above_threshold = above_threshold
+
+
+def record_retrieval_candidates(metrics: RetrievalCandidateMetrics) -> None:
+    timings = _current.get()
+    if timings is not None:
+        timings.transliteration_variant_added = metrics.transliteration_variant_added
+        timings.lexical_search_outcome = metrics.lexical_search_outcome
+        timings.dense_faq_candidate_count = metrics.dense_faq_candidate_count
+        timings.dense_document_candidate_count = metrics.dense_document_candidate_count
+        timings.lexical_faq_candidate_count = metrics.lexical_faq_candidate_count
+
+
+def record_retrieval_selection(metrics: RetrievalSelectionMetrics) -> None:
+    timings = _current.get()
+    if timings is not None:
+        timings.final_faq_count = metrics.final_faq_count
+        timings.final_document_count = metrics.final_document_count
+        timings.lexical_only_final_count = metrics.lexical_only_final_count
+        timings.reranker_fallback = metrics.reranker_fallback
+        timings.retrieval_path = metrics.retrieval_path
 
 
 def record_response_id(response_id: str) -> None:

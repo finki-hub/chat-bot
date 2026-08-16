@@ -1,8 +1,8 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
-from typing import assert_never
+from dataclasses import dataclass, replace
+from typing import Literal, assert_never
 from uuid import UUID
 
 from asyncpg import PostgresError
@@ -40,8 +40,14 @@ from app.utils.discord_content import redact_unresolved_discord_tokens
 from app.utils.exceptions import RetrievalError
 from app.utils.settings import Settings
 from app.utils.timing import (
+    LexicalSearchOutcome,
+    RetrievalCandidateMetrics,
+    RetrievalPath,
+    RetrievalSelectionMetrics,
     record_reranker_scores,
+    record_retrieval_candidates,
     record_retrieval_ids,
+    record_retrieval_selection,
     record_retrieval_shape,
     timed,
 )
@@ -53,15 +59,17 @@ settings = Settings()
 # Chunks pulled in on each side of a retrieved chunk, to give the model a contiguous passage.
 _NEIGHBOR_WINDOW: int = 1
 _RETRIEVAL_IDS_CAP: int = 10
+type _CandidateRetrievalPath = Literal["dense", "lexical", "hybrid"]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class _Candidate:
     key: str  # dedup key, namespaced 'Q:'/'C:' so a chunk never collides with a FAQ
     source: str  # 'faq' | 'chunk'
     rerank_text: str  # the candidate text scored by the cross-encoder
     context_text: str  # rendered into the final context string
     retrieval_source: RetrievalSource
+    retrieval_path: _CandidateRetrievalPath
     distance: float | None = None  # carried only for the DEBUG trace
     doc_id: UUID | None = None  # chunk identity for neighbor expansion (None for FAQ)
     chunk_index: int | None = None
@@ -124,7 +132,10 @@ def _embedding_for_variant(
     raise AssertionError(f"Unhandled query variant kind: {kind}")
 
 
-def _question_candidate(q: QuestionSchema) -> _Candidate:
+def _question_candidate(
+    q: QuestionSchema,
+    retrieval_path: _CandidateRetrievalPath = "dense",
+) -> _Candidate:
     name = redact_unresolved_discord_tokens(q.name)
     content = redact_unresolved_discord_tokens(q.content)
     links = [
@@ -161,6 +172,7 @@ def _question_candidate(q: QuestionSchema) -> _Candidate:
             ),
             snippet=content,
         ),
+        retrieval_path=retrieval_path,
         distance=q.distance,
     )
 
@@ -192,6 +204,7 @@ def _chunk_candidate(c: ChunkSchema) -> _Candidate:
             section=c.section,
             snippet=c.content,
         ),
+        retrieval_path="dense",
         distance=c.distance,
         doc_id=c.document_id,
         chunk_index=c.chunk_index,
@@ -199,20 +212,25 @@ def _chunk_candidate(c: ChunkSchema) -> _Candidate:
 
 
 def _build_candidates(
-    question_lists: list[list[QuestionSchema]],
-    chunk_lists: list[list[ChunkSchema]],
+    search_results: list[tuple[list[QuestionSchema], list[ChunkSchema]]],
+    lexical_results: list[list[QuestionSchema]],
 ) -> list[_Candidate]:
-    seen: set[str] = set()
-    merged: list[_Candidate] = []
-    for questions, chunks in zip(question_lists, chunk_lists, strict=True):
+    merged: dict[str, _Candidate] = {}
+    for questions, chunks in search_results:
         for cand in (
-            *map(_question_candidate, questions),
+            *(_question_candidate(question, "dense") for question in questions),
             *map(_chunk_candidate, chunks),
         ):
-            if cand.key not in seen:
-                seen.add(cand.key)
-                merged.append(cand)
-    return merged
+            merged.setdefault(cand.key, cand)
+    for questions in lexical_results:
+        for question in questions:
+            candidate = _question_candidate(question, "lexical")
+            existing = merged.get(candidate.key)
+            if existing is None:
+                merged[candidate.key] = candidate
+            elif existing.retrieval_path == "dense":
+                merged[candidate.key] = replace(existing, retrieval_path="hybrid")
+    return list(merged.values())
 
 
 def _select_with_source_priority(
@@ -357,6 +375,7 @@ async def get_retrieved_context_with_sources(
 
         lexical_results: list[list[QuestionSchema]] = []
         lexical_queries = query_search_variants(search_query)
+        lexical_search_outcome: LexicalSearchOutcome = "skipped"
         if lexical_faq_expansion_allowed(
             (
                 question.distance
@@ -378,21 +397,40 @@ async def get_retrieved_context_with_sources(
                             for lexical_query in lexical_queries
                         ),
                     )
+                    lexical_search_outcome = (
+                        "matched" if any(lexical_results) else "no_match"
+                    )
                 except PostgresError:
+                    lexical_search_outcome = "error"
                     logger.warning(
                         "Lexical FAQ search unavailable; continuing with vector candidates",
                         exc_info=True,
                     )
 
         candidates = _build_candidates(
-            [
-                *[questions for questions, _ in search_results],
-                *lexical_results,
-            ],
-            [
-                *[chunks for _, chunks in search_results],
-                *[[] for _ in lexical_results],
-            ],
+            search_results,
+            lexical_results,
+        )
+        dense_faq_candidate_count = sum(
+            candidate.source == "faq"
+            and candidate.retrieval_path in {"dense", "hybrid"}
+            for candidate in candidates
+        )
+        dense_document_candidate_count = sum(
+            candidate.source == "chunk" for candidate in candidates
+        )
+        lexical_faq_candidate_count = sum(
+            candidate.retrieval_path in {"lexical", "hybrid"}
+            for candidate in candidates
+        )
+        record_retrieval_candidates(
+            RetrievalCandidateMetrics(
+                transliteration_variant_added=len(lexical_queries) > 1,
+                lexical_search_outcome=lexical_search_outcome,
+                dense_faq_candidate_count=dense_faq_candidate_count,
+                dense_document_candidate_count=dense_document_candidate_count,
+                lexical_faq_candidate_count=lexical_faq_candidate_count,
+            ),
         )
 
         distances = [c.distance for c in candidates if c.distance is not None]
@@ -424,6 +462,8 @@ async def get_retrieved_context_with_sources(
         raise RetrievalError("Failed during multi-query vector search") from e
 
     rerank_texts = [c.rerank_text for c in candidates]
+    reranker_fallback = False
+    dense_fallback = False
 
     _stage("rerank")
 
@@ -500,6 +540,7 @@ async def get_retrieved_context_with_sources(
                     settings.RERANKER_MIN_SCORE,
                 )
                 ranked_candidates = [candidates[best_idx]]
+                reranker_fallback = True
 
         final = _select_with_source_priority(ranked_candidates, top_k)
         sources = visible_sources(
@@ -517,6 +558,8 @@ async def get_retrieved_context_with_sources(
             sum(1 for c in final if c.source == "chunk"),
         )
     except Exception as exc:
+        reranker_fallback = True
+        dense_fallback = True
         logger.warning(
             "Reranking failed; using vector order error_type=%s",
             type(exc).__name__,
@@ -527,6 +570,36 @@ async def get_retrieved_context_with_sources(
         final = _select_with_source_priority(dense_candidates, top_k)
         sources = ()
 
+    final_has_dense = any(
+        candidate.retrieval_path in {"dense", "hybrid"} for candidate in final
+    )
+    final_has_lexical = any(
+        candidate.retrieval_path in {"lexical", "hybrid"} for candidate in final
+    )
+    retrieval_path: RetrievalPath
+    if dense_fallback and final:
+        retrieval_path = "dense"
+    elif final_has_dense and final_has_lexical:
+        retrieval_path = "hybrid"
+    elif final_has_lexical:
+        retrieval_path = "lexical"
+    elif final_has_dense:
+        retrieval_path = "dense"
+    else:
+        retrieval_path = "none"
+    record_retrieval_selection(
+        RetrievalSelectionMetrics(
+            final_faq_count=sum(candidate.source == "faq" for candidate in final),
+            final_document_count=sum(
+                candidate.source == "chunk" for candidate in final
+            ),
+            lexical_only_final_count=sum(
+                candidate.retrieval_path == "lexical" for candidate in final
+            ),
+            reranker_fallback=reranker_fallback,
+            retrieval_path=retrieval_path,
+        ),
+    )
     record_retrieval_ids([c.key for c in final[:_RETRIEVAL_IDS_CAP]])
 
     _stage("context")
