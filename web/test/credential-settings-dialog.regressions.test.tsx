@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -26,8 +32,9 @@ const USER_ID_FIELD = 'user_id';
 const credential = (
   provider: ChatCredentialProvider,
   userId: string,
+  baseUrl: null | string = null,
 ): ChatCredentialPublic => ({
-  [BASE_URL_FIELD]: null,
+  [BASE_URL_FIELD]: baseUrl,
   [HAS_API_KEY_FIELD]: true,
   provider,
   [USER_ID_FIELD]: userId,
@@ -109,14 +116,12 @@ describe('CredentialSettingsDialog regressions', () => {
     vi.unstubAllGlobals();
   });
 
-  it('lets valid providers submit when another optional URL is invalid', async () => {
+  it('disables native validation for optional provider URLs', async () => {
     renderDialog();
 
     const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
-    const form = keyInput.closest('form');
 
-    expect(form).not.toBeNull();
-    expect(form).toHaveAttribute('novalidate');
+    expect(keyInput.closest('form')).toHaveAttribute('novalidate');
   });
 
   it('links every provider to its official API-key dashboard', async () => {
@@ -154,15 +159,39 @@ describe('CredentialSettingsDialog regressions', () => {
     });
   });
 
-  it('clears a save error when the dialog closes', async () => {
-    saveCredentialMock.mockResolvedValueOnce(null);
+  it('ignores a delete error that settles after the session changes', async () => {
+    const pendingDelete = Promise.withResolvers<boolean>();
+    deleteCredentialMock.mockReturnValueOnce(pendingDelete.promise);
+    loadCredentialsMock.mockResolvedValueOnce([
+      credential('openai', SESSION_A),
+    ]);
+    const { rerenderDialog } = renderDialog();
+
+    await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+    fireEvent.click(screen.getByRole('button', { name: 'Избриши' }));
+    fireEvent.click(await screen.findByTestId('confirm-action'));
+
+    sessionKeyMock.mockReturnValue(SESSION_B);
+    rerenderDialog();
+    const requestError = new TypeError('Delete request failed');
+    await act(async () => {
+      pendingDelete.reject(requestError);
+
+      await expect(pendingDelete.promise).rejects.toBe(requestError);
+    });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('ignores a save error that settles after the dialog closes', async () => {
+    const pendingSave = Promise.withResolvers<ChatCredentialPublic | null>();
+    saveCredentialMock.mockReturnValueOnce(pendingSave.promise);
     const { rerenderDialog } = renderDialog();
     const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
     fireEvent.change(keyInput, { target: { value: 'invalid-secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Зачувај' }));
 
-    await expect(screen.findByRole('alert')).resolves.toBeInTheDocument();
-
+    fireEvent.click(screen.getByRole('button', { name: 'Затвори' }));
     rerenderDialog(false);
     await waitFor(() => {
       expect(
@@ -171,6 +200,11 @@ describe('CredentialSettingsDialog regressions', () => {
     });
     rerenderDialog();
     await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+
+    await act(async () => {
+      pendingSave.resolve(null);
+      await pendingSave.promise;
+    });
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
@@ -194,6 +228,33 @@ describe('CredentialSettingsDialog regressions', () => {
     expect(
       queryClient.getQueryData([...CREDENTIALS_QUERY_KEY, SESSION_B]),
     ).toStrictEqual(userBCredentials);
+  });
+
+  it('ignores save reconciliation after the session changes', async () => {
+    const pendingModelRefetch = Promise.withResolvers<unknown>();
+    const userABaseUrl = 'https://user-a.example/v1';
+    saveCredentialMock.mockResolvedValueOnce(
+      credential('openai', SESSION_A, userABaseUrl),
+    );
+    refetchModelsMock.mockReturnValueOnce(pendingModelRefetch.promise);
+    const { rerenderDialog } = renderDialog();
+    const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+
+    fireEvent.change(keyInput, { target: { value: 'user-a-secret' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Зачувај' }));
+    await waitFor(() => {
+      expect(refetchModelsMock).toHaveBeenCalledOnce();
+    });
+
+    sessionKeyMock.mockReturnValue(SESSION_B);
+    rerenderDialog();
+    await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+    await act(async () => {
+      pendingModelRefetch.resolve({});
+      await pendingModelRefetch.promise;
+    });
+
+    expect(screen.getByLabelText('OpenAI base URL')).toHaveValue('');
   });
 
   it('reconciles successful saves when another provider fails unexpectedly', async () => {

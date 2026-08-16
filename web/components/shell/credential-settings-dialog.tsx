@@ -42,6 +42,11 @@ type CredentialSettingsDialogProps = {
   readonly open: boolean;
 };
 
+type DialogOperation = {
+  readonly dialogCycle: number;
+  readonly sessionKey: string;
+};
+
 const providerList: readonly ProviderConfig[] = PROVIDERS;
 
 type CredentialProviderListProps = {
@@ -168,8 +173,26 @@ export const CredentialSettingsDialog = ({
     useState<ChatCredentialProvider | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<null | string>(null);
+  const dialogCycleRef = useRef(0);
   const sessionKeyRef = useRef(sessionKey);
   sessionKeyRef.current = sessionKey;
+  const changeOpen = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      dialogCycleRef.current += 1;
+    }
+    onOpenChangeAction(nextOpen);
+  };
+  const runForCurrentDialogOperation = (
+    operation: DialogOperation,
+    update: () => void,
+  ) => {
+    if (
+      sessionKeyRef.current === operation.sessionKey &&
+      dialogCycleRef.current === operation.dialogCycle
+    ) {
+      update();
+    }
+  };
   useEffect(() => {
     setBusyProvider(null);
     setCredentialToDelete(null);
@@ -182,6 +205,7 @@ export const CredentialSettingsDialog = ({
       setCredentialToDelete(null);
       setError(null);
       setForms(EMPTY_FORMS);
+      setSaving(false);
       return;
     }
     setForms((current) => formsWithPendingDrafts(current, credentials));
@@ -203,7 +227,10 @@ export const CredentialSettingsDialog = ({
     if (sessionKey === null) {
       return;
     }
-    const submittingSessionKey = sessionKey;
+    const operation = {
+      dialogCycle: dialogCycleRef.current,
+      sessionKey,
+    } satisfies DialogOperation;
     setSaving(true);
     setError(null);
     try {
@@ -212,7 +239,7 @@ export const CredentialSettingsDialog = ({
         failure,
         unexpectedError,
       } = await saveEnteredCredentials(forms);
-      if (sessionKeyRef.current !== submittingSessionKey) {
+      if (sessionKeyRef.current !== operation.sessionKey) {
         return;
       }
       if (savedCredentials.length > 0) {
@@ -232,28 +259,34 @@ export const CredentialSettingsDialog = ({
           exact: true,
           queryKey,
         });
-        if (sessionKeyRef.current !== submittingSessionKey) {
+        if (sessionKeyRef.current !== operation.sessionKey) {
           return;
         }
         await refetchModels();
-        setForms((current) =>
-          formsWithSavedCredentials(current, savedCredentials),
-        );
+        runForCurrentDialogOperation(operation, () => {
+          setForms((current) =>
+            formsWithSavedCredentials(current, savedCredentials),
+          );
+        });
       }
-      setError(saveFailureMessage(failure));
+      runForCurrentDialogOperation(operation, () => {
+        setError(saveFailureMessage(failure));
+      });
       if (unexpectedError !== null) {
         reportError(unexpectedError.reason);
       }
     } catch (error_) {
       if (error_ instanceof TypeError) {
-        setError(t('settings.credentialSaveError'));
+        runForCurrentDialogOperation(operation, () => {
+          setError(t('settings.credentialSaveError'));
+        });
       } else {
         throw error_;
       }
     } finally {
-      if (sessionKeyRef.current === submittingSessionKey) {
+      runForCurrentDialogOperation(operation, () => {
         setSaving(false);
-      }
+      });
     }
   };
 
@@ -263,16 +296,21 @@ export const CredentialSettingsDialog = ({
     if (sessionKey === null) {
       return false;
     }
-    const deletingSessionKey = sessionKey;
+    const operation = {
+      dialogCycle: dialogCycleRef.current,
+      sessionKey,
+    } satisfies DialogOperation;
     setBusyProvider(provider);
     setError(null);
     try {
       const deleted = await deleteCredential(provider);
       if (!deleted) {
-        setError(t('settings.credentialDeleteError'));
+        runForCurrentDialogOperation(operation, () => {
+          setError(t('settings.credentialDeleteError'));
+        });
         return false;
       }
-      if (sessionKeyRef.current !== deletingSessionKey) {
+      if (sessionKeyRef.current !== operation.sessionKey) {
         return false;
       }
       queryClient.setQueryData<null | readonly ChatCredentialPublic[]>(
@@ -283,25 +321,32 @@ export const CredentialSettingsDialog = ({
           ),
       );
       await queryClient.invalidateQueries({ exact: true, queryKey });
-      if (sessionKeyRef.current !== deletingSessionKey) {
+      if (sessionKeyRef.current !== operation.sessionKey) {
         return false;
       }
       await refetchModels();
-      setForms((current) => ({
-        ...current,
-        [provider]: EMPTY_FORMS[provider],
-      }));
+      if (sessionKeyRef.current !== operation.sessionKey) {
+        return false;
+      }
+      runForCurrentDialogOperation(operation, () => {
+        setForms((current) => ({
+          ...current,
+          [provider]: EMPTY_FORMS[provider],
+        }));
+      });
       return true;
     } catch (error_) {
       if (!(error_ instanceof TypeError)) {
         throw error_;
       }
-      setError(t('settings.credentialDeleteError'));
+      runForCurrentDialogOperation(operation, () => {
+        setError(t('settings.credentialDeleteError'));
+      });
       return false;
     } finally {
-      if (sessionKeyRef.current === deletingSessionKey) {
+      runForCurrentDialogOperation(operation, () => {
         setBusyProvider(null);
-      }
+      });
     }
   };
   const hasPendingCredentials = providerList.some(
@@ -311,7 +356,7 @@ export const CredentialSettingsDialog = ({
   return (
     <>
       <Dialog
-        onOpenChange={onOpenChangeAction}
+        onOpenChange={changeOpen}
         open={open}
       >
         <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
@@ -357,7 +402,7 @@ export const CredentialSettingsDialog = ({
               <Button
                 disabled={saving}
                 onClick={() => {
-                  onOpenChangeAction(false);
+                  changeOpen(false);
                 }}
                 type="button"
                 variant="outline"
