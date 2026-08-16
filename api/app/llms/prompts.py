@@ -33,7 +33,7 @@ def markdown_instructions(interface: ChatInterface) -> str:
         case "web":
             return _WEB_MARKDOWN_INSTRUCTIONS
         case unreachable:
-            return assert_never(unreachable)
+            assert_never(unreachable)
 
 
 def build_user_agent_prompt(context: str, prompt: str) -> str:
