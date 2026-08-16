@@ -99,14 +99,14 @@ _current: ContextVar[RequestTimings | None] = ContextVar(
 )
 
 
-def start_request_timings() -> tuple[RequestTimings, Token]:
+def start_request_timings() -> tuple[RequestTimings, Token[RequestTimings | None]]:
     """Open a timing scope for the current request."""
     timings = RequestTimings()
     token = _current.set(timings)
     return timings, token
 
 
-def reset_request_timings(token: Token) -> None:
+def reset_request_timings(token: Token[RequestTimings | None]) -> None:
     _current.reset(token)
 
 
