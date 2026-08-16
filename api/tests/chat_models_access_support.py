@@ -149,15 +149,17 @@ def settings(
     sponsored_model_id: str = SPONSORED_ID,
     sponsored_provider: str = "openai",
 ) -> Settings:
-    return Settings(
-        API_KEY="test-api-key",
-        CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
-        MCP_API_KEY="test-mcp-key",
-        SPONSORED_MODEL_ENABLED=enabled,
-        SPONSORED_MODEL_ID=sponsored_model_id,
-        SPONSORED_MODEL_PROVIDER=sponsored_provider,
-        SPONSORED_MODEL_API_KEY="sponsored-secret" if enabled else None,
-        SPONSORED_DAILY_GLOBAL_LIMIT=10 if enabled else None,
+    return Settings.model_validate(
+        {
+            "API_KEY": "test-api-key",
+            "CREDENTIAL_ENCRYPTION_KEY": "test-credential-key",
+            "MCP_API_KEY": "test-mcp-key",
+            "SPONSORED_MODEL_ENABLED": enabled,
+            "SPONSORED_MODEL_ID": sponsored_model_id,
+            "SPONSORED_MODEL_PROVIDER": sponsored_provider,
+            "SPONSORED_MODEL_API_KEY": "sponsored-secret" if enabled else None,
+            "SPONSORED_DAILY_GLOBAL_LIMIT": 10 if enabled else None,
+        },
     )
 
 
