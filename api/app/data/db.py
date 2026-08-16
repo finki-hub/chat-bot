@@ -7,4 +7,5 @@ def get_db(request: Request) -> Database:
     """
     Dependency to get the database connection from the request's app state.
     """
-    return request.app.state.db
+    database: Database = request.app.state.db
+    return database
