@@ -1,3 +1,5 @@
+import type { Ref } from 'react';
+
 import { PanelLeft } from 'lucide-react';
 
 import { ThemeToggle } from '@/components/shell/theme-toggle';
@@ -6,6 +8,7 @@ import { t } from '@/lib/i18n';
 
 export type HeaderProps = {
   onToggleSidebar: () => void;
+  sidebarTriggerRef?: Ref<HTMLButtonElement>;
 };
 
 const GitHubIcon = () => (
@@ -19,12 +22,13 @@ const GitHubIcon = () => (
   </svg>
 );
 
-export const Header = ({ onToggleSidebar }: HeaderProps) => (
+export const Header = ({ onToggleSidebar, sidebarTriggerRef }: HeaderProps) => (
   <header className="z-30 shrink-0 border-b border-border/60 bg-background pt-[env(safe-area-inset-top)]">
     <div className="flex min-h-14 flex-wrap items-center gap-2 px-3 py-1.5 sm:h-14 sm:flex-nowrap sm:gap-3 sm:px-4 sm:py-0">
       <IconButton
         aria-label={t('header.toggleSidebar')}
         onClick={onToggleSidebar}
+        ref={sidebarTriggerRef}
       >
         <PanelLeft
           aria-hidden="true"
