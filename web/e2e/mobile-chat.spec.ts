@@ -133,7 +133,10 @@ test('mobile conversation actions use one touch-friendly overflow menu', async (
     streamUrl: STREAM_URL,
   });
   await page.goto('/');
-  await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
+  const sidebarToggle = page.getByRole('button', {
+    name: SIDEBAR_TOGGLE_LABEL,
+  });
+  await sidebarToggle.click();
   const drawer = page.getByRole('dialog', { name: 'Странична лента' });
 
   // When the row action trigger is opened.
@@ -164,7 +167,10 @@ test('mobile keeps account actions in the profile menu and opens credentials aft
   await installMockChatState(page, { streamUrl: STREAM_URL });
   await page.goto('/');
 
-  await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
+  const sidebarToggle = page.getByRole('button', {
+    name: SIDEBAR_TOGGLE_LABEL,
+  });
+  await sidebarToggle.click();
   const drawer = page.getByRole('dialog', { name: 'Странична лента' });
   const accountTrigger = drawer.getByRole('button', {
     name: 'Корисничко мени: Student, student@example.com',
@@ -185,6 +191,8 @@ test('mobile keeps account actions in the profile menu and opens credentials aft
     0,
   );
   await expect(page.getByRole('button', { name: 'Одјави се' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(sidebarToggle).toBeFocused();
 });
 
 test('mobile drawer truncates long authenticated names without overflowing', async ({
