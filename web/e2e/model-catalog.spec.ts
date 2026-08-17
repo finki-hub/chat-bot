@@ -268,7 +268,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     credentialsAvailable = true;
     await page.getByRole('button', { name: 'Обиди се повторно' }).click();
 
-    await expect(page.getByLabel('OpenAI API key')).toBeVisible();
+    await expect(page.getByLabel('OpenAI API клуч')).toBeVisible();
     await expect(
       page.getByText('Клучевите не можеа да се вчитаат.'),
     ).toBeHidden();
@@ -394,16 +394,20 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     await expect(unavailable).toHaveAttribute('aria-disabled', 'true');
     await page.keyboard.press('Escape');
 
-    await page.getByRole('button', { name: ACCOUNT_MENU_LABEL }).click();
+    const accountTrigger = page.getByRole('button', {
+      name: ACCOUNT_MENU_LABEL,
+    });
+    await accountTrigger.click();
     await page.getByRole('menuitem', { name: 'API клучеви' }).click();
-    await page.getByLabel('OpenAI API key').fill('sk-test-refresh');
-    await page.getByRole('button', { name: 'Зачувај' }).first().click();
+    await page.getByLabel('OpenAI API клуч').fill('sk-test-refresh');
+    await page.getByRole('button', { name: 'Зачувај клучеви' }).click();
 
     await expect.poll(() => modelRequests).toBeGreaterThan(1);
     await expect(
       page.getByRole('dialog', { name: 'Лични API клучеви' }),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Откажи' }).click();
+    await expect(accountTrigger).toBeFocused();
     await page.getByTestId('composer-model').click();
     await expect(page.getByTestId(`model-free-badge-${LUNA_ID}`)).toContainText(
       '5/5',

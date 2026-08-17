@@ -109,7 +109,10 @@ export const messages = {
   'searchTool.search_documents': 'Барам во документи…',
   'service.unavailable':
     'Услугата е привремено недостапна. Чатот не е достапен во моментов.',
+  'settings.apiKey': 'API клуч',
   'settings.baseUrl': 'Base URL (опционално)',
+  'settings.baseUrlHint': 'Остави празно за стандардниот endpoint.',
+  'settings.baseUrlPlaceholder': 'https://api.example.com/v1',
   'settings.credentialBaseUrlError':
     'Base URL адресата не е дозволена. Остави го полето празно за стандардниот endpoint или побарај администраторот да ја додаде.',
   'settings.credentialDeleteError': 'Клучот не можеше да се избрише.',
@@ -117,18 +120,25 @@ export const messages = {
   'settings.credentialsDescription':
     'Зачувај лични OpenAI, Google/Gemini, Anthropic или Ollama клучеви. Тие се користат само за\u{00A0}твоите разговори и\u{00A0}за\u{00A0}пребарувачките LLM чекори.',
   'settings.credentialsError': 'Клучевите не можеа да се вчитаат.',
+  'settings.credentialsLoading': 'Се вчитуваат API клучевите…',
   'settings.credentialsTitle': 'Лични API клучеви',
   'settings.deleteCredential': 'Избриши клуч',
   'settings.deleteCredentialDescription':
     'Зачуваниот клуч ќе биде отстранет и ќе треба повторно да го внесеш за да го користиш провајдерот.',
   'settings.getApiKey': 'Добиј API клуч',
   'settings.keyPlaceholder': 'Внеси API клуч',
-  'settings.noCredential': 'Не е зачуван клуч',
+  'settings.noCredential': 'Опционално',
+  'settings.optionalCredential':
+    'Додај клуч само за провајдерите што\u{00A0}сакаш\u{00A0}да\u{00A0}ги\u{00A0}користиш.',
   'settings.provider.anthropic': 'Anthropic',
   'settings.provider.google': 'Google / Gemini',
   'settings.provider.ollama': 'Ollama',
   'settings.provider.openai': 'OpenAI',
-  'settings.savedCredential': 'Има зачуван клуч',
+  'settings.replaceCredential':
+    'Внеси нов клуч само ако сакаш да\u{00A0}го\u{00A0}замениш\u{00A0}зачуваниот.',
+  'settings.saveCredentials': 'Зачувај клучеви',
+  'settings.savedCredential': 'Зачувано',
+  'settings.savingCredentials': 'Се зачувуваат клучевите…',
   'shared.empty': 'Разговорот нема пораки.',
   'shared.pageTitle': 'Споделен разговор / ФИНКИ Хаб',
   'shared.untitled': 'Споделен разговор',
