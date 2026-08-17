@@ -29,10 +29,12 @@ const USER_ID = '00000000-0000-4000-8000-000000000001';
 const USER_ID_FIELD = 'user_id';
 const OPENAI_BASE_URL = 'https://openai-proxy.example/v1';
 const OPENAI_ALT_BASE_URL = 'https://openai.example/v1';
-const OPENAI_API_KEY_LABEL = 'OpenAI API key';
+const OPENAI_API_KEY_LABEL = 'OpenAI API клуч';
+const OPENAI_BASE_URL_LABEL = 'OpenAI Base URL (опционално)';
 const OPENAI_FORM_NOT_FOUND = 'OpenAI credential form not found';
 const OLLAMA_BASE_URL = 'https://ollama.example';
 const REPLACEMENT_KEY = 'replacement-key';
+const SAVE_BUTTON_LABEL = 'Зачувај клучеви';
 const ACTIVE_CREDENTIALS_QUERY_KEY = [
   ...CREDENTIALS_QUERY_KEY,
   'anonymous',
@@ -114,6 +116,19 @@ describe('CredentialSettingsDialog', () => {
     refetchModelsMock.mockResolvedValue({});
   });
 
+  it('announces credential loading progress', () => {
+    const pendingLoad = Promise.withResolvers<
+      null | readonly ChatCredentialPublic[]
+    >();
+    loadCredentialsMock.mockReturnValueOnce(pendingLoad.promise);
+
+    renderDialog();
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Се вчитуваат API клучевите…',
+    );
+  });
+
   it('uses a localized accessible name for the close action', async () => {
     renderDialog();
 
@@ -125,6 +140,77 @@ describe('CredentialSettingsDialog', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('explains saved and optional provider states without relying on color', async () => {
+    renderDialog();
+
+    const openaiHeading = await screen.findByRole('heading', {
+      name: 'OpenAI',
+    });
+    const openaiCard = openaiHeading.closest('section');
+    if (openaiCard === null) {
+      throw new Error(OPENAI_FORM_NOT_FOUND);
+    }
+
+    expect(within(openaiCard).getByText('Зачувано')).toBeInTheDocument();
+    expect(
+      within(openaiCard).getByText(
+        'Внеси нов клуч само ако сакаш да го замениш зачуваниот.',
+      ),
+    ).toBeInTheDocument();
+
+    const googleHeading = screen.getByRole('heading', {
+      name: 'Google / Gemini',
+    });
+    const googleCard = googleHeading.closest('section');
+    if (googleCard === null) {
+      throw new Error('Google credential form not found');
+    }
+
+    expect(within(googleCard).getByText('Опционално')).toBeInTheDocument();
+    expect(
+      within(googleCard).getByText(
+        'Додај клуч само за провајдерите што сакаш да ги користиш.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('shows field labels and default endpoint guidance', async () => {
+    renderDialog();
+
+    const openaiHeading = await screen.findByRole('heading', {
+      name: 'OpenAI',
+    });
+    const openaiCard = openaiHeading.closest('section');
+    if (openaiCard === null) {
+      throw new Error(OPENAI_FORM_NOT_FOUND);
+    }
+
+    expect(
+      within(openaiCard).getByText('API клуч', { selector: 'label' }),
+    ).toBeInTheDocument();
+    expect(
+      within(openaiCard).getByText('Base URL (опционално)', {
+        selector: 'label',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(openaiCard).getByText('Остави празно за стандардниот endpoint.'),
+    ).toBeInTheDocument();
+    expect(
+      within(openaiCard).getByLabelText(OPENAI_API_KEY_LABEL),
+    ).toHaveAccessibleName(OPENAI_API_KEY_LABEL);
+
+    const openaiBaseUrl = within(openaiCard).getByLabelText(
+      OPENAI_BASE_URL_LABEL,
+    );
+
+    expect(openaiBaseUrl).toHaveAccessibleName(OPENAI_BASE_URL_LABEL);
+    expect(openaiBaseUrl).toHaveAttribute('placeholder', OPENAI_BASE_URL);
+    expect(
+      screen.getByLabelText('Google / Gemini Base URL (опционално)'),
+    ).toHaveAttribute('placeholder', 'https://api.example.com/v1');
+  });
+
   it('saves every entered provider credential from one action', async () => {
     saveCredentialMock
       .mockResolvedValueOnce(openaiCredential(OPENAI_ALT_BASE_URL))
@@ -134,17 +220,19 @@ describe('CredentialSettingsDialog', () => {
     fireEvent.change(await screen.findByLabelText(OPENAI_API_KEY_LABEL), {
       target: { value: 'openai-user-key' },
     });
-    fireEvent.change(screen.getByLabelText('OpenAI base URL'), {
+    fireEvent.change(screen.getByLabelText(OPENAI_BASE_URL_LABEL), {
       target: { value: OPENAI_ALT_BASE_URL },
     });
-    fireEvent.change(screen.getByLabelText('Ollama API key'), {
+    fireEvent.change(screen.getByLabelText('Ollama API клуч'), {
       target: { value: 'ollama-user-key' },
     });
-    fireEvent.change(screen.getByLabelText('Ollama base URL'), {
+    fireEvent.change(screen.getByLabelText('Ollama Base URL (опционално)'), {
       target: { value: OLLAMA_BASE_URL },
     });
 
-    const saveButtons = screen.getAllByRole('button', { name: 'Зачувај' });
+    const saveButtons = screen.getAllByRole('button', {
+      name: SAVE_BUTTON_LABEL,
+    });
 
     expect(saveButtons).toHaveLength(1);
 
@@ -186,18 +274,20 @@ describe('CredentialSettingsDialog', () => {
     const { queryClient } = renderDialog();
 
     const openaiKey = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
-    const googleKey = screen.getByLabelText('Google / Gemini API key');
-    const googleBaseUrl = screen.getByLabelText('Google / Gemini base URL');
+    const googleKey = screen.getByLabelText('Google / Gemini API клуч');
+    const googleBaseUrl = screen.getByLabelText(
+      'Google / Gemini Base URL (опционално)',
+    );
 
     fireEvent.change(openaiKey, { target: { value: 'openai-user-key' } });
-    fireEvent.change(screen.getByLabelText('OpenAI base URL'), {
+    fireEvent.change(screen.getByLabelText(OPENAI_BASE_URL_LABEL), {
       target: { value: OPENAI_ALT_BASE_URL },
     });
     fireEvent.change(googleKey, { target: { value: 'google-user-key' } });
     fireEvent.change(googleBaseUrl, {
       target: { value: 'https://google.example/v1' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Зачувај' }));
+    fireEvent.click(screen.getByRole('button', { name: SAVE_BUTTON_LABEL }));
 
     await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
       'Клучот не можеше да се зачува.',
@@ -213,7 +303,9 @@ describe('CredentialSettingsDialog', () => {
       queryClient.getQueryData(ACTIVE_CREDENTIALS_QUERY_KEY),
     ).toStrictEqual([openai]);
 
-    expect(screen.getByRole('button', { name: 'Зачувај' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: SAVE_BUTTON_LABEL }),
+    ).toBeEnabled();
   });
 
   it('preserves a saved custom base URL when only the API key changes', async () => {
@@ -226,7 +318,9 @@ describe('CredentialSettingsDialog', () => {
     }
 
     fireEvent.change(keyInput, { target: { value: REPLACEMENT_KEY } });
-    fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
+    fireEvent.click(
+      within(form).getByRole('button', { name: SAVE_BUTTON_LABEL }),
+    );
 
     await waitFor(() => {
       expect(saveCredentialMock).toHaveBeenCalledWith({
@@ -249,7 +343,7 @@ describe('CredentialSettingsDialog', () => {
       .mockResolvedValueOnce([]);
     const { queryClient } = renderDialog();
 
-    const baseUrlInput = await screen.findByLabelText('OpenAI base URL');
+    const baseUrlInput = await screen.findByLabelText(OPENAI_BASE_URL_LABEL);
 
     expect(baseUrlInput).toHaveValue(OPENAI_BASE_URL);
 
@@ -315,7 +409,9 @@ describe('CredentialSettingsDialog', () => {
     }
 
     fireEvent.change(keyInput, { target: { value: REPLACEMENT_KEY } });
-    fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
+    fireEvent.click(
+      within(form).getByRole('button', { name: SAVE_BUTTON_LABEL }),
+    );
 
     await waitFor(() => {
       expect(loadCredentialsMock).toHaveBeenCalledTimes(2);
@@ -357,7 +453,9 @@ describe('CredentialSettingsDialog', () => {
     }
 
     fireEvent.change(keyInput, { target: { value: REPLACEMENT_KEY } });
-    fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
+    fireEvent.click(
+      within(form).getByRole('button', { name: SAVE_BUTTON_LABEL }),
+    );
 
     await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
       'Клучот не можеше да се зачува.',
@@ -365,6 +463,24 @@ describe('CredentialSettingsDialog', () => {
     expect(
       screen.queryByText('Клучевите не можеа да се вчитаат.'),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps save failures outside the scrolling provider list', async () => {
+    saveCredentialMock.mockResolvedValueOnce(null);
+    renderDialog();
+
+    const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+    const providerScrollRegion = keyInput.closest('.overflow-y-auto');
+    if (providerScrollRegion === null) {
+      throw new Error('Credential provider scroll region not found');
+    }
+
+    fireEvent.change(keyInput, { target: { value: REPLACEMENT_KEY } });
+    fireEvent.click(screen.getByRole('button', { name: SAVE_BUTTON_LABEL }));
+
+    const alert = await screen.findByRole('alert');
+
+    expect(providerScrollRegion).not.toContainElement(alert);
   });
 
   it('explains how to fix a rejected custom base URL', async () => {
@@ -380,10 +496,12 @@ describe('CredentialSettingsDialog', () => {
     }
 
     fireEvent.change(keyInput, { target: { value: REPLACEMENT_KEY } });
-    fireEvent.change(screen.getByLabelText('OpenAI base URL'), {
+    fireEvent.change(screen.getByLabelText(OPENAI_BASE_URL_LABEL), {
       target: { value: 'https://openai-proxy.example/v1' },
     });
-    fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
+    fireEvent.click(
+      within(form).getByRole('button', { name: SAVE_BUTTON_LABEL }),
+    );
 
     await expect(
       screen.findByText(
@@ -396,8 +514,8 @@ describe('CredentialSettingsDialog', () => {
     saveCredentialMock.mockResolvedValueOnce(ollamaCredential(OLLAMA_BASE_URL));
     renderDialog();
 
-    const keyInput = await screen.findByLabelText('Ollama API key');
-    const baseUrlInput = screen.getByLabelText('Ollama base URL');
+    const keyInput = await screen.findByLabelText('Ollama API клуч');
+    const baseUrlInput = screen.getByLabelText('Ollama Base URL (опционално)');
     const form = keyInput.closest('form');
     if (form === null) {
       throw new Error('Ollama credential form not found');
@@ -407,7 +525,9 @@ describe('CredentialSettingsDialog', () => {
     fireEvent.change(baseUrlInput, {
       target: { value: OLLAMA_BASE_URL },
     });
-    fireEvent.click(within(form).getByRole('button', { name: 'Зачувај' }));
+    fireEvent.click(
+      within(form).getByRole('button', { name: SAVE_BUTTON_LABEL }),
+    );
 
     await waitFor(() => {
       expect(saveCredentialMock).toHaveBeenCalledWith({

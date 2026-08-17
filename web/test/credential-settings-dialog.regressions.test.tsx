@@ -24,7 +24,7 @@ type SaveCredentialInput = {
 
 const SESSION_A = 'test:user-a';
 const SESSION_B = 'test:user-b';
-const OPENAI_API_KEY_LABEL = 'OpenAI API key';
+const OPENAI_API_KEY_LABEL = 'OpenAI API клуч';
 const BASE_URL_FIELD = 'base_url';
 const HAS_API_KEY_FIELD = 'has_api_key';
 const USER_ID_FIELD = 'user_id';
@@ -191,7 +191,7 @@ describe('CredentialSettingsDialog regressions', () => {
     const { rerenderDialog } = renderDialog();
     const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
     fireEvent.change(keyInput, { target: { value: 'invalid-secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Зачувај' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Зачувај клучеви' }));
 
     rerenderDialog(false);
     await waitFor(() => {
@@ -220,7 +220,7 @@ describe('CredentialSettingsDialog regressions', () => {
     );
 
     fireEvent.change(keyInput, { target: { value: 'user-a-secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Зачувај' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Зачувај клучеви' }));
 
     await waitFor(() => {
       expect(saveCredentialMock).toHaveBeenCalledOnce();
@@ -242,7 +242,7 @@ describe('CredentialSettingsDialog regressions', () => {
     const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
 
     fireEvent.change(keyInput, { target: { value: 'user-a-secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Зачувај' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Зачувај клучеви' }));
     await waitFor(() => {
       expect(refetchModelsMock).toHaveBeenCalledOnce();
     });
@@ -255,7 +255,9 @@ describe('CredentialSettingsDialog regressions', () => {
       await pendingModelRefetch.promise;
     });
 
-    expect(screen.getByLabelText('OpenAI base URL')).toHaveValue('');
+    expect(screen.getByLabelText('OpenAI Base URL (опционално)')).toHaveValue(
+      '',
+    );
   });
 
   it('reconciles successful saves when another provider fails unexpectedly', async () => {
@@ -272,10 +274,10 @@ describe('CredentialSettingsDialog regressions', () => {
     const { queryClient } = renderDialog();
 
     const openaiKey = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
-    const googleKey = screen.getByLabelText('Google / Gemini API key');
+    const googleKey = screen.getByLabelText('Google / Gemini API клуч');
     fireEvent.change(openaiKey, { target: { value: 'openai-secret' } });
     fireEvent.change(googleKey, { target: { value: 'google-secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Зачувај' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Зачувај клучеви' }));
 
     await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
       'Клучот не можеше да се зачува.',

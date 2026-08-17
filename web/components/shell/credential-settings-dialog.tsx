@@ -45,6 +45,7 @@ import { useModels } from '@/lib/use-models';
 
 type CredentialSettingsDialogProps = {
   readonly onOpenChangeAction: (open: boolean) => void;
+  readonly onRestoreFocusAction?: () => boolean;
   readonly open: boolean;
 };
 
@@ -162,6 +163,7 @@ const CredentialProviderList = ({
 
 export const CredentialSettingsDialog = ({
   onOpenChangeAction,
+  onRestoreFocusAction,
   open,
 }: CredentialSettingsDialogProps) => {
   const queryClient = useQueryClient();
@@ -184,9 +186,9 @@ export const CredentialSettingsDialog = ({
   const dialogCycleRef = useRef(0);
   const lifecycleRef = useRef({ open, sessionKey });
   const sessionKeyRef = useRef(sessionKey);
-  sessionKeyRef.current = sessionKey;
   useIsomorphicLayoutEffect(() => {
     const previous = lifecycleRef.current;
+    sessionKeyRef.current = sessionKey;
     if (previous.open !== open || previous.sessionKey !== sessionKey) {
       dialogCycleRef.current += 1;
       lifecycleRef.current = { open, sessionKey };
@@ -369,67 +371,84 @@ export const CredentialSettingsDialog = ({
         onOpenChange={onOpenChangeAction}
         open={open}
       >
-        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent
+          className="grid max-h-[calc(100dvh_-_2rem)] max-w-[calc(100%_-_2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-2xl"
+          onCloseAutoFocus={(event) => {
+            if (onRestoreFocusAction?.() === true) {
+              event.preventDefault();
+            }
+          }}
+        >
+          <DialogHeader className="border-b border-border px-6 py-5 pr-14">
             <DialogTitle>{t('settings.credentialsTitle')}</DialogTitle>
             <DialogDescription>
               {t('settings.credentialsDescription')}
             </DialogDescription>
           </DialogHeader>
           <form
-            className="grid gap-4"
+            className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]"
             noValidate
             onSubmit={(event) => {
               void saveProviders(event);
             }}
           >
-            <CredentialSettingsStatus
-              loadError={credentialsLoadError}
-              loading={loading}
-              onRetryAction={() => {
-                void refetch();
-              }}
-            />
-            {!loading && !credentialsLoadError ? (
-              <CredentialProviderList
-                busyProvider={busyProvider}
-                forms={forms}
-                onDelete={setCredentialToDelete}
-                onFieldChange={updateForm}
-                saved={saved}
-                saving={saving}
-              />
-            ) : null}
-            {error === null ? null : (
-              <p
-                className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                role="alert"
-              >
-                {error}
-              </p>
-            )}
-            <DialogFooter>
-              <Button
-                disabled={saving}
-                onClick={() => {
-                  onOpenChangeAction(false);
-                }}
-                type="button"
-                variant="outline"
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button
-                aria-busy={saving || undefined}
-                disabled={
-                  saving || busyProvider !== null || !hasPendingCredentials
-                }
-                type="submit"
-              >
-                {saving ? <Spinner aria-hidden="true" /> : null}
-                {saving ? t('composer.modelsLoading') : t('common.save')}
-              </Button>
-            </DialogFooter>
+            <div className="min-h-0 overflow-y-auto p-4 sm:p-6">
+              <div className="grid gap-4">
+                <CredentialSettingsStatus
+                  loadError={credentialsLoadError}
+                  loading={loading}
+                  onRetryAction={() => {
+                    void refetch();
+                  }}
+                />
+                {!loading && !credentialsLoadError ? (
+                  <CredentialProviderList
+                    busyProvider={busyProvider}
+                    forms={forms}
+                    onDelete={setCredentialToDelete}
+                    onFieldChange={updateForm}
+                    saved={saved}
+                    saving={saving}
+                  />
+                ) : null}
+              </div>
+            </div>
+            <div className="border-t border-border bg-background">
+              {error === null ? null : (
+                <p
+                  className="mx-4 mt-4 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive sm:mx-6"
+                  role="alert"
+                >
+                  {error}
+                </p>
+              )}
+              <DialogFooter className="p-4 sm:px-6">
+                <Button
+                  className="w-full sm:w-auto"
+                  disabled={saving}
+                  onClick={() => {
+                    onOpenChangeAction(false);
+                  }}
+                  type="button"
+                  variant="outline"
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  aria-busy={saving || undefined}
+                  className="w-full sm:w-auto"
+                  disabled={
+                    saving || busyProvider !== null || !hasPendingCredentials
+                  }
+                  type="submit"
+                >
+                  {saving ? <Spinner aria-hidden="true" /> : null}
+                  {saving
+                    ? t('settings.savingCredentials')
+                    : t('settings.saveCredentials')}
+                </Button>
+              </DialogFooter>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
