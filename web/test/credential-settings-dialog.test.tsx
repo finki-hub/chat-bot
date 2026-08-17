@@ -211,6 +211,16 @@ describe('CredentialSettingsDialog', () => {
     ).toHaveAttribute('placeholder', 'https://api.example.com/v1');
   });
 
+  it('uses the example placeholder for a legacy empty base URL', async () => {
+    loadCredentialsMock.mockResolvedValueOnce([openaiCredential('')]);
+
+    renderDialog();
+
+    await expect(
+      screen.findByLabelText(OPENAI_BASE_URL_LABEL),
+    ).resolves.toHaveAttribute('placeholder', 'https://api.example.com/v1');
+  });
+
   it('saves every entered provider credential from one action', async () => {
     saveCredentialMock
       .mockResolvedValueOnce(openaiCredential(OPENAI_ALT_BASE_URL))

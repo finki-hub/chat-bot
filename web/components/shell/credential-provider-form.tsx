@@ -39,6 +39,10 @@ export const CredentialProviderForm = ({
   const baseUrlId = `${fieldId}-base-url`;
   const baseUrlDescriptionId = `${fieldId}-base-url-description`;
   const hasCredential = credential !== undefined;
+  /* eslint-disable @typescript-eslint/prefer-nullish-coalescing -- legacy empty URLs should use the example. */
+  const baseUrlPlaceholder =
+    credential?.base_url || t('settings.baseUrlPlaceholder');
+  /* eslint-enable @typescript-eslint/prefer-nullish-coalescing -- end legacy empty URL exception. */
 
   return (
     <section className="rounded-xl border border-border bg-card p-4">
@@ -151,9 +155,7 @@ export const CredentialProviderForm = ({
               onChange={(event) => {
                 onFieldChange('baseUrl', event.target.value);
               }}
-              placeholder={
-                credential?.base_url ?? t('settings.baseUrlPlaceholder')
-              }
+              placeholder={baseUrlPlaceholder}
               type="url"
               value={form.baseUrl}
             />
