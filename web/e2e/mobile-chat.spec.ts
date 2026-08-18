@@ -22,6 +22,7 @@ const CREDENTIALS_LABEL = 'API клучеви';
 const ACCOUNT_MENU_LABEL = 'Корисничко мени: Student, student@example.com';
 const CREDENTIAL_DIALOG_LABEL = 'Лични API клучеви';
 const SAVE_CREDENTIALS_LABEL = 'Зачувај клучеви';
+const CREDENTIAL_FORM_REGION_SELECTOR = 'form > div';
 const EMPTY_JSON = '{}';
 const STREAM_URL = 'http://127.0.0.1:9/stream';
 const SPONSORED_MODEL = 'gpt-5.6-luna';
@@ -235,7 +236,7 @@ test('credential actions follow their visual order while the provider list alone
   expect(
     (dialogBox?.y ?? 0) + (dialogBox?.height ?? Infinity),
   ).toBeLessThanOrEqual(560);
-  const scroller = dialog.locator('form > div').first();
+  const scroller = dialog.locator(CREDENTIAL_FORM_REGION_SELECTOR).first();
   await expect
     .poll(() =>
       scroller.evaluate(
@@ -328,8 +329,12 @@ test('credential save errors stay attributed and visible at responsive heights',
       await test.step('keeps the scroll body separate from fixed actions', async () => {
         const dialogBox = await dialog.boundingBox();
         const alertBox = await alert.boundingBox();
-        const scroller = dialog.locator('form > div').first();
-        const actionArea = dialog.locator('form > div').last();
+        const scroller = dialog
+          .locator(CREDENTIAL_FORM_REGION_SELECTOR)
+          .first();
+        const actionArea = dialog
+          .locator(CREDENTIAL_FORM_REGION_SELECTOR)
+          .last();
         const scrollerBox = await scroller.boundingBox();
         const actionAreaBox = await actionArea.boundingBox();
         const saveBox = await dialog
@@ -354,6 +359,77 @@ test('credential save errors stay attributed and visible at responsive heights',
       });
     }
   }
+});
+
+test('short credential error states keep both actions inside the dialog', async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 320, width: 375 });
+  await mockSession(page);
+  await mockModels(page, []);
+  await installMockChatState(page, { streamUrl: STREAM_URL });
+  await page.route('**/api/chat/credentials', async (route) => {
+    if (route.request().method() === 'PUT') {
+      await route.fulfill({
+        body: EMPTY_JSON,
+        contentType: 'application/json',
+        status: 422,
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
+  await page
+    .getByRole('dialog', { name: SIDEBAR_DIALOG_LABEL })
+    .getByRole('button', { name: ACCOUNT_MENU_LABEL })
+    .click();
+  await page.getByRole('menuitem', { name: CREDENTIALS_LABEL }).click();
+
+  const dialog = page.getByRole('dialog', { name: CREDENTIAL_DIALOG_LABEL });
+  await dialog.getByLabel('OpenAI API клуч').fill('sk-short-height');
+  await dialog
+    .getByLabel('OpenAI Base URL (опционално)')
+    .fill('https://blocked.example/v1');
+  await dialog.getByRole('button', { name: SAVE_CREDENTIALS_LABEL }).click();
+
+  const alert = dialog.getByRole('alert');
+  const scroller = dialog.locator(CREDENTIAL_FORM_REGION_SELECTOR).first();
+  const actionArea = dialog.locator(CREDENTIAL_FORM_REGION_SELECTOR).last();
+  const cancel = dialog.getByRole('button', { name: 'Откажи' });
+  const save = dialog.getByRole('button', { name: SAVE_CREDENTIALS_LABEL });
+  await expect(alert).toBeVisible();
+  await expect
+    .poll(() => scroller.evaluate((element) => element.scrollTop))
+    .toBe(0);
+  await expect
+    .poll(() =>
+      scroller.evaluate(
+        (element) => element.scrollHeight > element.clientHeight,
+      ),
+    )
+    .toBe(true);
+
+  const dialogBox = await dialog.boundingBox();
+  const scrollerBox = await scroller.boundingBox();
+  const actionAreaBox = await actionArea.boundingBox();
+  const alertBox = await alert.boundingBox();
+  const cancelBox = await cancel.boundingBox();
+  const saveBox = await save.boundingBox();
+  const dialogBottom = (dialogBox?.y ?? 0) + (dialogBox?.height ?? 0);
+
+  expect(alertBox?.y).toBeGreaterThanOrEqual(scrollerBox?.y ?? 0);
+  expect(
+    (scrollerBox?.y ?? Infinity) + (scrollerBox?.height ?? Infinity),
+  ).toBeLessThanOrEqual(actionAreaBox?.y ?? 0);
+  expect(
+    (cancelBox?.y ?? Infinity) + (cancelBox?.height ?? 0),
+  ).toBeLessThanOrEqual(dialogBottom);
+  expect((saveBox?.y ?? Infinity) + (saveBox?.height ?? 0)).toBeLessThanOrEqual(
+    dialogBottom,
+  );
 });
 
 test('all provider failures keep credential actions inside a constrained viewport', async ({

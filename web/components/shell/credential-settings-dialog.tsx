@@ -62,6 +62,20 @@ type DialogOperation = {
 };
 
 const providerList: readonly ProviderConfig[] = PROVIDERS;
+const SHORT_DIALOG_HEIGHT_QUERY = '(max-height: 30rem)';
+const getIsShortDialogHeight = (): boolean =>
+  typeof matchMedia === 'function' &&
+  matchMedia(SHORT_DIALOG_HEIGHT_QUERY).matches;
+const subscribeToShortDialogHeight = (listener: () => void): (() => void) => {
+  if (typeof matchMedia !== 'function') {
+    return () => false;
+  }
+  const media = matchMedia(SHORT_DIALOG_HEIGHT_QUERY);
+  media.addEventListener('change', listener);
+  return () => {
+    media.removeEventListener('change', listener);
+  };
+};
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
@@ -229,12 +243,18 @@ export const CredentialSettingsDialog = ({
     readonly CredentialSaveFailure[]
   >([]);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const providerScrollerRef = useRef<HTMLDivElement>(null);
   const dialogCycleRef = useRef(0);
   const lifecycleRef = useRef({ open, sessionKey });
   const sessionKeyRef = useRef(sessionKey);
   const saving = useSyncExternalStore(
     subscribeCredentialMutations,
     () => hasPendingCredentialMutation(sessionKey),
+    () => false,
+  );
+  const shortDialogHeight = useSyncExternalStore(
+    subscribeToShortDialogHeight,
+    getIsShortDialogHeight,
     () => false,
   );
   useIsomorphicLayoutEffect(() => {
@@ -422,6 +442,18 @@ export const CredentialSettingsDialog = ({
   const hasPendingCredentials = providerList.some(
     ({ provider }) => forms[provider].apiKey.trim().length > 0,
   );
+  const saveError =
+    error ??
+    (saveFailures.length === 0 ? null : saveFailureSummary(saveFailures));
+  useIsomorphicLayoutEffect(() => {
+    if (
+      saveError !== null &&
+      shortDialogHeight &&
+      providerScrollerRef.current !== null
+    ) {
+      providerScrollerRef.current.scrollTop = 0;
+    }
+  }, [saveError, shortDialogHeight]);
 
   return (
     <>
@@ -460,7 +492,10 @@ export const CredentialSettingsDialog = ({
               void saveProviders(event);
             }}
           >
-            <div className="min-h-0 overflow-y-auto p-4 sm:p-6">
+            <div
+              className="min-h-0 overflow-y-auto p-4 sm:p-6"
+              ref={providerScrollerRef}
+            >
               <div className="grid gap-4">
                 <CredentialSettingsStatus
                   loadError={credentialsLoadError}
@@ -469,6 +504,14 @@ export const CredentialSettingsDialog = ({
                     void refetch();
                   }}
                 />
+                {saveError === null || !shortDialogHeight ? null : (
+                  <p
+                    className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-pretty text-sm text-destructive"
+                    role="alert"
+                  >
+                    {saveError}
+                  </p>
+                )}
                 {!loading && !credentialsLoadError ? (
                   <CredentialProviderList
                     busyProvider={busyProvider}
@@ -483,17 +526,25 @@ export const CredentialSettingsDialog = ({
               </div>
             </div>
             <div className="border-t border-border bg-background">
-              {error === null && saveFailures.length === 0 ? null : (
+              {saveError === null || shortDialogHeight ? null : (
                 <p
                   className="mx-4 mt-4 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-pretty text-sm text-destructive sm:mx-6"
                   role="alert"
                 >
-                  {error ?? saveFailureSummary(saveFailures)}
+                  {saveError}
                 </p>
               )}
-              <DialogFooter className="flex-col p-4 sm:px-6">
+              <DialogFooter
+                className={
+                  shortDialogHeight
+                    ? 'flex-row p-4 sm:px-6'
+                    : 'flex-col p-4 sm:px-6'
+                }
+              >
                 <Button
-                  className="w-full sm:w-auto"
+                  className={
+                    shortDialogHeight ? 'w-auto flex-1' : 'w-full sm:w-auto'
+                  }
                   disabled={saving}
                   onClick={() => {
                     onOpenChangeAction(false);
@@ -505,7 +556,11 @@ export const CredentialSettingsDialog = ({
                 </Button>
                 <Button
                   aria-busy={saving || undefined}
-                  className="w-full disabled:opacity-70 sm:w-auto"
+                  className={
+                    shortDialogHeight
+                      ? 'w-auto flex-1 disabled:opacity-70'
+                      : 'w-full disabled:opacity-70 sm:w-auto'
+                  }
                   disabled={
                     saving || busyProvider !== null || !hasPendingCredentials
                   }
