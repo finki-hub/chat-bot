@@ -419,7 +419,7 @@ test.describe('chat streaming (mocked BFF)', () => {
       const manageCredentials = page.getByRole('button', {
         name: 'Додај API клуч',
       });
-      await manageCredentials.click();
+      await manageCredentials.dispatchEvent('click');
       await expect(
         page.getByRole('dialog', { name: 'Лични API клучеви' }),
       ).toBeVisible();

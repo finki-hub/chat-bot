@@ -21,7 +21,7 @@ export type ThreadProps = {
   activeError?: ErrorNotice;
   activeStatus?: StatusPart;
   messages: MyUIMessage[];
-  onManageCredentials?: () => void;
+  onManageCredentials?: (returnFocusTarget: HTMLElement) => void;
   onPickSuggestion?: (text: string) => unknown;
   onRetry?: () => void;
   renderActions?: (message: MyUIMessage) => ReactNode;

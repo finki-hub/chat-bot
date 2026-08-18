@@ -68,13 +68,12 @@ export const ChatScreen = () => {
     },
     [desktopSidebar, setSidebarOpen],
   );
-  const openCredentialSettings = useCallback(() => {
-    showCredentialSettings(
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null,
-    );
-  }, [showCredentialSettings]);
+  const openCredentialSettings = useCallback(
+    (returnFocusTarget: HTMLElement) => {
+      showCredentialSettings(returnFocusTarget);
+    },
+    [showCredentialSettings],
+  );
   const openCredentialSettingsFromAccount = useCallback(
     (accountTrigger?: HTMLButtonElement) => {
       showCredentialSettings(
@@ -86,10 +85,12 @@ export const ChatScreen = () => {
   const restoreCredentialSettingsFocus = useCallback(() => {
     const target = credentialReturnFocusRef.current;
     credentialReturnFocusRef.current = null;
-    if (target?.isConnected !== true) {
+    const connectedTarget =
+      target?.isConnected === true ? target : sidebarTriggerRef.current;
+    if (connectedTarget?.isConnected !== true) {
       return false;
     }
-    target.focus();
+    connectedTarget.focus();
     return true;
   }, []);
 
