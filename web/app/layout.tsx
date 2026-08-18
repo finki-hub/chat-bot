@@ -54,6 +54,7 @@ export const viewport: Viewport = {
     { color: LIGHT_THEME_COLOR, media: '(prefers-color-scheme: light)' },
     { color: DARK_THEME_COLOR, media: '(prefers-color-scheme: dark)' },
   ],
+  viewportFit: 'cover',
 };
 
 const noFlashTheme = `(() => {

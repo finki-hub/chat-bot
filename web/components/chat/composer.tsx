@@ -183,7 +183,7 @@ export const Composer = ({
   };
 
   return (
-    <div className="bg-background px-3 pb-3 pt-2 sm:px-4">
+    <div className="bg-background px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4">
       <div className="mx-auto w-full max-w-3xl">
         <div className="flex flex-col rounded-3xl border border-input bg-card shadow-lg shadow-black/5 transition-[color,box-shadow] focus-within:border-foreground/25 focus-within:ring-2 focus-within:ring-foreground/[0.06] dark:shadow-black/25">
           <textarea
@@ -231,7 +231,7 @@ export const Composer = ({
             }
           />
         </div>
-        <p className="mt-2 text-balance text-center text-xs text-muted-foreground">
+        <p className="mt-2 text-balance text-center text-xs text-muted-foreground [@media(max-height:500px)]:mt-1 [@media(max-height:500px)]:line-clamp-1">
           {t('composer.disclaimer')}
         </p>
       </div>
