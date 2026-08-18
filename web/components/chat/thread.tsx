@@ -104,7 +104,7 @@ export const Thread = ({
     <Conversation
       className="flex-1"
       initial={messages.length === 0 ? false : 'instant'}
-      key={`${conversationId ?? 'unscoped'}:${messages.length === 0 ? 'welcome' : 'messages'}`}
+      key={`${messages.at(0)?.id ?? conversationId ?? 'unscoped'}:${messages.length === 0 ? 'welcome' : 'messages'}`}
     >
       <ConversationContent>
         {messages.length === 0 ? (
