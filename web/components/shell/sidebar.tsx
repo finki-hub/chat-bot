@@ -91,7 +91,7 @@ export const Sidebar = ({
   const responsiveStateClass = getSidebarWidthClass(open, synced);
 
   const sidebarContent = (
-    <div className="flex h-full w-64 flex-col gap-3 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] md:py-3">
+    <div className="flex h-full w-64 flex-col gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))]">
       <button
         className="group inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-medium shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-200 hover:border-primary/40 hover:bg-muted hover:shadow active:scale-[0.99]"
         onClick={handleNewChat}
