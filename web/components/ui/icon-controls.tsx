@@ -1,6 +1,6 @@
 import type {
   AnchorHTMLAttributes,
-  ButtonHTMLAttributes,
+  ComponentProps,
   ReactElement,
 } from 'react';
 
@@ -45,7 +45,7 @@ const IconButton = ({
   title,
   type = 'button',
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement>) => {
+}: ComponentProps<'button'>) => {
   const control = (
     <button
       className={cn(iconControlClass, className)}

@@ -31,7 +31,7 @@ export type AssistantMessageProps = {
   complete?: boolean;
   errorPart?: ErrorNotice;
   message: MyUIMessage;
-  onManageCredentials?: () => void;
+  onManageCredentials?: (returnFocusTarget: HTMLElement) => void;
   onRetry?: () => void;
   pending?: boolean;
   statusPart?: StatusPart;
@@ -377,7 +377,7 @@ const SponsoredQuotaError = ({
   onManageCredentials,
 }: {
   errorPart: ErrorNotice;
-  onManageCredentials?: () => void;
+  onManageCredentials?: (returnFocusTarget: HTMLElement) => void;
 }) => {
   const resetTime = formatResetTime(errorPart.resets_at);
 
@@ -392,7 +392,9 @@ const SponsoredQuotaError = ({
       {onManageCredentials ? (
         <Button
           className="min-h-11 self-start sm:pointer-fine:min-h-8"
-          onClick={onManageCredentials}
+          onClick={(event) => {
+            onManageCredentials(event.currentTarget);
+          }}
           size="sm"
           type="button"
         >
@@ -409,7 +411,7 @@ export const MessageError = ({
   onRetry,
 }: {
   errorPart: ErrorNotice;
-  onManageCredentials?: () => void;
+  onManageCredentials?: (returnFocusTarget: HTMLElement) => void;
   onRetry?: () => void;
 }) => {
   let content: ReactNode;
@@ -422,7 +424,9 @@ export const MessageError = ({
           {onManageCredentials ? (
             <button
               className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={onManageCredentials}
+              onClick={(event) => {
+                onManageCredentials(event.currentTarget);
+              }}
               type="button"
             >
               {t('error.manageCredentials')}

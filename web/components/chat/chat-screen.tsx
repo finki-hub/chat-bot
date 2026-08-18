@@ -5,6 +5,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -54,13 +55,44 @@ export const ChatScreen = () => {
   const [sidebarSynced, setSidebarSynced] = useState(false);
   const [desktopSidebar, setDesktopSidebar] = useState(false);
   const [credentialSettingsOpen, setCredentialSettingsOpen] = useState(false);
+  const credentialReturnFocusRef = useRef<HTMLElement | null>(null);
+  const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
 
-  const openCredentialSettings = useCallback(() => {
-    if (!desktopSidebar) {
-      setSidebarOpen(false);
+  const showCredentialSettings = useCallback(
+    (returnFocusTarget: HTMLElement | null) => {
+      credentialReturnFocusRef.current = returnFocusTarget;
+      if (!desktopSidebar) {
+        setSidebarOpen(false);
+      }
+      setCredentialSettingsOpen(true);
+    },
+    [desktopSidebar, setSidebarOpen],
+  );
+  const openCredentialSettings = useCallback(
+    (returnFocusTarget: HTMLElement) => {
+      showCredentialSettings(returnFocusTarget);
+    },
+    [showCredentialSettings],
+  );
+  const openCredentialSettingsFromAccount = useCallback(
+    (accountTrigger?: HTMLButtonElement) => {
+      showCredentialSettings(
+        desktopSidebar ? (accountTrigger ?? null) : sidebarTriggerRef.current,
+      );
+    },
+    [desktopSidebar, showCredentialSettings],
+  );
+  const restoreCredentialSettingsFocus = useCallback(() => {
+    const target = credentialReturnFocusRef.current;
+    credentialReturnFocusRef.current = null;
+    const connectedTarget =
+      target?.isConnected === true ? target : sidebarTriggerRef.current;
+    if (connectedTarget?.isConnected !== true) {
+      return false;
     }
-    setCredentialSettingsOpen(true);
-  }, [desktopSidebar, setSidebarOpen]);
+    connectedTarget.focus();
+    return true;
+  }, []);
 
   const { unavailable } = useHealth();
 
@@ -148,9 +180,13 @@ export const ChatScreen = () => {
 
   return (
     <div className="flex h-dvh w-full flex-col">
-      <Header onToggleSidebar={toggleSidebar} />
+      <Header
+        onToggleSidebar={toggleSidebar}
+        sidebarTriggerRef={sidebarTriggerRef}
+      />
       <CredentialSettingsDialog
         onOpenChangeAction={setCredentialSettingsOpen}
+        onRestoreFocusAction={restoreCredentialSettingsFocus}
         open={credentialSettingsOpen}
       />
       {unavailable ? <ServiceBanner /> : null}
@@ -162,7 +198,7 @@ export const ChatScreen = () => {
             <SidebarUserIdentity
               hasConversations={conversations.length > 0}
               onClearAll={onClearAll}
-              onOpenCredentialsAction={openCredentialSettings}
+              onOpenCredentialsAction={openCredentialSettingsFromAccount}
             />
           }
           generatingTitleId={generatingTitleId}
