@@ -36,6 +36,9 @@ describe('root navigation', () => {
 
     expect(markup).toContain('href="#main-content"');
     expect(markup).toContain('Прескокни до содржината');
+    expect(markup).toContain('pl-[env(safe-area-inset-left)]');
+    expect(markup).toContain('pr-[env(safe-area-inset-right)]');
+    expect(markup).toContain('left-[max(1rem,env(safe-area-inset-left))]');
   });
 
   it('provides a stable skip target on fallback pages', () => {
