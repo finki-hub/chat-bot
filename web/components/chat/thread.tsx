@@ -20,6 +20,7 @@ import { hasReasoning, hasText, joinText } from '@/lib/message-parts';
 export type ThreadProps = {
   activeError?: ErrorNotice;
   activeStatus?: StatusPart;
+  conversationId?: null | string;
   messages: MyUIMessage[];
   onManageCredentials?: () => void;
   onPickSuggestion?: (text: string) => unknown;
@@ -44,10 +45,10 @@ const MESSAGE_ENTRANCE =
   'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500';
 
 const Welcome = ({ onPick }: { onPick?: (text: string) => void }) => (
-  <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-6 py-12 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:slide-in-from-bottom-4 motion-safe:duration-700">
+  <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-6 py-12 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:slide-in-from-bottom-4 motion-safe:duration-700 [@media(max-height:500px)]:justify-start [@media(max-height:500px)]:gap-3 [@media(max-height:500px)]:py-3">
     <img
       alt="ФИНКИ Хаб"
-      className="h-16 w-16 object-contain drop-shadow-sm"
+      className="h-16 w-16 object-contain drop-shadow-sm [@media(max-height:500px)]:h-12 [@media(max-height:500px)]:w-12"
       height={64}
       src="/logo.png"
       width={64}
@@ -81,6 +82,7 @@ const Welcome = ({ onPick }: { onPick?: (text: string) => void }) => (
 export const Thread = ({
   activeError,
   activeStatus,
+  conversationId,
   messages,
   onManageCredentials,
   onPickSuggestion,
@@ -99,7 +101,11 @@ export const Thread = ({
         !hasReasoning(lastMessage)));
 
   return (
-    <Conversation className="flex-1">
+    <Conversation
+      className="flex-1"
+      initial={messages.length === 0 ? false : 'instant'}
+      key={`${conversationId ?? 'unscoped'}:${messages.length === 0 ? 'welcome' : 'messages'}`}
+    >
       <ConversationContent>
         {messages.length === 0 ? (
           <Welcome onPick={onPickSuggestion} />
@@ -188,7 +194,7 @@ export const Thread = ({
           </div>
         ) : null}
       </ConversationContent>
-      <ConversationScrollButton />
+      {messages.length === 0 ? null : <ConversationScrollButton />}
     </Conversation>
   );
 };

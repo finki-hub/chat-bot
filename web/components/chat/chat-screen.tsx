@@ -195,6 +195,7 @@ export const ChatScreen = () => {
           <Thread
             activeError={activeError}
             activeStatus={activeStatus}
+            conversationId={activeId}
             messages={messages}
             onManageCredentials={openCredentialSettings}
             onPickSuggestion={unavailable ? undefined : submitMessage}

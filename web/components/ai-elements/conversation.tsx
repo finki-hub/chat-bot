@@ -39,15 +39,20 @@ const usePrefersReducedMotion = () => {
 
 export type ConversationProps = ComponentProps<typeof StickToBottom>;
 
-export const Conversation = ({ className, ...props }: ConversationProps) => {
+export const Conversation = ({
+  className,
+  initial,
+  resize,
+  ...props
+}: ConversationProps) => {
   const reducedMotion = usePrefersReducedMotion();
   const scrollBehavior = reducedMotion ? 'instant' : 'smooth';
 
   return (
     <StickToBottom
       className={cn("relative flex-1 overflow-y-hidden", className)}
-      initial={scrollBehavior}
-      resize={scrollBehavior}
+      initial={initial ?? scrollBehavior}
+      resize={resize ?? scrollBehavior}
       role="log"
       {...props}
     />
