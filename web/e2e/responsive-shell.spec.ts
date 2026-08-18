@@ -163,7 +163,11 @@ test('short mobile viewports preserve a readable message region', async ({
   const disclaimer = page.getByText(DISCLAIMER_PATTERN);
 
   // Then fixed chrome leaves enough height to read more than one message line.
-  expect(thread?.height).toBeGreaterThanOrEqual(MINIMUM_SHORT_THREAD_HEIGHT);
+  expect(thread).not.toBeNull();
+  if (thread === null) {
+    throw new TypeError('Expected the conversation thread to be visible');
+  }
+  expect(thread.height).toBeGreaterThanOrEqual(MINIMUM_SHORT_THREAD_HEIGHT);
   await expect(contextBar).toHaveCSS('min-height', '44px');
   await expect
     .poll(async () =>

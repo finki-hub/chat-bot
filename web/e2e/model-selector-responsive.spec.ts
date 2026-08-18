@@ -50,15 +50,18 @@ test('keeps a long model list inside narrow viewport gutters', async ({
   // When the model selector opens.
   await page.getByTestId('composer-model').click();
   const listbox = page.getByRole('listbox');
+  await expect(listbox).toBeVisible();
   const box = await listbox.boundingBox();
   const option = page.getByRole('option', { name: LONG_MODEL_NAME });
   const chips = page.getByTestId('composer-chip-scroll');
 
   // Then the popup stays inside the configured 12px collision gutters.
-  expect(box?.x).toBeGreaterThanOrEqual(12);
-  expect((box?.x ?? Infinity) + (box?.width ?? Infinity)).toBeLessThanOrEqual(
-    308,
-  );
+  expect(box).not.toBeNull();
+  if (box === null) {
+    throw new TypeError('Expected the model listbox to have layout geometry');
+  }
+  expect(box.x).toBeGreaterThanOrEqual(12);
+  expect(box.x + box.width).toBeLessThanOrEqual(308);
   await expect
     .poll(async () =>
       option.evaluate((element) => element.scrollWidth <= element.clientWidth),
