@@ -8,6 +8,7 @@ import {
 import { useId } from 'react';
 
 import type { ProviderForm } from '@/components/shell/credential-settings-data';
+import type { CredentialSaveFailure } from '@/components/shell/credential-settings-save';
 import type { ChatCredentialPublic } from '@/lib/api-types';
 
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ import { t } from '@/lib/i18n';
 type CredentialProviderFormProps = {
   readonly busy: boolean;
   readonly credential?: ChatCredentialPublic;
+  readonly failure?: CredentialSaveFailure;
   readonly form: ProviderForm;
   readonly keyUrl: string;
   readonly label: string;
@@ -27,6 +29,7 @@ type CredentialProviderFormProps = {
 export const CredentialProviderForm = ({
   busy,
   credential,
+  failure,
   form,
   keyUrl,
   label,
@@ -36,8 +39,10 @@ export const CredentialProviderForm = ({
   const fieldId = useId();
   const apiKeyId = `${fieldId}-api-key`;
   const apiKeyDescriptionId = `${fieldId}-api-key-description`;
+  const apiKeyErrorId = `${fieldId}-api-key-error`;
   const baseUrlId = `${fieldId}-base-url`;
   const baseUrlDescriptionId = `${fieldId}-base-url-description`;
+  const baseUrlErrorId = `${fieldId}-base-url-error`;
   const hasCredential = credential !== undefined;
   /* eslint-disable @typescript-eslint/prefer-nullish-coalescing -- legacy empty URLs should use the example. */
   const baseUrlPlaceholder =
@@ -49,11 +54,15 @@ export const CredentialProviderForm = ({
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <KeyRound
-              aria-hidden="true"
-              className="size-4 shrink-0 text-muted-foreground"
-            />
-            <h3 className="text-sm font-semibold">{label}</h3>
+            <div className="flex min-w-0 items-center gap-2">
+              <KeyRound
+                aria-hidden="true"
+                className="size-4 shrink-0 text-muted-foreground"
+              />
+              <h3 className="whitespace-nowrap text-sm font-semibold">
+                {label}
+              </h3>
+            </div>
             <output
               className={
                 hasCredential
@@ -121,7 +130,11 @@ export const CredentialProviderForm = ({
               <span className="sr-only">{label}</span> {t('settings.apiKey')}
             </label>
             <Input
-              aria-describedby={apiKeyDescriptionId}
+              aria-describedby={
+                failure?.field === 'apiKey'
+                  ? `${apiKeyDescriptionId} ${apiKeyErrorId}`
+                  : apiKeyDescriptionId
+              }
               autoComplete="off"
               disabled={busy}
               id={apiKeyId}
@@ -140,6 +153,14 @@ export const CredentialProviderForm = ({
                 ? t('settings.replaceCredential')
                 : t('settings.optionalCredential')}
             </p>
+            {failure?.field === 'apiKey' ? (
+              <p
+                className="text-pretty text-xs leading-relaxed text-destructive"
+                id={apiKeyErrorId}
+              >
+                {t('settings.credentialSaveError')}
+              </p>
+            ) : null}
           </div>
           <div className="grid gap-1.5">
             <label
@@ -149,7 +170,12 @@ export const CredentialProviderForm = ({
               <span className="sr-only">{label}</span> {t('settings.baseUrl')}
             </label>
             <Input
-              aria-describedby={baseUrlDescriptionId}
+              aria-describedby={
+                failure?.field === 'baseUrl'
+                  ? `${baseUrlDescriptionId} ${baseUrlErrorId}`
+                  : baseUrlDescriptionId
+              }
+              aria-invalid={failure?.field === 'baseUrl' || undefined}
               disabled={busy}
               id={baseUrlId}
               onChange={(event) => {
@@ -165,6 +191,14 @@ export const CredentialProviderForm = ({
             >
               {t('settings.baseUrlHint')}
             </p>
+            {failure?.field === 'baseUrl' ? (
+              <p
+                className="text-pretty text-xs leading-relaxed text-destructive"
+                id={baseUrlErrorId}
+              >
+                {t('settings.credentialBaseUrlError')}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>

@@ -114,7 +114,7 @@ export const messages = {
   'settings.baseUrlHint': 'Остави празно за стандардниот endpoint.',
   'settings.baseUrlPlaceholder': 'https://api.example.com/v1',
   'settings.credentialBaseUrlError':
-    'Base URL адресата не е дозволена. Остави го полето празно за стандардниот endpoint или побарај администраторот да ја додаде.',
+    'Base URL адресата не е дозволена. Остави го полето празно за\u{00A0}стандардниот\u{00A0}endpoint или побарај администраторот да ја додаде.',
   'settings.credentialDeleteError': 'Клучот не можеше да се избрише.',
   'settings.credentialSaveError': 'Клучот не можеше да се зачува.',
   'settings.credentialsDescription':

@@ -7,6 +7,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 
 import type {
@@ -15,6 +16,12 @@ import type {
 } from '@/lib/api-types';
 
 import { CredentialDeleteDialog } from '@/components/shell/credential-delete-dialog';
+import {
+  beginCredentialMutation,
+  finishCredentialMutation,
+  hasPendingCredentialMutation,
+  subscribeCredentialMutations,
+} from '@/components/shell/credential-mutation-coordinator';
 import { CredentialProviderForm } from '@/components/shell/credential-provider-form';
 import { deleteCredential } from '@/components/shell/credential-settings-client';
 import {
@@ -60,6 +67,7 @@ const useIsomorphicLayoutEffect =
 
 type CredentialProviderListProps = {
   readonly busyProvider: ChatCredentialProvider | null;
+  readonly failures: readonly CredentialSaveFailure[];
   readonly forms: FormState;
   readonly onDelete: (provider: ChatCredentialProvider) => void;
   readonly onFieldChange: (
@@ -77,18 +85,51 @@ type SavedCredentials = Partial<
   Record<ChatCredentialProvider, ChatCredentialPublic>
 >;
 
-const saveFailureMessage = (
-  failure: CredentialSaveFailure | null,
-): null | string => {
-  if (failure === null) {
-    return null;
+const saveFailureMessage = (kind: CredentialSaveFailure['kind']): string => {
+  switch (kind) {
+    case 'base-url':
+      return t('settings.credentialBaseUrlError');
+    case 'save':
+      return t('settings.credentialSaveError');
+    default:
+      return kind satisfies never;
   }
-  return t(
-    failure === 'base-url'
-      ? 'settings.credentialBaseUrlError'
-      : 'settings.credentialSaveError',
-  );
 };
+
+const failureKinds = ['base-url', 'save'] as const satisfies ReadonlyArray<
+  CredentialSaveFailure['kind']
+>;
+
+const saveFailureSummary = (
+  failures: readonly CredentialSaveFailure[],
+): string => {
+  const providersByKind: Record<CredentialSaveFailure['kind'], string[]> = {
+    'base-url': [],
+    save: [],
+  };
+  for (const failure of failures) {
+    const provider = providerList.find(
+      (entry) => entry.provider === failure.provider,
+    );
+    const providerLabel =
+      provider === undefined ? failure.provider : t(provider.labelKey);
+    providersByKind[failure.kind].push(providerLabel);
+  }
+  return failureKinds
+    .flatMap((kind) => {
+      const providers = providersByKind[kind];
+      return providers.length === 0
+        ? []
+        : [`${providers.join(', ')}: ${saveFailureMessage(kind)}`];
+    })
+    .join(' ');
+};
+
+const withoutProviderFailures = (
+  failures: readonly CredentialSaveFailure[],
+  provider: ChatCredentialProvider,
+): readonly CredentialSaveFailure[] =>
+  failures.filter((failure) => failure.provider !== provider);
 
 const formsForCredentials = (
   credentials: readonly ChatCredentialPublic[],
@@ -135,6 +176,7 @@ const formsWithPendingDrafts = (
 
 const CredentialProviderList = ({
   busyProvider,
+  failures,
   forms,
   onDelete,
   onFieldChange,
@@ -146,6 +188,7 @@ const CredentialProviderList = ({
       <CredentialProviderForm
         busy={saving || busyProvider === provider}
         credential={saved[provider]}
+        failure={failures.find((failure) => failure.provider === provider)}
         form={forms[provider]}
         key={provider}
         keyUrl={keyUrl}
@@ -181,11 +224,19 @@ export const CredentialSettingsDialog = ({
     useState<ChatCredentialProvider | null>(null);
   const [credentialToDelete, setCredentialToDelete] =
     useState<ChatCredentialProvider | null>(null);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<null | string>(null);
+  const [saveFailures, setSaveFailures] = useState<
+    readonly CredentialSaveFailure[]
+  >([]);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const dialogCycleRef = useRef(0);
   const lifecycleRef = useRef({ open, sessionKey });
   const sessionKeyRef = useRef(sessionKey);
+  const saving = useSyncExternalStore(
+    subscribeCredentialMutations,
+    () => hasPendingCredentialMutation(sessionKey),
+    () => false,
+  );
   useIsomorphicLayoutEffect(() => {
     const previous = lifecycleRef.current;
     sessionKeyRef.current = sessionKey;
@@ -209,15 +260,15 @@ export const CredentialSettingsDialog = ({
     setBusyProvider(null);
     setCredentialToDelete(null);
     setError(null);
+    setSaveFailures([]);
     setForms(EMPTY_FORMS);
-    setSaving(false);
   }, [sessionKey]);
   useEffect(() => {
     if (!open) {
       setCredentialToDelete(null);
       setError(null);
+      setSaveFailures([]);
       setForms(EMPTY_FORMS);
-      setSaving(false);
       return;
     }
     setForms((current) => formsWithPendingDrafts(current, credentials));
@@ -229,6 +280,11 @@ export const CredentialSettingsDialog = ({
     field: keyof ProviderForm,
     value: string,
   ) => {
+    setSaveFailures((current) =>
+      current.filter(
+        (failure) => failure.provider !== provider || failure.field !== field,
+      ),
+    );
     setForms((current) => ({
       ...current,
       [provider]: { ...current[provider], [field]: value },
@@ -236,19 +292,19 @@ export const CredentialSettingsDialog = ({
   };
   const saveProviders = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (sessionKey === null) {
+    if (sessionKey === null || !beginCredentialMutation(sessionKey)) {
       return;
     }
     const operation = {
       dialogCycle: dialogCycleRef.current,
       sessionKey,
     } satisfies DialogOperation;
-    setSaving(true);
     setError(null);
+    setSaveFailures([]);
     try {
       const {
         credentials: savedCredentials,
-        failure,
+        failures,
         unexpectedError,
       } = await saveEnteredCredentials(forms);
       if (sessionKeyRef.current !== operation.sessionKey) {
@@ -282,7 +338,7 @@ export const CredentialSettingsDialog = ({
         });
       }
       runForCurrentDialogOperation(operation, () => {
-        setError(saveFailureMessage(failure));
+        setSaveFailures(failures);
       });
       if (unexpectedError !== null) {
         reportError(unexpectedError.reason);
@@ -296,16 +352,14 @@ export const CredentialSettingsDialog = ({
         throw error_;
       }
     } finally {
-      runForCurrentDialogOperation(operation, () => {
-        setSaving(false);
-      });
+      finishCredentialMutation(operation.sessionKey);
     }
   };
 
   const deleteProvider = async (
     provider: ChatCredentialProvider,
   ): Promise<boolean> => {
-    if (sessionKey === null) {
+    if (sessionKey === null || !beginCredentialMutation(sessionKey)) {
       return false;
     }
     const operation = {
@@ -345,6 +399,9 @@ export const CredentialSettingsDialog = ({
           ...current,
           [provider]: EMPTY_FORMS[provider],
         }));
+        setSaveFailures((current) =>
+          withoutProviderFailures(current, provider),
+        );
       });
       return true;
     } catch (error_) {
@@ -356,6 +413,7 @@ export const CredentialSettingsDialog = ({
       });
       return false;
     } finally {
+      finishCredentialMutation(operation.sessionKey);
       runForCurrentDialogOperation(operation, () => {
         setBusyProvider(null);
       });
@@ -372,15 +430,25 @@ export const CredentialSettingsDialog = ({
         open={open}
       >
         <DialogContent
-          className="grid max-h-[calc(100dvh_-_2rem)] max-w-[calc(100%_-_2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-2xl"
+          className="grid max-h-[calc(100dvh_-_2rem)] max-w-[calc(100%_-_2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-clip p-0 sm:max-w-2xl"
           onCloseAutoFocus={(event) => {
             if (onRestoreFocusAction?.() === true) {
               event.preventDefault();
             }
           }}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            titleRef.current?.focus();
+          }}
         >
           <DialogHeader className="border-b border-border px-6 py-5 pr-14">
-            <DialogTitle>{t('settings.credentialsTitle')}</DialogTitle>
+            <DialogTitle
+              className="outline-none"
+              ref={titleRef}
+              tabIndex={-1}
+            >
+              {t('settings.credentialsTitle')}
+            </DialogTitle>
             <DialogDescription>
               {t('settings.credentialsDescription')}
             </DialogDescription>
@@ -404,6 +472,7 @@ export const CredentialSettingsDialog = ({
                 {!loading && !credentialsLoadError ? (
                   <CredentialProviderList
                     busyProvider={busyProvider}
+                    failures={saveFailures}
                     forms={forms}
                     onDelete={setCredentialToDelete}
                     onFieldChange={updateForm}
@@ -414,15 +483,15 @@ export const CredentialSettingsDialog = ({
               </div>
             </div>
             <div className="border-t border-border bg-background">
-              {error === null ? null : (
+              {error === null && saveFailures.length === 0 ? null : (
                 <p
-                  className="mx-4 mt-4 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive sm:mx-6"
+                  className="mx-4 mt-4 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-pretty text-sm text-destructive sm:mx-6"
                   role="alert"
                 >
-                  {error}
+                  {error ?? saveFailureSummary(saveFailures)}
                 </p>
               )}
-              <DialogFooter className="p-4 sm:px-6">
+              <DialogFooter className="flex-col p-4 sm:px-6">
                 <Button
                   className="w-full sm:w-auto"
                   disabled={saving}
@@ -436,7 +505,7 @@ export const CredentialSettingsDialog = ({
                 </Button>
                 <Button
                   aria-busy={saving || undefined}
-                  className="w-full sm:w-auto"
+                  className="w-full disabled:opacity-70 sm:w-auto"
                   disabled={
                     saving || busyProvider !== null || !hasPendingCredentials
                   }
