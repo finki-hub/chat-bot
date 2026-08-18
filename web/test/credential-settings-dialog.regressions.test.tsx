@@ -6,6 +6,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -121,7 +122,6 @@ afterEach(() => {
 describe('CredentialSettingsDialog regressions', () => {
   it('disables native validation for optional provider URLs', async () => {
     renderDialog();
-
     const keyInput = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
 
     expect(keyInput.closest('form')).toHaveAttribute('novalidate');
@@ -482,5 +482,67 @@ describe('CredentialSettingsDialog save reconciliation', () => {
     await waitFor(() => {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('CredentialSettingsDialog accessibility regressions', () => {
+  it('wraps reverse tabbing from the initially focused title', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Лични API клучеви',
+    });
+    const title = screen.getByRole('heading', { name: 'Лични API клучеви' });
+    await waitFor(() => {
+      expect(title).toHaveFocus();
+    });
+
+    expect(title).toHaveAttribute('tabindex', '-1');
+
+    await user.tab({ shift: true });
+
+    expect(title).not.toHaveFocus();
+    expect(dialog.querySelector('[data-slot="dialog-close"]')).toHaveFocus();
+  });
+
+  it('keeps a corrected failed field visible in a short dialog', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn<(query: string) => MediaQueryList>((query) => ({
+        addEventListener: vi.fn<MediaQueryList['addEventListener']>(),
+        addListener: vi.fn<MediaQueryList['addListener']>(),
+        dispatchEvent: vi
+          .fn<MediaQueryList['dispatchEvent']>()
+          .mockReturnValue(true),
+        matches: query === '(max-height: 30rem)',
+        media: query,
+        onchange: null,
+        removeEventListener: vi.fn<MediaQueryList['removeEventListener']>(),
+        removeListener: vi.fn<MediaQueryList['removeListener']>(),
+      })),
+    );
+    saveCredentialMock.mockResolvedValue(null);
+    renderDialog();
+
+    const openaiKey = await screen.findByLabelText(OPENAI_API_KEY_LABEL);
+    const ollamaKey = screen.getByLabelText('Ollama API клуч');
+    const providerScroller = openaiKey.closest('.overflow-y-auto');
+    if (!(providerScroller instanceof HTMLElement)) {
+      throw new TypeError('Credential provider scroll region not found');
+    }
+    fireEvent.change(openaiKey, { target: { value: 'openai-secret' } });
+    fireEvent.change(ollamaKey, { target: { value: 'ollama-secret' } });
+    fireEvent.click(
+      screen.getByRole('button', { name: SAVE_CREDENTIALS_LABEL }),
+    );
+    await screen.findByRole('alert');
+    providerScroller.scrollTop = 240;
+    ollamaKey.focus();
+
+    fireEvent.change(ollamaKey, { target: { value: 'corrected-secret' } });
+
+    expect(ollamaKey).toHaveFocus();
+    expect(providerScroller.scrollTop).toBe(240);
   });
 });

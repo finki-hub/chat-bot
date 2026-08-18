@@ -244,6 +244,7 @@ export const CredentialSettingsDialog = ({
   >([]);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const providerScrollerRef = useRef<HTMLDivElement>(null);
+  const revealSaveErrorRef = useRef(false);
   const dialogCycleRef = useRef(0);
   const lifecycleRef = useRef({ open, sessionKey });
   const sessionKeyRef = useRef(sessionKey);
@@ -277,6 +278,7 @@ export const CredentialSettingsDialog = ({
     }
   };
   useEffect(() => {
+    revealSaveErrorRef.current = false;
     setBusyProvider(null);
     setCredentialToDelete(null);
     setError(null);
@@ -285,6 +287,7 @@ export const CredentialSettingsDialog = ({
   }, [sessionKey]);
   useEffect(() => {
     if (!open) {
+      revealSaveErrorRef.current = false;
       setCredentialToDelete(null);
       setError(null);
       setSaveFailures([]);
@@ -319,6 +322,7 @@ export const CredentialSettingsDialog = ({
       dialogCycle: dialogCycleRef.current,
       sessionKey,
     } satisfies DialogOperation;
+    revealSaveErrorRef.current = false;
     setError(null);
     setSaveFailures([]);
     try {
@@ -358,6 +362,7 @@ export const CredentialSettingsDialog = ({
         });
       }
       runForCurrentDialogOperation(operation, () => {
+        revealSaveErrorRef.current = failures.length > 0;
         setSaveFailures(failures);
       });
       if (unexpectedError !== null) {
@@ -366,6 +371,7 @@ export const CredentialSettingsDialog = ({
     } catch (error_) {
       if (error_ instanceof TypeError) {
         runForCurrentDialogOperation(operation, () => {
+          revealSaveErrorRef.current = true;
           setError(t('settings.credentialSaveError'));
         });
       } else {
@@ -387,11 +393,13 @@ export const CredentialSettingsDialog = ({
       sessionKey,
     } satisfies DialogOperation;
     setBusyProvider(provider);
+    revealSaveErrorRef.current = false;
     setError(null);
     try {
       const deleted = await deleteCredential(provider);
       if (!deleted) {
         runForCurrentDialogOperation(operation, () => {
+          revealSaveErrorRef.current = true;
           setError(t('settings.credentialDeleteError'));
         });
         return false;
@@ -429,6 +437,7 @@ export const CredentialSettingsDialog = ({
         throw error_;
       }
       runForCurrentDialogOperation(operation, () => {
+        revealSaveErrorRef.current = true;
         setError(t('settings.credentialDeleteError'));
       });
       return false;
@@ -446,12 +455,17 @@ export const CredentialSettingsDialog = ({
     error ??
     (saveFailures.length === 0 ? null : saveFailureSummary(saveFailures));
   useIsomorphicLayoutEffect(() => {
+    if (saveError === null) {
+      revealSaveErrorRef.current = false;
+      return;
+    }
     if (
-      saveError !== null &&
+      revealSaveErrorRef.current &&
       shortDialogHeight &&
       providerScrollerRef.current !== null
     ) {
       providerScrollerRef.current.scrollTop = 0;
+      revealSaveErrorRef.current = false;
     }
   }, [saveError, shortDialogHeight]);
 
@@ -476,6 +490,19 @@ export const CredentialSettingsDialog = ({
           <DialogHeader className="border-b border-border px-6 py-5 pr-14">
             <DialogTitle
               className="outline-none"
+              onKeyDown={(event) => {
+                if (event.key !== 'Tab' || !event.shiftKey) {
+                  return;
+                }
+                const closeButton = event.currentTarget
+                  .closest('[role="dialog"]')
+                  ?.querySelector<HTMLElement>('[data-slot="dialog-close"]');
+                if (closeButton === null || closeButton === undefined) {
+                  return;
+                }
+                event.preventDefault();
+                closeButton.focus();
+              }}
               ref={titleRef}
               tabIndex={-1}
             >
