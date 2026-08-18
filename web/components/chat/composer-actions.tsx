@@ -151,7 +151,7 @@ export const ComposerActions = ({
         >
           <SelectTrigger
             aria-label={t('composer.model')}
-            className="min-h-11 w-fit max-w-[70vw] shrink-0 gap-1.5 rounded-full border-0 bg-transparent px-3 text-xs font-medium text-muted-foreground shadow-none hover:bg-muted hover:text-foreground sm:max-w-[240px] sm:pointer-fine:min-h-8"
+            className="min-h-11 min-w-0 w-fit max-w-[calc(100vw-14.5rem)] shrink-0 gap-1.5 overflow-hidden rounded-full border-0 bg-transparent px-3 text-xs font-medium text-muted-foreground shadow-none *:data-[slot=select-value]:min-w-0 hover:bg-muted hover:text-foreground sm:max-w-[240px] sm:pointer-fine:min-h-8"
             data-testid="composer-model"
             size="sm"
           >
