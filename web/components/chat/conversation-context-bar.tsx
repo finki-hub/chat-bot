@@ -12,7 +12,7 @@ export const ConversationContextBar = ({
 }: ConversationContextBarProps) => (
   <section
     aria-label={t('conversation.contextLabel')}
-    className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border/60 bg-background/95 px-3 sm:min-h-12 sm:px-4"
+    className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border/60 bg-background/95 px-3 sm:min-h-12 sm:px-4 [@media(max-height:500px)]:min-h-11"
     data-testid="chat-context-bar"
   >
     <h2
