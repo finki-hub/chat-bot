@@ -329,6 +329,7 @@ describe('POST /api/chat', () => {
         },
         parts: [
           {
+            id: RESPONSE_ID,
             state: 'done',
             text: 'Проверувам правила.',
             type: 'reasoning',
