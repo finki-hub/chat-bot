@@ -144,8 +144,8 @@ export const Thread = ({
               const isLastAssistant = m.id === lastAssistantId;
               const activeAssistant =
                 isLastAssistant &&
-                streaming &&
-                lastMessage?.role === 'assistant';
+                lastMessage?.role === 'assistant' &&
+                (streaming || activeStatus !== undefined);
               return (
                 <div
                   className={activeAssistant ? MESSAGE_ENTRANCE : undefined}
@@ -164,10 +164,8 @@ export const Thread = ({
                       isLastAssistant ? onManageCredentials : undefined
                     }
                     onRetry={isLastAssistant ? onRetry : undefined}
-                    pending={isLastAssistant && streaming}
-                    statusPart={
-                      isLastAssistant && streaming ? activeStatus : undefined
-                    }
+                    pending={activeAssistant}
+                    statusPart={activeAssistant ? activeStatus : undefined}
                   />
                 </div>
               );
