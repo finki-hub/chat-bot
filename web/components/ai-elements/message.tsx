@@ -144,7 +144,7 @@ export const MessageResponse = memo(
   ({ className, ...props }: MessageResponseProps) => (
     <Streamdown
       className={cn(
-        "size-full text-pretty [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+        "size-full [overflow-wrap:anywhere] text-pretty [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         className
       )}
       plugins={streamdownPlugins}

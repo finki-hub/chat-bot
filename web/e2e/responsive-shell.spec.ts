@@ -5,10 +5,12 @@ import { mockModels } from './helpers/models';
 
 const SIDEBAR_TOGGLE_LABEL = 'Прикажи/сокриј странична лента';
 const STREAM_URL = 'http://127.0.0.1:9/stream';
+const CONVERSATION_ID = 'conversation-1';
 const CONVERSATION_TITLE = 'Услови за запишување семестар';
 const MINIMUM_SHORT_THREAD_HEIGHT = 160;
 const VIEWPORT_FIT_COVER_PATTERN = /viewport-fit=cover/u;
 const DISCLAIMER_PATTERN = /Не внесувајте лични/u;
+const LONG_UNBROKEN_TEXT = 'x'.repeat(300);
 const LONG_HISTORY = Array.from({ length: 12 }, (_, index) => ({
   id: `message-${index}`,
   parts: [
@@ -49,7 +51,7 @@ test('tablet width keeps the chat sidebar in a modal drawer', async ({
   await mockModels(page);
   await installMockChatState(page, {
     conversations: [
-      { id: 'conversation-1', model: null, title: CONVERSATION_TITLE },
+      { id: CONVERSATION_ID, model: null, title: CONVERSATION_TITLE },
     ],
     streamUrl: STREAM_URL,
   });
@@ -88,13 +90,13 @@ test('narrow fine pointers retain inline conversation actions', async ({
   await mockModels(page);
   await installMockChatState(page, {
     conversations: [
-      { id: 'conversation-1', model: null, title: CONVERSATION_TITLE },
+      { id: CONVERSATION_ID, model: null, title: CONVERSATION_TITLE },
     ],
     streamUrl: STREAM_URL,
   });
   await page.goto('/');
   await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
-  const row = page.getByTestId('conversation-conversation-1');
+  const row = page.getByTestId(`conversation-${CONVERSATION_ID}`);
 
   // When the fine pointer hovers the conversation row.
   await row.hover();
@@ -125,13 +127,13 @@ test('short mobile viewports preserve a readable message region', async ({
   await mockModels(page);
   await installMockChatState(page, {
     conversations: [
-      { id: 'conversation-1', model: null, title: CONVERSATION_TITLE },
+      { id: CONVERSATION_ID, model: null, title: CONVERSATION_TITLE },
     ],
     histories: {
-      'conversation-1': {
+      [CONVERSATION_ID]: {
         conversation: {
           activeStream: null,
-          id: 'conversation-1',
+          id: CONVERSATION_ID,
           model: null,
           title: CONVERSATION_TITLE,
         },
@@ -188,4 +190,59 @@ test('short mobile viewports preserve a readable message region', async ({
         ),
     )
     .toBeLessThanOrEqual(1);
+});
+
+test('narrow message bubbles wrap unbroken user and assistant content', async ({
+  page,
+}) => {
+  // Given a narrow conversation containing unbroken content from both roles.
+  await page.setViewportSize({ height: 568, width: 320 });
+  await mockSession(page);
+  await mockModels(page);
+  await installMockChatState(page, {
+    conversations: [
+      { id: CONVERSATION_ID, model: null, title: CONVERSATION_TITLE },
+    ],
+    histories: {
+      [CONVERSATION_ID]: {
+        conversation: {
+          activeStream: null,
+          id: CONVERSATION_ID,
+          model: null,
+          title: CONVERSATION_TITLE,
+        },
+        messages: [
+          {
+            id: 'long-user-message',
+            parts: [{ text: LONG_UNBROKEN_TEXT, type: 'text' }],
+            role: 'user',
+          },
+          {
+            id: 'long-assistant-message',
+            parts: [{ text: LONG_UNBROKEN_TEXT, type: 'text' }],
+            role: 'assistant',
+          },
+        ],
+      },
+    },
+    streamUrl: STREAM_URL,
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
+  await page.getByRole('button', { name: CONVERSATION_TITLE }).click();
+
+  const messageText = page.getByText(LONG_UNBROKEN_TEXT, { exact: true });
+  await expect(messageText).toHaveCount(2);
+  const renderedMessages = await messageText.all();
+
+  // Then neither rendered message clips or expands beyond its available width.
+  for (const text of renderedMessages) {
+    const metrics = await text.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      overflowWrap: getComputedStyle(element).overflowWrap,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(metrics.overflowWrap).toBe('anywhere');
+    expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth);
+  }
 });
