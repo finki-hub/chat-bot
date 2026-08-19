@@ -199,7 +199,7 @@ export const Sidebar = ({
     >
       <DialogContent
         aria-describedby={undefined}
-        className="left-0 top-0 h-dvh w-64 max-w-none translate-x-0 translate-y-0 gap-0 rounded-none border-y-0 border-l-0 p-0"
+        className="left-0 top-0 h-dvh max-h-none w-64 max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-y-0 border-l-0 p-0"
         showCloseButton={false}
       >
         <DialogTitle className="sr-only">{t('sidebar.label')}</DialogTitle>

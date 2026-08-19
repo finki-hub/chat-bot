@@ -1,20 +1,38 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
 import { installMockChatState } from './helpers/chat-state';
 import { mockModels } from './helpers/models';
 
 const LEFT_SAFE_AREA = 47;
 const RIGHT_SAFE_AREA = 21;
+const TOP_SAFE_AREA = 59;
+const BOTTOM_SAFE_AREA = 34;
+const SAFE_GUTTER = 16;
+const ROUNDING_TOLERANCE = 1;
+const VIEWPORT_HEIGHT = 844;
+const NARROW_VIEWPORT_WIDTH = 390;
+const WIDE_VIEWPORT_WIDTH = 640;
 const SIDEBAR_TOGGLE_LABEL = 'Прикажи/сокриј странична лента';
+const ACCOUNT_MENU_LABEL = /Корисничко мени:/u;
 
-test('landscape mobile controls stay outside display cutouts', async ({
-  page,
-}) => {
-  // Given a landscape viewport with asymmetric safe-area insets.
-  await page.setViewportSize({ height: 390, width: 844 });
+const drawerAccountMenu = (page: Page) =>
+  page
+    .getByRole('dialog', { name: 'Странична лента' })
+    .getByRole('button', { name: ACCOUNT_MENU_LABEL });
+
+const prepareSafeAreaPage = async (
+  page: Page,
+  width: number,
+): Promise<void> => {
+  await page.setViewportSize({ height: VIEWPORT_HEIGHT, width });
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setSafeAreaInsetsOverride', {
-    insets: { left: LEFT_SAFE_AREA, right: RIGHT_SAFE_AREA },
+    insets: {
+      bottom: BOTTOM_SAFE_AREA,
+      left: LEFT_SAFE_AREA,
+      right: RIGHT_SAFE_AREA,
+      top: TOP_SAFE_AREA,
+    },
   });
   await page.route('**/api/auth/session', async (route) => {
     await route.fulfill({
@@ -31,6 +49,30 @@ test('landscape mobile controls stay outside display cutouts', async ({
     streamUrl: 'http://127.0.0.1:9/stream',
   });
   await page.goto('/');
+};
+
+test('mobile controls and overlays stay outside display cutouts', async ({
+  page,
+}) => {
+  // Given a mobile viewport with asymmetric safe-area insets on every edge.
+  await prepareSafeAreaPage(page, NARROW_VIEWPORT_WIDTH);
+
+  const skipLink = page.getByRole('link', {
+    name: 'Прескокни до содржината',
+  });
+  await skipLink.focus();
+  await expect
+    .poll(async () => {
+      const bounds = await skipLink.boundingBox();
+      return bounds?.y ?? -Infinity;
+    })
+    .toBeGreaterThanOrEqual(TOP_SAFE_AREA);
+  const skipLinkBounds = await skipLink.boundingBox();
+  expect(skipLinkBounds).not.toBeNull();
+  if (skipLinkBounds === null) {
+    throw new TypeError('Expected the focused skip link to be visible');
+  }
+  await skipLink.blur();
 
   // When the user opens the mobile navigation drawer.
   const toggle = page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL });
@@ -41,6 +83,20 @@ test('landscape mobile controls stay outside display cutouts', async ({
     .last()
     .boundingBox();
   await toggle.click();
+  const drawer = page.getByRole('dialog', { name: 'Странична лента' });
+  await expect
+    .poll(async () => {
+      const bounds = await drawer.boundingBox();
+      return Math.abs(bounds?.y ?? Infinity);
+    })
+    .toBeLessThanOrEqual(ROUNDING_TOLERANCE);
+  await expect
+    .poll(async () => {
+      const bounds = await drawer.boundingBox();
+      return bounds?.height ?? -Infinity;
+    })
+    .toBeGreaterThanOrEqual(VIEWPORT_HEIGHT - ROUNDING_TOLERANCE);
+  const drawerBounds = await drawer.boundingBox();
   const newChat = page.getByRole('button', { name: 'Нов разговор' });
   const newChatBounds = await newChat.boundingBox();
   const documentMetrics = await page.locator('html').evaluate((element) => ({
@@ -48,13 +104,82 @@ test('landscape mobile controls stay outside display cutouts', async ({
     scrollWidth: element.scrollWidth,
   }));
 
-  // Then both the page shell and fixed drawer clear the left cutout.
+  // Then the page shell, fixed drawer, and keyboard entry point clear the cutouts.
+  expect(skipLinkBounds.y).toBeGreaterThanOrEqual(TOP_SAFE_AREA);
   expect(toggleBounds?.x).toBeGreaterThanOrEqual(LEFT_SAFE_AREA);
   expect(
     (themeBounds?.x ?? Infinity) + (themeBounds?.width ?? Infinity),
-  ).toBeLessThanOrEqual(844 - RIGHT_SAFE_AREA);
+  ).toBeLessThanOrEqual(NARROW_VIEWPORT_WIDTH - RIGHT_SAFE_AREA);
   expect(newChatBounds?.x).toBeGreaterThanOrEqual(LEFT_SAFE_AREA);
+  expect(Math.abs(drawerBounds?.y ?? Infinity)).toBeLessThanOrEqual(
+    ROUNDING_TOLERANCE,
+  );
+  expect(drawerBounds?.height).toBeGreaterThanOrEqual(
+    VIEWPORT_HEIGHT - ROUNDING_TOLERANCE,
+  );
   expect(documentMetrics.scrollWidth).toBeLessThanOrEqual(
     documentMetrics.clientWidth,
+  );
+
+  // When a portaled settings dialog opens from the drawer.
+  await drawerAccountMenu(page).click();
+  await page.getByRole('menuitem', { name: 'API клучеви' }).click();
+  const credentialsDialog = page.getByRole('dialog', {
+    name: 'Лични API клучеви',
+  });
+  await expect(credentialsDialog).toBeVisible();
+  await expect
+    .poll(async () => {
+      const bounds = await credentialsDialog.boundingBox();
+      return bounds?.x ?? -Infinity;
+    })
+    .toBeGreaterThanOrEqual(LEFT_SAFE_AREA + SAFE_GUTTER);
+  const dialogBounds = await credentialsDialog.boundingBox();
+  expect(dialogBounds).not.toBeNull();
+  if (dialogBounds === null) {
+    throw new TypeError('Expected the credentials dialog to be visible');
+  }
+
+  // Then the dialog stays inside the safe vertical interval.
+  expect(dialogBounds.x).toBeGreaterThanOrEqual(LEFT_SAFE_AREA + SAFE_GUTTER);
+  expect(dialogBounds.x + dialogBounds.width).toBeLessThanOrEqual(
+    NARROW_VIEWPORT_WIDTH - RIGHT_SAFE_AREA - SAFE_GUTTER + ROUNDING_TOLERANCE,
+  );
+  expect(dialogBounds.y).toBeGreaterThanOrEqual(TOP_SAFE_AREA + SAFE_GUTTER);
+  expect(dialogBounds.y + dialogBounds.height).toBeLessThanOrEqual(
+    VIEWPORT_HEIGHT - BOTTOM_SAFE_AREA - SAFE_GUTTER + ROUNDING_TOLERANCE,
+  );
+});
+
+test('responsive dialog caps preserve safe gutters at the sm breakpoint', async ({
+  page,
+}) => {
+  // Given a viewport wide enough to activate responsive dialog max-width classes.
+  await prepareSafeAreaPage(page, WIDE_VIEWPORT_WIDTH);
+  await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
+  await drawerAccountMenu(page).click();
+
+  // When the credential settings dialog opens.
+  await page.getByRole('menuitem', { name: 'API клучеви' }).click();
+  const credentialsDialog = page.getByRole('dialog', {
+    name: 'Лични API клучеви',
+  });
+  await expect(credentialsDialog).toBeVisible();
+  await expect
+    .poll(async () => {
+      const bounds = await credentialsDialog.boundingBox();
+      return bounds?.x ?? -Infinity;
+    })
+    .toBeGreaterThanOrEqual(LEFT_SAFE_AREA + SAFE_GUTTER);
+  const dialogBounds = await credentialsDialog.boundingBox();
+  expect(dialogBounds).not.toBeNull();
+  if (dialogBounds === null) {
+    throw new TypeError('Expected the credentials dialog to be visible');
+  }
+
+  // Then responsive component caps cannot expand beyond the safe-area gutter.
+  expect(dialogBounds.x).toBeGreaterThanOrEqual(LEFT_SAFE_AREA + SAFE_GUTTER);
+  expect(dialogBounds.x + dialogBounds.width).toBeLessThanOrEqual(
+    WIDE_VIEWPORT_WIDTH - RIGHT_SAFE_AREA - SAFE_GUTTER + ROUNDING_TOLERANCE,
   );
 });

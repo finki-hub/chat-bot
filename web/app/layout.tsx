@@ -93,7 +93,7 @@ const RootLayout = ({ children }: Readonly<{ children: ReactNode }>) => (
     </head>
     <body className="pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <a
-        className="fixed left-[max(1rem,env(safe-area-inset-left))] top-4 z-50 -translate-y-24 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground shadow-lg transition-transform focus:translate-y-0 focus:outline-none focus:ring-2 focus:ring-ring"
+        className="fixed left-[max(1rem,env(safe-area-inset-left))] top-[max(1rem,env(safe-area-inset-top))] z-50 -translate-y-24 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground shadow-lg transition-transform focus:translate-y-0 focus:outline-none focus:ring-2 focus:ring-ring"
         href="#main-content"
       >
         {t('navigation.skipToContent')}

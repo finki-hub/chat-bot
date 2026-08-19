@@ -6,6 +6,7 @@ import { startChatStreamServer, type UiChunk } from './helpers/sse';
 
 const MODEL = 'claude-sonnet-5';
 const ACCOUNT_MENU_NAME_PATTERN = /Корисничко мени:/u;
+const LONG_SAFE_URL = `https://finki.ukim.mk/${'a'.repeat(3_000)}`;
 
 const answer = (text: string): UiChunk[] => [
   {
@@ -106,6 +107,49 @@ test('protocol-less markdown links render as safe https links', async ({
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('https://finki.ukim.mk/');
+
+  await server.close();
+});
+
+test('long link confirmations scroll inside mobile safe areas', async ({
+  page,
+}) => {
+  // Given a mobile viewport with cutouts and an answer containing a long safe URL.
+  await page.setViewportSize({ height: 844, width: 390 });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+    insets: { bottom: 34, left: 47, right: 21, top: 59 },
+  });
+  const server = await mockBackend(
+    page,
+    answer(`Повеќе на [FINKI](${LONG_SAFE_URL}) тука.`),
+  );
+  await page.goto('/');
+  await send(page, 'Каде да видам повеќе?');
+
+  // When the user opens the link confirmation.
+  const link = page
+    .getByTestId('answer-text')
+    .locator('[data-streamdown="link"]')
+    .first();
+  await link.waitFor();
+  await link.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+
+  // Then the generic dialog owns overflow and remains inside the safe viewport.
+  await expect(dialog).toHaveCSS('overflow-y', 'auto');
+  const metrics = await dialog.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  }));
+  expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
+  await dialog.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect
+    .poll(async () => dialog.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(0);
 
   await server.close();
 });
