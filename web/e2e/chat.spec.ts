@@ -416,10 +416,15 @@ test.describe('chat streaming (mocked BFF)', () => {
         });
       }
 
-      await page.getByRole('button', { name: 'Додај API клуч' }).click();
+      const manageCredentials = page.getByRole('button', {
+        name: 'Додај API клуч',
+      });
+      await manageCredentials.dispatchEvent('click');
       await expect(
         page.getByRole('dialog', { name: 'Лични API клучеви' }),
       ).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(manageCredentials).toBeFocused();
     } finally {
       await chatServer.close();
     }

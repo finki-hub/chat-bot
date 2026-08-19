@@ -15,10 +15,10 @@ export const CredentialSettingsStatus = ({
 }: CredentialSettingsStatusProps) => {
   if (loading) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+      <output className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
         <Spinner aria-hidden="true" />
-        {t('composer.modelsLoading')}
-      </div>
+        {t('settings.credentialsLoading')}
+      </output>
     );
   }
 
@@ -28,7 +28,7 @@ export const CredentialSettingsStatus = ({
 
   return (
     <div
-      className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
+      className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
       role="alert"
     >
       <p>{t('settings.credentialsError')}</p>

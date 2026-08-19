@@ -12,13 +12,23 @@ import {
   PROVIDERS,
 } from '@/components/shell/credential-settings-data';
 
-export type CredentialSaveFailure = 'base-url' | 'save';
+export type CredentialSaveFailure =
+  | {
+      readonly field: 'apiKey';
+      readonly kind: 'save';
+      readonly provider: ChatCredentialProvider;
+    }
+  | {
+      readonly field: 'baseUrl';
+      readonly kind: 'base-url';
+      readonly provider: ChatCredentialProvider;
+    };
 
 type CredentialForms = Readonly<Record<ChatCredentialProvider, ProviderForm>>;
 
 type CredentialSaveBatch = {
   readonly credentials: readonly ChatCredentialPublic[];
-  readonly failure: CredentialSaveFailure | null;
+  readonly failures: readonly CredentialSaveFailure[];
   readonly unexpectedError: null | { readonly reason: unknown };
 };
 
@@ -36,26 +46,46 @@ export const saveEnteredCredentials = async (
     pendingCredentials.map((credential) => saveCredential(credential)),
   );
   const credentials: ChatCredentialPublic[] = [];
-  let failure: CredentialSaveFailure | null = null;
+  const failures: CredentialSaveFailure[] = [];
   let unexpectedError: CredentialSaveBatch['unexpectedError'] = null;
-  for (const result of results) {
+  for (const [index, result] of results.entries()) {
+    const pendingCredential = pendingCredentials.at(index);
+    if (pendingCredential === undefined) {
+      continue;
+    }
     if (result.status === 'fulfilled') {
       if (result.value === null) {
-        failure ??= 'save';
+        failures.push({
+          field: 'apiKey',
+          kind: 'save',
+          provider: pendingCredential.provider,
+        });
       } else {
         credentials.push(result.value);
       }
       continue;
     }
     const reason: unknown = result.reason;
-    if (reason instanceof CredentialBaseUrlRejectedError) {
-      failure = 'base-url';
-    } else if (reason instanceof TypeError) {
-      failure ??= 'save';
-    } else if (unexpectedError === null) {
-      failure ??= 'save';
+    const failure: CredentialSaveFailure =
+      reason instanceof CredentialBaseUrlRejectedError
+        ? {
+            field: 'baseUrl',
+            kind: 'base-url',
+            provider: pendingCredential.provider,
+          }
+        : {
+            field: 'apiKey',
+            kind: 'save',
+            provider: pendingCredential.provider,
+          };
+    failures.push(failure);
+    if (
+      !(reason instanceof CredentialBaseUrlRejectedError) &&
+      !(reason instanceof TypeError) &&
+      unexpectedError === null
+    ) {
       unexpectedError = { reason };
     }
   }
-  return { credentials, failure, unexpectedError };
+  return { credentials, failures, unexpectedError };
 };

@@ -15,6 +15,25 @@ describe('i18n', () => {
     expect(messages['app.title']).toBe('ФИНКИ Хаб');
   });
 
+  it('keeps narrow-dialog semantic phrases nonbreaking', () => {
+    expect(t('settings.credentialsDescription')).toContain(
+      'Тие\u{00A0}се\u{00A0}користат',
+    );
+    expect(t('settings.credentialsDescription')).toContain('LLM\u{00A0}чекори');
+    expect(t('settings.credentialsDescription')).toContain(
+      'за\u{00A0}твоите\u{00A0}разговори',
+    );
+    expect(t('settings.baseUrlHint')).toContain(
+      'за\u{00A0}стандардниот\u{00A0}endpoint',
+    );
+    expect(t('settings.credentialBaseUrlError')).toContain(
+      'Остави\u{00A0}го\u{00A0}полето\u{00A0}празно',
+    );
+    expect(t('settings.credentialBaseUrlError')).toContain(
+      'или\u{00A0}побарај',
+    );
+  });
+
   it('covers every documented key with non-empty values', () => {
     const keys = Object.keys(messages);
 

@@ -22,7 +22,7 @@ export type ThreadProps = {
   activeStatus?: StatusPart;
   conversationId?: null | string;
   messages: MyUIMessage[];
-  onManageCredentials?: () => void;
+  onManageCredentials?: (returnFocusTarget: HTMLElement) => void;
   onPickSuggestion?: (text: string) => unknown;
   onRetry?: () => void;
   renderActions?: (message: MyUIMessage) => ReactNode;

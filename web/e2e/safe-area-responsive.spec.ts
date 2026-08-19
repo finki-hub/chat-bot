@@ -183,3 +183,50 @@ test('responsive dialog caps preserve safe gutters at the sm breakpoint', async 
     WIDE_VIEWPORT_WIDTH - RIGHT_SAFE_AREA - SAFE_GUTTER + ROUNDING_TOLERANCE,
   );
 });
+
+test('safe-area reduced height keeps credential errors and actions reachable', async ({
+  page,
+}) => {
+  // Given a raw viewport above the compact breakpoint whose safe rectangle is short.
+  await prepareSafeAreaPage(page, NARROW_VIEWPORT_WIDTH);
+  await page.setViewportSize({ height: 560, width: NARROW_VIEWPORT_WIDTH });
+  await page.route('**/api/chat/credentials', async (route) => {
+    await route.fulfill({
+      body: route.request().method() === 'PUT' ? '{}' : '[]',
+      contentType: 'application/json',
+      status: route.request().method() === 'PUT' ? 422 : 200,
+    });
+  });
+  await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
+  await drawerAccountMenu(page).click();
+  await page.getByRole('menuitem', { name: 'API клучеви' }).click();
+
+  // When a rejected save adds a long error to the safe-area-bounded dialog.
+  const dialog = page.getByRole('dialog', { name: 'Лични API клучеви' });
+  await dialog.getByLabel('OpenAI API клуч').fill('sk-safe-area-error');
+  await dialog
+    .getByLabel('OpenAI Base URL (опционално)')
+    .fill('https://blocked.example/v1');
+  await dialog.getByRole('button', { name: 'Зачувај клучеви' }).click();
+  await expect(dialog.getByRole('alert')).toBeVisible();
+
+  // Then the provider body remains usable and the fixed actions clear the cutouts.
+  const scroller = dialog.locator('form > div').first();
+  const actionArea = dialog.locator('form > div').last();
+  const dialogBounds = await dialog.boundingBox();
+  const scrollerBounds = await scroller.boundingBox();
+  const actionBounds = await actionArea.boundingBox();
+  const saveBounds = await dialog
+    .getByRole('button', { name: 'Зачувај клучеви' })
+    .boundingBox();
+  expect(scrollerBounds?.height).toBeGreaterThan(0);
+  expect(
+    (scrollerBounds?.y ?? Infinity) + (scrollerBounds?.height ?? Infinity),
+  ).toBeLessThanOrEqual(actionBounds?.y ?? 0);
+  expect(
+    (saveBounds?.y ?? Infinity) + (saveBounds?.height ?? 0),
+  ).toBeLessThanOrEqual(
+    dialogBounds?.y === undefined ? 0 : dialogBounds.y + dialogBounds.height,
+  );
+  expect(await dialog.evaluate((element) => element.scrollTop)).toBe(0);
+});

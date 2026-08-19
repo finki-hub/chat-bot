@@ -268,11 +268,74 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     credentialsAvailable = true;
     await page.getByRole('button', { name: 'Обиди се повторно' }).click();
 
-    await expect(page.getByLabel('OpenAI API key')).toBeVisible();
+    await expect(page.getByLabel('OpenAI API клуч')).toBeVisible();
     await expect(
       page.getByText('Клучевите не можеа да се вчитаат.'),
     ).toBeHidden();
     expect(credentialRequests).toBeGreaterThan(1);
+  });
+
+  test('captures attributed credential save errors at responsive widths', async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ height: 640, width: 375 });
+    await mockAuthenticatedSession(page);
+    await mockModels(page, []);
+    await page.route('**/api/chat/credentials', async (route) => {
+      if (route.request().method() === 'PUT') {
+        await route.fulfill({
+          body: EMPTY_JSON,
+          contentType: 'application/json',
+          status: 422,
+        });
+        return;
+      }
+      await route.fallback();
+    });
+    await page.route('**/api/health', async (route) => {
+      await route.fulfill({
+        body: EMPTY_JSON,
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
+    await installMockChatState(page, { streamUrl: 'http://127.0.0.1:9/chat' });
+    await page.goto('/');
+    await hideDevelopmentOverlay(page);
+
+    await page
+      .getByRole('button', { name: 'Прикажи/сокриј странична лента' })
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Странична лента' })
+      .getByRole('button', { name: ACCOUNT_MENU_LABEL })
+      .click();
+    await page.getByRole('menuitem', { name: 'API клучеви' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Лични API клучеви' });
+    const openaiBaseUrl = dialog.getByLabel('OpenAI Base URL (опционално)');
+    await dialog.getByLabel('OpenAI API клуч').fill('sk-visual-test');
+    await openaiBaseUrl.fill('https://blocked.example/v1');
+    await dialog.getByRole('button', { name: 'Зачувај клучеви' }).click();
+
+    await expect(openaiBaseUrl).toHaveAttribute('aria-invalid', 'true');
+    await expect(dialog.getByRole('alert')).toContainText('OpenAI');
+    await openaiBaseUrl.scrollIntoViewIfNeeded();
+
+    for (const viewport of [
+      { height: 640, label: 'mobile-constrained', width: 375 },
+      { height: 900, label: 'tablet', width: 768 },
+      { height: 800, label: 'desktop', width: 1_280 },
+    ] as const) {
+      await page.setViewportSize(viewport);
+      await expect(dialog.getByRole('alert')).toBeVisible();
+      await page.screenshot({
+        animations: 'disabled',
+        path: testInfo.outputPath(
+          `credential-save-error-clean-${viewport.label}.png`,
+        ),
+      });
+    }
   });
 
   test('renders the sponsored badge and updates the quota from five to zero', async ({
@@ -394,16 +457,20 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     await expect(unavailable).toHaveAttribute('aria-disabled', 'true');
     await page.keyboard.press('Escape');
 
-    await page.getByRole('button', { name: ACCOUNT_MENU_LABEL }).click();
+    const accountTrigger = page.getByRole('button', {
+      name: ACCOUNT_MENU_LABEL,
+    });
+    await accountTrigger.click();
     await page.getByRole('menuitem', { name: 'API клучеви' }).click();
-    await page.getByLabel('OpenAI API key').fill('sk-test-refresh');
-    await page.getByRole('button', { name: 'Зачувај' }).first().click();
+    await page.getByLabel('OpenAI API клуч').fill('sk-test-refresh');
+    await page.getByRole('button', { name: 'Зачувај клучеви' }).click();
 
     await expect.poll(() => modelRequests).toBeGreaterThan(1);
     await expect(
       page.getByRole('dialog', { name: 'Лични API клучеви' }),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Откажи' }).click();
+    await expect(accountTrigger).toBeFocused();
     await page.getByTestId('composer-model').click();
     await expect(page.getByTestId(`model-free-badge-${LUNA_ID}`)).toContainText(
       '5/5',
