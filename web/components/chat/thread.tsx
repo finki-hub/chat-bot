@@ -135,7 +135,9 @@ export const Thread = ({
                     key={m.id}
                   >
                     <MessageContent>
-                      <MessageResponse>{joinText(m)}</MessageResponse>
+                      <MessageResponse className="text-balance">
+                        {joinText(m)}
+                      </MessageResponse>
                     </MessageContent>
                   </Message>
                 );

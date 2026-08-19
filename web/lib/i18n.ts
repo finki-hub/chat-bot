@@ -150,7 +150,7 @@ export const messages = {
   'sources.link': 'Врска',
   'sources.show': 'Прикажи извори',
   'sources.title': 'Извори',
-  'thread.emptyDescription': 'Прашај нешто за студиите на ФИНКИ.',
+  'thread.emptyDescription': 'Прашај нешто за студиите на\u{A0}ФИНКИ.',
   'thread.emptyTitle': 'Започни разговор',
   'thread.firstToken': 'прв токен',
   'thread.reasoning': 'Размислување',
