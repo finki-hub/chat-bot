@@ -80,6 +80,20 @@ describe('SignInPage', () => {
     ).toBeVisible();
   });
 
+  it('keeps sign-in content within vertical safe areas', async () => {
+    // Given a signed-out visitor on an edge-to-edge display.
+    await renderSignInPage();
+
+    // When the sign-in surface is rendered.
+    const content = screen.getByRole('main').firstElementChild;
+
+    // Then its normal spacing yields to larger device insets.
+    expect(content).toHaveClass(
+      'pt-[max(2.5rem,env(safe-area-inset-top))]',
+      'pb-[max(2.5rem,env(safe-area-inset-bottom))]',
+    );
+  });
+
   it('starts OAuth sign-in from the current browser build', async () => {
     // Given
     const user = userEvent.setup();

@@ -51,6 +51,48 @@ const prepareSafeAreaPage = async (
   await page.goto('/');
 };
 
+test('sign-in content stays inside vertical display cutouts', async ({
+  page,
+}) => {
+  // Given a signed-out mobile viewport with asymmetric vertical cutouts.
+  await page.setViewportSize({
+    height: VIEWPORT_HEIGHT,
+    width: NARROW_VIEWPORT_WIDTH,
+  });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+    insets: {
+      bottom: BOTTOM_SAFE_AREA,
+      left: 0,
+      right: 0,
+      top: TOP_SAFE_AREA,
+    },
+  });
+
+  // When the sign-in page renders.
+  await page.goto('/signin');
+  const content = page.locator('#main-content > div').first();
+  const padding = await content.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      bottom: Number.parseFloat(style.paddingBottom),
+      top: Number.parseFloat(style.paddingTop),
+    };
+  });
+
+  // Then its content clears both cutouts without reducing baseline spacing.
+  expect(padding.top).toBeGreaterThanOrEqual(TOP_SAFE_AREA);
+  expect(padding.bottom).toBe(40);
+  await page.keyboard.press('Tab');
+  const skipLink = page.getByRole('link', {
+    name: 'Прескокни до содржината',
+  });
+  await expect(skipLink).toBeFocused();
+  await expect(skipLink).toBeVisible();
+  const skipLinkBox = await skipLink.boundingBox();
+  expect(skipLinkBox?.y).toBeGreaterThanOrEqual(TOP_SAFE_AREA);
+});
+
 test('mobile controls and overlays stay outside display cutouts', async ({
   page,
 }) => {
