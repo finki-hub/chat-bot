@@ -1,5 +1,5 @@
 import { renderHook, waitFor } from '@testing-library/react';
-import { useRef, useState } from 'react';
+import { type Dispatch, type SetStateAction, useRef, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
@@ -39,7 +39,8 @@ const transportMocks = vi.hoisted(() => {
     >(),
   };
 });
-const setActiveError = vi.fn<(value: ErrorNotice | undefined) => void>();
+const setActiveError =
+  vi.fn<Dispatch<SetStateAction<ErrorNotice | undefined>>>();
 const setActiveId = vi.fn<(id: null | string) => void>();
 
 vi.mock('@/lib/transport', () => transportMocks);
@@ -234,7 +235,13 @@ describe('useConversationHydration', () => {
     });
 
     expect(setActiveId).not.toHaveBeenCalledWith(null);
-    expect(setActiveError).toHaveBeenCalledWith({
+
+    const historyErrorUpdate = setActiveError.mock.calls.at(-1)?.[0];
+    if (typeof historyErrorUpdate !== 'function') {
+      throw new TypeError('History error update was not functional');
+    }
+
+    expect(historyErrorUpdate(undefined)).toStrictEqual({
       code: 'history_load',
       message: 'Разговорот не можеше да се вчита. Обидете се повторно.',
     });

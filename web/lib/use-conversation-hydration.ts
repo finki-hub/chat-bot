@@ -1,8 +1,10 @@
 'use client';
 
 import {
+  type Dispatch,
   type RefObject,
   type SetStateAction,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useState,
@@ -18,12 +20,17 @@ import {
   loadChatConversationHistory,
 } from '@/lib/transport';
 
+type ConversationHydration = {
+  readonly hydratingConversation: boolean;
+  readonly retryHydration: () => void;
+};
+
 type UseConversationHydrationOptions = {
   readonly activeId: null | string;
   readonly activeStreamConversationIdRef: RefObject<null | string>;
   readonly convoIdRef: RefObject<null | string>;
   readonly preserveEmptyHydrationIdRef: RefObject<null | string>;
-  readonly setActiveError: (value: ErrorNotice | undefined) => void;
+  readonly setActiveError: Dispatch<SetStateAction<ErrorNotice | undefined>>;
   readonly setActiveId: (id: null | string) => void;
   readonly setActiveStatus: (
     value: undefined | { label: string; tool?: string },
@@ -40,16 +47,25 @@ export const useConversationHydration = ({
   setActiveId,
   setActiveStatus,
   setMessages,
-}: UseConversationHydrationOptions): boolean => {
+}: UseConversationHydrationOptions): ConversationHydration => {
   const [hydratingId, setHydratingId] = useState<null | string>(null);
+  const [hydrationAttempt, setHydrationAttempt] = useState(0);
+
+  const retryHydration = useCallback(() => {
+    if (activeId === null || hydratingId === activeId) {
+      return;
+    }
+    setHydratingId(activeId);
+    setHydrationAttempt((current) => current + 1);
+  }, [activeId, hydratingId]);
 
   useLayoutEffect(() => {
     setHydratingId(activeId);
-  }, [activeId]);
+    setActiveError(undefined);
+  }, [activeId, setActiveError]);
 
   useEffect(() => {
     convoIdRef.current = activeId;
-    setActiveError(undefined);
     setActiveStatus(undefined);
     let cancelled = false;
     const isCancelled = (): boolean => cancelled;
@@ -73,6 +89,9 @@ export const useConversationHydration = ({
         const serverHistory = await loadChatConversationHistory(id);
         if (serverHistory !== null) {
           if (!isCancelled()) {
+            setActiveError((current) =>
+              current?.code === 'history_load' ? undefined : current,
+            );
             setMessages((current) => {
               if (
                 serverHistory.messages.length === 0 &&
@@ -94,10 +113,14 @@ export const useConversationHydration = ({
         }
 
         if (!isCancelled()) {
-          setActiveError({
-            code: 'history_load',
-            message: t('conversation.historyLoadError'),
-          });
+          setActiveError((current) =>
+            current === undefined || current.code === 'history_load'
+              ? {
+                  code: 'history_load',
+                  message: t('conversation.historyLoadError'),
+                }
+              : current,
+          );
         }
       } catch (error) {
         if (!isCancelled()) {
@@ -118,10 +141,14 @@ export const useConversationHydration = ({
             error instanceof ChatConversationRequestError ||
             error instanceof TypeError
           ) {
-            setActiveError({
-              code: 'history_load',
-              message: t('conversation.historyLoadError'),
-            });
+            setActiveError((current) =>
+              current === undefined || current.code === 'history_load'
+                ? {
+                    code: 'history_load',
+                    message: t('conversation.historyLoadError'),
+                  }
+                : current,
+            );
             return;
           }
           clearPreserveMarker(id);
@@ -150,6 +177,7 @@ export const useConversationHydration = ({
     activeStreamConversationIdRef,
     activeId,
     convoIdRef,
+    hydrationAttempt,
     preserveEmptyHydrationIdRef,
     setActiveError,
     setActiveId,
@@ -157,5 +185,8 @@ export const useConversationHydration = ({
     setMessages,
   ]);
 
-  return activeId !== null && hydratingId === activeId;
+  return {
+    hydratingConversation: activeId !== null && hydratingId === activeId,
+    retryHydration,
+  };
 };
