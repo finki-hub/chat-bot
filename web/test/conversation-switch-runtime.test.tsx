@@ -44,7 +44,10 @@ vi.mock('@/lib/transport', () => ({
 }));
 
 vi.mock('@/lib/use-conversation-hydration', () => ({
-  useConversationHydration: () => true,
+  useConversationHydration: () => ({
+    hydratingConversation: true,
+    retryHydration: vi.fn<() => void>(),
+  }),
 }));
 
 vi.mock('@/lib/use-models', () => ({
