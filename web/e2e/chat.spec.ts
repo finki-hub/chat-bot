@@ -72,6 +72,82 @@ const errorStream = (code: string, message: string, resetsAt?: string) =>
   });
 
 test.describe('chat streaming (mocked BFF)', () => {
+  test('retries history loading from empty conversation recovery', async ({
+    page,
+  }) => {
+    // Given a selected conversation whose first history request fails before messages load.
+    const conversationId = 'failed-history-conversation';
+    const title = 'Недостапен разговор';
+    const recoveredText = 'Разговорот е повторно вчитан.';
+    const recoveredHistory = {
+      conversation: {
+        activeStream: null,
+        id: conversationId,
+        model: null,
+        title,
+      },
+      messages: [
+        {
+          id: 'recovered-assistant',
+          metadata: {},
+          parts: [{ text: recoveredText, type: 'text' }],
+          role: 'assistant',
+        },
+      ],
+    } satisfies ChatConversationHistory;
+    let historyRequests = 0;
+    let releaseRetryResponse: (() => void) | undefined;
+    const retryResponse = new Promise<void>((resolve) => {
+      releaseRetryResponse = resolve;
+    });
+    await mockModels(page);
+    await installMockChatState(page, {
+      conversations: [{ id: conversationId, model: null, title }],
+      streamUrl: 'http://127.0.0.1:9/stream',
+    });
+    await page.route(`**/api/chat/${conversationId}/history`, async (route) => {
+      historyRequests += 1;
+      if (historyRequests === 1) {
+        await route.fulfill({ status: 503 });
+        return;
+      }
+      await retryResponse;
+      await route.fulfill({
+        body: JSON.stringify(recoveredHistory),
+        contentType: 'application/json',
+        status: 200,
+      });
+    });
+    await page.goto('/');
+    await page.getByRole('button', { exact: true, name: title }).click();
+    const recoveryAlert = page.getByRole('alert').filter({
+      hasText: 'Се случи неочекувана грешка.',
+    });
+    await expect(recoveryAlert).toBeVisible();
+    await expect(page.getByText('Започни разговор')).toHaveCount(0);
+
+    // When the user retries the failed history load.
+    const retryButton = page.getByRole('button', { name: 'Обиди се повторно' });
+    await retryButton.click();
+
+    // Then recovery remains primary and cannot be repeated while loading.
+    await expect.poll(() => historyRequests).toBe(2);
+    await expect(recoveryAlert).toBeVisible();
+    await expect(retryButton).toBeDisabled();
+    await expect(retryButton).toHaveAttribute('aria-busy', 'true');
+    await expect(page.getByText('Започни разговор')).toHaveCount(0);
+
+    if (releaseRetryResponse === undefined) {
+      throw new Error('Retry response release was not initialized');
+    }
+    releaseRetryResponse();
+
+    // Then the selected conversation reloads instead of returning to Welcome.
+    await expect(page.getByText(recoveredText)).toBeVisible();
+    await expect(recoveryAlert).toHaveCount(0);
+    await expect(page.getByText('Започни разговор')).toHaveCount(0);
+  });
+
   test('shows the search chip, drops the preamble, renders the answer, and toggles like feedback', async ({
     page,
   }) => {
