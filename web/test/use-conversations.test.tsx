@@ -66,6 +66,7 @@ const ACTIVE_CONVERSATION_ID = 'conv-active';
 const useChatOptions: UseChatOptions[] = [];
 const refetchModels = vi.fn<() => Promise<unknown>>();
 const runtimeModels: ModelDescriptor[] = [];
+const retryHydration = vi.fn<() => void>();
 
 vi.mock('@/lib/use-models', () => ({
   useModels: () => ({
@@ -108,7 +109,15 @@ vi.mock('@/lib/transport', () => ({
 }));
 
 vi.mock('@/lib/use-conversation-hydration', () => ({
-  useConversationHydration: vi.fn<() => void>(),
+  useConversationHydration: vi.fn<
+    () => {
+      readonly hydratingConversation: boolean;
+      readonly retryHydration: () => void;
+    }
+  >(() => ({
+    hydratingConversation: false,
+    retryHydration,
+  })),
 }));
 
 vi.mock('@/lib/use-conversation-list', () => ({
@@ -131,6 +140,7 @@ describe('useConversations resumable streaming', () => {
     refreshConversations.mockResolvedValue();
     refetchModels.mockReset();
     refetchModels.mockResolvedValue(undefined);
+    retryHydration.mockReset();
     runtimeModels.length = 0;
     saveChatConversation.mockReset();
     saveChatConversation.mockResolvedValue();

@@ -42,6 +42,7 @@ export const useConversations = (
     regenerate,
     regeneratingMessageId,
     regeneratingMessageIdRef,
+    retryHydration,
     sendMessageRef,
     setActiveError,
     setActiveStatus,
@@ -85,9 +86,13 @@ export const useConversations = (
     if (disabled) {
       return;
     }
+    if (activeError?.code === 'history_load') {
+      retryHydration();
+      return;
+    }
     setActiveError(undefined);
     fireAndForget(regenerate());
-  }, [disabled, regenerate, setActiveError]);
+  }, [activeError?.code, disabled, regenerate, retryHydration, setActiveError]);
 
   const regenerateMessage = useCallback(
     (options: { messageId: string }) => {
@@ -123,7 +128,9 @@ export const useConversations = (
     lastNonEmptyMessagesRef.current = previewMessages;
   }
   const visibleMessages =
-    hydratingConversation && previewMessages.length === 0
+    hydratingConversation &&
+    previewMessages.length === 0 &&
+    activeError?.code !== 'history_load'
       ? [...lastNonEmptyMessagesRef.current]
       : previewMessages;
   const renderActions = renderAnswerActions({
@@ -142,6 +149,7 @@ export const useConversations = (
     conversationListLoading,
     conversations,
     generatingTitleId,
+    hydratingConversation,
     messages: visibleMessages,
     onClearAll: handleClearAll,
     onDelete: handleDelete,
