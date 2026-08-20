@@ -76,7 +76,15 @@ vi.mock('@/lib/use-models', () => ({
 }));
 
 vi.mock('@/lib/use-conversation-hydration', () => ({
-  useConversationHydration: vi.fn<() => boolean>(() => false),
+  useConversationHydration: vi.fn<
+    () => {
+      readonly hydratingConversation: boolean;
+      readonly retryHydration: () => void;
+    }
+  >(() => ({
+    hydratingConversation: false,
+    retryHydration: vi.fn<() => void>(),
+  })),
 }));
 
 describe('useConversationChatRuntime sponsored errors', () => {

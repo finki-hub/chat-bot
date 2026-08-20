@@ -197,7 +197,7 @@ export const useConversationChatRuntime = ({
     status,
   });
 
-  const hydratingConversation = useConversationHydration({
+  const { hydratingConversation, retryHydration } = useConversationHydration({
     activeId,
     activeStreamConversationIdRef,
     convoIdRef,
@@ -218,6 +218,7 @@ export const useConversationChatRuntime = ({
     regenerate,
     regeneratingMessageId,
     regeneratingMessageIdRef,
+    retryHydration,
     sendMessageRef,
     setActiveError,
     setActiveStatus,
