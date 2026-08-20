@@ -39,6 +39,10 @@ describe('root navigation', () => {
     expect(markup).toContain('pl-[env(safe-area-inset-left)]');
     expect(markup).toContain('pr-[env(safe-area-inset-right)]');
     expect(markup).toContain('left-[max(1rem,env(safe-area-inset-left))]');
+    expect(markup).toContain('opacity-0');
+    expect(markup).toContain('shadow-none');
+    expect(markup).toContain('focus:opacity-100');
+    expect(markup).toContain('focus:shadow-lg');
   });
 
   it('provides a stable skip target on fallback pages', () => {
