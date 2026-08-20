@@ -29,7 +29,7 @@ const SignInPage = async ({ searchParams }: SignInPageProps) => {
       id="main-content"
       tabIndex={-1}
     >
-      <div className="mx-auto flex w-full max-w-6xl px-6 py-10 lg:min-h-dvh lg:items-center lg:px-8">
+      <div className="mx-auto flex w-full max-w-6xl px-6 pt-[max(2.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] lg:min-h-dvh lg:items-center lg:px-8">
         <div className="grid w-full gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:gap-16">
           <section className="space-y-8 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500 motion-safe:fill-mode-both">
             <div className="flex items-center gap-3">
