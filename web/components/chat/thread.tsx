@@ -26,6 +26,7 @@ export type ThreadProps = {
   onPickSuggestion?: (text: string) => unknown;
   onRetry?: () => void;
   renderActions?: (message: MyUIMessage) => ReactNode;
+  retryPending?: boolean;
   status: 'error' | 'ready' | 'streaming' | 'submitted';
 };
 
@@ -79,6 +80,37 @@ const Welcome = ({ onPick }: { onPick?: (text: string) => void }) => (
   </div>
 );
 
+type ThreadEmptyStateProps = Pick<
+  ThreadProps,
+  | 'activeError'
+  | 'onManageCredentials'
+  | 'onPickSuggestion'
+  | 'onRetry'
+  | 'retryPending'
+>;
+
+const ThreadEmptyState = ({
+  activeError,
+  onManageCredentials,
+  onPickSuggestion,
+  onRetry,
+  retryPending,
+}: ThreadEmptyStateProps) =>
+  activeError === undefined ? (
+    <Welcome onPick={onPickSuggestion} />
+  ) : (
+    <div className="mx-auto flex w-full max-w-3xl flex-1 items-center px-4 py-8 sm:px-6">
+      <div className="w-full">
+        <MessageError
+          errorPart={activeError}
+          onManageCredentials={onManageCredentials}
+          onRetry={onRetry}
+          retryPending={retryPending}
+        />
+      </div>
+    </div>
+  );
+
 export const Thread = ({
   activeError,
   activeStatus,
@@ -88,6 +120,7 @@ export const Thread = ({
   onPickSuggestion,
   onRetry,
   renderActions,
+  retryPending,
   status,
 }: ThreadProps) => {
   const lastAssistantId = messages.findLast((m) => m.role === 'assistant')?.id;
@@ -99,7 +132,6 @@ export const Thread = ({
       (activeStatus === undefined &&
         !hasText(lastMessage) &&
         !hasReasoning(lastMessage)));
-
   return (
     <Conversation
       className="flex-1"
@@ -108,7 +140,13 @@ export const Thread = ({
     >
       <ConversationContent>
         {messages.length === 0 ? (
-          <Welcome onPick={onPickSuggestion} />
+          <ThreadEmptyState
+            activeError={activeError}
+            onManageCredentials={onManageCredentials}
+            onPickSuggestion={onPickSuggestion}
+            onRetry={onRetry}
+            retryPending={retryPending}
+          />
         ) : (
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
             {messages.map((m) => {
@@ -167,6 +205,7 @@ export const Thread = ({
                     }
                     onRetry={isLastAssistant ? onRetry : undefined}
                     pending={activeAssistant}
+                    retryPending={isLastAssistant ? retryPending : undefined}
                     statusPart={activeAssistant ? activeStatus : undefined}
                   />
                 </div>
@@ -184,12 +223,13 @@ export const Thread = ({
             ) : null}
           </div>
         )}
-        {activeError && lastAssistantId === undefined ? (
+        {messages.length > 0 && activeError && lastAssistantId === undefined ? (
           <div className="mx-auto w-full max-w-3xl">
             <MessageError
               errorPart={activeError}
               onManageCredentials={onManageCredentials}
               onRetry={onRetry}
+              retryPending={retryPending}
             />
           </div>
         ) : null}

@@ -160,6 +160,7 @@ export const ChatScreen = () => {
     conversationListLoading,
     conversations,
     generatingTitleId,
+    hydratingConversation,
     messages,
     onClearAll,
     onDelete,
@@ -237,6 +238,9 @@ export const ChatScreen = () => {
             onPickSuggestion={unavailable ? undefined : submitMessage}
             onRetry={unavailable ? undefined : retry}
             renderActions={renderActions}
+            retryPending={
+              hydratingConversation && activeError?.code === 'history_load'
+            }
             status={status}
           />
           <Composer

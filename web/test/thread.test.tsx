@@ -25,6 +25,7 @@ const SECOND_SOURCE_TITLE = 'Втор извор';
 const THIRD_SOURCE_TITLE = 'Трет извор';
 const SHOW_SOURCES_LABEL = 'Прикажи извори';
 const HIDE_SOURCES_LABEL = 'Сокриј извори';
+const RETRY_LABEL = 'Обиди се повторно';
 const SPONSORED_RESET_TEXT = '18 јул. 2026, 14:00.';
 const TIMING_TESTID = 'message-timing';
 
@@ -270,7 +271,7 @@ describe('AssistantMessage', () => {
     );
     expect(alert).not.toHaveTextContent(rawMessage);
 
-    screen.getByRole('button', { name: 'Обиди се повторно' }).click();
+    screen.getByRole('button', { name: RETRY_LABEL }).click();
 
     expect(onRetry).toHaveBeenCalledOnce();
   });
@@ -293,9 +294,7 @@ describe('AssistantMessage', () => {
     expect(alert).toHaveTextContent('За избраниот модел е потребен API клуч.');
     expect(alert).not.toHaveTextContent(rawMessage);
 
-    expect(
-      screen.queryByRole('button', { name: 'Обиди се повторно' }),
-    ).toBeNull();
+    expect(screen.queryByRole('button', { name: RETRY_LABEL })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Додај API клуч' }));
 
@@ -318,7 +317,7 @@ describe('AssistantMessage', () => {
       'Одговорот е прекинат.',
     );
     expect(
-      screen.queryByRole('button', { name: 'Обиди се повторно' }),
+      screen.queryByRole('button', { name: RETRY_LABEL }),
     ).not.toBeInTheDocument();
   });
 
@@ -403,9 +402,7 @@ describe('AssistantMessage', () => {
       expect(alert).toHaveTextContent(copy);
       expect(alert).not.toHaveTextContent(rawMessage);
 
-      expect(
-        screen.queryByRole('button', { name: 'Обиди се повторно' }),
-      ).toBeNull();
+      expect(screen.queryByRole('button', { name: RETRY_LABEL })).toBeNull();
     },
   );
 
@@ -802,6 +799,23 @@ describe('Thread', () => {
     );
 
     expect(screen.getByText('Започни разговор')).toBeInTheDocument();
+  });
+
+  it('replaces the empty state with recovery when loading fails', () => {
+    // Given an empty selected conversation whose history could not load.
+    render(
+      <Thread
+        activeError={{ code: 'history_load', message: 'request failed' }}
+        messages={[]}
+        status="error"
+      />,
+    );
+
+    // When the thread renders the failure, recovery is the primary content.
+    expect(screen.getByRole('alert')).toBeVisible();
+
+    // Then welcome content cannot misrepresent the failed conversation as new.
+    expect(screen.queryByText('Започни разговор')).not.toBeInTheDocument();
   });
 
   it('renders a user turn and an assistant answer (last text part)', () => {

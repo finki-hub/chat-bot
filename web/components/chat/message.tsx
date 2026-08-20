@@ -34,6 +34,7 @@ export type AssistantMessageProps = {
   onManageCredentials?: (returnFocusTarget: HTMLElement) => void;
   onRetry?: () => void;
   pending?: boolean;
+  retryPending?: boolean;
   statusPart?: StatusPart;
 };
 
@@ -409,10 +410,12 @@ export const MessageError = ({
   errorPart,
   onManageCredentials,
   onRetry,
+  retryPending,
 }: {
   errorPart: ErrorNotice;
   onManageCredentials?: (returnFocusTarget: HTMLElement) => void;
   onRetry?: () => void;
+  retryPending?: boolean;
 }) => {
   let content: ReactNode;
 
@@ -467,7 +470,9 @@ export const MessageError = ({
           <p className="text-destructive">{t('error.description')}</p>
           {onRetry ? (
             <button
-              className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-busy={retryPending}
+              className="self-start rounded-md border border-border px-3 py-1 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={retryPending}
               onClick={onRetry}
               type="button"
             >
@@ -569,6 +574,7 @@ export const AssistantMessage = ({
   onManageCredentials,
   onRetry,
   pending,
+  retryPending,
   statusPart,
 }: AssistantMessageProps) => {
   const parts = textParts(message);
@@ -649,6 +655,7 @@ export const AssistantMessage = ({
             errorPart={errorPart}
             onManageCredentials={onManageCredentials}
             onRetry={onRetry}
+            retryPending={retryPending}
           />
         ) : null}
         {answerVisible && actions !== undefined && actions !== null ? (
