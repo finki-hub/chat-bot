@@ -134,14 +134,19 @@ def _metadata_for_policy(
         return None
     if provider.id != policy.provider:
         return None
-    raw_model = provider.models.get(policy.model.value)
+    remote_model_id = (
+        policy.model.value.removeprefix("openrouter:")
+        if policy.provider == "openrouter"
+        else policy.model.value
+    )
+    raw_model = provider.models.get(remote_model_id)
     if raw_model is None:
         return None
     try:
         remote = _RemoteModel.model_validate(raw_model)
     except ValidationError:
         return None
-    if remote.id != policy.model.value:
+    if remote.id != remote_model_id:
         return None
     try:
         return _metadata(remote)
