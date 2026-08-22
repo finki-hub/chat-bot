@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { isReasoningCapableModel } from '@/lib/reasoning';
+import {
+  isReasoningCapableModel,
+  isReasoningEnabledForModel,
+  isReasoningMandatoryModel,
+} from '@/lib/reasoning';
 
 describe('isReasoningCapableModel', () => {
   it('is true for reasoning-capable model families', () => {
@@ -27,5 +31,23 @@ describe('isReasoningCapableModel', () => {
     expect(incapable.map(isReasoningCapableModel)).toStrictEqual(
       incapable.map(() => false),
     );
+  });
+});
+
+describe('mandatory reasoning policy', () => {
+  const mandatoryModel = 'openrouter:z-ai/glm-5.3';
+
+  it('identifies only models whose provider cannot disable reasoning', () => {
+    expect(isReasoningMandatoryModel(mandatoryModel)).toBe(true);
+    expect(
+      isReasoningMandatoryModel('openrouter:deepseek/deepseek-v4-pro'),
+    ).toBe(false);
+  });
+
+  it('keeps mandatory reasoning enabled when the stored preference is false', () => {
+    expect(isReasoningEnabledForModel(mandatoryModel, false)).toBe(true);
+    expect(
+      isReasoningEnabledForModel('openrouter:deepseek/deepseek-v4-pro', false),
+    ).toBe(false);
   });
 });
