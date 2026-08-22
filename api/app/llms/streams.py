@@ -9,6 +9,7 @@ from app.llms.google import stream_google_agent_response
 from app.llms.models import REASONING_CAPABLE_MODELS, ChatModel, Model, model_id
 from app.llms.ollama import stream_ollama_agent_response
 from app.llms.openai import stream_openai_agent_response
+from app.llms.openrouter import stream_openrouter_agent_response
 from app.schemas.chat import ChatInterface
 from app.schemas.chat_credentials import ChatCredentialSecret
 
@@ -140,6 +141,21 @@ async def stream_response_with_agent(
                 observation=observation,
                 credential=credential,
                 upstream_model=upstream_model,
+            )
+
+        case model if model.value.startswith("openrouter:"):
+            _tag_provider(observation, "openrouter")
+            return await stream_openrouter_agent_response(
+                user_prompt,
+                model,
+                system_prompt=system_prompt,
+                history=history,
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_tokens,
+                reasoning=reasoning,
+                observation=observation,
+                credential=credential,
             )
 
         case _:

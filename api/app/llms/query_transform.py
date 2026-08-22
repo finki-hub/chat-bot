@@ -7,11 +7,13 @@ from app.llms.models import (
     GOOGLE_QUERY_TRANSFORM_MODELS,
     OLLAMA_QUERY_TRANSFORM_MODELS,
     OPENAI_QUERY_TRANSFORM_MODELS,
+    OPENROUTER_QUERY_TRANSFORM_MODELS,
     ChatModel,
     Model,
 )
 from app.llms.ollama import transform_query_with_ollama
 from app.llms.openai import transform_query_with_openai
+from app.llms.openrouter import transform_query_with_openrouter
 from app.llms.prompts import DEFAULT_QUERY_TRANSFORM_SYSTEM_PROMPT
 from app.llms.provider_credentials import LlmProviderCredentials
 
@@ -88,6 +90,17 @@ async def transform_query(
                 top_p=top_p,
                 max_tokens=max_tokens,
                 credential=None if credentials is None else credentials.ollama,
+            )
+
+        case model if model in OPENROUTER_QUERY_TRANSFORM_MODELS:
+            return await transform_query_with_openrouter(
+                query,
+                model,
+                system_prompt=system_prompt,
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_tokens,
+                credential=None if credentials is None else credentials.openrouter,
             )
 
         case _:

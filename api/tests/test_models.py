@@ -12,7 +12,7 @@ from app.constants.defaults import (
     DEFAULT_INFERENCE_MODEL,
     DEFAULT_QUERY_TRANSFORM_MODEL,
 )
-from app.llms import anthropic, google, streams
+from app.llms import anthropic, google, query_transform, streams
 from app.llms.agents import StreamObservation
 from app.llms.models import (
     ACTIVE_EMBEDDING_MODELS,
@@ -26,7 +26,7 @@ from app.llms.models import (
     Model,
 )
 from app.llms.pricing import is_self_hosted
-from app.llms.provider_credentials import provider_for_model
+from app.llms.provider_credentials import LlmProviderCredentials, provider_for_model
 from app.schemas.chat import ChatSchema
 from app.schemas.chat_credentials import ChatCredentialSecret
 
@@ -44,6 +44,14 @@ EXPECTED_CHAT_IDS = (
     "claude-opus-4-8",
     "claude-sonnet-5",
     "claude-haiku-4-5",
+    "openrouter:deepseek/deepseek-v4-pro",
+    "openrouter:deepseek/deepseek-v4-flash",
+    "openrouter:z-ai/glm-5.3",
+    "openrouter:moonshotai/kimi-k2.6",
+    "openrouter:qwen/qwen3.8-27b",
+    "openrouter:qwen/qwen3.7-flash",
+    "openrouter:minimax/minimax-m3",
+    "openrouter:mistralai/mistral-small-2603",
 )
 
 
@@ -105,6 +113,122 @@ def test_claude_sonnet_5_is_a_supported_anthropic_chat_model():
     assert model in CHAT_MODELS
     assert model in ANTHROPIC_QUERY_TRANSFORM_MODELS
     assert model in REASONING_CAPABLE_MODELS
+
+
+def test_openrouter_deepseek_is_a_supported_openrouter_chat_model() -> None:
+    model = Model("openrouter:deepseek/deepseek-v4-pro")
+
+    assert model in CHAT_MODELS
+    assert model in QUERY_TRANSFORM_MODELS
+    assert model in REASONING_CAPABLE_MODELS
+    assert provider_for_model(model) == "openrouter"
+
+
+def test_openrouter_inference_defaults_query_transform_to_same_model() -> None:
+    payload = ChatSchema.model_validate(
+        {
+            "inference_model": "openrouter:deepseek/deepseek-v4-pro",
+            "messages": [{"role": "user", "content": "test"}],
+        },
+    )
+
+    assert payload.query_transform_model == Model.OPENROUTER_DEEPSEEK_V4_PRO
+
+
+def test_stream_openrouter_route_receives_user_credential(monkeypatch) -> None:
+    captured: list[ChatCredentialSecret | None] = []
+
+    async def fake_stream_openrouter_agent_response(
+        user_prompt: str,
+        routed_model: Model,
+        *,
+        system_prompt: str,
+        history: list[BaseMessage] | None = None,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        reasoning: bool = False,
+        observation: StreamObservation | None = None,
+        credential: ChatCredentialSecret | None = None,
+    ) -> StreamingResponse:
+        captured.append(credential)
+
+        async def empty_body() -> AsyncIterator[bytes]:
+            if False:
+                yield b""
+
+        return StreamingResponse(empty_body(), media_type="text/event-stream")
+
+    monkeypatch.setattr(
+        streams,
+        "stream_openrouter_agent_response",
+        fake_stream_openrouter_agent_response,
+        raising=False,
+    )
+    credential = ChatCredentialSecret(
+        provider="openrouter",
+        api_key="openrouter-user-key",
+    )
+
+    async def route_response() -> StreamingResponse:
+        return await streams.stream_response_with_agent(
+            "test",
+            Model.OPENROUTER_DEEPSEEK_V4_PRO,
+            system_prompt="system",
+            history=[],
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=1024,
+            interface="web",
+            credential=credential,
+        )
+
+    anyio.run(route_response)
+
+    assert captured == [credential]
+
+
+def test_query_transform_routes_openrouter_credential(monkeypatch) -> None:
+    captured: list[ChatCredentialSecret | None] = []
+
+    async def fake_transform_query_with_openrouter(
+        query: str,
+        model: Model,
+        *,
+        system_prompt: str,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        credential: ChatCredentialSecret | None = None,
+    ) -> str:
+        captured.append(credential)
+        return "transformed"
+
+    monkeypatch.setattr(
+        query_transform,
+        "transform_query_with_openrouter",
+        fake_transform_query_with_openrouter,
+        raising=False,
+    )
+    credential = ChatCredentialSecret(
+        provider="openrouter",
+        api_key="openrouter-user-key",
+    )
+
+    async def transform() -> str:
+        return await query_transform.transform_query(
+            "test",
+            Model.OPENROUTER_DEEPSEEK_V4_PRO,
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=256,
+            credentials=LlmProviderCredentials(openrouter=credential),
+        )
+
+    result = anyio.run(transform)
+
+    assert result == "transformed"
+    assert captured == [credential]
 
 
 def test_stream_openai_route_receives_direct_sponsored_credential_and_override(
