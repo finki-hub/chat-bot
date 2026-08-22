@@ -23,9 +23,7 @@ export const MODEL_CATALOG = {
 };
 
 type MockModelsInput =
-  | MockModelsOptions
-  | null
-  | readonly ChatCredentialProvider[];
+  MockModelsOptions | null | readonly ChatCredentialProvider[];
 
 type MockModelsOptions = {
   readonly catalog?: (() => ModelCatalog) | ModelCatalog;

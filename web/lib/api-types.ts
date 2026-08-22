@@ -1,20 +1,12 @@
 import type { UIMessage } from 'ai';
 
 export type CatalogProvider =
-  | 'anthropic'
-  | 'google'
-  | 'ollama'
-  | 'openai'
-  | 'openrouter';
+  'anthropic' | 'google' | 'ollama' | 'openai' | 'openrouter';
 
 export type CatalogSource = 'error' | 'live' | 'snapshot' | 'stale';
 
 export type ChatCredentialProvider =
-  | 'anthropic'
-  | 'google'
-  | 'ollama'
-  | 'openai'
-  | 'openrouter';
+  'anthropic' | 'google' | 'ollama' | 'openai' | 'openrouter';
 
 export type ChatCredentialPublic = {
   readonly base_url: null | string;
