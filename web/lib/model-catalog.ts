@@ -16,9 +16,16 @@ const PROVIDER_LABEL_KEYS: Record<CatalogProvider, TKey> = {
   google: 'settings.provider.google',
   ollama: 'settings.provider.ollama',
   openai: 'settings.provider.openai',
+  openrouter: 'settings.provider.openrouter',
 };
 
-const CATALOG_PROVIDERS = ['anthropic', 'google', 'ollama', 'openai'] as const;
+const CATALOG_PROVIDERS = [
+  'anthropic',
+  'google',
+  'ollama',
+  'openai',
+  'openrouter',
+] as const;
 const API_CATALOG_SOURCES = ['live', 'snapshot', 'stale'] as const;
 const MODEL_AVAILABILITIES = [
   'both',
@@ -41,6 +48,18 @@ const CURATED_MODEL_DATA = [
   ['claude-opus-4-8', 'Claude Opus 4.8', 'anthropic'],
   ['claude-sonnet-5', 'Claude Sonnet 5', 'anthropic'],
   ['claude-haiku-4-5', 'Claude Haiku 4.5', 'anthropic'],
+  ['openrouter:deepseek/deepseek-v4-pro', 'DeepSeek V4 Pro', 'openrouter'],
+  ['openrouter:deepseek/deepseek-v4-flash', 'DeepSeek V4 Flash', 'openrouter'],
+  ['openrouter:z-ai/glm-5.3', 'GLM-5.3', 'openrouter'],
+  ['openrouter:moonshotai/kimi-k2.6', 'Kimi K2.6', 'openrouter'],
+  ['openrouter:qwen/qwen3.8-27b', 'Qwen3.8 27B', 'openrouter'],
+  ['openrouter:qwen/qwen3.7-flash', 'Qwen3.7 Flash', 'openrouter'],
+  ['openrouter:minimax/minimax-m3', 'MiniMax M3', 'openrouter'],
+  [
+    'openrouter:mistralai/mistral-small-2603',
+    'Mistral Small 2603',
+    'openrouter',
+  ],
   ['qwen3:30b-a3b-thinking-2507-q4_K_M', 'Qwen3 30B Thinking', 'ollama'],
   ['qwen3:30b-a3b-instruct-2507-q4_K_M', 'Qwen3 30B Instruct', 'ollama'],
   ['qwen3:14b-q4_K_M', 'Qwen3 14B', 'ollama'],
@@ -56,6 +75,7 @@ export const CURATED_MODEL_DESCRIPTORS: Readonly<
 );
 
 const PROVIDER_PREFIXES: ReadonlyArray<readonly [string, CatalogProvider]> = [
+  ['openrouter:', 'openrouter'],
   ['gpt', 'openai'],
   ['text-embedding', 'openai'],
   ['gemini', 'google'],
