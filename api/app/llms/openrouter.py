@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Generator
+from typing import Final, TypedDict
 
 from fastapi.responses import StreamingResponse
 from langchain.agents import create_agent
@@ -33,6 +34,25 @@ _PROVIDER_ROUTING = {
     "data_collection": "deny",
     "require_parameters": True,
 }
+_REASONING_EFFORT_BY_MODEL: Final[dict[Model, str]] = {
+    Model.OPENROUTER_DEEPSEEK_V4_PRO: "high",
+    Model.OPENROUTER_DEEPSEEK_V4_FLASH: "high",
+    Model.OPENROUTER_GLM_5_3: "high",
+    Model.OPENROUTER_QWEN3_8_27B: "medium",
+    Model.OPENROUTER_MISTRAL_SMALL_2603: "high",
+}
+
+
+class _ReasoningConfig(TypedDict, total=False):
+    effort: str
+
+
+def _reasoning_config(model: Model, requested: bool) -> _ReasoningConfig:
+    enabled = requested or model in OPENROUTER_MANDATORY_REASONING_MODELS
+    if not enabled:
+        return {"effort": "none"}
+    effort = _REASONING_EFFORT_BY_MODEL.get(model)
+    return {} if effort is None else {"effort": effort}
 
 
 def get_openrouter_llm(
@@ -43,11 +63,16 @@ def get_openrouter_llm(
     *,
     reasoning: bool = False,
     credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> ChatOpenRouter:
     credential = require_provider_credential("openrouter", credential)
     return ChatOpenRouter.model_validate(
         {
-            "model_name": model.value.removeprefix(_MODEL_PREFIX),
+            "model_name": (
+                model.value.removeprefix(_MODEL_PREFIX)
+                if upstream_model is None
+                else upstream_model
+            ),
             "openrouter_api_key": SecretStr(credential.api_key),
             "base_url": credential.base_url,
             "temperature": temperature,
@@ -55,13 +80,7 @@ def get_openrouter_llm(
             "max_tokens": max_tokens,
             "streaming": True,
             "stream_usage": True,
-            "reasoning": {
-                "effort": (
-                    "medium"
-                    if reasoning or model in OPENROUTER_MANDATORY_REASONING_MODELS
-                    else "none"
-                ),
-            },
+            "reasoning": _reasoning_config(model, reasoning),
             "openrouter_provider": _PROVIDER_ROUTING,
         },
     )
@@ -78,6 +97,7 @@ def stream_openrouter_response(
     max_tokens: int,
     reasoning: bool = False,
     credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> StreamingResponse:
     llm = get_openrouter_llm(
         model,
@@ -86,6 +106,7 @@ def stream_openrouter_response(
         max_tokens,
         reasoning=reasoning,
         credential=credential,
+        upstream_model=upstream_model,
     )
     messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
@@ -107,6 +128,7 @@ async def stream_openrouter_agent_response(
     reasoning: bool = False,
     observation: StreamObservation | None = None,
     credential: ChatCredentialSecret | None = None,
+    upstream_model: str | None = None,
 ) -> StreamingResponse:
     try:
         llm = get_openrouter_llm(
@@ -116,6 +138,7 @@ async def stream_openrouter_agent_response(
             max_tokens,
             reasoning=reasoning,
             credential=credential,
+            upstream_model=upstream_model,
         )
         tools = await get_agent_tools()
         agent = create_agent(llm, tools)
@@ -147,6 +170,7 @@ async def stream_openrouter_agent_response(
             max_tokens=max_tokens,
             reasoning=reasoning,
             credential=credential,
+            upstream_model=upstream_model,
         )
 
 

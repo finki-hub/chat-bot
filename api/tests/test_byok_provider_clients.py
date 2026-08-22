@@ -1,4 +1,5 @@
 import pytest
+from openrouter.components import ChatRequest
 from pydantic import SecretStr
 
 from app.llms import anthropic, google, ollama, openai, openrouter
@@ -350,7 +351,7 @@ def test_openrouter_client_uses_upstream_id_and_privacy_routing(monkeypatch) -> 
             "max_tokens": 1024,
             "streaming": True,
             "stream_usage": True,
-            "reasoning": {"effort": "medium"},
+            "reasoning": {"effort": "high"},
             "openrouter_provider": {
                 "allow_fallbacks": True,
                 "data_collection": "deny",
@@ -358,6 +359,105 @@ def test_openrouter_client_uses_upstream_id_and_privacy_routing(monkeypatch) -> 
             },
         },
     ]
+
+
+def test_sponsored_openrouter_client_receives_upstream_model(monkeypatch) -> None:
+    captured: list[dict] = []
+
+    class OpenRouterCapturingClient:
+        @classmethod
+        def model_validate(cls, value):
+            captured.append(value)
+            return cls()
+
+    monkeypatch.setattr(openrouter, "ChatOpenRouter", OpenRouterCapturingClient)
+
+    openrouter.get_openrouter_llm(
+        Model.OPENROUTER_DEEPSEEK_V4_PRO,
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=1024,
+        credential=ChatCredentialSecret(
+            provider="openrouter",
+            api_key="sponsored-key",
+        ),
+        upstream_model="sponsored/upstream-model",
+    )
+
+    assert captured[0]["model_name"] == "sponsored/upstream-model"
+
+
+@pytest.mark.parametrize(
+    ("model", "expected_reasoning"),
+    [
+        (Model.OPENROUTER_KIMI_K2_6, {}),
+        (Model.OPENROUTER_QWEN3_8_27B, {"effort": "medium"}),
+        (Model.OPENROUTER_QWEN3_7_FLASH, {}),
+        (Model.OPENROUTER_MINIMAX_M3, {}),
+        (Model.OPENROUTER_MISTRAL_SMALL_2603, {"effort": "high"}),
+    ],
+)
+def test_openrouter_client_uses_supported_reasoning_configuration(
+    monkeypatch,
+    model: Model,
+    expected_reasoning: dict[str, bool | str],
+) -> None:
+    captured: list[dict] = []
+
+    class OpenRouterCapturingClient:
+        @classmethod
+        def model_validate(cls, value):
+            captured.append(value)
+            return cls()
+
+    monkeypatch.setattr(openrouter, "ChatOpenRouter", OpenRouterCapturingClient)
+
+    openrouter.get_openrouter_llm(
+        model,
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=1024,
+        reasoning=True,
+        credential=ChatCredentialSecret(
+            provider="openrouter",
+            api_key="openrouter-user-key",
+        ),
+    )
+
+    assert captured[0]["reasoning"] == expected_reasoning
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        Model.OPENROUTER_KIMI_K2_6,
+        Model.OPENROUTER_QWEN3_7_FLASH,
+        Model.OPENROUTER_MINIMAX_M3,
+    ],
+)
+def test_openrouter_sdk_serializes_default_reasoning_configuration(
+    model: Model,
+) -> None:
+    llm = openrouter.get_openrouter_llm(
+        model,
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=1024,
+        reasoning=True,
+        credential=ChatCredentialSecret(
+            provider="openrouter",
+            api_key="openrouter-user-key",
+        ),
+    )
+    request = ChatRequest.model_validate(
+        {
+            "messages": [{"role": "user", "content": "test"}],
+            "model": llm.model_name,
+            "reasoning": llm.reasoning,
+        },
+    )
+
+    assert request.model_dump(mode="json")["reasoning"] == {}
 
 
 def test_openrouter_client_disables_optional_reasoning(monkeypatch) -> None:
@@ -409,7 +509,7 @@ def test_openrouter_client_keeps_mandatory_reasoning_enabled(monkeypatch) -> Non
         ),
     )
 
-    assert captured[0]["reasoning"] == {"effort": "medium"}
+    assert captured[0]["reasoning"] == {"effort": "high"}
 
 
 @pytest.mark.parametrize(
