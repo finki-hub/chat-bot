@@ -6,12 +6,13 @@ from app.llms.models import (
     GOOGLE_QUERY_TRANSFORM_MODELS,
     OLLAMA_QUERY_TRANSFORM_MODELS,
     OPENAI_QUERY_TRANSFORM_MODELS,
+    OPENROUTER_QUERY_TRANSFORM_MODELS,
     ChatModel,
     Model,
 )
 from app.schemas.chat_credentials import ChatCredentialSecret
 
-ProviderName = Literal["openai", "google", "anthropic", "ollama"]
+ProviderName = Literal["openai", "google", "anthropic", "ollama", "openrouter"]
 
 
 class ProviderCredentialRequiredError(RuntimeError):
@@ -38,6 +39,8 @@ def provider_for_model(model: ChatModel) -> ProviderName | None:
         return "google"
     if model in ANTHROPIC_QUERY_TRANSFORM_MODELS:
         return "anthropic"
+    if model in OPENROUTER_QUERY_TRANSFORM_MODELS:
+        return "openrouter"
     if model in OLLAMA_QUERY_TRANSFORM_MODELS or model == Model.BGE_M3:
         return "ollama"
     return None
@@ -49,6 +52,7 @@ class LlmProviderCredentials:
     google: ChatCredentialSecret | None = None
     anthropic: ChatCredentialSecret | None = None
     ollama: ChatCredentialSecret | None = None
+    openrouter: ChatCredentialSecret | None = None
     rejected_providers: frozenset[ProviderName] = frozenset()
 
     def available_providers(self) -> frozenset[ProviderName]:
@@ -57,6 +61,7 @@ class LlmProviderCredentials:
             "google",
             "anthropic",
             "ollama",
+            "openrouter",
         )
         return frozenset(
             provider
@@ -74,6 +79,8 @@ class LlmProviderCredentials:
                 return self.anthropic
             case "ollama":
                 return self.ollama
+            case "openrouter":
+                return self.openrouter
             case unreachable:
                 assert_never(unreachable)
         raise AssertionError(f"Unhandled provider: {provider}")

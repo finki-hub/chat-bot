@@ -16,7 +16,13 @@ from app.schemas.chat_credentials import ChatCredentialSecret
 from app.utils.settings import Settings
 
 CredentialStage = Literal["inference", "embeddings"]
-_PROVIDERS: tuple[ProviderName, ...] = ("openai", "google", "anthropic", "ollama")
+_PROVIDERS: tuple[ProviderName, ...] = (
+    "openai",
+    "google",
+    "anthropic",
+    "ollama",
+    "openrouter",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,11 +64,19 @@ async def resolve_provider_credentials(
         providers,
         settings,
     )
+    openrouter = await _get_secret(
+        db,
+        user_id,
+        "openrouter",
+        providers,
+        settings,
+    )
     return LlmProviderCredentials(
         openai=openai,
         google=google,
         anthropic=anthropic,
         ollama=ollama,
+        openrouter=openrouter,
         rejected_providers=frozenset(
             provider
             for provider, credential in (
@@ -70,6 +84,7 @@ async def resolve_provider_credentials(
                 ("google", google),
                 ("anthropic", anthropic),
                 ("ollama", ollama),
+                ("openrouter", openrouter),
             )
             if provider in providers
             and provider in stored_providers
@@ -97,6 +112,8 @@ async def _stored_providers(
                 providers.add("anthropic")
             case "ollama":
                 providers.add("ollama")
+            case "openrouter":
+                providers.add("openrouter")
             case _:
                 continue
     return providers
