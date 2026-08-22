@@ -13,6 +13,7 @@ const DEFAULT_CREDENTIAL_PROVIDERS = [
   'google',
   'ollama',
   'openai',
+  'openrouter',
 ] as const satisfies readonly ChatCredentialProvider[];
 
 export const MODEL_CATALOG = {
@@ -22,7 +23,9 @@ export const MODEL_CATALOG = {
 };
 
 type MockModelsInput =
-  MockModelsOptions | null | readonly ChatCredentialProvider[];
+  | MockModelsOptions
+  | null
+  | readonly ChatCredentialProvider[];
 
 type MockModelsOptions = {
   readonly catalog?: (() => ModelCatalog) | ModelCatalog;

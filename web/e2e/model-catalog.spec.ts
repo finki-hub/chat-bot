@@ -125,6 +125,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
       'OpenAI',
       'Google / Gemini',
       'Anthropic',
+      'OpenRouter',
       'Ollama',
     ]);
 
@@ -135,6 +136,9 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     await expect(
       page.getByRole('option', { name: 'Qwen3 30B Thinking' }),
     ).toBeVisible();
+    await expect(
+      page.getByRole('option', { exact: true, name: 'DeepSeek V4 Pro' }),
+    ).toBeEnabled();
     await page.screenshot({ path: 'test-results/model-selector-open-qa.png' });
 
     const selectedModel = page.getByRole('option', {
@@ -151,6 +155,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
       'OpenAI',
       'Google / Gemini',
       'Anthropic',
+      'OpenRouter',
       'Ollama',
     ]);
     await expect(page.getByTestId('model-tier-label')).toHaveCount(0);
