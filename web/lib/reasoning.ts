@@ -1,4 +1,4 @@
-const REASONING_PREFIXES = ['claude-', 'gemini-', 'gpt-5'];
+const REASONING_PREFIXES = ['claude-', 'gemini-', 'gpt-5', 'openrouter:'];
 const REASONING_MODEL_IDS = new Set([
   'qwen3:14b-q4_K_M',
   'qwen3:30b-a3b-thinking-2507-q4_K_M',
