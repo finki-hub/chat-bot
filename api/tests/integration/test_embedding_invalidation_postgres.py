@@ -87,7 +87,7 @@ def test_real_postgres_adds_exact_lifecycle_columns_when_migrations_run() -> Non
                 for column, data_type, nullable, default in LIFECYCLE_COLUMNS
             }
             assert {tuple(row) for row in rows} == expected
-            assert applied_version == "0010_add_embedding_invalidation.sql"
+            assert applied_version == "0011_allow_openrouter_chat_credentials.sql"
 
     anyio.run(run)
 
