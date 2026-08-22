@@ -5,7 +5,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-ChatCredentialProvider = Literal["openai", "google", "anthropic", "ollama"]
+ChatCredentialProvider = Literal[
+    "openai",
+    "google",
+    "anthropic",
+    "ollama",
+    "openrouter",
+]
 OLLAMA_DEFAULT_BASE_URL: Final = "https://ollama.com"
 
 
