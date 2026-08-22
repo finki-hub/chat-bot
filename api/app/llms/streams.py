@@ -156,6 +156,7 @@ async def stream_response_with_agent(
                 reasoning=reasoning,
                 observation=observation,
                 credential=credential,
+                upstream_model=upstream_model,
             )
 
         case _:

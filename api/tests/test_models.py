@@ -136,7 +136,7 @@ def test_openrouter_inference_defaults_query_transform_to_same_model() -> None:
 
 
 def test_stream_openrouter_route_receives_user_credential(monkeypatch) -> None:
-    captured: list[ChatCredentialSecret | None] = []
+    captured: list[tuple[ChatCredentialSecret | None, str | None]] = []
 
     async def fake_stream_openrouter_agent_response(
         user_prompt: str,
@@ -150,8 +150,9 @@ def test_stream_openrouter_route_receives_user_credential(monkeypatch) -> None:
         reasoning: bool = False,
         observation: StreamObservation | None = None,
         credential: ChatCredentialSecret | None = None,
+        upstream_model: str | None = None,
     ) -> StreamingResponse:
-        captured.append(credential)
+        captured.append((credential, upstream_model))
 
         async def empty_body() -> AsyncIterator[bytes]:
             if False:
@@ -181,11 +182,12 @@ def test_stream_openrouter_route_receives_user_credential(monkeypatch) -> None:
             max_tokens=1024,
             interface="web",
             credential=credential,
+            upstream_model="sponsored/upstream-model",
         )
 
     anyio.run(route_response)
 
-    assert captured == [credential]
+    assert captured == [(credential, "sponsored/upstream-model")]
 
 
 def test_query_transform_routes_openrouter_credential(monkeypatch) -> None:

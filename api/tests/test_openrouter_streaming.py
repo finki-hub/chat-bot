@@ -2,6 +2,7 @@ import os
 from collections.abc import Generator
 
 import anyio
+from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk
 
 from app.llms import openrouter
@@ -66,3 +67,56 @@ def test_openrouter_regular_stream_preserves_reasoning_events(monkeypatch) -> No
 
     assert 'event: thinking\ndata: {"text": "thinking"}' in body
     assert 'event: token\ndata: {"text": "answer"}' in body
+
+
+def test_openrouter_agent_fallback_preserves_upstream_model(monkeypatch) -> None:
+    captured: list[str | None] = []
+
+    async def fail_get_agent_tools() -> list[object]:
+        msg = "agent tools unavailable"
+        raise RuntimeError(msg)
+
+    def fake_stream_openrouter_response(
+        user_prompt: str,
+        routed_model: Model,
+        *,
+        system_prompt: str,
+        history=None,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        reasoning: bool = False,
+        credential: ChatCredentialSecret | None = None,
+        upstream_model: str | None = None,
+    ) -> StreamingResponse:
+        captured.append(upstream_model)
+        return StreamingResponse(iter(()), media_type="text/event-stream")
+
+    monkeypatch.setattr(
+        openrouter, "get_openrouter_llm", lambda *_args, **_kwargs: object()
+    )
+    monkeypatch.setattr(openrouter, "get_agent_tools", fail_get_agent_tools)
+    monkeypatch.setattr(
+        openrouter,
+        "stream_openrouter_response",
+        fake_stream_openrouter_response,
+    )
+
+    async def route() -> StreamingResponse:
+        return await openrouter.stream_openrouter_agent_response(
+            "question",
+            Model.OPENROUTER_DEEPSEEK_V4_PRO,
+            system_prompt="system",
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=128,
+            credential=ChatCredentialSecret(
+                provider="openrouter",
+                api_key="sponsored-key",
+            ),
+            upstream_model="sponsored/upstream-model",
+        )
+
+    anyio.run(route)
+
+    assert captured == ["sponsored/upstream-model"]
