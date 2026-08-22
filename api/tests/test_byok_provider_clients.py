@@ -1,7 +1,7 @@
 import pytest
 from pydantic import SecretStr
 
-from app.llms import anthropic, google, ollama, openai
+from app.llms import anthropic, google, ollama, openai, openrouter
 from app.llms.models import Model
 from app.llms.provider_credentials import ProviderCredentialRequiredError
 from app.schemas.chat_credentials import ChatCredentialSecret
@@ -316,6 +316,102 @@ def test_ollama_byok_clients_are_not_shared_between_requests(monkeypatch) -> Non
     ]
 
 
+def test_openrouter_client_uses_upstream_id_and_privacy_routing(monkeypatch) -> None:
+    captured: list[dict] = []
+
+    class OpenRouterCapturingClient:
+        @classmethod
+        def model_validate(cls, value):
+            captured.append(value)
+            return cls()
+
+    monkeypatch.setattr(openrouter, "ChatOpenRouter", OpenRouterCapturingClient)
+
+    openrouter.get_openrouter_llm(
+        Model.OPENROUTER_DEEPSEEK_V4_PRO,
+        temperature=0.2,
+        top_p=0.8,
+        max_tokens=1024,
+        reasoning=True,
+        credential=ChatCredentialSecret(
+            provider="openrouter",
+            api_key="openrouter-user-key",
+            base_url="https://openrouter-proxy.example/v1",
+        ),
+    )
+
+    assert captured == [
+        {
+            "model_name": "deepseek/deepseek-v4-pro",
+            "openrouter_api_key": SecretStr("openrouter-user-key"),
+            "base_url": "https://openrouter-proxy.example/v1",
+            "temperature": 0.2,
+            "top_p": 0.8,
+            "max_tokens": 1024,
+            "streaming": True,
+            "stream_usage": True,
+            "reasoning": {"effort": "medium"},
+            "openrouter_provider": {
+                "allow_fallbacks": True,
+                "data_collection": "deny",
+                "require_parameters": True,
+            },
+        },
+    ]
+
+
+def test_openrouter_client_disables_optional_reasoning(monkeypatch) -> None:
+    captured: list[dict] = []
+
+    class OpenRouterCapturingClient:
+        @classmethod
+        def model_validate(cls, value):
+            captured.append(value)
+            return cls()
+
+    monkeypatch.setattr(openrouter, "ChatOpenRouter", OpenRouterCapturingClient)
+
+    openrouter.get_openrouter_llm(
+        Model.OPENROUTER_DEEPSEEK_V4_PRO,
+        temperature=0.2,
+        top_p=0.8,
+        max_tokens=1024,
+        reasoning=False,
+        credential=ChatCredentialSecret(
+            provider="openrouter",
+            api_key="openrouter-user-key",
+        ),
+    )
+
+    assert captured[0]["reasoning"] == {"effort": "none"}
+
+
+def test_openrouter_client_keeps_mandatory_reasoning_enabled(monkeypatch) -> None:
+    captured: list[dict] = []
+
+    class OpenRouterCapturingClient:
+        @classmethod
+        def model_validate(cls, value):
+            captured.append(value)
+            return cls()
+
+    monkeypatch.setattr(openrouter, "ChatOpenRouter", OpenRouterCapturingClient)
+
+    openrouter.get_openrouter_llm(
+        Model.OPENROUTER_GLM_5_3,
+        temperature=0.2,
+        top_p=0.8,
+        max_tokens=1024,
+        reasoning=False,
+        credential=ChatCredentialSecret(
+            provider="openrouter",
+            api_key="openrouter-user-key",
+        ),
+    )
+
+    assert captured[0]["reasoning"] == {"effort": "medium"}
+
+
 @pytest.mark.parametrize(
     ("provider", "factory", "model"),
     [
@@ -323,6 +419,11 @@ def test_ollama_byok_clients_are_not_shared_between_requests(monkeypatch) -> Non
         ("google", google.get_google_llm, Model.GEMINI_3_5_FLASH),
         ("anthropic", anthropic.get_anthropic_llm, Model.CLAUDE_HAIKU_4_5),
         ("ollama", ollama.get_llm, Model.QWEN3_14B),
+        (
+            "openrouter",
+            openrouter.get_openrouter_llm,
+            Model.OPENROUTER_DEEPSEEK_V4_PRO,
+        ),
     ],
 )
 def test_byok_llm_client_requires_user_credential(
