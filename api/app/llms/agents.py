@@ -203,9 +203,9 @@ def capture_model_fallback(
     )
 
 
-def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
-    """Wrap a synchronous token generator as a chat-SSE StreamingResponse."""
-
+def stream_sync_gen_as_sse(
+    gen: Generator[str | AIMessageChunk],
+) -> StreamingResponse:
     async def async_token_gen() -> AsyncGenerator[str]:
         streamed = False
         try:
@@ -213,7 +213,13 @@ def stream_sync_gen_as_sse(gen: Generator[str]) -> StreamingResponse:
                 chunk = await asyncio.to_thread(next, gen, _SENTINEL)
                 if chunk is _SENTINEL:
                     break
-                text = str(chunk)
+                if isinstance(chunk, AIMessageChunk):
+                    reasoning = _chunk_reasoning(chunk)
+                    if reasoning:
+                        yield thinking_event(reasoning)
+                    text = _chunk_text(chunk)
+                else:
+                    text = str(chunk)
                 if not text:
                     continue
                 streamed = True
@@ -290,6 +296,16 @@ def _chunk_reasoning(message: AIMessageChunk) -> str:
     extra = message.additional_kwargs.get("reasoning_content")
     if isinstance(extra, str):
         parts.append(extra)
+
+    details = message.additional_kwargs.get("reasoning_details")
+    if isinstance(details, list):
+        parts.extend(
+            detail["text"]
+            for detail in details
+            if isinstance(detail, dict)
+            and detail.get("type") == "reasoning.text"
+            and isinstance(detail.get("text"), str)
+        )
 
     return "".join(parts)
 

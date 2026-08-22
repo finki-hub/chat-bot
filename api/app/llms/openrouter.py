@@ -3,7 +3,12 @@ from collections.abc import Generator
 
 from fastapi.responses import StreamingResponse
 from langchain.agents import create_agent
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessageChunk,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+)
 from langchain_openrouter import ChatOpenRouter
 from pydantic import SecretStr
 
@@ -44,11 +49,7 @@ def get_openrouter_llm(
         {
             "model_name": model.value.removeprefix(_MODEL_PREFIX),
             "openrouter_api_key": SecretStr(credential.api_key),
-            **(
-                {"base_url": credential.base_url}
-                if credential.base_url is not None
-                else {}
-            ),
+            "base_url": credential.base_url,
             "temperature": temperature,
             "top_p": top_p,
             "max_tokens": max_tokens,
@@ -88,11 +89,10 @@ def stream_openrouter_response(
     )
     messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
-    def sync_token_gen() -> Generator[str]:
-        for chunk in llm.stream(messages):
-            yield content_to_text(chunk.content)
+    def sync_chunk_gen() -> Generator[AIMessageChunk]:
+        yield from llm.stream(messages)
 
-    return stream_sync_gen_as_sse(sync_token_gen())
+    return stream_sync_gen_as_sse(sync_chunk_gen())
 
 
 async def stream_openrouter_agent_response(
