@@ -58,6 +58,18 @@ MODEL_CATALOG: Final[tuple[CatalogPolicy, ...]] = (
     _policy(Model.CLAUDE_OPUS_4_8, "anthropic", "Claude Opus 4.8"),
     _policy(Model.CLAUDE_SONNET_5, "anthropic", "Claude Sonnet 5"),
     _policy(Model.CLAUDE_HAIKU_4_5, "anthropic", "Claude Haiku 4.5"),
+    _policy(Model.OPENROUTER_DEEPSEEK_V4_PRO, "openrouter", "DeepSeek V4 Pro"),
+    _policy(Model.OPENROUTER_DEEPSEEK_V4_FLASH, "openrouter", "DeepSeek V4 Flash"),
+    _policy(Model.OPENROUTER_GLM_5_3, "openrouter", "GLM-5.3"),
+    _policy(Model.OPENROUTER_KIMI_K2_6, "openrouter", "Kimi K2.6"),
+    _policy(Model.OPENROUTER_QWEN3_8_27B, "openrouter", "Qwen3.8 27B"),
+    _policy(Model.OPENROUTER_QWEN3_7_FLASH, "openrouter", "Qwen3.7 Flash"),
+    _policy(Model.OPENROUTER_MINIMAX_M3, "openrouter", "MiniMax M3"),
+    _policy(
+        Model.OPENROUTER_MISTRAL_SMALL_2603,
+        "openrouter",
+        "Mistral Small 2603",
+    ),
 )
 
 if tuple(policy.model for policy in MODEL_CATALOG) != CHAT_MODEL_ORDER:
