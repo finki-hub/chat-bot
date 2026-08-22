@@ -17,6 +17,7 @@ const OPENAI = 'openai';
 const GOOGLE = 'google';
 const ANTHROPIC = 'anthropic';
 const OLLAMA = 'ollama';
+const OPENROUTER = 'openrouter';
 const LIVE = 'live';
 const GPT = 'gpt-5.4';
 const LUNA = 'gpt-5.6-luna';
@@ -35,6 +36,14 @@ const EXPECTED_CURATED_IDS = [
   'claude-opus-4-8',
   'claude-sonnet-5',
   'claude-haiku-4-5',
+  'openrouter:deepseek/deepseek-v4-pro',
+  'openrouter:deepseek/deepseek-v4-flash',
+  'openrouter:z-ai/glm-5.3',
+  'openrouter:moonshotai/kimi-k2.6',
+  'openrouter:qwen/qwen3.8-27b',
+  'openrouter:qwen/qwen3.7-flash',
+  'openrouter:minimax/minimax-m3',
+  'openrouter:mistralai/mistral-small-2603',
   'qwen3:30b-a3b-thinking-2507-q4_K_M',
   'qwen3:30b-a3b-instruct-2507-q4_K_M',
   'qwen3:14b-q4_K_M',
@@ -397,6 +406,7 @@ describe('providerLabel', () => {
   it('maps known providers to their display label', () => {
     expect(providerLabel(OPENAI)).toBe('OpenAI');
     expect(providerLabel(ANTHROPIC)).toBe('Anthropic');
+    expect(providerLabel(OPENROUTER)).toBe('OpenRouter');
   });
 
   it('returns the raw provider for unknown buckets', () => {

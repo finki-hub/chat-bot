@@ -36,6 +36,11 @@ export const PROVIDERS = [
     labelKey: 'settings.provider.ollama',
     provider: 'ollama',
   },
+  {
+    keyUrl: 'https://openrouter.ai/settings/keys',
+    labelKey: 'settings.provider.openrouter',
+    provider: 'openrouter',
+  },
 ] as const satisfies readonly ProviderConfig[];
 
 export const EMPTY_FORMS = {
@@ -43,6 +48,7 @@ export const EMPTY_FORMS = {
   google: { apiKey: '', baseUrl: '' },
   ollama: { apiKey: '', baseUrl: '' },
   openai: { apiKey: '', baseUrl: '' },
+  openrouter: { apiKey: '', baseUrl: '' },
 } satisfies Record<ChatCredentialProvider, ProviderForm>;
 
 const PROVIDER_SET: ReadonlySet<unknown> = new Set(

@@ -11,6 +11,7 @@ describe('isReasoningCapableModel', () => {
       'claude-haiku-4-5',
       'gpt-5.4-mini',
       'gpt-5.6-sol',
+      'openrouter:deepseek/deepseek-v4-pro',
       'qwen3:30b-a3b-thinking-2507-q4_K_M',
       'qwen3:14b-q4_K_M',
     ];

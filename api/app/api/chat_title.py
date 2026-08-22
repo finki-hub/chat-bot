@@ -76,10 +76,14 @@ async def generate_chat_title(
         candidate_models = (payload.provider_model,)
     else:
         provider = provider_for_model(payload.provider_model)
-        candidate_models = tuple(
-            model
-            for model in _TITLE_MODELS_BY_COST
-            if provider_for_model(model) == provider
+        candidate_models = (
+            (payload.provider_model,)
+            if provider == "openrouter"
+            else tuple(
+                model
+                for model in _TITLE_MODELS_BY_COST
+                if provider_for_model(model) == provider
+            )
         )
     if payload.user_id is None:
         credentials = None

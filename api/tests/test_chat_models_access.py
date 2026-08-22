@@ -7,6 +7,7 @@ from app.llms.provider_credentials import LlmProviderCredentials
 from app.utils.settings import Settings
 from tests.chat_models_access_support import (
     BASE_URL,
+    OPENROUTER_MODEL_ID,
     OTHER_MODEL_ID,
     SPONSORED_ID,
     USER_CREDENTIAL,
@@ -56,7 +57,9 @@ def test_models_endpoint_overlays_user_and_sponsored_capacity(
         providers,
         settings: Settings,
     ) -> LlmProviderCredentials:
-        assert providers == frozenset({"openai", "google", "anthropic", "ollama"})
+        assert providers == frozenset(
+            {"openai", "google", "anthropic", "ollama", "openrouter"},
+        )
         assert settings.SPONSORED_MODEL_ENABLED
         return LlmProviderCredentials(
             openai=credentials(openai=has_key).openai,
@@ -116,6 +119,45 @@ def test_models_endpoint_overlays_user_and_sponsored_capacity(
     assert base.models[0].sponsored_quota is None
     other = next(model for model in body["models"] if model["id"] == OTHER_MODEL_ID)
     assert other["sponsored_quota"] is None
+
+
+def test_models_endpoint_marks_openrouter_models_byok_with_saved_key(
+    monkeypatch,
+) -> None:
+    catalog_service = StubCatalogService(base_catalog())
+    monkeypatch.setattr("app.api.chat.model_catalog_service", catalog_service)
+
+    async def resolve_credentials(
+        db,
+        *,
+        user_id: UUID | None,
+        providers,
+        settings: Settings,
+    ) -> LlmProviderCredentials:
+        assert providers == frozenset(
+            {"openai", "google", "anthropic", "ollama", "openrouter"},
+        )
+        return credentials(openai=False, openrouter=True)
+
+    monkeypatch.setattr(
+        "app.api.chat.resolve_provider_credentials",
+        resolve_credentials,
+    )
+
+    with client(monkeypatch, settings(enabled=False)) as api_client:
+        response = api_client.get(
+            "/chat/models",
+            headers={"x-api-key": "test-api-key"},
+            params={"user_id": str(USER_WITH_KEY)},
+        )
+
+    assert response.status_code == 200
+    openrouter_model = next(
+        model
+        for model in response.json()["models"]
+        if model["id"] == OPENROUTER_MODEL_ID
+    )
+    assert openrouter_model["availability"] == "byok"
 
 
 def test_models_endpoint_uses_one_cached_base_for_different_users(monkeypatch) -> None:

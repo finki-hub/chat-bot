@@ -91,6 +91,7 @@ _CREDENTIAL_PROVIDER_LABELS = {
     "google": "Google",
     "anthropic": "Anthropic",
     "ollama": "Ollama",
+    "openrouter": "OpenRouter",
 }
 
 
@@ -930,7 +931,9 @@ async def list_models(
     credentials = await resolve_provider_credentials(
         db,
         user_id=user_id,
-        providers=frozenset({"openai", "google", "anthropic", "ollama"}),
+        providers=frozenset(
+            {"openai", "google", "anthropic", "ollama", "openrouter"},
+        ),
         settings=settings,
     )
     ollama_models: tuple[OllamaCatalogModel, ...] = ()

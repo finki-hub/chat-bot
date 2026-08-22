@@ -119,7 +119,7 @@ export const messages = {
   'settings.credentialDeleteError': 'Клучот не можеше да се избрише.',
   'settings.credentialSaveError': 'Клучот не можеше да се зачува.',
   'settings.credentialsDescription':
-    'Зачувај лични OpenAI, Google/Gemini, Anthropic или Ollama клучеви. Тие\u{00A0}се\u{00A0}користат само за\u{00A0}твоите\u{00A0}разговори и\u{00A0}за\u{00A0}пребарувачките LLM\u{00A0}чекори.',
+    'Зачувај лични OpenAI, Google/Gemini, Anthropic, Ollama или OpenRouter клучеви. Тие\u{00A0}се\u{00A0}користат само за\u{00A0}твоите\u{00A0}разговори и\u{00A0}за\u{00A0}пребарувачките LLM\u{00A0}чекори.',
   'settings.credentialsError': 'Клучевите не можеа да се вчитаат.',
   'settings.credentialsLoading': 'Се вчитуваат API клучевите…',
   'settings.credentialsTitle': 'Лични API клучеви',
@@ -135,6 +135,7 @@ export const messages = {
   'settings.provider.google': 'Google / Gemini',
   'settings.provider.ollama': 'Ollama',
   'settings.provider.openai': 'OpenAI',
+  'settings.provider.openrouter': 'OpenRouter',
   'settings.replaceCredential':
     'Внеси нов клуч само ако сакаш да\u{00A0}го\u{00A0}замениш\u{00A0}зачуваниот.',
   'settings.saveCredentials': 'Зачувај клучеви',

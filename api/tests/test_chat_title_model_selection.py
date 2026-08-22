@@ -120,3 +120,61 @@ def test_chat_title_uses_dynamic_ollama_provider_model_directly(monkeypatch):
 
     assert response.title == "Испитен рок"
     assert selected_models == [dynamic_model]
+
+
+def test_chat_title_uses_selected_openrouter_model_directly(monkeypatch) -> None:
+    selected_models: list[ChatModel] = []
+
+    async def fake_transform_query(
+        query: str,
+        model: ChatModel,
+        *,
+        system_prompt: str,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        credentials=None,
+    ) -> str:
+        selected_models.append(model)
+        return "Испитен рок"
+
+    monkeypatch.setattr(chat_title, "transform_query", fake_transform_query)
+    db = FakeChatDatabase()
+    user_id = UUID("00000000-0000-4000-8000-000000000001")
+    settings = Settings(
+        API_KEY="test-api-key",
+        CREDENTIAL_ENCRYPTION_KEY="runtime-credential-key",
+        MCP_API_KEY="test-mcp-key",
+    )
+
+    async def run_title():
+        await upsert_chat_credential(
+            db,
+            user_id=user_id,
+            credential=ChatCredentialUpsert(
+                api_key="openrouter-user-key",
+                provider="openrouter",
+            ),
+            settings=settings,
+        )
+        return await chat_title.generate_chat_title(
+            ChatTitleSchema.model_validate(
+                {
+                    "user_id": user_id,
+                    "messages": [
+                        ConversationTurn(
+                            role="user",
+                            content="Кога е јунската сесија?",
+                        ),
+                    ],
+                    "provider_model": Model.OPENROUTER_DEEPSEEK_V4_PRO,
+                },
+            ),
+            db,
+            settings,
+        )
+
+    response = anyio.run(run_title)
+
+    assert response.title == "Испитен рок"
+    assert selected_models == [Model.OPENROUTER_DEEPSEEK_V4_PRO]

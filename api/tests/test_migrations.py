@@ -113,6 +113,17 @@ def test_chat_user_migration_allows_supported_auth_providers() -> None:
     )
 
 
+def test_chat_credential_migration_allows_openrouter() -> None:
+    migration_path = Path(
+        "resources/migrations/0011_allow_openrouter_chat_credentials.sql",
+    )
+
+    assert migration_path.is_file(), "missing OpenRouter credential migration"
+    migration = migration_path.read_text(encoding="utf-8")
+    assert "openrouter" in migration
+    assert "chat_user_credential_provider_check" in migration
+
+
 def test_chat_message_parts_migration_adds_nullable_jsonb_column() -> None:
     # Given: persisted chat messages need durable AI SDK UI parts.
     migration = Path(

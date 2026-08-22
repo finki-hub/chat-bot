@@ -13,6 +13,7 @@ const DEFAULT_CREDENTIAL_PROVIDERS = [
   'google',
   'ollama',
   'openai',
+  'openrouter',
 ] as const satisfies readonly ChatCredentialProvider[];
 
 export const MODEL_CATALOG = {
