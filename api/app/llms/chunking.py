@@ -73,13 +73,13 @@ def _member_heading(line: str) -> str | None:
     return title if digit_count > 0 else None
 
 
-def _split_members(md: str) -> list[tuple[str | None, str]]:
+def _split_members(lines: list[str]) -> list[tuple[str | None, str]]:
     units: list[tuple[str | None, str]] = []
     section = PREAMBLE_LABEL
     body_lines: list[str] = []
     found_member = False
 
-    for line in md.splitlines():
+    for line in lines:
         header = _member_heading(line)
         if header is None:
             body_lines.append(line)
@@ -96,13 +96,13 @@ def _split_members(md: str) -> list[tuple[str | None, str]]:
     return units
 
 
-def _split_headings(md: str) -> list[tuple[str | None, str]]:
+def _split_headings(md: str, lines: list[str]) -> list[tuple[str | None, str]]:
     units: list[tuple[str | None, str]] = []
     section: str | None = None
     body_lines: list[str] = []
     found_heading = False
 
-    for line in md.splitlines():
+    for line in lines:
         header = _heading(line, require_space=True)
         if header is None:
             body_lines.append(line)
@@ -126,8 +126,9 @@ def chunk_markdown(markdown: str) -> list[Chunk]:
     if not md:
         return []
 
-    has_member_heading = any(_member_heading(line) for line in md.splitlines())
-    units = _split_members(md) if has_member_heading else _split_headings(md)
+    lines = md.splitlines()
+    has_member_heading = any(_member_heading(line) for line in lines)
+    units = _split_members(lines) if has_member_heading else _split_headings(md, lines)
 
     splitter = _splitter()
     chunks: list[Chunk] = []

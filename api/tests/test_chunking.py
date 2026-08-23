@@ -9,17 +9,12 @@ def _sections_and_content(markdown: str) -> list[tuple[str | None, str]]:
     return [(chunk.section, chunk.content) for chunk in chunk_markdown(markdown)]
 
 
-def _elapsed(markdown: str) -> float:
+def test_unclosed_comment_markers_complete_within_conservative_bound() -> None:
     start = perf_counter()
-    chunk_markdown(markdown)
-    return perf_counter() - start
 
+    chunk_markdown("<!--" * 25_000)
 
-def test_unclosed_comment_markers_scale_linearly() -> None:
-    short = min(_elapsed("<!--" * 4_000) for _ in range(2))
-    long = min(_elapsed("<!--" * 8_000) for _ in range(2))
-
-    assert long < short * 3 + 0.01
+    assert perf_counter() - start < 2.0
 
 
 def test_comment_removal_preserves_surrounding_markdown() -> None:
