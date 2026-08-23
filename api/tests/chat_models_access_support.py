@@ -101,7 +101,7 @@ def base_catalog() -> ModelCatalogResponse:
             ModelDescriptor(
                 id=OPENROUTER_MODEL_ID,
                 provider="openrouter",
-                name="DeepSeek V4 Pro",
+                name="DeepSeek V4 Pro 0813",
                 execution=execution,
             ),
         ),
