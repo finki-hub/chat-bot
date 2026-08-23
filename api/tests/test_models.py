@@ -44,14 +44,15 @@ EXPECTED_CHAT_IDS = (
     "claude-opus-4-8",
     "claude-sonnet-5",
     "claude-haiku-4-5",
-    "openrouter:deepseek/deepseek-v4-pro",
-    "openrouter:deepseek/deepseek-v4-flash",
+    "openrouter:deepseek/deepseek-v4-pro-0813",
+    "openrouter:deepseek/deepseek-v4-flash-0731",
     "openrouter:z-ai/glm-5.3",
-    "openrouter:moonshotai/kimi-k2.6",
+    "openrouter:moonshotai/kimi-k3",
+    "openrouter:qwen/qwen3.8-max",
     "openrouter:qwen/qwen3.8-27b",
-    "openrouter:qwen/qwen3.7-flash",
     "openrouter:minimax/minimax-m3",
-    "openrouter:mistralai/mistral-small-2603",
+    "openrouter:x-ai/grok-4.6",
+    "openrouter:tencent/hy3",
 )
 
 
@@ -73,6 +74,11 @@ def test_removed_chat_values_are_not_parseable_or_active() -> None:
         "gpt-5-nano",
         "gpt-5.2",
         "mistral:latest",
+        "openrouter:deepseek/deepseek-v4-flash",
+        "openrouter:deepseek/deepseek-v4-pro",
+        "openrouter:moonshotai/kimi-k2.6",
+        "openrouter:mistralai/mistral-small-2603",
+        "openrouter:qwen/qwen3.7-flash",
         "llama3.3:70b",
         "deepseek-r1:70b",
         "hf.co/LVSTCK/domestic-yak-8B-instruct-GGUF:Q8_0",
@@ -116,7 +122,7 @@ def test_claude_sonnet_5_is_a_supported_anthropic_chat_model():
 
 
 def test_openrouter_deepseek_is_a_supported_openrouter_chat_model() -> None:
-    model = Model("openrouter:deepseek/deepseek-v4-pro")
+    model = Model("openrouter:deepseek/deepseek-v4-pro-0813")
 
     assert model in CHAT_MODELS
     assert model in QUERY_TRANSFORM_MODELS
@@ -127,12 +133,12 @@ def test_openrouter_deepseek_is_a_supported_openrouter_chat_model() -> None:
 def test_openrouter_inference_defaults_query_transform_to_same_model() -> None:
     payload = ChatSchema.model_validate(
         {
-            "inference_model": "openrouter:deepseek/deepseek-v4-pro",
+            "inference_model": "openrouter:deepseek/deepseek-v4-pro-0813",
             "messages": [{"role": "user", "content": "test"}],
         },
     )
 
-    assert payload.query_transform_model == Model.OPENROUTER_DEEPSEEK_V4_PRO
+    assert payload.query_transform_model == Model.OPENROUTER_DEEPSEEK_V4_PRO_0813
 
 
 def test_stream_openrouter_route_receives_user_credential(monkeypatch) -> None:
@@ -174,7 +180,7 @@ def test_stream_openrouter_route_receives_user_credential(monkeypatch) -> None:
     async def route_response() -> StreamingResponse:
         return await streams.stream_response_with_agent(
             "test",
-            Model.OPENROUTER_DEEPSEEK_V4_PRO,
+            Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
             system_prompt="system",
             history=[],
             temperature=0.0,
@@ -220,7 +226,7 @@ def test_query_transform_routes_openrouter_credential(monkeypatch) -> None:
     async def transform() -> str:
         return await query_transform.transform_query(
             "test",
-            Model.OPENROUTER_DEEPSEEK_V4_PRO,
+            Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
             temperature=0.0,
             top_p=1.0,
             max_tokens=256,

@@ -24,14 +24,15 @@ class Model(StrEnum):
     CLAUDE_SONNET_5 = "claude-sonnet-5"
     CLAUDE_HAIKU_4_5 = "claude-haiku-4-5"
 
-    OPENROUTER_DEEPSEEK_V4_PRO = "openrouter:deepseek/deepseek-v4-pro"
-    OPENROUTER_DEEPSEEK_V4_FLASH = "openrouter:deepseek/deepseek-v4-flash"
+    OPENROUTER_DEEPSEEK_V4_PRO_0813 = "openrouter:deepseek/deepseek-v4-pro-0813"
+    OPENROUTER_DEEPSEEK_V4_FLASH_0731 = "openrouter:deepseek/deepseek-v4-flash-0731"
     OPENROUTER_GLM_5_3 = "openrouter:z-ai/glm-5.3"
-    OPENROUTER_KIMI_K2_6 = "openrouter:moonshotai/kimi-k2.6"
+    OPENROUTER_KIMI_K3 = "openrouter:moonshotai/kimi-k3"
+    OPENROUTER_QWEN3_8_MAX = "openrouter:qwen/qwen3.8-max"
     OPENROUTER_QWEN3_8_27B = "openrouter:qwen/qwen3.8-27b"
-    OPENROUTER_QWEN3_7_FLASH = "openrouter:qwen/qwen3.7-flash"
     OPENROUTER_MINIMAX_M3 = "openrouter:minimax/minimax-m3"
-    OPENROUTER_MISTRAL_SMALL_2603 = "openrouter:mistralai/mistral-small-2603"
+    OPENROUTER_GROK_4_6 = "openrouter:x-ai/grok-4.6"
+    OPENROUTER_HY3 = "openrouter:tencent/hy3"
 
     QWEN3_30B_THINKING = "qwen3:30b-a3b-thinking-2507-q4_K_M"
     QWEN3_30B_INSTRUCT = "qwen3:30b-a3b-instruct-2507-q4_K_M"
@@ -73,14 +74,15 @@ CHAT_MODEL_ORDER: Final[tuple[Model, ...]] = (
     Model.CLAUDE_OPUS_4_8,
     Model.CLAUDE_SONNET_5,
     Model.CLAUDE_HAIKU_4_5,
-    Model.OPENROUTER_DEEPSEEK_V4_PRO,
-    Model.OPENROUTER_DEEPSEEK_V4_FLASH,
+    Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
+    Model.OPENROUTER_DEEPSEEK_V4_FLASH_0731,
     Model.OPENROUTER_GLM_5_3,
-    Model.OPENROUTER_KIMI_K2_6,
+    Model.OPENROUTER_KIMI_K3,
+    Model.OPENROUTER_QWEN3_8_MAX,
     Model.OPENROUTER_QWEN3_8_27B,
-    Model.OPENROUTER_QWEN3_7_FLASH,
     Model.OPENROUTER_MINIMAX_M3,
-    Model.OPENROUTER_MISTRAL_SMALL_2603,
+    Model.OPENROUTER_GROK_4_6,
+    Model.OPENROUTER_HY3,
 )
 CHAT_MODELS: Final[frozenset[Model]] = frozenset(CHAT_MODEL_ORDER)
 type ChatModel = Model | str
@@ -113,14 +115,15 @@ ANTHROPIC_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
 )
 OPENROUTER_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     {
-        Model.OPENROUTER_DEEPSEEK_V4_PRO,
-        Model.OPENROUTER_DEEPSEEK_V4_FLASH,
+        Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
+        Model.OPENROUTER_DEEPSEEK_V4_FLASH_0731,
         Model.OPENROUTER_GLM_5_3,
-        Model.OPENROUTER_KIMI_K2_6,
+        Model.OPENROUTER_KIMI_K3,
+        Model.OPENROUTER_QWEN3_8_MAX,
         Model.OPENROUTER_QWEN3_8_27B,
-        Model.OPENROUTER_QWEN3_7_FLASH,
         Model.OPENROUTER_MINIMAX_M3,
-        Model.OPENROUTER_MISTRAL_SMALL_2603,
+        Model.OPENROUTER_GROK_4_6,
+        Model.OPENROUTER_HY3,
     },
 )
 OPENROUTER_MANDATORY_REASONING_MODELS: Final[frozenset[Model]] = frozenset(
