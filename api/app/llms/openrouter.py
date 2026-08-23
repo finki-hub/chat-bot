@@ -69,6 +69,15 @@ def get_openrouter_llm(
     upstream_model: str | None = None,
 ) -> ChatOpenRouter:
     credential = require_provider_credential("openrouter", credential)
+    if upstream_model is None:
+        reasoning_config = _reasoning_config(model, reasoning)
+    else:
+        try:
+            effective_model = Model(f"{_MODEL_PREFIX}{upstream_model}")
+        except ValueError:
+            reasoning_config = None
+        else:
+            reasoning_config = _reasoning_config(effective_model, reasoning)
     return ChatOpenRouter.model_validate(
         {
             "model_name": (
@@ -83,7 +92,7 @@ def get_openrouter_llm(
             "max_tokens": max_tokens,
             "streaming": True,
             "stream_usage": True,
-            "reasoning": _reasoning_config(model, reasoning),
+            **({} if reasoning_config is None else {"reasoning": reasoning_config}),
             "openrouter_provider": _PROVIDER_ROUTING,
         },
     )

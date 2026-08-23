@@ -361,19 +361,11 @@ def test_openrouter_client_uses_upstream_id_and_privacy_routing(monkeypatch) -> 
     ]
 
 
-def test_sponsored_openrouter_client_receives_upstream_model(monkeypatch) -> None:
-    captured: list[dict] = []
-
-    class OpenRouterCapturingClient:
-        @classmethod
-        def model_validate(cls, value):
-            captured.append(value)
-            return cls()
-
-    monkeypatch.setattr(openrouter, "ChatOpenRouter", OpenRouterCapturingClient)
-
-    openrouter.get_openrouter_llm(
-        Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
+def test_sponsored_openrouter_client_omits_alias_reasoning_for_unknown_upstream() -> (
+    None
+):
+    llm = openrouter.get_openrouter_llm(
+        Model.OPENROUTER_QWEN3_8_MAX,
         temperature=0.0,
         top_p=1.0,
         max_tokens=1024,
@@ -384,7 +376,24 @@ def test_sponsored_openrouter_client_receives_upstream_model(monkeypatch) -> Non
         upstream_model="sponsored/upstream-model",
     )
 
-    assert captured[0]["model_name"] == "sponsored/upstream-model"
+    assert llm.model_name == "sponsored/upstream-model"
+    assert llm.reasoning is None
+
+
+def test_sponsored_openrouter_client_uses_known_upstream_reasoning() -> None:
+    llm = openrouter.get_openrouter_llm(
+        Model.OPENROUTER_QWEN3_8_MAX,
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=1024,
+        credential=ChatCredentialSecret(
+            provider="openrouter",
+            api_key="sponsored-key",
+        ),
+        upstream_model="minimax/minimax-m3",
+    )
+
+    assert llm.reasoning == {"effort": "none"}
 
 
 @pytest.mark.parametrize(
