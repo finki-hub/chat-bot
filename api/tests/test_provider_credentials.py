@@ -63,7 +63,7 @@ def test_credential_providers_for_models_includes_dynamic_ollama_tags() -> None:
 
 def test_credential_providers_for_models_includes_openrouter_models() -> None:
     providers = credential_providers_for_models(
-        Model("openrouter:deepseek/deepseek-v4-pro"),
+        Model("openrouter:deepseek/deepseek-v4-pro-0813"),
     )
 
     assert providers == frozenset({"openrouter"})
