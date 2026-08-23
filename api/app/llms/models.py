@@ -127,7 +127,11 @@ OPENROUTER_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     },
 )
 OPENROUTER_MANDATORY_REASONING_MODELS: Final[frozenset[Model]] = frozenset(
-    {Model.OPENROUTER_GLM_5_3},
+    {
+        Model.OPENROUTER_GLM_5_3,
+        Model.OPENROUTER_QWEN3_8_MAX,
+        Model.OPENROUTER_GROK_4_6,
+    },
 )
 OLLAMA_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset()
 QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(

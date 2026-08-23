@@ -483,7 +483,18 @@ def test_openrouter_client_disables_optional_reasoning(monkeypatch) -> None:
     assert captured[0]["reasoning"] == {"effort": "none"}
 
 
-def test_openrouter_client_keeps_mandatory_reasoning_enabled(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "model",
+    [
+        Model.OPENROUTER_GLM_5_3,
+        Model.OPENROUTER_QWEN3_8_MAX,
+        Model.OPENROUTER_GROK_4_6,
+    ],
+)
+def test_openrouter_client_keeps_mandatory_reasoning_enabled(
+    monkeypatch,
+    model: Model,
+) -> None:
     captured: list[dict] = []
 
     class OpenRouterCapturingClient:
@@ -495,7 +506,7 @@ def test_openrouter_client_keeps_mandatory_reasoning_enabled(monkeypatch) -> Non
     monkeypatch.setattr(openrouter, "ChatOpenRouter", OpenRouterCapturingClient)
 
     openrouter.get_openrouter_llm(
-        Model.OPENROUTER_GLM_5_3,
+        model,
         temperature=0.2,
         top_p=0.8,
         max_tokens=1024,
