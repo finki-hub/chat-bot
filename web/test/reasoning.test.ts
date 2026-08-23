@@ -39,17 +39,25 @@ describe('isReasoningCapableModel', () => {
 });
 
 describe('mandatory reasoning policy', () => {
-  const mandatoryModel = 'openrouter:z-ai/glm-5.3';
+  const mandatoryModels = [
+    'openrouter:z-ai/glm-5.3',
+    'openrouter:qwen/qwen3.8-max',
+    'openrouter:x-ai/grok-4.6',
+  ];
 
   it('identifies only models whose provider cannot disable reasoning', () => {
-    expect(isReasoningMandatoryModel(mandatoryModel)).toBe(true);
+    expect(mandatoryModels.map(isReasoningMandatoryModel)).toStrictEqual(
+      mandatoryModels.map(() => true),
+    );
     expect(
       isReasoningMandatoryModel('openrouter:deepseek/deepseek-v4-pro-0813'),
     ).toBe(false);
   });
 
   it('keeps mandatory reasoning enabled when the stored preference is false', () => {
-    expect(isReasoningEnabledForModel(mandatoryModel, false)).toBe(true);
+    expect(
+      mandatoryModels.map((model) => isReasoningEnabledForModel(model, false)),
+    ).toStrictEqual(mandatoryModels.map(() => true));
     expect(
       isReasoningEnabledForModel(
         'openrouter:deepseek/deepseek-v4-pro-0813',
