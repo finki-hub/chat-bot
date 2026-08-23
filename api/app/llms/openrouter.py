@@ -35,11 +35,14 @@ _PROVIDER_ROUTING = {
     "require_parameters": True,
 }
 _REASONING_EFFORT_BY_MODEL: Final[dict[Model, str]] = {
-    Model.OPENROUTER_DEEPSEEK_V4_PRO: "high",
-    Model.OPENROUTER_DEEPSEEK_V4_FLASH: "high",
+    Model.OPENROUTER_DEEPSEEK_V4_PRO_0813: "high",
+    Model.OPENROUTER_DEEPSEEK_V4_FLASH_0731: "high",
     Model.OPENROUTER_GLM_5_3: "high",
+    Model.OPENROUTER_KIMI_K3: "high",
+    Model.OPENROUTER_QWEN3_8_MAX: "high",
     Model.OPENROUTER_QWEN3_8_27B: "medium",
-    Model.OPENROUTER_MISTRAL_SMALL_2603: "high",
+    Model.OPENROUTER_GROK_4_6: "high",
+    Model.OPENROUTER_HY3: "high",
 }
 
 
