@@ -167,7 +167,7 @@ def test_chat_title_uses_selected_openrouter_model_directly(monkeypatch) -> None
                             content="Кога е јунската сесија?",
                         ),
                     ],
-                    "provider_model": Model.OPENROUTER_DEEPSEEK_V4_PRO,
+                    "provider_model": Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
                 },
             ),
             db,
@@ -177,4 +177,4 @@ def test_chat_title_uses_selected_openrouter_model_directly(monkeypatch) -> None
     response = anyio.run(run_title)
 
     assert response.title == "Испитен рок"
-    assert selected_models == [Model.OPENROUTER_DEEPSEEK_V4_PRO]
+    assert selected_models == [Model.OPENROUTER_DEEPSEEK_V4_PRO_0813]

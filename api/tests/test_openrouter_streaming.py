@@ -16,7 +16,7 @@ def test_openrouter_byok_client_does_not_inherit_deployment_base_url(
     monkeypatch.setenv("OPENROUTER_API_BASE", "https://deployment.example/v1")
 
     llm = openrouter.get_openrouter_llm(
-        Model.OPENROUTER_DEEPSEEK_V4_PRO,
+        Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
         temperature=0.0,
         top_p=1.0,
         max_tokens=128,
@@ -47,7 +47,7 @@ def test_openrouter_regular_stream_preserves_reasoning_events(monkeypatch) -> No
     )
     response = openrouter.stream_openrouter_response(
         "question",
-        Model.OPENROUTER_DEEPSEEK_V4_PRO,
+        Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
         system_prompt="system",
         temperature=0.0,
         top_p=1.0,
@@ -105,7 +105,7 @@ def test_openrouter_agent_fallback_preserves_upstream_model(monkeypatch) -> None
     async def route() -> StreamingResponse:
         return await openrouter.stream_openrouter_agent_response(
             "question",
-            Model.OPENROUTER_DEEPSEEK_V4_PRO,
+            Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
             system_prompt="system",
             temperature=0.0,
             top_p=1.0,
