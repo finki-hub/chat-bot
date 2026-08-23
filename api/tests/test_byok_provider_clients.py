@@ -329,7 +329,7 @@ def test_openrouter_client_uses_upstream_id_and_privacy_routing(monkeypatch) -> 
     monkeypatch.setattr(openrouter, "ChatOpenRouter", OpenRouterCapturingClient)
 
     openrouter.get_openrouter_llm(
-        Model.OPENROUTER_DEEPSEEK_V4_PRO,
+        Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
         temperature=0.2,
         top_p=0.8,
         max_tokens=1024,
@@ -343,7 +343,7 @@ def test_openrouter_client_uses_upstream_id_and_privacy_routing(monkeypatch) -> 
 
     assert captured == [
         {
-            "model_name": "deepseek/deepseek-v4-pro",
+            "model_name": "deepseek/deepseek-v4-pro-0813",
             "openrouter_api_key": SecretStr("openrouter-user-key"),
             "base_url": "https://openrouter-proxy.example/v1",
             "temperature": 0.2,
@@ -361,19 +361,11 @@ def test_openrouter_client_uses_upstream_id_and_privacy_routing(monkeypatch) -> 
     ]
 
 
-def test_sponsored_openrouter_client_receives_upstream_model(monkeypatch) -> None:
-    captured: list[dict] = []
-
-    class OpenRouterCapturingClient:
-        @classmethod
-        def model_validate(cls, value):
-            captured.append(value)
-            return cls()
-
-    monkeypatch.setattr(openrouter, "ChatOpenRouter", OpenRouterCapturingClient)
-
-    openrouter.get_openrouter_llm(
-        Model.OPENROUTER_DEEPSEEK_V4_PRO,
+def test_sponsored_openrouter_client_omits_alias_reasoning_for_unknown_upstream() -> (
+    None
+):
+    llm = openrouter.get_openrouter_llm(
+        Model.OPENROUTER_QWEN3_8_MAX,
         temperature=0.0,
         top_p=1.0,
         max_tokens=1024,
@@ -384,17 +376,35 @@ def test_sponsored_openrouter_client_receives_upstream_model(monkeypatch) -> Non
         upstream_model="sponsored/upstream-model",
     )
 
-    assert captured[0]["model_name"] == "sponsored/upstream-model"
+    assert llm.model_name == "sponsored/upstream-model"
+    assert llm.reasoning is None
+
+
+def test_sponsored_openrouter_client_uses_known_upstream_reasoning() -> None:
+    llm = openrouter.get_openrouter_llm(
+        Model.OPENROUTER_QWEN3_8_MAX,
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=1024,
+        credential=ChatCredentialSecret(
+            provider="openrouter",
+            api_key="sponsored-key",
+        ),
+        upstream_model="minimax/minimax-m3",
+    )
+
+    assert llm.reasoning == {"effort": "none"}
 
 
 @pytest.mark.parametrize(
     ("model", "expected_reasoning"),
     [
-        (Model.OPENROUTER_KIMI_K2_6, {}),
+        (Model.OPENROUTER_KIMI_K3, {"effort": "high"}),
+        (Model.OPENROUTER_QWEN3_8_MAX, {"effort": "high"}),
         (Model.OPENROUTER_QWEN3_8_27B, {"effort": "medium"}),
-        (Model.OPENROUTER_QWEN3_7_FLASH, {}),
         (Model.OPENROUTER_MINIMAX_M3, {}),
-        (Model.OPENROUTER_MISTRAL_SMALL_2603, {"effort": "high"}),
+        (Model.OPENROUTER_GROK_4_6, {"effort": "high"}),
+        (Model.OPENROUTER_HY3, {"effort": "high"}),
     ],
 )
 def test_openrouter_client_uses_supported_reasoning_configuration(
@@ -429,11 +439,7 @@ def test_openrouter_client_uses_supported_reasoning_configuration(
 
 @pytest.mark.parametrize(
     "model",
-    [
-        Model.OPENROUTER_KIMI_K2_6,
-        Model.OPENROUTER_QWEN3_7_FLASH,
-        Model.OPENROUTER_MINIMAX_M3,
-    ],
+    [Model.OPENROUTER_MINIMAX_M3],
 )
 def test_openrouter_sdk_serializes_default_reasoning_configuration(
     model: Model,
@@ -472,7 +478,7 @@ def test_openrouter_client_disables_optional_reasoning(monkeypatch) -> None:
     monkeypatch.setattr(openrouter, "ChatOpenRouter", OpenRouterCapturingClient)
 
     openrouter.get_openrouter_llm(
-        Model.OPENROUTER_DEEPSEEK_V4_PRO,
+        Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
         temperature=0.2,
         top_p=0.8,
         max_tokens=1024,
@@ -486,7 +492,18 @@ def test_openrouter_client_disables_optional_reasoning(monkeypatch) -> None:
     assert captured[0]["reasoning"] == {"effort": "none"}
 
 
-def test_openrouter_client_keeps_mandatory_reasoning_enabled(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "model",
+    [
+        Model.OPENROUTER_GLM_5_3,
+        Model.OPENROUTER_QWEN3_8_MAX,
+        Model.OPENROUTER_GROK_4_6,
+    ],
+)
+def test_openrouter_client_keeps_mandatory_reasoning_enabled(
+    monkeypatch,
+    model: Model,
+) -> None:
     captured: list[dict] = []
 
     class OpenRouterCapturingClient:
@@ -498,7 +515,7 @@ def test_openrouter_client_keeps_mandatory_reasoning_enabled(monkeypatch) -> Non
     monkeypatch.setattr(openrouter, "ChatOpenRouter", OpenRouterCapturingClient)
 
     openrouter.get_openrouter_llm(
-        Model.OPENROUTER_GLM_5_3,
+        model,
         temperature=0.2,
         top_p=0.8,
         max_tokens=1024,
@@ -522,7 +539,7 @@ def test_openrouter_client_keeps_mandatory_reasoning_enabled(monkeypatch) -> Non
         (
             "openrouter",
             openrouter.get_openrouter_llm,
-            Model.OPENROUTER_DEEPSEEK_V4_PRO,
+            Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
         ),
     ],
 )

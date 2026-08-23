@@ -46,7 +46,7 @@ def _client() -> TestClient:
             "inference",
         ),
         (
-            Model.OPENROUTER_DEEPSEEK_V4_PRO,
+            Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
             Model.BGE_M3_LOCAL,
             "openrouter",
             "inference",
