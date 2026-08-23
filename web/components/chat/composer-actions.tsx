@@ -24,7 +24,11 @@ import {
   type ModelGroup,
   providerLabel,
 } from '@/lib/model-catalog';
-import { isReasoningCapableModel } from '@/lib/reasoning';
+import {
+  isReasoningCapableModel,
+  isReasoningEnabledForModel,
+  isReasoningMandatoryModel,
+} from '@/lib/reasoning';
 
 export type ComposerActionsProps = {
   availableProviders: ReadonlySet<string>;
@@ -115,6 +119,8 @@ export const ComposerActions = ({
   const selectedModel = groups
     .flatMap((group) => group.models)
     .find((entry) => entry.id === model);
+  const mandatoryReasoning = isReasoningMandatoryModel(model);
+  const reasoningEnabled = isReasoningEnabledForModel(model, reasoning);
   const triggerLabel = showModelPlaceholder
     ? modelPlaceholder
     : (selectedModel?.name ?? modelPlaceholder);
@@ -127,16 +133,20 @@ export const ComposerActions = ({
       >
         <Button
           aria-label={t('composer.reasoning')}
-          aria-pressed={reasoning}
+          aria-pressed={reasoningEnabled}
           className="min-h-11 w-fit shrink-0 gap-1.5 rounded-full px-3 text-xs font-medium sm:pointer-fine:min-h-8"
           data-testid="composer-reasoning"
-          disabled={(disabled ?? false) || !isReasoningCapableModel(model)}
+          disabled={
+            (disabled ?? false) ||
+            mandatoryReasoning ||
+            !isReasoningCapableModel(model)
+          }
           onClick={() => {
-            onReasoningChange(!reasoning);
+            onReasoningChange(!reasoningEnabled);
           }}
           size="sm"
           type="button"
-          variant={reasoning ? 'default' : 'ghost'}
+          variant={reasoningEnabled ? 'default' : 'ghost'}
         >
           <Brain
             aria-hidden="true"

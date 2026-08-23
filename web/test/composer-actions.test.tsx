@@ -16,6 +16,7 @@ const LUNA_OPTION_NAME = /GPT-5\.6 Luna.*Бесплатно/u;
 const GEMINI_ID = 'gemini-3.5-flash';
 const GEMINI_NAME = 'Gemini 3.5 Flash';
 const GEMINI_OPTION_NAME = /Gemini 3\.5 Flash.*Бесплатно/u;
+const GLM_ID = 'openrouter:z-ai/glm-5.3';
 
 const DEFAULT_MODEL = {
   id: LUNA_ID,
@@ -129,5 +130,26 @@ describe('ComposerActions Luna availability', () => {
     expect(option).toHaveTextContent('Бесплатно');
     expect(option).not.toHaveTextContent('Luna');
     expect(option).not.toHaveTextContent('OpenAI');
+  });
+});
+
+describe('ComposerActions mandatory reasoning', () => {
+  it('shows mandatory reasoning as enabled and prevents disabling it', async () => {
+    const props = createProps('byok', {
+      id: GLM_ID,
+      name: 'GLM 5.3',
+      provider: 'openrouter',
+    });
+    render(<ComposerActions {...props} />);
+    const user = userEvent.setup();
+    const reasoning = screen.getByTestId('composer-reasoning');
+
+    expect(reasoning).toHaveAttribute('aria-pressed', 'true');
+
+    expect(reasoning).toBeDisabled();
+
+    await user.click(reasoning);
+
+    expect(props.onReasoningChange).not.toHaveBeenCalled();
   });
 });

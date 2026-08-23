@@ -27,9 +27,15 @@ def test_available_providers_returns_only_configured_credentials() -> None:
             provider="ollama",
             api_key=secrets.token_urlsafe(),
         ),
+        openrouter=ChatCredentialSecret(
+            provider="openrouter",
+            api_key=secrets.token_urlsafe(),
+        ),
     )
 
-    assert credentials.available_providers() == frozenset({"google", "ollama"})
+    assert credentials.available_providers() == frozenset(
+        {"google", "ollama", "openrouter"},
+    )
 
 
 def test_credential_providers_for_models_includes_retrieval_time_models() -> None:
@@ -53,6 +59,14 @@ def test_credential_providers_for_models_includes_dynamic_ollama_tags() -> None:
     providers = credential_providers_for_models("bge-m3:latest", Model.BGE_M3_LOCAL)
 
     assert providers == frozenset({"ollama"})
+
+
+def test_credential_providers_for_models_includes_openrouter_models() -> None:
+    providers = credential_providers_for_models(
+        Model("openrouter:deepseek/deepseek-v4-pro"),
+    )
+
+    assert providers == frozenset({"openrouter"})
 
 
 def test_resolve_provider_credentials_skips_unrequested_corrupted_credentials() -> None:

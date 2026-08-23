@@ -29,6 +29,14 @@ EXPECTED_IDS = [
     "claude-opus-4-8",
     "claude-sonnet-5",
     "claude-haiku-4-5",
+    "openrouter:deepseek/deepseek-v4-pro",
+    "openrouter:deepseek/deepseek-v4-flash",
+    "openrouter:z-ai/glm-5.3",
+    "openrouter:moonshotai/kimi-k2.6",
+    "openrouter:qwen/qwen3.8-27b",
+    "openrouter:qwen/qwen3.7-flash",
+    "openrouter:minimax/minimax-m3",
+    "openrouter:mistralai/mistral-small-2603",
 ]
 
 
@@ -76,6 +84,14 @@ def test_static_catalog_has_exact_order_and_providers_without_tiers() -> None:
         "anthropic",
         "anthropic",
         "anthropic",
+        "openrouter",
+        "openrouter",
+        "openrouter",
+        "openrouter",
+        "openrouter",
+        "openrouter",
+        "openrouter",
+        "openrouter",
     ]
     assert all(not hasattr(entry, "tier") for entry in MODEL_CATALOG)
 

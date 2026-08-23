@@ -1,7 +1,7 @@
-from typing import Literal
+from typing import Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.constants.defaults import (
     DEFAULT_EMBEDDINGS_MODEL,
@@ -11,6 +11,7 @@ from app.constants.defaults import (
 from app.llms.models import (
     ACTIVE_EMBEDDING_MODELS,
     CHAT_MODELS,
+    OPENROUTER_QUERY_TRANSFORM_MODELS,
     QUERY_TRANSFORM_MODELS,
     ChatModel,
     Model,
@@ -136,6 +137,16 @@ class ChatSchema(BaseModel):
             "a reasoning mode ignore this flag."
         ),
     )
+
+    @model_validator(mode="after")
+    def _default_openrouter_query_transform(self) -> Self:
+        if (
+            "query_transform_model" not in self.model_fields_set
+            and isinstance(self.inference_model, Model)
+            and self.inference_model in OPENROUTER_QUERY_TRANSFORM_MODELS
+        ):
+            self.query_transform_model = self.inference_model
+        return self
 
     @field_validator("messages")
     @classmethod

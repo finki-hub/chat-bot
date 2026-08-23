@@ -199,6 +199,28 @@ describe('/api/chat/credentials', () => {
     });
   });
 
+  it('upserts an OpenRouter key for the authenticated user', async () => {
+    const credential: ChatCredentialPublic = {
+      base_url: null,
+      has_api_key: true,
+      provider: 'openrouter',
+      user_id: USER_ID,
+    };
+    stateClientMock.upsertCredential.mockResolvedValueOnce(credential);
+    const { PUT } = await import('@/app/api/chat/credentials/route');
+
+    const response = await PUT(
+      jsonRequest({ api_key: 'openrouter-user-key', provider: 'openrouter' }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(stateClientMock.upsertCredential).toHaveBeenCalledWith({
+      apiKey: 'openrouter-user-key',
+      provider: 'openrouter',
+      userId: USER_ID,
+    });
+  });
+
   it('returns a JSON error without authentication or state access for an invalid credential payload', async () => {
     getAuthenticatedChatUserIdMock.mockClear();
     stateClientMock.upsertCredential.mockClear();
@@ -250,6 +272,22 @@ describe('/api/chat/credentials', () => {
     expect(res.status).toBe(204);
     expect(stateClientMock.deleteCredential).toHaveBeenCalledWith({
       provider: 'google',
+      userId: USER_ID,
+    });
+  });
+
+  it('deletes OpenRouter credentials for the authenticated chat user', async () => {
+    stateClientMock.deleteCredential.mockResolvedValueOnce(undefined);
+    const { DELETE } =
+      await import('@/app/api/chat/credentials/[provider]/route');
+
+    const response = await DELETE(new Request('https://localhost'), {
+      params: Promise.resolve({ provider: 'openrouter' }),
+    });
+
+    expect(response.status).toBe(204);
+    expect(stateClientMock.deleteCredential).toHaveBeenCalledWith({
+      provider: 'openrouter',
       userId: USER_ID,
     });
   });

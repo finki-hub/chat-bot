@@ -20,7 +20,7 @@ import { DESKTOP_SIDEBAR_QUERY } from '@/components/shell/sidebar-helpers';
 import { SidebarUserIdentity } from '@/components/shell/sidebar-user-identity';
 import { t } from '@/lib/i18n';
 import { isModelAvailable, recoverSelectedModel } from '@/lib/model-catalog';
-import { isReasoningCapableModel } from '@/lib/reasoning';
+import { isReasoningEnabledForModel } from '@/lib/reasoning';
 import { DEFAULT_MODEL, useUiStore } from '@/lib/ui-store';
 import { useConversations } from '@/lib/use-conversations';
 import { useCredentials } from '@/lib/use-credentials';
@@ -49,7 +49,7 @@ export const ChatScreen = () => {
   const reasoning = useUiStore((s) => s.reasoning);
   const setReasoning = useUiStore((s) => s.setReasoning);
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
-  const reasoningActive = reasoning && isReasoningCapableModel(model);
+  const reasoningActive = isReasoningEnabledForModel(model, reasoning);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const [sidebarSynced, setSidebarSynced] = useState(false);

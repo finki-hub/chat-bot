@@ -84,6 +84,18 @@ test('keeps model selector geometry stable at scroll boundaries', async ({
   await page.keyboard.press('Escape');
   await page.setViewportSize({ height: 900, width: 1_280 });
   await page.getByTestId('composer-model').click();
-  await expect(scrollUpIndicator).toBeHidden();
-  await expect(scrollDownIndicator).toBeHidden();
+  await expect(scrollUpIndicator).toBeVisible();
+  await expect(scrollDownIndicator).toBeVisible();
+  const tallViewport = await viewport.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  }));
+  expect(tallViewport.scrollHeight).toBeGreaterThan(tallViewport.clientHeight);
+
+  const lastOption = content.getByRole('option').last();
+  await viewport.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event('scroll'));
+  });
+  await expect(lastOption).toBeVisible();
 });

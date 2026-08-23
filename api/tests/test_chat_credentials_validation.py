@@ -45,6 +45,12 @@ def _client() -> TestClient:
             "ollama",
             "inference",
         ),
+        (
+            Model.OPENROUTER_DEEPSEEK_V4_PRO,
+            Model.BGE_M3_LOCAL,
+            "openrouter",
+            "inference",
+        ),
     ],
 )
 def test_chat_requires_user_credential_before_mandatory_hosted_stage(
