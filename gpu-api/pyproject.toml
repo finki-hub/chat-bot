@@ -9,7 +9,7 @@ dependencies = [
   "posthog>=7.43.0",
   "sentence-transformers>=5.7.0",
   "torch>=2.13.0",
-  "transformers>=5.15.1",
+  "transformers>=5.16.1",
 ]
 
 [dependency-groups]
