@@ -195,17 +195,25 @@ def test_question_candidate_redacts_legacy_discord_tokens() -> None:
     assert "непозната Discord-ознака" in candidate.context_text
 
 
-def test_chunk_candidate_keeps_document_link_section_and_index():
+def test_chunk_candidate_keeps_document_provenance():
     chunk_id = uuid4()
     doc_id = uuid4()
+    authority_url = HttpUrl("https://www.finki.ukim.mk/documents/statute")
+    raw_url = HttpUrl(
+        "https://raw.githubusercontent.com/finki-hub/documents/main/raw/"
+        "statut_i_delovnik.pdf",
+    )
     c = ChunkSchema(
         id=chunk_id,
         document_id=doc_id,
         document_name="statut-finki",
         document_title="Статут на ФИНКИ",
-        document_url=HttpUrl(
-            "https://raw.githubusercontent.com/finki-hub/documents/main/raw/statut_i_delovnik.pdf",
-        ),
+        document_url=authority_url,
+        document_urls=(authority_url, raw_url),
+        document_authority_url=authority_url,
+        document_current_status="current",
+        document_date="2019-06-06",
+        document_last_verified="2026-08-31",
         chunk_index=4,
         section="Член 12",
         content="Правилата се наведени во членот.",
@@ -214,10 +222,18 @@ def test_chunk_candidate_keeps_document_link_section_and_index():
     cand = _chunk_candidate(c)
 
     assert cand.retrieval_source.as_payload() == {
+        "authority_url": "https://www.finki.ukim.mk/documents/statute",
         "chunk_index": 4,
+        "current_status": "current",
+        "document_date": "2019-06-06",
         "id": str(chunk_id),
         "kind": "chunk",
+        "last_verified": "2026-08-31",
         "links": [
+            {
+                "label": "Статут на ФИНКИ",
+                "url": "https://www.finki.ukim.mk/documents/statute",
+            },
             {
                 "label": "Статут на ФИНКИ",
                 "url": "https://raw.githubusercontent.com/finki-hub/documents/main/raw/statut_i_delovnik.pdf",
@@ -237,10 +253,11 @@ def test_chunk_candidate_omits_link_without_document_url() -> None:
     assert "links" not in payload
 
 
-def test_chunk_retrieval_derives_document_url_from_source_file(
+def test_chunk_retrieval_maps_document_provenance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    document_url = (
+    authority_url = "https://www.finki.ukim.mk/documents/statute"
+    raw_url = (
         "https://raw.githubusercontent.com/finki-hub/documents/main/raw/"
         "statut_i_delovnik.pdf"
     )
@@ -251,8 +268,15 @@ def test_chunk_retrieval_derives_document_url_from_source_file(
                 "document_id": uuid4(),
                 "document_name": "statut-finki",
                 "document_title": "Статут на ФИНКИ",
+                "document_authority_url": authority_url,
                 "document_source_url": None,
                 "document_source_file": "statut_i_delovnik.pdf",
+                "document_source_files": json.dumps(
+                    ["statut_i_delovnik.pdf", "amendment.pdf"],
+                ),
+                "document_current_status": "current",
+                "document_date": "2019-06-06",
+                "document_last_verified": "2026-08-31",
                 "chunk_index": 4,
                 "section": "Член 12",
                 "content": "Правилата се наведени во членот.",
@@ -270,7 +294,20 @@ def test_chunk_retrieval_derives_document_url_from_source_file(
             limit=1,
         )
 
-        assert str(chunks[0].document_url) == document_url
+        chunk = chunks[0]
+        assert str(chunk.document_url) == authority_url
+        assert tuple(map(str, chunk.document_urls)) == (
+            authority_url,
+            raw_url,
+            (
+                "https://raw.githubusercontent.com/finki-hub/documents/main/raw/"
+                "amendment.pdf"
+            ),
+        )
+        assert str(chunk.document_authority_url) == authority_url
+        assert chunk.document_current_status == "current"
+        assert chunk.document_date == "2019-06-06"
+        assert chunk.document_last_verified == "2026-08-31"
 
     anyio.run(run)
 

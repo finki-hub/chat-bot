@@ -2,9 +2,11 @@
 
 import json
 from collections.abc import Sequence
+from typing import Final
 from uuid import UUID
 
 from asyncpg import Record
+from pydantic import TypeAdapter, ValidationError
 
 from app.data.connection import Database
 from app.data.embedding_sql import (
@@ -19,11 +21,25 @@ from app.llms.models import (
     Model,
     is_bge_m3_lifecycle_model,
 )
-from app.schemas.document_sources import resolve_document_source_url
+from app.schemas.document_sources import (
+    resolve_document_source_url,
+    resolve_document_source_urls,
+)
 from app.schemas.documents import ChunkSchema, DocumentSchema, IngestDocumentSchema
 from app.utils.database import embedding_to_pgvector
 
 __all__ = ["dirty_embedding_predicate"]
+
+SOURCE_FILES_ADAPTER: Final = TypeAdapter(tuple[str, ...])
+
+
+def _source_files_from_json(value: str | None) -> tuple[str, ...]:
+    if not value:
+        return ()
+    try:
+        return SOURCE_FILES_ADAPTER.validate_json(value)
+    except ValidationError:
+        return ()
 
 
 def _document_from_row(row: Record, chunk_count: int | None = None) -> DocumentSchema:
@@ -140,8 +156,13 @@ async def get_closest_chunks(
         c.section,
         d.name AS document_name,
         d.title AS document_title,
+        d.metadata->>'authority_url' AS document_authority_url,
         d.metadata->>'source_url' AS document_source_url,
         d.metadata->>'source_file' AS document_source_file,
+        d.metadata->>'source_files' AS document_source_files,
+        d.metadata->>'current_status' AS document_current_status,
+        d.metadata->>'document_date' AS document_date,
+        d.metadata->>'last_verified' AS document_last_verified,
         {embedding.distance_operand} <=> {embedding.query_operand} AS distance
     FROM chunk c
     JOIN document d ON d.id = c.document_id
@@ -159,23 +180,40 @@ async def get_closest_chunks(
         *predicate.parameters,
     )
 
-    return [
-        ChunkSchema(
-            id=row["id"],
-            document_id=row["document_id"],
-            document_name=row["document_name"],
-            document_title=row["document_title"],
-            document_url=resolve_document_source_url(
-                row.get("document_source_url"),
-                row.get("document_source_file"),
-            ),
-            chunk_index=row["chunk_index"],
-            section=row["section"],
-            content=row["content"],
-            distance=row.get("distance", None),
+    chunks: list[ChunkSchema] = []
+    for row in result:
+        source_file = row.get("document_source_file")
+        source_files = (
+            (source_file,) if source_file else ()
+        ) + _source_files_from_json(row.get("document_source_files"))
+        authority_url = resolve_document_source_url(
+            row.get("document_authority_url"),
+            None,
         )
-        for row in result
-    ]
+        document_urls = resolve_document_source_urls(
+            row.get("document_authority_url"),
+            row.get("document_source_url"),
+            source_files,
+        )
+        chunks.append(
+            ChunkSchema(
+                id=row["id"],
+                document_id=row["document_id"],
+                document_name=row["document_name"],
+                document_title=row["document_title"],
+                document_url=document_urls[0] if document_urls else None,
+                document_urls=document_urls,
+                document_authority_url=authority_url,
+                document_current_status=row.get("document_current_status"),
+                document_date=row.get("document_date"),
+                document_last_verified=row.get("document_last_verified"),
+                chunk_index=row["chunk_index"],
+                section=row["section"],
+                content=row["content"],
+                distance=row.get("distance", None),
+            ),
+        )
+    return chunks
 
 
 async def get_chunks_window(
