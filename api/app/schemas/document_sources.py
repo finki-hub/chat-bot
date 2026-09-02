@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Final
 from urllib.parse import quote
 
@@ -28,16 +29,16 @@ def parse_document_source_url(value: str) -> HttpUrl:
     return url
 
 
-def resolve_document_source_url(
-    source_url: str | None,
-    source_file: str | None,
-) -> HttpUrl | None:
+def _parse_optional_source_url(value: str | None) -> HttpUrl | None:
+    if value is None:
+        return None
     try:
-        explicit_url = parse_document_source_url(source_url) if source_url else None
+        return parse_document_source_url(value)
     except InvalidDocumentSourceUrlError, ValidationError:
-        explicit_url = None
-    if explicit_url is not None:
-        return explicit_url
+        return None
+
+
+def _raw_source_url(source_file: str | None) -> HttpUrl | None:
     if (
         not source_file
         or source_file in {".", ".."}
@@ -48,9 +49,36 @@ def resolve_document_source_url(
         )
     ):
         return None
-    try:
-        return parse_document_source_url(
-            f"{DOCUMENTS_RAW_BASE_URL}{quote(source_file, safe='')}",
-        )
-    except InvalidDocumentSourceUrlError, ValidationError:
-        return None
+    return _parse_optional_source_url(
+        f"{DOCUMENTS_RAW_BASE_URL}{quote(source_file, safe='')}",
+    )
+
+
+def resolve_document_source_url(
+    source_url: str | None,
+    source_file: str | None,
+) -> HttpUrl | None:
+    explicit_url = _parse_optional_source_url(source_url)
+    if explicit_url is not None:
+        return explicit_url
+    return _raw_source_url(source_file)
+
+
+def resolve_document_source_urls(
+    authority_url: str | None,
+    source_url: str | None,
+    source_files: Sequence[str],
+) -> tuple[HttpUrl, ...]:
+    candidates = (
+        _parse_optional_source_url(authority_url),
+        _parse_optional_source_url(source_url),
+        *(_raw_source_url(source_file) for source_file in source_files),
+    )
+    resolved: list[HttpUrl] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if candidate is None or str(candidate) in seen:
+            continue
+        resolved.append(candidate)
+        seen.add(str(candidate))
+    return tuple(resolved)

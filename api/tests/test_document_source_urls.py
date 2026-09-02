@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from app.schemas import document_sources
 from app.schemas.document_sources import resolve_document_source_url
 from app.schemas.documents import IngestDocumentSchema
 
@@ -44,6 +45,35 @@ def test_invalid_legacy_source_url_without_source_file_is_omitted() -> None:
     assert resolve_document_source_url("javascript:alert(1)", None) is None
 
 
+def test_authority_url_is_primary_and_raw_sources_follow() -> None:
+    urls = document_sources.resolve_document_source_urls(
+        authority_url="https://www.finki.ukim.mk/documents/rulebook",
+        source_url=(
+            "https://raw.githubusercontent.com/finki-hub/documents/main/raw/"
+            "rulebook.pdf"
+        ),
+        source_files=("rulebook.pdf", "amendment.pdf"),
+    )
+
+    assert tuple(map(str, urls)) == (
+        "https://www.finki.ukim.mk/documents/rulebook",
+        "https://raw.githubusercontent.com/finki-hub/documents/main/raw/rulebook.pdf",
+        "https://raw.githubusercontent.com/finki-hub/documents/main/raw/amendment.pdf",
+    )
+
+
+def test_invalid_authority_url_falls_back_to_legacy_source_url() -> None:
+    urls = document_sources.resolve_document_source_urls(
+        authority_url="javascript:alert(1)",
+        source_url="https://www.finki.ukim.mk/documents/rulebook.pdf",
+        source_files=(),
+    )
+
+    assert tuple(map(str, urls)) == (
+        "https://www.finki.ukim.mk/documents/rulebook.pdf",
+    )
+
+
 @pytest.mark.parametrize(
     "source_file",
     [
@@ -70,13 +100,17 @@ def test_malformed_source_file_is_omitted(source_file: str) -> None:
         "https://www.finki.ukim.mk/document.pdf#section",
     ],
 )
-def test_ingest_rejects_non_public_source_url(source_url: str) -> None:
+@pytest.mark.parametrize("metadata_key", ["authority_url", "source_url"])
+def test_ingest_rejects_non_public_source_url(
+    source_url: str,
+    metadata_key: str,
+) -> None:
     with pytest.raises(ValidationError):
         _ = IngestDocumentSchema(
             name="document",
             title="Document",
             content="# Document",
-            metadata={"source_url": source_url},
+            metadata={metadata_key: source_url},
         )
 
 
@@ -86,12 +120,14 @@ def test_ingest_normalizes_public_source_url() -> None:
         title="Document",
         content="# Document",
         metadata={
+            "authority_url": "https://WWW.FINKI.UKIM.MK",
             "source_file": "document.pdf",
             "source_url": "https://www.finki.ukim.mk/document.pdf",
         },
     )
 
     assert payload.metadata == {
+        "authority_url": "https://www.finki.ukim.mk/",
         "source_file": "document.pdf",
         "source_url": "https://www.finki.ukim.mk/document.pdf",
     }
