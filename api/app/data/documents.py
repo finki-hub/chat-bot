@@ -93,23 +93,23 @@ async def delete_document_query(db: Database, name: str) -> None:
 
 async def update_document_metadata(
     db: Database,
+    observed: DocumentSchema,
     payload: IngestDocumentSchema,
-    chunk_count: int | None,
-) -> DocumentSchema:
+) -> DocumentSchema | None:
     row = await db.fetchrow(
         """
         UPDATE document
-        SET metadata = $2::jsonb, updated_at = NOW()
-        WHERE name = $1
+        SET metadata = $3::jsonb, updated_at = NOW()
+        WHERE id = $1 AND source_hash = $2
         RETURNING *
         """,
-        payload.name,
+        observed.id,
+        observed.source_hash,
         json.dumps(payload.metadata) if payload.metadata else None,
     )
     if row is None:
-        msg = "UPDATE document ... RETURNING returned no row"
-        raise RuntimeError(msg)
-    return _document_from_row(row, chunk_count=chunk_count)
+        return None
+    return _document_from_row(row, chunk_count=observed.chunk_count)
 
 
 async def replace_document_with_chunks(
