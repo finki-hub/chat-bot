@@ -127,8 +127,20 @@ const toSources = (
       id,
       kind,
       title,
+      ...(typeof item['authority_url'] === 'string' && {
+        authorityUrl: item['authority_url'],
+      }),
       ...(typeof item['chunk_index'] === 'number' && {
         chunkIndex: item['chunk_index'],
+      }),
+      ...(typeof item['current_status'] === 'string' && {
+        currentStatus: item['current_status'],
+      }),
+      ...(typeof item['document_date'] === 'string' && {
+        documentDate: item['document_date'],
+      }),
+      ...(typeof item['last_verified'] === 'string' && {
+        lastVerified: item['last_verified'],
       }),
       ...(typeof item['section'] === 'string' && { section: item['section'] }),
       ...(typeof item['snippet'] === 'string' && { snippet: item['snippet'] }),
