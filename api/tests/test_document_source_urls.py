@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import anyio
 import pytest
-from fastapi import Response, status
+from fastapi import HTTPException, Response, status
 from pydantic import ValidationError
 
 from app.api import documents as documents_api
@@ -171,10 +171,10 @@ def test_unchanged_ingest_updates_metadata_without_rechunking(
 
     async def update_metadata(
         _db: object,
+        observed: DocumentSchema,
         update: IngestDocumentSchema,
-        chunk_count: int | None,
-    ) -> DocumentSchema:
-        assert chunk_count == 2
+    ) -> DocumentSchema | None:
+        assert observed == existing
         return existing.model_copy(update={"metadata": update.metadata})
 
     monkeypatch.setattr(documents_api, "get_document_by_name_query", get_existing)
@@ -194,5 +194,57 @@ def test_unchanged_ingest_updates_metadata_without_rechunking(
         )
         assert result.metadata == payload.metadata
         assert response.status_code == status.HTTP_200_OK
+
+    anyio.run(run)
+
+
+def test_unchanged_ingest_rejects_stale_metadata_update(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    content = "# Document"
+    existing = DocumentSchema(
+        id=uuid4(),
+        name="document",
+        title="Document",
+        source_hash=hashlib.sha256(content.encode()).hexdigest(),
+        metadata={"source_file": "document.pdf"},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        chunk_count=2,
+    )
+    payload = IngestDocumentSchema(
+        name="document",
+        title="Document",
+        content=content,
+        metadata={"authority_url": "https://www.finki.ukim.mk/document"},
+    )
+
+    async def get_existing(*_args: object) -> DocumentSchema:
+        return existing
+
+    async def reject_stale_update(
+        _db: object,
+        observed: DocumentSchema,
+        update: IngestDocumentSchema,
+    ) -> None:
+        assert observed == existing
+        assert update == payload
+
+    monkeypatch.setattr(documents_api, "get_document_by_name_query", get_existing)
+    monkeypatch.setattr(documents_api, "update_document_metadata", reject_stale_update)
+    monkeypatch.setattr(
+        documents_api,
+        "chunk_markdown",
+        lambda _content: pytest.fail("stale metadata must not trigger rechunking"),
+    )
+
+    async def run() -> None:
+        with pytest.raises(HTTPException) as exc_info:
+            await documents_api.ingest_document(
+                payload,
+                Response(),
+                db=cast("Database", object()),
+            )
+        assert exc_info.value.status_code == status.HTTP_409_CONFLICT
 
     anyio.run(run)

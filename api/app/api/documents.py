@@ -80,6 +80,9 @@ async def get_document_by_name(name: str, db: Database = db_dep) -> DocumentSche
         status.HTTP_400_BAD_REQUEST: {
             "description": "Empty document / no chunks produced",
         },
+        status.HTTP_409_CONFLICT: {
+            "description": "Document changed during metadata refresh",
+        },
         status.HTTP_401_UNAUTHORIZED: {"description": "Invalid or missing API Key"},
     },
     dependencies=[api_key_dep],
@@ -100,7 +103,13 @@ async def ingest_document(
     if existing and existing.source_hash == source_hash and not force:
         response.status_code = status.HTTP_200_OK
         if (existing.metadata or None) != (payload.metadata or None):
-            return await update_document_metadata(db, payload, existing.chunk_count)
+            updated = await update_document_metadata(db, existing, payload)
+            if updated is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Document changed during metadata refresh",
+                )
+            return updated
         return existing
 
     chunks = chunk_markdown(payload.content)
