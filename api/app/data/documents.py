@@ -91,6 +91,27 @@ async def delete_document_query(db: Database, name: str) -> None:
     await db.execute("DELETE FROM document WHERE name = $1", name)
 
 
+async def update_document_metadata(
+    db: Database,
+    payload: IngestDocumentSchema,
+    chunk_count: int | None,
+) -> DocumentSchema:
+    row = await db.fetchrow(
+        """
+        UPDATE document
+        SET metadata = $2::jsonb, updated_at = NOW()
+        WHERE name = $1
+        RETURNING *
+        """,
+        payload.name,
+        json.dumps(payload.metadata) if payload.metadata else None,
+    )
+    if row is None:
+        msg = "UPDATE document ... RETURNING returned no row"
+        raise RuntimeError(msg)
+    return _document_from_row(row, chunk_count=chunk_count)
+
+
 async def replace_document_with_chunks(
     db: Database,
     payload: IngestDocumentSchema,

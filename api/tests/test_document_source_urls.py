@@ -1,9 +1,18 @@
+import hashlib
+from datetime import UTC, datetime
+from typing import cast
+from uuid import uuid4
+
+import anyio
 import pytest
+from fastapi import Response, status
 from pydantic import ValidationError
 
+from app.api import documents as documents_api
+from app.data.connection import Database
 from app.schemas import document_sources
 from app.schemas.document_sources import resolve_document_source_url
-from app.schemas.documents import IngestDocumentSchema
+from app.schemas.documents import DocumentSchema, IngestDocumentSchema
 
 
 def test_source_file_derives_encoded_raw_document_url() -> None:
@@ -131,3 +140,59 @@ def test_ingest_normalizes_public_source_url() -> None:
         "source_file": "document.pdf",
         "source_url": "https://www.finki.ukim.mk/document.pdf",
     }
+
+
+def test_unchanged_ingest_updates_metadata_without_rechunking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    content = "# Document"
+    existing = DocumentSchema(
+        id=uuid4(),
+        name="document",
+        title="Document",
+        source_hash=hashlib.sha256(content.encode()).hexdigest(),
+        metadata={"source_file": "document.pdf"},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        chunk_count=2,
+    )
+    payload = IngestDocumentSchema(
+        name="document",
+        title="Document",
+        content=content,
+        metadata={
+            "authority_url": "https://www.finki.ukim.mk/documents/document",
+            "source_file": "document.pdf",
+        },
+    )
+
+    async def get_existing(*_args: object) -> DocumentSchema:
+        return existing
+
+    async def update_metadata(
+        _db: object,
+        update: IngestDocumentSchema,
+        chunk_count: int | None,
+    ) -> DocumentSchema:
+        assert chunk_count == 2
+        return existing.model_copy(update={"metadata": update.metadata})
+
+    monkeypatch.setattr(documents_api, "get_document_by_name_query", get_existing)
+    monkeypatch.setattr(documents_api, "update_document_metadata", update_metadata)
+    monkeypatch.setattr(
+        documents_api,
+        "chunk_markdown",
+        lambda _content: pytest.fail("unchanged content must not be rechunked"),
+    )
+    response = Response()
+
+    async def run() -> None:
+        result = await documents_api.ingest_document(
+            payload,
+            response,
+            db=cast("Database", object()),
+        )
+        assert result.metadata == payload.metadata
+        assert response.status_code == status.HTTP_200_OK
+
+    anyio.run(run)

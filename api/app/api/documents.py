@@ -12,6 +12,7 @@ from app.data.documents import (
     get_document_by_name_query,
     list_documents_query,
     replace_document_with_chunks,
+    update_document_metadata,
 )
 from app.llms.chunking import chunk_markdown
 from app.llms.embeddings import stream_fill_chunk_embeddings
@@ -69,7 +70,7 @@ async def get_document_by_name(name: str, db: Database = db_dep) -> DocumentSche
         "Chunk a Markdown document into the `chunk` table. Idempotent by name: an existing "
         "document with the same name is fully replaced (its chunks are removed). Embeddings "
         "are left unfilled — call /documents/fill afterwards. If the content is unchanged "
-        "(same hash) the existing document is returned untouched unless `force=true`."
+        "(same hash) only changed metadata is updated unless `force=true`."
     ),
     status_code=status.HTTP_201_CREATED,
     responses={
@@ -97,8 +98,9 @@ async def ingest_document(
 
     existing = await get_document_by_name_query(db, payload.name)
     if existing and existing.source_hash == source_hash and not force:
-        # Unchanged content: nothing was created, so report 200 instead of the 201 default.
         response.status_code = status.HTTP_200_OK
+        if (existing.metadata or None) != (payload.metadata or None):
+            return await update_document_metadata(db, payload, existing.chunk_count)
         return existing
 
     chunks = chunk_markdown(payload.content)
