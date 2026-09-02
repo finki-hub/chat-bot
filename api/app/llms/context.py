@@ -181,6 +181,7 @@ def _chunk_candidate(c: ChunkSchema) -> _Candidate:
     label = f"{c.document_title} ({c.section})" if c.section else c.document_title
     rerank_text = f"Наслов: {label}\nСодржина: {c.content}"
     context_text = f"Тип на извор: Документ\nИзвор: {label}\nСодржина: {c.content}"
+    document_urls = c.document_urls or ((c.document_url,) if c.document_url else ())
     return _Candidate(
         key=f"C:{c.id}",
         source="chunk",
@@ -190,16 +191,19 @@ def _chunk_candidate(c: ChunkSchema) -> _Candidate:
             id=str(c.id),
             kind="chunk",
             title=c.document_title,
+            authority_url=(
+                str(c.document_authority_url) if c.document_authority_url else None
+            ),
             chunk_index=c.chunk_index,
-            links=(
-                (
-                    RetrievalSourceLink(
-                        label=c.document_title,
-                        url=str(c.document_url),
-                    ),
+            current_status=c.document_current_status,
+            document_date=c.document_date,
+            last_verified=c.document_last_verified,
+            links=tuple(
+                RetrievalSourceLink(
+                    label=c.document_title,
+                    url=str(document_url),
                 )
-                if c.document_url
-                else ()
+                for document_url in document_urls
             ),
             section=c.section,
             snippet=c.content,

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Final
 from uuid import UUID
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.llms.models import Model
 from app.schemas.document_sources import parse_document_source_url
+
+_SOURCE_URL_METADATA_KEYS: Final = ("authority_url", "source_url")
 
 
 class DocumentSchema(BaseModel):
@@ -57,6 +59,26 @@ class ChunkSchema(BaseModel):
     document_url: HttpUrl | None = Field(
         default=None,
         description="Canonical URL for the original document",
+    )
+    document_urls: tuple[HttpUrl, ...] = Field(
+        default=(),
+        description="Ordered official and original-file URLs for the document",
+    )
+    document_authority_url: HttpUrl | None = Field(
+        default=None,
+        description="Official authority URL for the document",
+    )
+    document_current_status: str | None = Field(
+        default=None,
+        description="Machine-readable currentness status supplied by the corpus",
+    )
+    document_date: str | None = Field(
+        default=None,
+        description="Primary date supplied by the corpus",
+    )
+    document_last_verified: str | None = Field(
+        default=None,
+        description="Date when the authority evidence was last reviewed",
     )
     chunk_index: int = Field(examples=[0])
     section: str | None = Field(
@@ -110,14 +132,17 @@ class IngestDocumentSchema(BaseModel):
 
     @field_validator("metadata")
     @classmethod
-    def _normalize_source_url(
+    def _normalize_source_urls(
         cls,
         value: dict[str, Any] | None,
     ) -> dict[str, Any] | None:
-        if value is None or value.get("source_url") is None:
-            return value
-        source_url = parse_document_source_url(value["source_url"])
-        return {**value, "source_url": str(source_url)}
+        if value is None:
+            return None
+        normalized = dict(value)
+        for key in _SOURCE_URL_METADATA_KEYS:
+            if (source_url := value.get(key)) is not None:
+                normalized[key] = str(parse_document_source_url(source_url))
+        return normalized
 
 
 class FillChunkEmbeddingsSchema(BaseModel):

@@ -229,9 +229,13 @@ export type ProtocolV2Event =
   | { data: { text: string }; event: 'token' };
 
 export type ProtocolV2RetrievedSource = {
+  readonly authority_url?: string;
   readonly chunk_index?: number;
+  readonly current_status?: string;
+  readonly document_date?: string;
   readonly id: string;
   readonly kind: RetrievedSourceKind;
+  readonly last_verified?: string;
   readonly links?: readonly RetrievedSourceLink[];
   readonly section?: string;
   readonly snippet?: string;
@@ -239,9 +243,13 @@ export type ProtocolV2RetrievedSource = {
 };
 
 export type RetrievedSource = {
+  readonly authorityUrl?: string;
   readonly chunkIndex?: number;
+  readonly currentStatus?: string;
+  readonly documentDate?: string;
   readonly id: string;
   readonly kind: RetrievedSourceKind;
+  readonly lastVerified?: string;
   readonly links?: readonly RetrievedSourceLink[];
   readonly section?: string;
   readonly snippet?: string;

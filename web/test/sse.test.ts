@@ -183,7 +183,7 @@ describe('parseProtocolV2', () => {
 
   it('maps source frames to typed retrieved sources and drops malformed entries', async () => {
     const events = await collect(
-      'event: sources\ndata: {"sources":[{"id":"q1","kind":"faq","title":"Упис","links":[{"label":"iKnow","url":"https://iknow.ukim.mk/"}],"snippet":"Упис преку iKnow."},{"id":"bad","kind":"unknown","title":"bad"},{"id":"c1","kind":"chunk","title":"Статут","section":"Член 12","chunk_index":4,"links":[{"label":"Статут","url":"https://raw.githubusercontent.com/finki-hub/documents/main/raw/statut_i_delovnik.pdf"}],"snippet":"Правила."}]}\n\n',
+      'event: sources\ndata: {"sources":[{"id":"q1","kind":"faq","title":"Упис","links":[{"label":"iKnow","url":"https://iknow.ukim.mk/"}],"snippet":"Упис преку iKnow."},{"id":"bad","kind":"unknown","title":"bad"},{"id":"c1","kind":"chunk","title":"Статут","authority_url":"https://www.finki.ukim.mk/documents/statute","current_status":"current","document_date":"2019-06-06","last_verified":"2026-08-31","section":"Член 12","chunk_index":4,"links":[{"label":"Статут","url":"https://raw.githubusercontent.com/finki-hub/documents/main/raw/statut_i_delovnik.pdf"}],"snippet":"Правила."}]}\n\n',
       DONE_FRAME,
     );
 
@@ -198,9 +198,13 @@ describe('parseProtocolV2', () => {
             title: 'Упис',
           },
           {
+            authorityUrl: 'https://www.finki.ukim.mk/documents/statute',
             chunkIndex: 4,
+            currentStatus: 'current',
+            documentDate: '2019-06-06',
             id: 'c1',
             kind: 'chunk',
+            lastVerified: '2026-08-31',
             links: [
               {
                 label: 'Статут',
