@@ -48,6 +48,7 @@ const config = [
   {
     files: ['test/**/*.{ts,tsx}'],
     rules: {
+      '@typescript-eslint/await-thenable': 'off',
       'vitest/prefer-to-be-falsy': 'off',
       'vitest/prefer-to-be-truthy': 'off',
     },
