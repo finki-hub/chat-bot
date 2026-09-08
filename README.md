@@ -22,7 +22,12 @@ It's highly recommended to do this in Docker.
 To run the chat bot:
 
 1. Download [`compose.prod.yaml`](./compose.prod.yaml)
-2. Download [`.env.sample`](.env.sample), rename it to `.env`, and set the required values. Also copy the non-secret release pin placeholders from [`production-release-pins.sample`](production-release-pins.sample) into `.env`, replacing both with the approved values. At minimum, set a non-default `API_KEY` before exposing the service. The sponsored model remains disabled unless its separate rollout settings are deliberately configured; never use `API_KEY` as its provider credential. If you configure MCP servers, set non-default per-server `api_key` values in `MCP_SERVERS`.
+2. Download [`.env.sample`](.env.sample) and [`production-release-pins.sample`](production-release-pins.sample), then copy the general settings and append the release settings to `.env`:
+   ```bash
+   cp .env.sample .env
+   cat production-release-pins.sample >> .env
+   ```
+   Replace all placeholders in `.env` with the approved values before running Compose. At minimum, set a non-default `API_KEY` before exposing the service. The sponsored model remains disabled unless its separate rollout settings are deliberately configured; never use `API_KEY` as its provider credential. If you configure MCP servers, set non-default per-server `api_key` values in `MCP_SERVERS`.
 3. Run `docker compose -f compose.prod.yaml up -d`
 
 The API runs on port `8880`, the GPU API on `8888`, and the web front-end on `3000`. This also brings up a `pgAdmin` instance on port `5555` by default.
@@ -54,10 +59,12 @@ Standalone, it needs `web/.env.local` with `API_BASE_URL` (the chat API base, e.
 
 The root [`.env.sample`](.env.sample) contains the main variables used by the Docker stacks:
 
-The production-only release pins are kept separately in
-[`production-release-pins.sample`](production-release-pins.sample) so the
-credential-protected root sample remains unchanged. Copy those two non-secret
-assignments into `.env` before using `compose.prod.yaml`.
+The production-only non-secret Compose settings are kept separately in
+[`production-release-pins.sample`](production-release-pins.sample). Append or
+copy its four assignments into `.env` after copying [`.env.sample`](.env.sample),
+then replace all placeholders before using `compose.prod.yaml`:
+`RAG_SYNC_EXPECTED_BUNDLE_SHA256`, `RAG_SYNC_EXPECTED_SOURCE_COMMIT`,
+`RAG_SYNC_DEPLOYMENT_IDENTITY`, and `RAG_SYNC_RELEASES_DIR`.
 
 - `API_KEY` - required for authenticated API writes, embedding fill jobs, diploma sync, and feedback submission; change the sample value before deployment. This is the chat API/BFF authentication secret, not a sponsored provider key.
 - `AUTH_URL`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_MICROSOFT_ENTRA_ID_ID`, `AUTH_MICROSOFT_ENTRA_ID_SECRET`, `AUTH_MICROSOFT_ENTRA_ID_ISSUER` - used by the web BFF for Auth.js login; configure Google, Microsoft Entra ID, or both. For Microsoft, use `https://login.microsoftonline.com/common/v2.0` to allow personal, work, and school accounts, or `https://login.microsoftonline.com/<tenant-id>/v2.0` to restrict logins to one tenant.

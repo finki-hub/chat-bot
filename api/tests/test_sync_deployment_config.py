@@ -10,7 +10,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def test_production_sync_identity_is_required_from_compose_configuration() -> None:
     compose = (REPO_ROOT / "compose.prod.yaml").read_text(encoding="utf-8")
-    sample = (REPO_ROOT / ".env.sample").read_text(encoding="utf-8")
     release_pin_sample = (REPO_ROOT / "production-release-pins.sample").read_text(
         encoding="utf-8"
     )
@@ -38,15 +37,22 @@ def test_production_sync_identity_is_required_from_compose_configuration() -> No
     assert "read_only: true" in compose_prod
     assert "COPY . ." in dockerfile
     assert (REPO_ROOT / "api" / "app" / "sync_rag_corpus.py").is_file()
-    assert "RAG_SYNC_DEPLOYMENT_IDENTITY=" in sample
-    assert "RAG_SYNC_RELEASES_DIR=" in sample
-    assert "RAG_SYNC_EXPECTED_BUNDLE_SHA256=" in release_pin_sample
-    assert "RAG_SYNC_EXPECTED_SOURCE_COMMIT=" in release_pin_sample
+    assert (REPO_ROOT / "production-release-pins.sample").is_file()
+    for setting in (
+        "RAG_SYNC_EXPECTED_BUNDLE_SHA256",
+        "RAG_SYNC_EXPECTED_SOURCE_COMMIT",
+        "RAG_SYNC_DEPLOYMENT_IDENTITY",
+        "RAG_SYNC_RELEASES_DIR",
+    ):
+        assert f"{setting}=" in release_pin_sample
     assert "--expected-deployment-identity" in script
     assert "--expected-bundle-sha256" in script
     assert "--expected-manifest-sha256" not in script
     assert "RAG_SYNC_EXPECTED_BUNDLE_SHA256" in readme
     assert "RAG_SYNC_EXPECTED_SOURCE_COMMIT" in readme
+    assert "cp .env.sample .env" in readme
+    assert "cat production-release-pins.sample >> .env" in readme
+    assert "replace all placeholders" in readme
     assert "--force-recreate api" in readme
     assert 'parser.add_argument("--deployment-identity")' not in script
     assert "from app.sync_rag_corpus import main" in (
