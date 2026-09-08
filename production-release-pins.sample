@@ -1,0 +1,6 @@
+# Non-secret production Compose settings required by compose.prod.yaml.
+# Replace every placeholder with the approved deployment values before Compose.
+RAG_SYNC_EXPECTED_BUNDLE_SHA256=replace_with_approved_release_sha256
+RAG_SYNC_EXPECTED_SOURCE_COMMIT=replace_with_approved_source_commit
+RAG_SYNC_DEPLOYMENT_IDENTITY=replace_with_immutable_production_identity
+RAG_SYNC_RELEASES_DIR=replace_with_production_releases_directory

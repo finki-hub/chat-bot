@@ -1,5 +1,6 @@
 # mypy: disable-error-code="arg-type"
 
+import hashlib
 import json
 from collections.abc import Sequence
 from typing import Final
@@ -15,7 +16,7 @@ from app.data.embedding_sql import (
     embedding_column_name,
     embedding_vector_sql,
 )
-from app.llms.chunking import Chunk
+from app.llms.chunking import Chunk, chunk_markdown
 from app.llms.models import (
     MODEL_DISTANCE_THRESHOLDS,
     Model,
@@ -69,6 +70,28 @@ async def list_documents_query(db: Database) -> list[DocumentSchema]:
     return [_document_from_row(row, chunk_count=row["chunk_count"]) for row in result]
 
 
+async def list_owned_documents_query(
+    db: Database,
+    prefixes: Sequence[str],
+) -> list[DocumentSchema]:
+    """List documents whose names are in one of the supplied ownership namespaces."""
+    if not prefixes:
+        return []
+    patterns = [f"{prefix}%" for prefix in prefixes]
+    result = await db.fetch(
+        """
+        SELECT d.*, COUNT(c.id) AS chunk_count
+        FROM document d
+        LEFT JOIN chunk c ON c.document_id = d.id
+        WHERE d.name LIKE ANY($1::text[])
+        GROUP BY d.id
+        ORDER BY d.name ASC
+        """,
+        patterns,
+    )
+    return [_document_from_row(row, chunk_count=row["chunk_count"]) for row in result]
+
+
 async def get_document_by_name_query(
     db: Database,
     name: str,
@@ -89,6 +112,41 @@ async def get_document_by_name_query(
 async def delete_document_query(db: Database, name: str) -> None:
     # ON DELETE CASCADE removes the document's chunks.
     await db.execute("DELETE FROM document WHERE name = $1", name)
+
+
+async def delete_all_documents_query(db: Database) -> int:
+    """Delete every document; the FK cascade removes every document chunk."""
+    rows = await db.fetch("DELETE FROM document RETURNING id")
+    return len(rows)
+
+
+async def delete_document_compare_and_set_query(
+    db: Database,
+    name: str,
+    *,
+    document_id: UUID,
+    source_hash: str | None,
+    title: str,
+    metadata: dict[str, object] | None,
+) -> bool:
+    """Delete only the exact inventory row observed during planning."""
+    row = await db.fetchrow(
+        """
+        DELETE FROM document
+        WHERE name = $1
+          AND id = $2
+          AND source_hash IS NOT DISTINCT FROM $3
+          AND title = $4
+          AND metadata IS NOT DISTINCT FROM $5::jsonb
+        RETURNING name
+        """,
+        name,
+        document_id,
+        source_hash,
+        title,
+        json.dumps(metadata) if metadata is not None else None,
+    )
+    return row is not None
 
 
 async def update_document_metadata(
@@ -147,6 +205,35 @@ async def replace_document_with_chunks(
             )
 
     return _document_from_row(row, chunk_count=len(chunks))
+
+
+async def upsert_document_query(
+    db: Database,
+    payload: IngestDocumentSchema,
+    *,
+    force: bool = False,
+) -> DocumentSchema:
+    """Apply the same hash-aware ingestion semantics as ``POST /documents``."""
+    source_hash = hashlib.sha256(payload.content.encode("utf-8")).hexdigest()
+    existing = await get_document_by_name_query(db, payload.name)
+    if (
+        existing
+        and existing.source_hash == source_hash
+        and existing.title == payload.title
+        and existing.source_type == payload.source_type
+        and not force
+    ):
+        if (existing.metadata or None) != (payload.metadata or None):
+            updated = await update_document_metadata(db, existing, payload)
+            if updated is None:
+                raise RuntimeError("document changed during metadata refresh")
+            return updated
+        return existing
+
+    chunks = chunk_markdown(payload.content)
+    if not chunks:
+        raise ValueError("document produced no chunks")
+    return await replace_document_with_chunks(db, payload, source_hash, chunks)
 
 
 async def get_closest_chunks(
