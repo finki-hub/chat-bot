@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -101,3 +102,69 @@ async def test_cli_rejects_raw_pin_before_database_initialization(
     )
     with pytest.raises(sync_cli.BundleValidationError, match="bundle SHA-256"):
         await sync_cli._run(arguments)
+
+
+@pytest.mark.anyio
+async def test_apply_cli_raises_single_pool_for_lock_connection(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class CapturingDatabase:
+        def __init__(self, _dsn, *, min_size, max_size):
+            captured["min_size"] = min_size
+            captured["max_size"] = max_size
+
+        async def init(self):
+            return None
+
+        async def disconnect(self):
+            return None
+
+    async def fake_synchronize(*_args, **_kwargs):
+        return SimpleNamespace(dry_run=False, deleted=())
+
+    arguments = sync_cli._parser().parse_args(
+        [
+            "--bundle",
+            "/releases/corpus.json",
+            "--apply",
+            "--replace-all",
+            "--expected-source-commit",
+            "a" * 40,
+            "--expected-bundle-sha256",
+            "b" * 64,
+            "--expected-deployment-identity",
+            "test-identity",
+        ],
+    )
+    monkeypatch.setenv("RAG_SYNC_EXPECTED_SOURCE_COMMIT", "a" * 40)
+    monkeypatch.setenv("RAG_SYNC_EXPECTED_BUNDLE_SHA256", "b" * 64)
+    monkeypatch.setenv("RAG_SYNC_DEPLOYMENT_IDENTITY", "test-identity")
+    monkeypatch.setattr(
+        sync_cli,
+        "Settings",
+        lambda: SimpleNamespace(
+            DATABASE_URL="postgresql://test",
+            DATABASE_POOL_MIN_SIZE=1,
+            DATABASE_POOL_MAX_SIZE=1,
+        ),
+    )
+    monkeypatch.setattr(sync_cli, "Database", CapturingDatabase)
+    monkeypatch.setattr(
+        sync_cli,
+        "load_bundle_path",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            source_commit="a" * 40,
+            raw_bundle_sha256="b" * 64,
+        ),
+    )
+    monkeypatch.setattr(sync_cli, "synchronize", fake_synchronize)
+    monkeypatch.setattr(sync_cli, "init_http_client", lambda: None)
+
+    async def close_http_client():
+        return None
+
+    monkeypatch.setattr(sync_cli, "close_http_client", close_http_client)
+
+    await sync_cli._run(arguments)
+
+    assert captured == {"min_size": 1, "max_size": 2}

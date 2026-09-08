@@ -120,10 +120,12 @@ async def _run(arguments: argparse.Namespace) -> int:
         raise ValueError("--timeout-seconds must not be negative")
 
     settings = Settings()
+    sync_pool_max_size = max(settings.DATABASE_POOL_MAX_SIZE, 2)
+    sync_pool_min_size = min(settings.DATABASE_POOL_MIN_SIZE, sync_pool_max_size)
     database = Database(
         settings.DATABASE_URL,
-        min_size=settings.DATABASE_POOL_MIN_SIZE,
-        max_size=settings.DATABASE_POOL_MAX_SIZE,
+        min_size=sync_pool_min_size,
+        max_size=sync_pool_max_size,
     )
     http_initialized = False
     try:
