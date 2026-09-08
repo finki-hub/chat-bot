@@ -31,9 +31,9 @@ services:
       POSTHOG_HOST: ${POSTHOG_HOST:-https://eu.i.posthog.com}
       POSTHOG_KEY: ${POSTHOG_KEY:-}
       RERANKER_MIN_SCORE: ${RERANKER_MIN_SCORE:-0.1}
-      RAG_SYNC_EXPECTED_BUNDLE_SHA256: ${RAG_SYNC_EXPECTED_BUNDLE_SHA256:?RAG_SYNC_EXPECTED_BUNDLE_SHA256 is required}
-      RAG_SYNC_EXPECTED_SOURCE_COMMIT: ${RAG_SYNC_EXPECTED_SOURCE_COMMIT:?RAG_SYNC_EXPECTED_SOURCE_COMMIT is required}
-      RAG_SYNC_DEPLOYMENT_IDENTITY: ${RAG_SYNC_DEPLOYMENT_IDENTITY:?RAG_SYNC_DEPLOYMENT_IDENTITY is required}
+      RAG_SYNC_EXPECTED_BUNDLE_SHA256: ${RAG_SYNC_EXPECTED_BUNDLE_SHA256:-}
+      RAG_SYNC_EXPECTED_SOURCE_COMMIT: ${RAG_SYNC_EXPECTED_SOURCE_COMMIT:-}
+      RAG_SYNC_DEPLOYMENT_IDENTITY: ${RAG_SYNC_DEPLOYMENT_IDENTITY:-}
       SOURCE_RERANKER_MIN_SCORE: ${SOURCE_RERANKER_MIN_SCORE:-0.3}
       # Sponsored model settings are API-only and fail closed unless explicitly enabled.
       # Never expose the sponsored key or endpoint through the web service.
@@ -51,7 +51,7 @@ services:
       WORKERS: ${WORKERS}
     volumes:
       - type: bind
-        source: ${RAG_SYNC_RELEASES_DIR:?RAG_SYNC_RELEASES_DIR is required}
+        source: ${RAG_SYNC_RELEASES_DIR:-./rag-corpus/releases}
         target: /releases
         read_only: true
     image: finki-hub/chat-bot-api:latest
