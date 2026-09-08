@@ -168,7 +168,7 @@ def main() -> int:
         RetrievalSmokeError,
         ValueError,
     ) as exc:
-        _parser().error(str(exc))
+        return _parser().error(str(exc))
 
 
 if __name__ == "__main__":

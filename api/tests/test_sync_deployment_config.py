@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 
 import app.sync_rag_corpus as sync_cli
-from app.sync_rag_corpus import _parser
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -61,7 +60,7 @@ def test_production_sync_identity_is_required_from_compose_configuration() -> No
 
 
 def test_replace_all_requires_an_explicit_cli_mode() -> None:
-    arguments = _parser().parse_args(
+    arguments = sync_cli._parser().parse_args(
         [
             "--bundle",
             "/releases/corpus.json",
@@ -78,7 +77,7 @@ async def test_cli_rejects_raw_pin_before_database_initialization(
 ):
     bundle_path = tmp_path / "bundle.json"
     bundle_path.write_text("not-json", encoding="utf-8")
-    arguments = _parser().parse_args(
+    arguments = sync_cli._parser().parse_args(
         [
             "--bundle",
             str(bundle_path),
