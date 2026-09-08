@@ -59,7 +59,7 @@ def _print_plan(bundle: object, plan: object) -> None:
         raise TypeError("unexpected sync object")
     print(f"source_commit={bundle.source_commit}")
     print(f"raw_bundle_sha256={bundle.raw_bundle_sha256}")
-    print(f"manifest_sha256={bundle.manifest_sha256}")
+    print(f"source_tree_sha256={bundle.source_tree_sha256}")
     print(f"add={len(plan.add)} names={','.join(entry.name for entry in plan.add)}")
     print(
         f"update={len(plan.update)} names={','.join(entry.name for entry in plan.update)}"
