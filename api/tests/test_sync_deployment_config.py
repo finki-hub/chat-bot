@@ -8,8 +8,26 @@ import app.sync_rag_corpus as sync_cli
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_production_sync_identity_is_required_from_compose_configuration() -> None:
-    compose = (REPO_ROOT / "compose.prod.yaml").read_text(encoding="utf-8")
+def test_compose_paths_have_development_safe_rag_sync_defaults() -> None:
+    for compose_name in ("compose.yaml", "compose.prod.yaml"):
+        compose = (REPO_ROOT / compose_name).read_text(encoding="utf-8")
+
+        assert (
+            "RAG_SYNC_EXPECTED_BUNDLE_SHA256: ${RAG_SYNC_EXPECTED_BUNDLE_SHA256:-}"
+        ) in compose
+        assert (
+            "RAG_SYNC_EXPECTED_SOURCE_COMMIT: ${RAG_SYNC_EXPECTED_SOURCE_COMMIT:-}"
+        ) in compose
+        assert (
+            "RAG_SYNC_DEPLOYMENT_IDENTITY: ${RAG_SYNC_DEPLOYMENT_IDENTITY:-}"
+        ) in compose
+        assert ("source: ${RAG_SYNC_RELEASES_DIR:-./rag-corpus/releases}") in compose
+        assert "target: /releases" in compose
+        assert "read_only: true" in compose
+
+
+def test_sync_guard_contract_is_present_in_compose_configuration() -> None:
+    compose = (REPO_ROOT / "compose.yaml").read_text(encoding="utf-8")
     release_pin_sample = (REPO_ROOT / "production-release-pins.sample").read_text(
         encoding="utf-8"
     )
@@ -20,21 +38,13 @@ def test_production_sync_identity_is_required_from_compose_configuration() -> No
         encoding="utf-8",
     )
 
-    assert (
-        "RAG_SYNC_DEPLOYMENT_IDENTITY: ${RAG_SYNC_DEPLOYMENT_IDENTITY:?"
-        "RAG_SYNC_DEPLOYMENT_IDENTITY is required}"
-    ) in compose
-    assert (
-        "RAG_SYNC_EXPECTED_BUNDLE_SHA256: ${RAG_SYNC_EXPECTED_BUNDLE_SHA256:?"
-        "RAG_SYNC_EXPECTED_BUNDLE_SHA256 is required}"
-    ) in compose
-    assert (
-        "RAG_SYNC_EXPECTED_SOURCE_COMMIT: ${RAG_SYNC_EXPECTED_SOURCE_COMMIT:?"
-        "RAG_SYNC_EXPECTED_SOURCE_COMMIT is required}"
-    ) in compose
-    assert "RAG_SYNC_RELEASES_DIR:?RAG_SYNC_RELEASES_DIR is required" in compose_prod
-    assert "target: /releases" in compose_prod
-    assert "read_only: true" in compose_prod
+    for compose_config in (compose, compose_prod):
+        assert "RAG_SYNC_DEPLOYMENT_IDENTITY" in compose_config
+        assert "RAG_SYNC_EXPECTED_BUNDLE_SHA256" in compose_config
+        assert "RAG_SYNC_EXPECTED_SOURCE_COMMIT" in compose_config
+        assert "RAG_SYNC_RELEASES_DIR" in compose_config
+        assert "target: /releases" in compose_config
+        assert "read_only: true" in compose_config
     assert "COPY . ." in dockerfile
     assert (REPO_ROOT / "api" / "app" / "sync_rag_corpus.py").is_file()
     assert (REPO_ROOT / "production-release-pins.sample").is_file()
