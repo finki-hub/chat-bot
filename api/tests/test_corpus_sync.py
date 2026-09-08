@@ -13,7 +13,7 @@ from app.data.connection import Database
 from app.llms.chunking import chunk_markdown
 
 SOURCE_COMMIT = "a" * 40
-MANIFEST_HASH = "b" * 64
+SOURCE_TREE_HASH = "b" * 64
 
 
 def _entry(name: str = "legal/a", content: str = "# A") -> sync.CorpusEntry:
@@ -22,17 +22,10 @@ def _entry(name: str = "legal/a", content: str = "# A") -> sync.CorpusEntry:
         "source_url": "https://www.finki.ukim.mk/source",
         "source_path": "processed/a.md",
         "source_class": "official_legal",
-        "source_commit": SOURCE_COMMIT,
-        "manifest_hash": MANIFEST_HASH,
-    }
-    stable = {
-        key: value
-        for key, value in metadata.items()
-        if key not in {"source_commit", "manifest_hash"}
     }
     metadata_hash = hashlib.sha256(
         json.dumps(
-            stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            metadata, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         ).encode(),
     ).hexdigest()
     return sync.CorpusEntry(
@@ -48,9 +41,9 @@ def _entry(name: str = "legal/a", content: str = "# A") -> sync.CorpusEntry:
 def _bundle(*entries: sync.CorpusEntry) -> sync.CorpusBundle:
     return sync.CorpusBundle(
         SOURCE_COMMIT,
-        MANIFEST_HASH,
+        SOURCE_TREE_HASH,
         entries,
-        raw_bundle_sha256=MANIFEST_HASH,
+        raw_bundle_sha256=SOURCE_TREE_HASH,
     )
 
 
@@ -123,18 +116,18 @@ def test_empty_malformed_and_duplicate_bundles_are_rejected() -> None:
         sync.load_bundle(
             json.dumps(
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "source_revision": SOURCE_COMMIT,
-                    "manifest_sha256": MANIFEST_HASH,
+                    "source_tree_sha256": SOURCE_TREE_HASH,
                     "entries": [],
                 },
             ),
         )
     entry = _entry()
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "source_revision": SOURCE_COMMIT,
-        "manifest_sha256": MANIFEST_HASH,
+        "source_tree_sha256": SOURCE_TREE_HASH,
         "entries": [_json_entry(entry)] * 2,
     }
     with pytest.raises(sync.BundleValidationError):
@@ -145,13 +138,53 @@ def test_empty_malformed_and_duplicate_bundles_are_rejected() -> None:
         sync.load_bundle(
             json.dumps(
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "source_revision": SOURCE_COMMIT,
-                    "manifest_sha256": MANIFEST_HASH,
+                    "source_tree_sha256": SOURCE_TREE_HASH,
                     "entries": [bad_hash],
                 },
             ),
         )
+
+
+def test_documents_exporter_schema_v2_loads_exact_top_level_shape() -> None:
+    metadata = {
+        "authority_url": "https://www.finki.ukim.mk/authority",
+        "source_url": "https://www.finki.ukim.mk/source",
+        "source_path": "processed/a.md",
+        "source_class": "official_legal",
+        "authority_rank": "primary",
+    }
+    content = "A paragraph"
+    entry = {
+        "name": "legal/a",
+        "title": "A",
+        "content": content,
+        "metadata": metadata,
+        "content_sha256": hashlib.sha256(content.encode()).hexdigest(),
+        "metadata_sha256": hashlib.sha256(
+            json.dumps(
+                metadata,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode(),
+        ).hexdigest(),
+    }
+    bundle = sync.load_bundle(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "source_revision": SOURCE_COMMIT,
+                "source_tree_sha256": "c" * 64,
+                "entries": [entry],
+            },
+            separators=(",", ":"),
+        ),
+    )
+    assert bundle.source_commit == SOURCE_COMMIT
+    assert bundle.source_tree_sha256 == "c" * 64
+    assert bundle.entries[0].metadata == metadata
 
 
 def test_bundle_rejects_unowned_namespace() -> None:
@@ -165,7 +198,7 @@ def test_release_bundle_rejects_worktree_revision() -> None:
         sync.validate_bundle(
             sync.CorpusBundle(
                 "WORKTREE-" + "a" * 64,
-                MANIFEST_HASH,
+                SOURCE_TREE_HASH,
                 (_entry(),),
             ),
         )
@@ -175,9 +208,9 @@ def test_raw_bundle_sha_is_verified_independently(tmp_path) -> None:
     entry = _entry()
     payload = json.dumps(
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "source_revision": SOURCE_COMMIT,
-            "manifest_sha256": MANIFEST_HASH,
+            "source_tree_sha256": SOURCE_TREE_HASH,
             "entries": [_json_entry(entry)],
         },
         separators=(",", ":"),
@@ -254,7 +287,7 @@ async def test_replace_all_deletes_everything_only_after_preconditions_and_reimp
         apply=True,
         replace_all=True,
         expected_source_commit=SOURCE_COMMIT,
-        expected_bundle_sha256=MANIFEST_HASH,
+        expected_bundle_sha256=SOURCE_TREE_HASH,
     )
 
     assert result.added == ("legal/a", "website/home")
@@ -296,7 +329,7 @@ async def test_replace_all_refuses_delete_when_inventory_precondition_changes(
             apply=True,
             replace_all=True,
             expected_source_commit=SOURCE_COMMIT,
-            expected_bundle_sha256=MANIFEST_HASH,
+            expected_bundle_sha256=SOURCE_TREE_HASH,
         )
     assert deleted is False
 
@@ -335,7 +368,7 @@ async def test_replace_all_rechecks_and_deletes_inside_table_lock(monkeypatch) -
             apply=True,
             replace_all=True,
             expected_source_commit=SOURCE_COMMIT,
-            expected_bundle_sha256=MANIFEST_HASH,
+            expected_bundle_sha256=SOURCE_TREE_HASH,
         )
     assert events == ["lock-enter:document", "lock-exit"]
 
@@ -451,7 +484,7 @@ async def test_concurrent_apply_is_rejected_before_plan_inventory_read(
             apply=True,
             max_deletions=0,
             expected_source_commit=SOURCE_COMMIT,
-            expected_bundle_sha256=MANIFEST_HASH,
+            expected_bundle_sha256=SOURCE_TREE_HASH,
         )
 
 
@@ -539,7 +572,7 @@ async def test_apply_rechecks_inventory_and_uses_compare_and_set(monkeypatch) ->
         apply=True,
         max_deletions=1,
         expected_source_commit=SOURCE_COMMIT,
-        expected_bundle_sha256=MANIFEST_HASH,
+        expected_bundle_sha256=SOURCE_TREE_HASH,
     )
     assert result.deleted == ("legal/obsolete",)
     assert deleted == ["legal/obsolete"]
@@ -602,7 +635,7 @@ async def test_apply_fails_closed_when_planned_delete_changes(monkeypatch) -> No
             apply=True,
             max_deletions=1,
             expected_source_commit=SOURCE_COMMIT,
-            expected_bundle_sha256=MANIFEST_HASH,
+            expected_bundle_sha256=SOURCE_TREE_HASH,
         )
     assert deleted is False
 
@@ -653,7 +686,7 @@ async def test_apply_never_deletes_when_upload_or_embedding_fails(monkeypatch) -
             apply=True,
             max_deletions=1,
             expected_source_commit=SOURCE_COMMIT,
-            expected_bundle_sha256=MANIFEST_HASH,
+            expected_bundle_sha256=SOURCE_TREE_HASH,
         )
     assert deleted == []
 
@@ -676,7 +709,7 @@ async def test_apply_never_deletes_when_upload_or_embedding_fails(monkeypatch) -
             apply=True,
             max_deletions=1,
             expected_source_commit=SOURCE_COMMIT,
-            expected_bundle_sha256=MANIFEST_HASH,
+            expected_bundle_sha256=SOURCE_TREE_HASH,
         )
     assert deleted == []
 
@@ -716,7 +749,7 @@ async def test_deletion_cap_is_checked_before_upload(monkeypatch) -> None:
             apply=True,
             max_deletions=1,
             expected_source_commit=SOURCE_COMMIT,
-            expected_bundle_sha256=MANIFEST_HASH,
+            expected_bundle_sha256=SOURCE_TREE_HASH,
         )
     assert uploaded is False
 

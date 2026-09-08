@@ -35,7 +35,7 @@ from app.schemas.documents import DocumentSchema, IngestDocumentSchema
 OWNED_PREFIXES: tuple[str, ...] = ("legal/", "website/")
 DEFAULT_EMBEDDING_TIMEOUT_SECONDS = 1800
 DEFAULT_MAX_DELETIONS = 0
-RELEASE_SCHEMA_VERSION = 1
+RELEASE_SCHEMA_VERSION = 2
 SYNC_ADVISORY_LOCK_KEY = 0x46494E4B52414753
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _SOURCE_COMMIT = re.compile(r"[0-9a-f]{40}\Z")
@@ -91,7 +91,7 @@ class CorpusEntry:
 @dataclass(frozen=True, slots=True)
 class CorpusBundle:
     source_commit: str
-    manifest_sha256: str
+    source_tree_sha256: str
     entries: tuple[CorpusEntry, ...]
     raw_bundle_sha256: str | None = None
 
@@ -189,13 +189,8 @@ def _sha256_text(value: str) -> str:
 
 
 def _metadata_sha256(metadata: Mapping[str, str]) -> str:
-    stable = {
-        key: value
-        for key, value in metadata.items()
-        if key not in {"source_commit", "manifest_hash"}
-    }
     encoded = json.dumps(
-        stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        dict(metadata), ensure_ascii=False, sort_keys=True, separators=(",", ":")
     )
     return _sha256_text(encoded)
 
@@ -266,8 +261,8 @@ def validate_bundle(bundle: CorpusBundle) -> CorpusBundle:
     """Validate a bundle object before it is used for planning or mutation."""
     if not _SOURCE_COMMIT.fullmatch(bundle.source_commit):
         raise _invalid("source_commit is not a pinned commit identifier")
-    if not _SHA256.fullmatch(bundle.manifest_sha256):
-        raise _invalid("manifest_sha256 is not a lowercase SHA-256 digest")
+    if not _SHA256.fullmatch(bundle.source_tree_sha256):
+        raise _invalid("source_tree_sha256 is not a lowercase SHA-256 digest")
     if bundle.raw_bundle_sha256 is not None and not _SHA256.fullmatch(
         bundle.raw_bundle_sha256
     ):
@@ -289,10 +284,6 @@ def validate_bundle(bundle: CorpusBundle) -> CorpusBundle:
             },
             index,
         )
-        if entry.metadata.get("source_commit") != bundle.source_commit:
-            raise _invalid(f"entry {entry.name!r} source commit differs from bundle")
-        if entry.metadata.get("manifest_hash") != bundle.manifest_sha256:
-            raise _invalid(f"entry {entry.name!r} manifest hash differs from bundle")
     return bundle
 
 
@@ -305,16 +296,16 @@ def load_bundle(text: str, *, raw_bundle_sha256: str | None = None) -> CorpusBun
     if not isinstance(raw, Mapping) or set(raw) != {
         "schema_version",
         "source_revision",
-        "manifest_sha256",
+        "source_tree_sha256",
         "entries",
     }:
         raise _invalid(
             "bundle must contain only schema_version, source_revision, "
-            "manifest_sha256, and entries"
+            "source_tree_sha256, and entries"
         )
     schema_version = raw["schema_version"]
     source_commit = raw["source_revision"]
-    manifest_sha256 = raw["manifest_sha256"]
+    source_tree_sha256 = raw["source_tree_sha256"]
     entries_raw = raw["entries"]
     if (
         not isinstance(schema_version, int)
@@ -322,8 +313,8 @@ def load_bundle(text: str, *, raw_bundle_sha256: str | None = None) -> CorpusBun
         or schema_version != RELEASE_SCHEMA_VERSION
     ):
         raise _invalid(f"unsupported schema_version {schema_version!r}")
-    if not isinstance(source_commit, str) or not isinstance(manifest_sha256, str):
-        raise _invalid("release revision and manifest hash must be strings")
+    if not isinstance(source_commit, str) or not isinstance(source_tree_sha256, str):
+        raise _invalid("release revision and source tree hash must be strings")
     if source_commit.startswith("WORKTREE-"):
         raise _invalid("release bundles must use a pinned source revision")
     if not isinstance(entries_raw, list):
@@ -333,7 +324,7 @@ def load_bundle(text: str, *, raw_bundle_sha256: str | None = None) -> CorpusBun
     )
     bundle = CorpusBundle(
         source_commit,
-        manifest_sha256,
+        source_tree_sha256,
         entries,
         raw_bundle_sha256=raw_bundle_sha256 or _sha256_text(text),
     )
