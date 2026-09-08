@@ -22,7 +22,7 @@ It's highly recommended to do this in Docker.
 To run the chat bot:
 
 1. Download [`compose.prod.yaml`](./compose.prod.yaml)
-2. Download [`.env.sample`](.env.sample), rename it to `.env`, and set the required values. At minimum, set a non-default `API_KEY` before exposing the service. The sponsored model remains disabled unless its separate rollout settings are deliberately configured; never use `API_KEY` as its provider credential. If you configure MCP servers, set non-default per-server `api_key` values in `MCP_SERVERS`.
+2. Download [`.env.sample`](.env.sample), rename it to `.env`, and set the required values. Also copy the non-secret release pin placeholders from [`production-release-pins.sample`](production-release-pins.sample) into `.env`, replacing both with the approved values. At minimum, set a non-default `API_KEY` before exposing the service. The sponsored model remains disabled unless its separate rollout settings are deliberately configured; never use `API_KEY` as its provider credential. If you configure MCP servers, set non-default per-server `api_key` values in `MCP_SERVERS`.
 3. Run `docker compose -f compose.prod.yaml up -d`
 
 The API runs on port `8880`, the GPU API on `8888`, and the web front-end on `3000`. This also brings up a `pgAdmin` instance on port `5555` by default.
@@ -54,10 +54,16 @@ Standalone, it needs `web/.env.local` with `API_BASE_URL` (the chat API base, e.
 
 The root [`.env.sample`](.env.sample) contains the main variables used by the Docker stacks:
 
+The production-only release pins are kept separately in
+[`production-release-pins.sample`](production-release-pins.sample) so the
+credential-protected root sample remains unchanged. Copy those two non-secret
+assignments into `.env` before using `compose.prod.yaml`.
+
 - `API_KEY` - required for authenticated API writes, embedding fill jobs, diploma sync, and feedback submission; change the sample value before deployment. This is the chat API/BFF authentication secret, not a sponsored provider key.
 - `AUTH_URL`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_MICROSOFT_ENTRA_ID_ID`, `AUTH_MICROSOFT_ENTRA_ID_SECRET`, `AUTH_MICROSOFT_ENTRA_ID_ISSUER` - used by the web BFF for Auth.js login; configure Google, Microsoft Entra ID, or both. For Microsoft, use `https://login.microsoftonline.com/common/v2.0` to allow personal, work, and school accounts, or `https://login.microsoftonline.com/<tenant-id>/v2.0` to restrict logins to one tenant.
 - `MCP_SERVERS` - optional JSON array of named MCP tool servers. Each entry supports `name`, `url`, `transport` (`streamable_http` or `sse`), optional per-server `api_key`, and optional `allowed_tools` / `blocked_tools` lists for tool exposure control. Existing `MCP_HTTP_URLS`, `MCP_SSE_URLS`, and `MCP_API_KEY` values are still forwarded by the compose files for compatibility, but new deployments should use `MCP_SERVERS`
 - `CREDENTIAL_ENCRYPTION_KEY` - required secret used to encrypt per-user BYOK provider keys at rest; rotate only with a re-encryption plan for stored credentials
+
 - `BYOK_ALLOWED_BASE_URLS` - optional comma-separated allowlist of HTTPS provider endpoints users may select with their own credentials
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT` - used by the database service and by the API `DATABASE_URL`
 - `DATABASE_POOL_MIN_SIZE`, `DATABASE_POOL_MAX_SIZE` - asyncpg pool sizing per API worker
@@ -65,6 +71,69 @@ The root [`.env.sample`](.env.sample) contains the main variables used by the Do
 - OpenAI, Google, Anthropic, Ollama, and OpenRouter models are BYOK-only and do not use deployment credentials, except for the explicitly isolated sponsored model path below. Ollama defaults to `https://ollama.com`; custom Ollama endpoints must be HTTPS and allowed by `BYOK_ALLOWED_BASE_URLS`.
 - `RESUMABLE_STREAM_REDIS_URL` - server-only Redis/Valkey URL used by the web BFF for resumable chat streams
 - `RERANKER_MIN_SCORE`, `SOURCE_RERANKER_MIN_SCORE`, `CHAT_HISTORY_MAX_TURNS` - retrieval and chat tuning
+
+## Trusted RAG corpus synchronization
+
+Corpus synchronization is a trusted, in-container one-off command. It is not
+part of API startup and never invokes `/documents/fill`. A dry run is the
+default and reports additions, updates, unchanged names, legacy deletions, and
+preserved unrecognized documents without requiring a deletion cap:
+
+```bash
+docker compose -f compose.prod.yaml exec api python -m app.sync_rag_corpus \
+  --bundle /releases/corpus.json --dry-run
+```
+
+The managed corpus is exactly the `legal/` and `website/` name namespaces in the
+bundle. Existing rows in those namespaces are replaced or deleted to match the
+bundle; a bare legacy legal row is deleted only when its content and provenance
+prove that it is the corresponding managed document. All other document names
+are preserved as unrelated data and are reported by the command.
+
+The one-time full replacement mode is intentionally separate from ordinary sync.
+It deletes every `document` row and relies on the database foreign-key cascade to
+delete every `chunk` row, including unrelated data, before importing the bundle.
+It has no automatic rollback: if import, embedding, or verification fails, the
+expected recovery is to restore a database backup or rerun the same approved
+bundle after fixing the failure. Take a recovery backup before using this mode.
+
+Apply requires the exact approved source commit and raw bundle SHA-256 pins, a configured
+`RAG_SYNC_DEPLOYMENT_IDENTITY` matching the explicit expected identity, and an
+explicit deletion cap. The identity is injected by immutable production
+service configuration; `RAG_SYNC_EXPECTED_SOURCE_COMMIT` and
+`RAG_SYNC_EXPECTED_BUNDLE_SHA256` are required compose settings and must match the
+two explicit command-line pins. Do not pass or override the configured values with
+`docker compose exec`.
+Do not place database credentials in command arguments or logs:
+
+```bash
+docker compose -f compose.prod.yaml exec api python -m app.sync_rag_corpus \
+  --bundle /releases/corpus.json --apply \
+  --expected-source-commit <40-hex-commit> \
+  --expected-bundle-sha256 <64-hex-sha256> \
+  --expected-deployment-identity <configured-identity> \
+  --max-deletions <approved-cap>
+```
+
+For the explicitly approved one-time full replacement, use `--replace-all` with
+`--apply` and omit `--max-deletions`:
+
+```bash
+docker compose -f compose.prod.yaml exec api python -m app.sync_rag_corpus \
+  --bundle /releases/corpus.json --apply --replace-all \
+  --expected-source-commit <40-hex-commit> \
+  --expected-bundle-sha256 <64-hex-sha256> \
+  --expected-deployment-identity <configured-identity>
+```
+
+The production compose configuration requires
+`RAG_SYNC_EXPECTED_SOURCE_COMMIT` and `RAG_SYNC_EXPECTED_BUNDLE_SHA256`; recreate
+the API service after changing either release pin so the one-off command receives
+the new values:
+
+```bash
+docker compose -f compose.prod.yaml up -d --force-recreate api
+```
 
 The API owns the executable chat catalog. `/chat/models` returns the fixed, ordered
 allowlist enriched with display metadata from models.dev. Metadata is cached in process

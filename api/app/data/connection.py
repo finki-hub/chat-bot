@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
 
 import anyio
 from asyncpg import Pool, PostgresError, Record, create_pool
@@ -86,6 +86,37 @@ class Database:
             self.pool = None
             logger.info("Database pool closed")
 
+    @asynccontextmanager
+    async def advisory_lock(self, key: int) -> AsyncGenerator[None]:
+        """Hold a dedicated-session advisory lock for one synchronizer run."""
+        if self.max_size < 2:
+            raise RuntimeError("synchronizer requires a database pool of at least two")
+        pool = await self._ensure_pool()
+        async with pool.acquire() as connection:
+            await connection.execute("SELECT pg_advisory_lock($1)", key)
+            try:
+                yield
+            finally:
+                await connection.execute("SELECT pg_advisory_unlock($1)", key)
+
+    @asynccontextmanager
+    async def try_advisory_lock(self, key: int) -> AsyncGenerator[bool]:
+        """Hold a dedicated-session advisory lock without waiting for another run."""
+        if self.max_size < 2:
+            raise RuntimeError("synchronizer requires a database pool of at least two")
+        pool = await self._ensure_pool()
+        async with pool.acquire() as connection:
+            acquired = bool(
+                await connection.fetchval("SELECT pg_try_advisory_lock($1)", key)
+            )
+            if not acquired:
+                yield False
+                return
+            try:
+                yield True
+            finally:
+                await connection.execute("SELECT pg_advisory_unlock($1)", key)
+
     async def _ensure_pool(self) -> Pool:
         """
         Ensure the pool is up, initializing it if necessary.
@@ -143,6 +174,20 @@ class Database:
         """Acquire a connection and open a transaction for multi-statement atomic work."""
         pool = await self._ensure_pool()
         async with pool.acquire() as conn, conn.transaction():
+            yield conn
+
+    @asynccontextmanager
+    async def table_lock(
+        self,
+        table: Literal["document"],
+    ) -> AsyncGenerator[PoolConnectionProxy[Record]]:
+        """Lock the document table for an atomic inventory-and-delete operation."""
+        pool = await self._ensure_pool()
+        async with pool.acquire() as conn, conn.transaction():
+            lock_statements = {
+                "document": "LOCK TABLE document IN ACCESS EXCLUSIVE MODE",
+            }
+            await conn.execute(lock_statements[table])
             yield conn
 
     async def run_migrations(self) -> None:

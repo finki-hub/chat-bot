@@ -1,0 +1,4 @@
+# Non-secret release pins required by compose.prod.yaml.
+# Replace both placeholders with the approved bundle and source revision.
+RAG_SYNC_EXPECTED_BUNDLE_SHA256=replace_with_approved_release_sha256
+RAG_SYNC_EXPECTED_SOURCE_COMMIT=replace_with_approved_source_commit

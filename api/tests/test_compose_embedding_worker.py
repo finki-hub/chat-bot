@@ -28,6 +28,10 @@ _COMPOSE_ENVIRONMENT = {
     "POSTGRES_PASSWORD": "compose-test-password",
     "POSTGRES_PORT": "5432",
     "POSTGRES_USER": "compose_test",
+    "RAG_SYNC_EXPECTED_BUNDLE_SHA256": "a" * 64,
+    "RAG_SYNC_EXPECTED_SOURCE_COMMIT": "b" * 40,
+    "RAG_SYNC_DEPLOYMENT_IDENTITY": "compose-test-rag-sync",
+    "RAG_SYNC_RELEASES_DIR": "./test-rag-releases",
     "TZ": "UTC",
     "WORKERS": "1",
 }
