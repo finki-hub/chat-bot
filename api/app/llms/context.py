@@ -177,37 +177,61 @@ def _question_candidate(
     )
 
 
+def _document_metadata_lines(source: RetrievalSource) -> list[str]:
+    """Render optional document metadata as labelled data for the model context."""
+    fields = (
+        ("Авторитетен URL", source.authority_url),
+        ("Статус (од корпусот)", source.current_status),
+        ("Датум на документот", source.document_date),
+        ("Последна проверка на изворот", source.last_verified),
+        ("Секција", source.section),
+    )
+    return [
+        f"{label}: {redact_unresolved_discord_tokens(value)}"
+        for label, value in fields
+        if value
+    ]
+
+
 def _chunk_candidate(c: ChunkSchema) -> _Candidate:
     label = f"{c.document_title} ({c.section})" if c.section else c.document_title
     rerank_text = f"Наслов: {label}\nСодржина: {c.content}"
-    context_text = f"Тип на извор: Документ\nИзвор: {label}\nСодржина: {c.content}"
     document_urls = c.document_urls or ((c.document_url,) if c.document_url else ())
+    retrieval_source = RetrievalSource(
+        id=str(c.id),
+        kind="chunk",
+        title=c.document_title,
+        authority_url=(
+            str(c.document_authority_url) if c.document_authority_url else None
+        ),
+        chunk_index=c.chunk_index,
+        current_status=c.document_current_status,
+        document_date=c.document_date,
+        last_verified=c.document_last_verified,
+        links=tuple(
+            RetrievalSourceLink(
+                label=c.document_title,
+                url=str(document_url),
+            )
+            for document_url in document_urls
+        ),
+        section=c.section,
+        snippet=c.content,
+    )
+    context_text = "\n".join(
+        [
+            "Тип на извор: Документ",
+            f"Извор: {label}",
+            *_document_metadata_lines(retrieval_source),
+            f"Содржина: {c.content}",
+        ],
+    )
     return _Candidate(
         key=f"C:{c.id}",
         source="chunk",
         rerank_text=rerank_text,
         context_text=context_text,
-        retrieval_source=RetrievalSource(
-            id=str(c.id),
-            kind="chunk",
-            title=c.document_title,
-            authority_url=(
-                str(c.document_authority_url) if c.document_authority_url else None
-            ),
-            chunk_index=c.chunk_index,
-            current_status=c.document_current_status,
-            document_date=c.document_date,
-            last_verified=c.document_last_verified,
-            links=tuple(
-                RetrievalSourceLink(
-                    label=c.document_title,
-                    url=str(document_url),
-                )
-                for document_url in document_urls
-            ),
-            section=c.section,
-            snippet=c.content,
-        ),
+        retrieval_source=retrieval_source,
         retrieval_path="dense",
         distance=c.distance,
         doc_id=c.document_id,
@@ -241,9 +265,8 @@ def _select_with_source_priority(
     ranked: list[_Candidate],
     top_k: int,
 ) -> list[_Candidate]:
-    faqs = [candidate for candidate in ranked if candidate.source == "faq"]
-    chunks = [candidate for candidate in ranked if candidate.source == "chunk"]
-    return [*faqs, *chunks][:top_k]
+    """Select the top reranked candidates without changing their relevance order."""
+    return ranked[:top_k]
 
 
 async def get_retrieved_context(
@@ -708,17 +731,22 @@ def _contiguous_runs(indices: list[int]) -> list[list[int]]:
     return runs
 
 
-def _render_passage(chunks: list[ChunkSchema]) -> str:
+def _render_passage(chunks: list[ChunkSchema], source: RetrievalSource) -> str:
     """Render a contiguous run of chunks (ordered by chunk_index) as one source block."""
     title = chunks[0].document_title
     sections = {c.section for c in chunks}
-    label = (
-        f"{title} ({chunks[0].section})"
-        if len(sections) == 1 and chunks[0].section
-        else title
-    )
+    passage_section = chunks[0].section if len(sections) == 1 else None
+    label = f"{title} ({passage_section})" if passage_section else title
+    metadata_source = replace(source, section=passage_section)
     body = "\n".join(c.content for c in chunks)
-    return f"Тип на извор: Документ\nИзвор: {label}\nСодржина: {body}"
+    return "\n".join(
+        [
+            "Тип на извор: Документ",
+            f"Извор: {label}",
+            *_document_metadata_lines(metadata_source),
+            f"Содржина: {body}",
+        ],
+    )
 
 
 def _render_blocks(
@@ -734,12 +762,14 @@ def _render_blocks(
         return "\n\n---\n\n".join(c.context_text for c in final)
 
     chunk_centers: dict[tuple[UUID, int], int] = {}
+    center_sources: dict[tuple[UUID, int], RetrievalSource] = {}
     items: list[tuple[int, str]] = []
     for rank, c in enumerate(final):
         if c.source == "chunk" and c.doc_id is not None and c.chunk_index is not None:
             ref = (c.doc_id, c.chunk_index)
             if ref in window_map:
                 chunk_centers.setdefault(ref, rank)
+                center_sources.setdefault(ref, c.retrieval_source)
                 continue
         # FAQ, or a chunk whose window refetch came back short: never drop it.
         items.append((rank, c.context_text))
@@ -752,10 +782,13 @@ def _render_blocks(
 
     for doc_id, indices in included.items():
         for run in _contiguous_runs(sorted(indices)):
-            run_rank = min(
-                chunk_centers[(doc_id, i)] for i in run if (doc_id, i) in chunk_centers
+            center_refs = [(doc_id, i) for i in run if (doc_id, i) in chunk_centers]
+            best_ref = min(center_refs, key=chunk_centers.__getitem__)
+            run_rank = chunk_centers[best_ref]
+            passage = _render_passage(
+                [window_map[(doc_id, i)] for i in run],
+                center_sources[best_ref],
             )
-            passage = _render_passage([window_map[(doc_id, i)] for i in run])
             items.append((run_rank, passage))
 
     items.sort(key=lambda item: item[0])

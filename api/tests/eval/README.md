@@ -138,6 +138,56 @@ Expectations deliberately avoid exact answer snapshots. They define required
 source names, forbidden text, the maximum URL count, a minimum Cyrillic-letter
 ratio, and whether the answer must contain a refusal or evidence-limitation marker.
 
+The seven `corpus-*` cases also provide replayable `query` and `context` inputs,
+an answer-review `rubric`, and commit-pinned `evidence` references into
+`finki-hub/documents`. These optional fields are loaded by `load_answer_cases()`;
+the original generic contracts remain compatible. The frozen excerpts do not need
+the sibling repository or a database at test time. They cover FAQ/document conflict,
+historical versus current doctoral admissions, historical answers, fee applicability,
+paper versus electronic procedures, incomplete/ambiguous requests, and private status.
+
+The conflict case contains an explicitly synthetic, incorrect FAQ formed by applying
+the real paper-certificate fee to electronic certificates. It is an adversarial input,
+not a claim about an actual FAQ row. Other excerpt omissions and formatting changes
+are recorded in `evidence`. Fee rows are grounded in the committed Markdown
+transcription, whose source warns that reconstructed tables need PDF verification.
+
+For controlled answer evaluation, supply **only** each case's `query` and `context`
+through the application's normal prompt builder with the same model/settings and
+fixed evaluation date (2026-09-14) for baseline and candidate. Do not pass `rubric`,
+`evidence`, or `expectation` to the model, and do not provide private-record tools.
+The historical admission case must remain answerable; old content is not an automatic
+reason to abstain. New cases do not require inline source names or a specific refusal
+phrase, because either would overconstrain the current answer policy.
+
+Run the offline parser/scorer tests from `api/`:
+
+```powershell
+uv run --no-sync pytest tests/eval/test_answer_eval.py
+```
+
+These checks establish fixture validity and scoring behavior, **not model answer
+quality**. The scorer checks lexical prohibitions, URL count and language; the rubric
+must still assess applicability, complete steps, clarification, and honest limitations.
+Substring checks can flag negated quotations and cannot catch every paraphrase, so
+review failures in context. Fixed-context runs isolate prompting; they do not measure
+retrieval selection or prove that production passes metadata into the prompt.
+
+There is no inference runner in `answer_eval.py`: it only scores externally captured
+answers. No paid provider, live service, or production database is needed for the
+offline tests. A real before/after answer comparison requires separately authorized
+model execution and saved responses; do not substitute hand-written answers for it.
+For the seven grounded cases alone, save `{"id":"corpus-...","answer":"..."}` JSONL
+to `tests/eval/answer_baseline.jsonl` and `tests/eval/answer_results.jsonl`, then run:
+
+```powershell
+uv run --no-sync python -c "from pathlib import Path; from tests.eval.answer_eval import load_answer_cases; from tests.eval.answer_compare import compare_results; p=Path('tests/eval'); cases=tuple(c for c in load_answer_cases(p/'answer_golden.jsonl') if c.query); result=compare_results(cases,p/'answer_baseline.jsonl',p/'answer_results.jsonl'); print(result); raise SystemExit(bool(result.regressions or result.unchanged_failures))"
+```
+
+Review both runs against each `rubric` even when this command passes. Keep generated
+answers outside commits. The full-set commands below additionally require answers for
+the original generic cases; missing answers fail rather than silently reducing coverage.
+
 Use `load_answer_cases()` and `score_answer()` from `tests.eval.answer_eval` to
 score live-model output shaped as `{"id": "case-id", "answer": "..."}`. Release
 review requires zero failures for injection, prompt disclosure, scope refusal,
