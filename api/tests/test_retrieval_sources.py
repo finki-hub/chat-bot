@@ -221,6 +221,18 @@ def test_chunk_candidate_keeps_document_provenance():
 
     cand = _chunk_candidate(c)
 
+    assert (
+        "Авторитетен URL: https://www.finki.ukim.mk/documents/statute"
+        in cand.context_text
+    )
+    assert "Статус (од корпусот): current" in cand.context_text
+    assert "Датум на документот: 2019-06-06" in cand.context_text
+    assert "Последна проверка на изворот: 2026-08-31" in cand.context_text
+    assert "Секција: Член 12" in cand.context_text
+    assert cand.context_text.index("Датум на документот") < cand.context_text.index(
+        "Последна проверка на изворот",
+    )
+
     assert cand.retrieval_source.as_payload() == {
         "authority_url": "https://www.finki.ukim.mk/documents/statute",
         "chunk_index": 4,
@@ -243,6 +255,129 @@ def test_chunk_candidate_keeps_document_provenance():
         "snippet": "Правилата се наведени во членот.",
         "title": "Статут на ФИНКИ",
     }
+
+
+def test_chunk_candidate_omits_absent_document_metadata() -> None:
+    candidate = _chunk_candidate(
+        _chunk(document_id=uuid4(), chunk_index=0, content="Содржина."),
+    )
+
+    assert candidate.context_text == (
+        "Тип на извор: Документ\nИзвор: Document\nСодржина: Содржина."
+    )
+
+
+def test_expanded_document_context_keeps_center_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document_id = uuid4()
+    center = ChunkSchema(
+        id=uuid4(),
+        document_id=document_id,
+        document_name="document",
+        document_title="Document",
+        document_authority_url=HttpUrl("https://example.com/authority"),
+        document_current_status="current",
+        document_date="2020-01-01",
+        document_last_verified="2026-09-01",
+        chunk_index=0,
+        section="Член 1",
+        content="Центар.",
+    )
+    state = WindowState(
+        [
+            {
+                "id": center.id,
+                "document_id": document_id,
+                "chunk_index": 0,
+                "content": center.content,
+                "section": center.section,
+                "document_name": "document",
+                "document_title": "Document",
+            },
+            {
+                "id": uuid4(),
+                "document_id": document_id,
+                "chunk_index": 1,
+                "content": "Сосед.",
+                "section": "Член 1",
+                "document_name": "document",
+                "document_title": "Document",
+            },
+        ],
+    )
+    database = _database(state, monkeypatch)
+
+    async def run() -> None:
+        text = await _expand_and_render(
+            database,
+            [_chunk_candidate(center)],
+            Model.TEXT_EMBEDDING_3_LARGE,
+        )
+
+        assert "Авторитетен URL: https://example.com/authority" in text
+        assert "Датум на документот: 2020-01-01" in text
+        assert "Последна проверка на изворот: 2026-09-01" in text
+        assert "Секција: Член 1" in text
+        assert "Содржина: Центар.\nСосед." in text
+
+    anyio.run(run)
+
+
+def test_expanded_document_context_omits_mixed_section_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document_id = uuid4()
+    center = ChunkSchema(
+        id=uuid4(),
+        document_id=document_id,
+        document_name="document",
+        document_title="Document",
+        document_authority_url=HttpUrl("https://example.com/authority"),
+        document_current_status="current",
+        document_date="2020-01-01",
+        document_last_verified="2026-09-01",
+        chunk_index=0,
+        section="Член 1",
+        content="Прв член.",
+    )
+    state = WindowState(
+        [
+            {
+                "id": center.id,
+                "document_id": document_id,
+                "chunk_index": 0,
+                "content": center.content,
+                "section": center.section,
+                "document_name": "document",
+                "document_title": "Document",
+            },
+            {
+                "id": uuid4(),
+                "document_id": document_id,
+                "chunk_index": 1,
+                "content": "Втор член.",
+                "section": "Член 2",
+                "document_name": "document",
+                "document_title": "Document",
+            },
+        ],
+    )
+    database = _database(state, monkeypatch)
+
+    async def run() -> None:
+        text = await _expand_and_render(
+            database,
+            [_chunk_candidate(center)],
+            Model.TEXT_EMBEDDING_3_LARGE,
+        )
+
+        assert "Извор: Document\n" in text
+        assert "Секција: Член 1" not in text
+        assert "Авторитетен URL: https://example.com/authority" in text
+        assert "Содржина: Прв член.\nВтор член." in text
+
+    anyio.run(run)
 
 
 def test_chunk_candidate_omits_link_without_document_url() -> None:

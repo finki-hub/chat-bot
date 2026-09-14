@@ -7,6 +7,14 @@ from app.llms.prompts import DEFAULT_AGENT_SYSTEM_PROMPT
 from app.schemas.chat import ChatSchema
 
 
+def test_system_prompt_distinguishes_source_review_date_from_applicability():
+    assert (
+        "„Последна проверка на изворот“ означува кога изворот е проверен, "
+        "а не датум на стапување во сила или доказ дека правилото сè уште важи "
+        "или е применливо на прашањето."
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+
+
 @pytest.mark.anyio
 async def test_handle_chat_ignores_client_system_prompt(monkeypatch):
     captured: dict[str, str] = {}

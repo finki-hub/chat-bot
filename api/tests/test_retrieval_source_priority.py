@@ -38,7 +38,7 @@ def _make_chunk_candidate(title: str, chunk_index: int) -> _Candidate:
     )
 
 
-def test_faq_priority_precedes_documents_and_preserves_source_order() -> None:
+def test_reranker_order_is_preserved_across_source_types() -> None:
     # Given
     chunk_first = _make_chunk_candidate("Документ 1", 0)
     faq_first = _make_faq_candidate("FAQ 1")
@@ -53,14 +53,14 @@ def test_faq_priority_precedes_documents_and_preserves_source_order() -> None:
 
     # Then
     assert [candidate.key for candidate in selected] == [
-        faq_first.key,
-        faq_second.key,
         chunk_first.key,
+        faq_first.key,
         chunk_second.key,
+        faq_second.key,
     ]
 
 
-def test_faq_priority_is_applied_before_top_k_without_a_slot_cap() -> None:
+def test_top_k_limits_reranked_candidates_without_source_promotion() -> None:
     # Given
     chunk = _make_chunk_candidate("Документ", 0)
     faqs = [_make_faq_candidate(f"FAQ {index}") for index in range(4)]
@@ -70,5 +70,14 @@ def test_faq_priority_is_applied_before_top_k_without_a_slot_cap() -> None:
 
     # Then
     assert [candidate.key for candidate in selected] == [
-        candidate.key for candidate in faqs
+        chunk.key,
+        *[faq.key for faq in faqs[:3]],
     ]
+
+
+def test_top_k_and_order_are_invariant_for_normal_faq_results() -> None:
+    faqs = [_make_faq_candidate(f"FAQ {index}") for index in range(3)]
+
+    selected = _select_with_source_priority(faqs, top_k=2)
+
+    assert [candidate.key for candidate in selected] == [faq.key for faq in faqs[:2]]

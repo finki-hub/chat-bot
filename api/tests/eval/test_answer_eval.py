@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -133,8 +134,9 @@ def test_score_answer_reports_every_contract_failure():
 def test_answer_golden_set_covers_approved_behavior_categories():
     cases = load_answer_cases(_GOLDEN)
 
-    assert len(cases) == 14
+    assert len(cases) == 21
     assert {case.category for case in cases} == {
+        "clarification",
         "conflict",
         "follow-up",
         "grounding",
@@ -142,12 +144,54 @@ def test_answer_golden_set_covers_approved_behavior_categories():
         "language",
         "links",
         "missing-evidence",
+        "private-status",
+        "procedure",
         "provider-parity",
         "scope",
         "synthesis",
+        "temporal-scope",
         "title",
         "tool-output",
     }
+
+
+def test_grounded_answer_cases_preserve_replay_inputs_and_review_evidence():
+    cases = load_answer_cases(_GOLDEN)
+    grounded = {case.id: case for case in cases if case.query}
+
+    assert set(grounded) == {
+        "corpus-faq-document-conflict",
+        "corpus-doctoral-current-scope",
+        "corpus-admission-historical-answer",
+        "corpus-fee-academic-year-scope",
+        "corpus-paper-electronic-procedure",
+        "corpus-incomplete-procedure-clarification",
+        "corpus-private-status-honesty",
+    }
+    for case in grounded.values():
+        assert "Тип на извор:" in case.context
+        assert case.rubric
+        assert all(item.startswith("finki-hub/documents@") for item in case.evidence)
+        # Source names are not mandatory prose in the application's current prompt.
+        assert not case.expectation.required_sources
+
+
+@pytest.mark.parametrize("missing", ["query", "context", "rubric", "evidence"])
+def test_grounded_answer_case_rejects_missing_replay_or_review_fields(
+    tmp_path: Path,
+    missing: str,
+):
+    row = next(
+        json.loads(line)
+        for line in _GOLDEN.read_text(encoding="utf-8").splitlines()
+        if json.loads(line)["id"] == "corpus-faq-document-conflict"
+    )
+    del row[missing]
+    path = tmp_path / "incomplete.jsonl"
+    path.write_text(json.dumps(row), encoding="utf-8")
+
+    with pytest.raises(AnswerEvalError, match="grounded cases require non-empty"):
+        load_answer_cases(path)
 
 
 def test_evaluate_results_scores_answers_by_case_id(tmp_path: Path):

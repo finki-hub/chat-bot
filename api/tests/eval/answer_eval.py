@@ -41,6 +41,10 @@ class AnswerCase:
     id: str
     category: str
     expectation: AnswerExpectation
+    query: str = ""
+    context: str = ""
+    rubric: tuple[str, ...] = ()
+    evidence: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,10 +121,28 @@ def _expectation(value: JsonValue, path: str) -> AnswerExpectation:
 
 def _case(value: JsonValue, path: str) -> AnswerCase:
     row = _mapping(value, path)
+    query = _text(row.get("query", ""), f"{path}.query")
+    context = _text(row.get("context", ""), f"{path}.context")
+    rubric = _texts(row.get("rubric", []), f"{path}.rubric")
+    evidence = _texts(row.get("evidence", []), f"{path}.evidence")
+    if any(key in row for key in ("query", "context", "rubric", "evidence")) and (
+        not query.strip()
+        or not context.strip()
+        or not rubric
+        or not evidence
+        or any(not item.strip() for item in (*rubric, *evidence))
+    ):
+        raise AnswerEvalError(
+            f"{path}: grounded cases require non-empty query, context, rubric and evidence",
+        )
     return AnswerCase(
         id=_text(row.get("id"), f"{path}.id"),
         category=_text(row.get("category"), f"{path}.category"),
         expectation=_expectation(row.get("expectation"), f"{path}.expectation"),
+        query=query,
+        context=context,
+        rubric=rubric,
+        evidence=evidence,
     )
 
 
