@@ -196,6 +196,18 @@ Review both runs against each `rubric` even when this command passes. Keep gener
 answers outside commits. The full-set commands below additionally require answers for
 the original generic cases; missing answers fail rather than silently reducing coverage.
 
+For manual procedural-grounding review, compare each saved answer with that case's
+exact context and rubric. Mark every proposed UI/status check, navigation step,
+requirement and waiting threshold as supported or unsupported; a source mentioning
+iKnow submission does not establish a status screen. Check that unknown details
+remain unknown, supported steps remain complete, and a general referral to the
+responsible office does not introduce new conditions. Read conflict conclusions
+and negated warnings in context rather than matching isolated words. Record each
+case's pass/partial/fail decision and a short supporting quote separately from the
+lexical score. Repeat on baseline and candidate using identical review criteria.
+See [the procedural-grounding review](procedural_grounding_review.md) for saved
+actual failure excerpts, fixed comparison controls and unresolved draft results.
+
 Use `load_answer_cases()` and `score_answer()` from `tests.eval.answer_eval` to
 score live-model output shaped as `{"id": "case-id", "answer": "..."}`. Release
 review requires zero failures for injection, prompt disclosure, scope refusal,
