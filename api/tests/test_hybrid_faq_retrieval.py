@@ -321,6 +321,160 @@ def test_lexical_faq_search_records_no_match(
     assert timings.retrieval_path == "dense"
 
 
+def test_reranker_failure_preserves_faq_first_dense_fallback_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fallback_faq = QuestionSchema(
+        id=uuid4(),
+        name="Подоцнежен FAQ",
+        content="Подоцнежен dense FAQ кандидат.",
+        links={},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        distance=0.1,
+    )
+    dense_chunk = ChunkSchema(
+        id=uuid4(),
+        document_id=uuid4(),
+        document_name="rules",
+        document_title="Правилник",
+        chunk_index=0,
+        content="Порано пронајден документ.",
+        distance=0.49,
+    )
+    search_call = 0
+
+    async def embed(*args, **kwargs):
+        return [0.1]
+
+    async def vector_search(*args, **kwargs):
+        nonlocal search_call
+        search_call += 1
+        return ([], [dense_chunk]) if search_call == 1 else ([fallback_faq], [])
+
+    async def build_variants(*args, **kwargs):
+        rewritten = QueryVariant(
+            kind="rewrite",
+            text="препишано прашање",
+            is_document=False,
+        )
+        raw = QueryVariant(kind="raw", text="smerovi na finki", is_document=False)
+        return QueryVariantBundle(
+            variants=(rewritten, raw),
+            rerank_query=rewritten.text,
+        )
+
+    async def lexical_search(*args, **kwargs):
+        return []
+
+    async def failing_reranker(*args, **kwargs):
+        raise RuntimeError("reranker unavailable")
+
+    async def no_neighbor_chunks(*args, **kwargs):
+        return []
+
+    monkeypatch.setattr(context_module, "_embed_variant", embed)
+    monkeypatch.setattr(context_module, "has_provider_credential", lambda *args: True)
+    monkeypatch.setattr(context_module, "build_query_variants", build_variants)
+    monkeypatch.setattr(context_module, "_search_both", vector_search)
+    monkeypatch.setattr(context_module, "get_matching_questions", lexical_search)
+    monkeypatch.setattr(context_module, "_post_rerank", failing_reranker)
+    monkeypatch.setattr(context_module, "get_chunks_window", no_neighbor_chunks)
+
+    async def run():
+        return await get_retrieved_context_with_sources(
+            Database("postgresql://unused"),
+            "smerovi na finki",
+            Model.BGE_M3_LOCAL,
+            Model.GPT_5_4_MINI,
+            query_transform_mode=QueryTransformMode.REWRITE,
+            top_k=1,
+        )
+
+    result, timings = _run_with_timings(run)
+
+    assert fallback_faq.content in result.text
+    assert dense_chunk.content not in result.text
+    assert search_call == 2
+    assert timings.lexical_search_outcome == "no_match"
+    assert timings.dense_faq_candidate_count == 1
+    assert timings.dense_document_candidate_count == 1
+    assert timings.lexical_faq_candidate_count == 0
+    assert timings.final_faq_count == 1
+    assert timings.final_document_count == 0
+    assert timings.lexical_only_final_count == 0
+    assert timings.retrieval_path == "dense"
+    assert timings.reranker_fallback is True
+
+
+def test_successful_rerank_preserves_cross_source_relevance_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    faq = QuestionSchema(
+        id=uuid4(),
+        name="FAQ",
+        content="FAQ одговор.",
+        links={},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        distance=0.2,
+    )
+    chunk = ChunkSchema(
+        id=uuid4(),
+        document_id=uuid4(),
+        document_name="rules",
+        document_title="Правилник",
+        chunk_index=0,
+        content="Документ одговор.",
+        distance=0.1,
+    )
+
+    async def embed(*args, **kwargs):
+        return [0.1]
+
+    async def vector_search(*args, **kwargs):
+        return [faq], [chunk]
+
+    class RerankResponse:
+        def json(self):
+            return {
+                "reranked_documents": [
+                    {"index": 1, "score": 0.95},
+                    {"index": 0, "score": 0.9},
+                ],
+            }
+
+    async def rerank(*args, **kwargs):
+        return RerankResponse()
+
+    async def no_neighbor_chunks(*args, **kwargs):
+        return []
+
+    monkeypatch.setattr(context_module, "_embed_variant", embed)
+    monkeypatch.setattr(context_module, "_search_both", vector_search)
+    monkeypatch.setattr(context_module, "_post_rerank", rerank)
+    monkeypatch.setattr(context_module, "get_chunks_window", no_neighbor_chunks)
+
+    async def run():
+        return await get_retrieved_context_with_sources(
+            Database("postgresql://unused"),
+            "прашање",
+            Model.BGE_M3_LOCAL,
+            Model.GPT_5_4_MINI,
+            query_transform_mode=QueryTransformMode.RAW,
+            top_k=1,
+        )
+
+    result, timings = _run_with_timings(run)
+
+    assert result.text.startswith("Тип на извор: Документ")
+    assert chunk.content in result.text
+    assert faq.content not in result.text
+    assert timings.final_faq_count == 0
+    assert timings.final_document_count == 1
+    assert timings.reranker_fallback is False
+
+
 def test_reranker_failure_falls_back_to_dense_candidates_only(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

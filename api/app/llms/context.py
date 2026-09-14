@@ -269,6 +269,16 @@ def _select_with_source_priority(
     return ranked[:top_k]
 
 
+def _select_fallback_candidates(
+    candidates: list[_Candidate],
+    top_k: int,
+) -> list[_Candidate]:
+    """Select dense fallback candidates with the historical FAQ-first ordering."""
+    faqs = [candidate for candidate in candidates if candidate.source == "faq"]
+    chunks = [candidate for candidate in candidates if candidate.source == "chunk"]
+    return [*faqs, *chunks][:top_k]
+
+
 async def get_retrieved_context(
     db: Database,
     query: str,
@@ -595,7 +605,7 @@ async def get_retrieved_context_with_sources(
         dense_candidates = [
             candidate for candidate in candidates if candidate.distance is not None
         ]
-        final = _select_with_source_priority(dense_candidates, top_k)
+        final = _select_fallback_candidates(dense_candidates, top_k)
         sources = ()
 
     final_has_dense = any(

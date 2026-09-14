@@ -146,6 +146,14 @@ the sibling repository or a database at test time. They cover FAQ/document confl
 historical versus current doctoral admissions, historical answers, fee applicability,
 paper versus electronic procedures, incomplete/ambiguous requests, and private status.
 
+Frozen document blocks use the production `_chunk_candidate` context labels and
+field order, including optional corpus metadata. FAQ blocks use `_question_candidate`
+formatting; the conflict case mutates FAQ content only, not its source envelope.
+`test_answer_context_format.py` reconstructs typed candidates from every grounded
+block and requires exact equality with the production formatter output. This detects
+label, ordering, and rendering drift without model calls or database access; it does
+not establish that retrieval selects these particular excerpts.
+
 The conflict case contains an explicitly synthetic, incorrect FAQ formed by applying
 the real paper-certificate fee to electronic certificates. It is an adversarial input,
 not a claim about an actual FAQ row. Other excerpt omissions and formatting changes
@@ -163,7 +171,7 @@ phrase, because either would overconstrain the current answer policy.
 Run the offline parser/scorer tests from `api/`:
 
 ```powershell
-uv run --no-sync pytest tests/eval/test_answer_eval.py
+uv run --no-sync pytest tests/eval/test_answer_eval.py tests/eval/test_answer_context_format.py
 ```
 
 These checks establish fixture validity and scoring behavior, **not model answer
