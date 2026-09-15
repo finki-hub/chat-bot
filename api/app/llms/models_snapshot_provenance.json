@@ -11,7 +11,8 @@
     "gpt-6-astra": "https://developers.openai.com/api/docs/models/gpt-6-astra",
     "gemini-3.8-flash": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
     "claude-fable-5-1": "https://platform.claude.com/docs/en/models/fable-5-1/overview",
-    "openrouter:deepseek/deepseek-v4.1-flash": "https://openrouter.ai/api/v1/models"
+    "openrouter:deepseek/deepseek-v4.1-flash": "https://openrouter.ai/api/v1/models",
+    "openrouter:qwen/qwen3.8-max-0902": "https://openrouter.ai/api/v1/models"
   },
   "entitlement_verified": false
 }

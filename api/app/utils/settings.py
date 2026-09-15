@@ -13,7 +13,8 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings
 
-from app.llms.models import CHAT_MODEL_ORDER, Model
+from app.llms.model_catalog_policy import CURATED_CHAT_MODELS
+from app.llms.models import Model
 from app.llms.provider_credentials import ProviderName, provider_for_model
 
 _API_KEY_DEFAULT: Final[str] = "your_api_key_here"
@@ -175,7 +176,7 @@ class Settings(BaseSettings):
         except ValueError:
             msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
             raise ValueError(msg) from None
-        if model not in frozenset(CHAT_MODEL_ORDER):
+        if model not in CURATED_CHAT_MODELS:
             msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
             raise ValueError(msg)
         derived_provider = provider_for_model(model)

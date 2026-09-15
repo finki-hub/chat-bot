@@ -83,6 +83,7 @@ MODEL_CATALOG: Final[tuple[CatalogPolicy, ...]] = (
 )
 
 _CATALOG_MODELS = tuple(policy.model for policy in MODEL_CATALOG)
+CURATED_CHAT_MODELS: Final[frozenset[Model]] = frozenset(_CATALOG_MODELS)
 if len(_CATALOG_MODELS) != len(set(_CATALOG_MODELS)):
     msg = "Catalog policy must not contain duplicate models"
     raise RuntimeError(msg)

@@ -115,6 +115,16 @@ def test_refresh_outputs_preserve_order_and_provenance_hashes() -> None:
     assert provenance["sha256"] == sha256(payload).hexdigest()
     assert provenance["snapshot_sha256"] == sha256(snapshot_bytes).hexdigest()
     assert provenance["remote_coverage"] == {"complete": True, "missing": []}
+    expected_verified_sources = {
+        "gpt-6-astra": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+        "gemini-3.8-flash": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
+        "claude-fable-5-1": "https://platform.claude.com/docs/en/models/fable-5-1/overview",
+        "openrouter:deepseek/deepseek-v4.1-flash": "https://openrouter.ai/api/v1/models",
+        "openrouter:qwen/qwen3.8-max-0902": "https://openrouter.ai/api/v1/models",
+    }
+    assert provenance["verified_id_sources"] == expected_verified_sources
+    checked_in_provenance = json.loads(refresh.PROVENANCE_PATH.read_bytes())
+    assert checked_in_provenance["verified_id_sources"] == expected_verified_sources
 
 
 def test_refresh_write_rolls_back_first_file_if_second_replace_fails(

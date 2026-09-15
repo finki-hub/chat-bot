@@ -25,7 +25,7 @@ const DIAGNOSTICS_LABEL = /Дијагностика/u;
 const OBSERVABLE_STAGE_GAP_MS = 5_000;
 const ANSWER_TEST_ID = 'answer-text';
 const ANSWER_PREVIEW = 'Резултатите од испитите се објавуваат';
-const SPONSORED_MODEL = 'gemini-3.5-flash';
+const SPONSORED_MODEL = 'gemini-3.8-flash';
 const SPONSORED_RESET_AT = '2099-01-01T12:00:00Z';
 const SPONSORED_RESET_TEXT = 'Повторно ќе биде достапно на 1 јан. 2099, 13:00.';
 const COMPOSER_INPUT = ['composer', 'input'].join('-');
@@ -36,7 +36,7 @@ const SPONSORED_CATALOG: ModelCatalog = {
     {
       availability: 'sponsored',
       id: SPONSORED_MODEL,
-      name: 'Gemini 3.5 Flash',
+      name: 'Gemini 3.8 Flash',
       provider: 'google',
       sponsored_quota: {
         limit: 5,
@@ -454,7 +454,7 @@ test.describe('chat streaming (mocked BFF)', () => {
         timeout: 15_000,
       });
       await expect(page.getByTestId('composer-model')).toContainText(
-        'Gemini 3.5 Flash',
+        'Gemini 3.8 Flash',
       );
       await expect(page.getByTestId('composer-input')).toBeEnabled();
       await page.getByTestId('composer-input').fill('Ново прашање');

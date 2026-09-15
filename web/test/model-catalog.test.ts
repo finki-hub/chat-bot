@@ -233,6 +233,16 @@ describe('parseModelCatalog', () => {
     );
   });
 
+  it('preserves the curated display name for a legacy string-array entry', () => {
+    expect(parseModelCatalog([QWEN_MAX]).models).toStrictEqual([
+      {
+        id: QWEN_MAX,
+        name: 'Qwen3.8 Max 0902',
+        provider: OPENROUTER,
+      },
+    ]);
+  });
+
   it('uses inferred provider and raw id name for an unknown legacy id', () => {
     const unknown = 'acme/new-model';
 

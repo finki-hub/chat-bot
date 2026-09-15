@@ -69,7 +69,7 @@ const CURATED_MODEL_DATA = [
   ],
   ['openrouter:z-ai/glm-5.3', 'GLM-5.3', 'openrouter'],
   ['openrouter:moonshotai/kimi-k3', 'Kimi K3', 'openrouter'],
-  ['openrouter:qwen/qwen3.8-max-0902', 'Qwen3.8 Max', 'openrouter'],
+  ['openrouter:qwen/qwen3.8-max-0902', 'Qwen3.8 Max 0902', 'openrouter'],
   ['openrouter:qwen/qwen3.8-27b', 'Qwen3.8 27B', 'openrouter'],
   ['openrouter:minimax/minimax-m3', 'MiniMax M3', 'openrouter'],
   ['openrouter:x-ai/grok-4.6', 'Grok 4.6', 'openrouter'],

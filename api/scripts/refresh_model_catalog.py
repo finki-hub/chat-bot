@@ -22,6 +22,7 @@ VERIFIED_ID_SOURCES = {
     "gemini-3.8-flash": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
     "claude-fable-5-1": "https://platform.claude.com/docs/en/models/fable-5-1/overview",
     "openrouter:deepseek/deepseek-v4.1-flash": "https://openrouter.ai/api/v1/models",
+    "openrouter:qwen/qwen3.8-max-0902": "https://openrouter.ai/api/v1/models",
 }
 
 
@@ -118,7 +119,7 @@ def _restore(path: Path, original: bytes | None) -> None:
         return
     staged = _stage(path, original)
     try:
-        os.replace(staged, path)  # noqa: PTH105 - required atomic same-dir replace
+        os.replace(staged, path)  # ruff: ignore[PTH105] - required atomic same-dir replace
     finally:
         staged.unlink(missing_ok=True)
 
@@ -143,12 +144,12 @@ def write_refresh_outputs(
     try:
         staged_snapshot = _stage(snapshot_path, snapshot_bytes)
         staged_provenance = _stage(provenance_path, provenance_bytes)
-        os.replace(  # noqa: PTH105 - required atomic same-dir replace
+        os.replace(  # ruff: ignore[PTH105] - required atomic same-dir replace
             staged_snapshot,
             snapshot_path,
         )
         snapshot_replaced = True
-        os.replace(  # noqa: PTH105 - required atomic same-dir replace
+        os.replace(  # ruff: ignore[PTH105] - required atomic same-dir replace
             staged_provenance,
             provenance_path,
         )
@@ -198,7 +199,7 @@ def main() -> None:
         SOURCE,
         headers={"User-Agent": "finki-hub-model-catalog-refresh"},
     )
-    with urlopen(request, timeout=30) as response:  # noqa: S310 - fixed HTTPS source
+    with urlopen(request, timeout=30) as response:  # ruff: ignore[S310] - fixed HTTPS source
         payload = response.read()
     snapshot_bytes, provenance_bytes = build_refresh_outputs(
         payload,
