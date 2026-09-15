@@ -70,10 +70,11 @@ def get_anthropic_llm(
     When `reasoning` is on, extended thinking additionally requires `temperature` to be
     unset (the API uses its default of 1), so we send `None` for every reasoning request.
     Claude Sonnet 5 enables adaptive thinking by default, so non-reasoning requests
-    explicitly disable it to preserve the UI toggle's semantics.
+    explicitly disable it to preserve the UI toggle's semantics. Claude Fable 5.1 is
+    always-on adaptive thinking and therefore receives no budget_tokens cap.
     """
     thinking, effective_max = (None, max_tokens)
-    if reasoning:
+    if reasoning or model == Model.CLAUDE_FABLE_5_1:
         thinking, effective_max = _thinking_config(model, max_tokens)
     elif model == Model.CLAUDE_SONNET_5:
         thinking = {"type": "disabled"}
@@ -81,15 +82,21 @@ def get_anthropic_llm(
         None if (reasoning or model in ANTHROPIC_NO_SAMPLING_MODELS) else temperature
     )
     credential = require_provider_credential("anthropic", credential)
+    client_kwargs: dict[str, object] = {
+        "model": model.value if upstream_model is None else upstream_model,
+        "api_key": SecretStr(credential.api_key),
+        "base_url": credential.base_url or None,
+        "temperature": temperature_arg,
+        "max_tokens": effective_max,
+        "thinking": thinking,
+    }
+    # Fable 5.1 documents adaptive thinking with an effort level, not a
+    # budget_tokens value.  The installed client translates this alias to
+    # Anthropic's output_config.effort.
+    if model == Model.CLAUDE_FABLE_5_1:
+        client_kwargs["effort"] = "medium"
     # LangChain's generated Pydantic signature omits documented constructor aliases.
-    return ChatAnthropic(  # type: ignore[call-arg]
-        model=model.value if upstream_model is None else upstream_model,
-        api_key=SecretStr(credential.api_key),
-        base_url=credential.base_url or None,
-        temperature=temperature_arg,
-        max_tokens=effective_max,
-        thinking=thinking,
-    )
+    return ChatAnthropic(**client_kwargs)  # type: ignore[arg-type]
 
 
 def stream_anthropic_response(
@@ -255,6 +262,7 @@ async def stream_anthropic_agent_response(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
+            reasoning=reasoning,
             credential=credential,
             upstream_model=upstream_model,
         )

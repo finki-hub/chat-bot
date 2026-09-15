@@ -19,36 +19,24 @@ const ANTHROPIC = 'anthropic';
 const OLLAMA = 'ollama';
 const OPENROUTER = 'openrouter';
 const LIVE = 'live';
-const GPT = 'gpt-5.4';
+const GPT = 'gpt-6-astra';
 const LUNA = 'gpt-5.6-luna';
-
-const EXPECTED_CURATED_IDS = [
-  'gpt-5.6-sol',
-  'gpt-5.6-terra',
-  LUNA,
-  'gpt-5.5',
-  'gpt-5.4',
-  'gpt-5.4-mini',
-  'gpt-5.4-nano',
-  'gemini-3.1-pro-preview',
-  'gemini-3.5-flash',
-  'gemini-3.1-flash-lite',
-  'claude-opus-4-8',
-  'claude-sonnet-5',
-  'claude-haiku-4-5',
-  'openrouter:deepseek/deepseek-v4-pro-0813',
-  'openrouter:deepseek/deepseek-v4-flash-0731',
-  'openrouter:z-ai/glm-5.3',
-  'openrouter:moonshotai/kimi-k3',
-  'openrouter:qwen/qwen3.8-max',
-  'openrouter:qwen/qwen3.8-27b',
-  'openrouter:minimax/minimax-m3',
-  'openrouter:x-ai/grok-4.6',
-  'openrouter:tencent/hy3',
-  'qwen3:30b-a3b-thinking-2507-q4_K_M',
-  'qwen3:30b-a3b-instruct-2507-q4_K_M',
-  'qwen3:14b-q4_K_M',
-];
+const RETIRED_GPT = 'gpt-5.4';
+const RETIRED_GPT_5_5 = 'gpt-5.5';
+const RETIRED_GEMINI = 'gemini-3.5-flash';
+const RETIRED_DEEPSEEK_FLASH = 'openrouter:deepseek/deepseek-v4-flash';
+const RETIRED_DEEPSEEK_FLASH_DATED =
+  'openrouter:deepseek/deepseek-v4-flash-0731';
+const RETIRED_QWEN_MAX_ALIAS = 'openrouter:qwen/qwen3.8-max';
+const QWEN_MAX = 'openrouter:qwen/qwen3.8-max-0902';
+const HIDDEN_CURATED_IDS = [
+  RETIRED_GPT,
+  RETIRED_GPT_5_5,
+  RETIRED_GEMINI,
+  RETIRED_DEEPSEEK_FLASH,
+  RETIRED_DEEPSEEK_FLASH_DATED,
+  RETIRED_QWEN_MAX_ALIAS,
+] as const;
 
 const GPT_TERRA = 'gpt-5.6-terra';
 const GPT_MINI = 'gpt-5.4-mini';
@@ -58,6 +46,34 @@ const GEMINI_PRO = 'gemini-3.1-pro-preview';
 const CLAUDE_OPUS = 'claude-opus-4-8';
 const CLAUDE_LEGACY = 'claude-sonnet-4-6';
 const QWEN_THINKING = 'qwen3:30b-a3b-thinking-2507-q4_K_M';
+
+const EXPECTED_CURATED_IDS = [
+  'gpt-6-astra',
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  LUNA,
+  GPT_MINI,
+  GPT_NANO,
+  'gemini-3.8-flash',
+  'gemini-3.1-pro-preview',
+  'gemini-3.1-flash-lite',
+  'claude-fable-5-1',
+  'claude-opus-4-8',
+  'claude-sonnet-5',
+  'claude-haiku-4-5',
+  'openrouter:deepseek/deepseek-v4.1-flash',
+  'openrouter:deepseek/deepseek-v4-pro-0813',
+  'openrouter:z-ai/glm-5.3',
+  'openrouter:moonshotai/kimi-k3',
+  QWEN_MAX,
+  'openrouter:qwen/qwen3.8-27b',
+  'openrouter:minimax/minimax-m3',
+  'openrouter:x-ai/grok-4.6',
+  'openrouter:tencent/hy3',
+  'qwen3:30b-a3b-thinking-2507-q4_K_M',
+  'qwen3:30b-a3b-instruct-2507-q4_K_M',
+  'qwen3:14b-q4_K_M',
+];
 
 const descriptor = (id: string, provider: string): ModelDescriptor => ({
   id,
@@ -70,7 +86,7 @@ const typedModels = [
     capabilities: { reasoning: true },
     description: 'OpenAI flagship reasoning model.',
     id: GPT,
-    name: 'GPT-5.4',
+    name: 'GPT-6 Astra',
     pricing: { input: 2.5, output: 15 },
     provider: OPENAI,
   },
@@ -107,6 +123,10 @@ describe('parseModelCatalog', () => {
     );
   });
 
+  it.each(HIDDEN_CURATED_IDS)('does not expose retired model %s', (id) => {
+    expect(Object.keys(CURATED_MODEL_DESCRIPTORS)).not.toContain(id);
+  });
+
   it('parses a typed catalog and keeps only the web-relevant fields', () => {
     const catalog = parseModelCatalog(typedCatalog());
 
@@ -116,7 +136,7 @@ describe('parseModelCatalog', () => {
     expect(catalog.models[0]).toStrictEqual({
       description: 'OpenAI flagship reasoning model.',
       id: GPT,
-      name: 'GPT-5.4',
+      name: 'GPT-6 Astra',
       provider: OPENAI,
     });
     expect(catalog.models.at(-1)).toMatchObject({
@@ -218,6 +238,64 @@ describe('parseModelCatalog', () => {
 
     expect(parseModelCatalog([unknown]).models).toStrictEqual([
       descriptor(unknown, 'acme'),
+    ]);
+  });
+
+  it('filters hidden ids from mixed legacy catalogs without dropping dynamic values', () => {
+    const catalog = parseModelCatalog([
+      RETIRED_GPT,
+      'ollama:runtime-model',
+      GPT_MINI,
+      RETIRED_DEEPSEEK_FLASH_DATED,
+      RETIRED_QWEN_MAX_ALIAS,
+      QWEN_MAX,
+    ]);
+
+    expect(catalog.models.map((model) => model.id)).toStrictEqual([
+      'ollama:runtime-model',
+      GPT_MINI,
+      QWEN_MAX,
+    ]);
+  });
+
+  it('filters hidden ids from typed catalogs without dropping dynamic values', () => {
+    const catalog = parseModelCatalog({
+      models: [
+        { id: RETIRED_GPT_5_5, name: 'GPT-5.5', provider: OPENAI },
+        {
+          id: 'llama3.3:runtime',
+          name: 'llama3.3:runtime',
+          provider: OLLAMA,
+        },
+        {
+          id: 'gpt-5.4-mini',
+          name: GPT_MINI_NAME,
+          provider: OPENAI,
+        },
+        {
+          id: RETIRED_DEEPSEEK_FLASH,
+          name: 'DeepSeek V4 Flash',
+          provider: OPENROUTER,
+        },
+        {
+          id: RETIRED_QWEN_MAX_ALIAS,
+          name: 'Qwen3.8 Max',
+          provider: OPENROUTER,
+        },
+        {
+          id: QWEN_MAX,
+          name: 'Qwen3.8 Max',
+          provider: OPENROUTER,
+        },
+      ],
+      source: LIVE,
+      version: 1,
+    });
+
+    expect(catalog.models.map((model) => model.id)).toStrictEqual([
+      'llama3.3:runtime',
+      'gpt-5.4-mini',
+      QWEN_MAX,
     ]);
   });
 
@@ -400,6 +478,14 @@ describe('recoverSelectedModel', () => {
 
   it('keeps the current model when the catalog is empty', () => {
     expect(recoverSelectedModel([], CLAUDE_LEGACY, GPT)).toBe(CLAUDE_LEGACY);
+  });
+
+  it('recovers a retired persisted selection to the current visible default', () => {
+    const { models: curatedModels } = parseModelCatalog(EXPECTED_CURATED_IDS);
+
+    expect(recoverSelectedModel(curatedModels, RETIRED_GPT, GPT_MINI)).toBe(
+      GPT_MINI,
+    );
   });
 });
 

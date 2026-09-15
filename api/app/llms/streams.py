@@ -84,7 +84,8 @@ async def stream_response_with_agent(
             )
 
         case (
-            Model.GPT_5_6_SOL
+            Model.GPT_6_ASTRA
+            | Model.GPT_5_6_SOL
             | Model.GPT_5_6_TERRA
             | Model.GPT_5_6_LUNA
             | Model.GPT_5_5
@@ -108,7 +109,8 @@ async def stream_response_with_agent(
             )
 
         case (
-            Model.GEMINI_3_1_PRO_PREVIEW
+            Model.GEMINI_3_8_FLASH
+            | Model.GEMINI_3_1_PRO_PREVIEW
             | Model.GEMINI_3_5_FLASH
             | Model.GEMINI_3_1_FLASH_LITE
         ):
@@ -127,7 +129,12 @@ async def stream_response_with_agent(
                 upstream_model=upstream_model,
             )
 
-        case Model.CLAUDE_OPUS_4_8 | Model.CLAUDE_SONNET_5 | Model.CLAUDE_HAIKU_4_5:
+        case (
+            Model.CLAUDE_FABLE_5_1
+            | Model.CLAUDE_OPUS_4_8
+            | Model.CLAUDE_SONNET_5
+            | Model.CLAUDE_HAIKU_4_5
+        ):
             _tag_provider(observation, "anthropic")
             return await stream_anthropic_agent_response(
                 user_prompt,

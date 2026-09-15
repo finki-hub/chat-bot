@@ -6,6 +6,7 @@ from typing import Final
 class Model(StrEnum):
     BGE_M3 = "bge-m3:latest"
 
+    GPT_6_ASTRA = "gpt-6-astra"
     GPT_5_6_SOL = "gpt-5.6-sol"
     GPT_5_6_TERRA = "gpt-5.6-terra"
     GPT_5_6_LUNA = "gpt-5.6-luna"
@@ -15,19 +16,24 @@ class Model(StrEnum):
     GPT_5_4_NANO = "gpt-5.4-nano"
     TEXT_EMBEDDING_3_LARGE = "text-embedding-3-large"
 
+    GEMINI_3_8_FLASH = "gemini-3.8-flash"
     GEMINI_3_1_PRO_PREVIEW = "gemini-3.1-pro-preview"
     GEMINI_3_5_FLASH = "gemini-3.5-flash"
     GEMINI_3_1_FLASH_LITE = "gemini-3.1-flash-lite"
     GEMINI_EMBEDDING_001 = "gemini-embedding-001"
 
+    CLAUDE_FABLE_5_1 = "claude-fable-5-1"
     CLAUDE_OPUS_4_8 = "claude-opus-4-8"
     CLAUDE_SONNET_5 = "claude-sonnet-5"
     CLAUDE_HAIKU_4_5 = "claude-haiku-4-5"
 
+    OPENROUTER_DEEPSEEK_V4_1_FLASH = "openrouter:deepseek/deepseek-v4.1-flash"
+    OPENROUTER_DEEPSEEK_V4_FLASH = "openrouter:deepseek/deepseek-v4-flash"
     OPENROUTER_DEEPSEEK_V4_PRO_0813 = "openrouter:deepseek/deepseek-v4-pro-0813"
     OPENROUTER_DEEPSEEK_V4_FLASH_0731 = "openrouter:deepseek/deepseek-v4-flash-0731"
     OPENROUTER_GLM_5_3 = "openrouter:z-ai/glm-5.3"
     OPENROUTER_KIMI_K3 = "openrouter:moonshotai/kimi-k3"
+    OPENROUTER_QWEN3_8_MAX_0902 = "openrouter:qwen/qwen3.8-max-0902"
     OPENROUTER_QWEN3_8_MAX = "openrouter:qwen/qwen3.8-max"
     OPENROUTER_QWEN3_8_27B = "openrouter:qwen/qwen3.8-27b"
     OPENROUTER_MINIMAX_M3 = "openrouter:minimax/minimax-m3"
@@ -61,6 +67,7 @@ ALL_MODELS_EMBEDDINGS: Final[tuple[Model, ...]] = (Model.BGE_M3_LOCAL,)
 GPU_API_MODELS: Final[dict[Model, str]] = {Model.BGE_M3_LOCAL: "BAAI/bge-m3"}
 
 CHAT_MODEL_ORDER: Final[tuple[Model, ...]] = (
+    Model.GPT_6_ASTRA,
     Model.GPT_5_6_SOL,
     Model.GPT_5_6_TERRA,
     Model.GPT_5_6_LUNA,
@@ -68,16 +75,21 @@ CHAT_MODEL_ORDER: Final[tuple[Model, ...]] = (
     Model.GPT_5_4,
     Model.GPT_5_4_MINI,
     Model.GPT_5_4_NANO,
+    Model.GEMINI_3_8_FLASH,
     Model.GEMINI_3_1_PRO_PREVIEW,
     Model.GEMINI_3_5_FLASH,
     Model.GEMINI_3_1_FLASH_LITE,
+    Model.CLAUDE_FABLE_5_1,
     Model.CLAUDE_OPUS_4_8,
     Model.CLAUDE_SONNET_5,
     Model.CLAUDE_HAIKU_4_5,
+    Model.OPENROUTER_DEEPSEEK_V4_1_FLASH,
+    Model.OPENROUTER_DEEPSEEK_V4_FLASH,
     Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
     Model.OPENROUTER_DEEPSEEK_V4_FLASH_0731,
     Model.OPENROUTER_GLM_5_3,
     Model.OPENROUTER_KIMI_K3,
+    Model.OPENROUTER_QWEN3_8_MAX_0902,
     Model.OPENROUTER_QWEN3_8_MAX,
     Model.OPENROUTER_QWEN3_8_27B,
     Model.OPENROUTER_MINIMAX_M3,
@@ -94,6 +106,7 @@ _ACTIVE_CHAT_MODEL_ERROR: Final = "model must be an active chat model"
 
 OPENAI_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     {
+        Model.GPT_6_ASTRA,
         Model.GPT_5_6_SOL,
         Model.GPT_5_6_TERRA,
         Model.GPT_5_6_LUNA,
@@ -105,20 +118,29 @@ OPENAI_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
 )
 GOOGLE_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     {
+        Model.GEMINI_3_8_FLASH,
         Model.GEMINI_3_1_PRO_PREVIEW,
         Model.GEMINI_3_5_FLASH,
         Model.GEMINI_3_1_FLASH_LITE,
     },
 )
 ANTHROPIC_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
-    {Model.CLAUDE_OPUS_4_8, Model.CLAUDE_SONNET_5, Model.CLAUDE_HAIKU_4_5},
+    {
+        Model.CLAUDE_FABLE_5_1,
+        Model.CLAUDE_OPUS_4_8,
+        Model.CLAUDE_SONNET_5,
+        Model.CLAUDE_HAIKU_4_5,
+    },
 )
 OPENROUTER_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     {
+        Model.OPENROUTER_DEEPSEEK_V4_1_FLASH,
+        Model.OPENROUTER_DEEPSEEK_V4_FLASH,
         Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
         Model.OPENROUTER_DEEPSEEK_V4_FLASH_0731,
         Model.OPENROUTER_GLM_5_3,
         Model.OPENROUTER_KIMI_K3,
+        Model.OPENROUTER_QWEN3_8_MAX_0902,
         Model.OPENROUTER_QWEN3_8_MAX,
         Model.OPENROUTER_QWEN3_8_27B,
         Model.OPENROUTER_MINIMAX_M3,
@@ -129,6 +151,7 @@ OPENROUTER_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
 OPENROUTER_MANDATORY_REASONING_MODELS: Final[frozenset[Model]] = frozenset(
     {
         Model.OPENROUTER_GLM_5_3,
+        Model.OPENROUTER_QWEN3_8_MAX_0902,
         Model.OPENROUTER_QWEN3_8_MAX,
         Model.OPENROUTER_GROK_4_6,
     },
@@ -146,6 +169,7 @@ QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
 
 REASONING_CAPABLE_MODELS: Final[frozenset[Model]] = frozenset(
     {
+        Model.GPT_6_ASTRA,
         Model.GPT_5_6_SOL,
         Model.GPT_5_6_TERRA,
         Model.GPT_5_6_LUNA,
@@ -153,9 +177,11 @@ REASONING_CAPABLE_MODELS: Final[frozenset[Model]] = frozenset(
         Model.GPT_5_4,
         Model.GPT_5_4_MINI,
         Model.GPT_5_4_NANO,
+        Model.GEMINI_3_8_FLASH,
         Model.GEMINI_3_1_PRO_PREVIEW,
         Model.GEMINI_3_5_FLASH,
         Model.GEMINI_3_1_FLASH_LITE,
+        Model.CLAUDE_FABLE_5_1,
         Model.CLAUDE_OPUS_4_8,
         Model.CLAUDE_SONNET_5,
         Model.CLAUDE_HAIKU_4_5,
@@ -164,7 +190,7 @@ REASONING_CAPABLE_MODELS: Final[frozenset[Model]] = frozenset(
 )
 OPENAI_MINIMAL_EFFORT_MODELS: Final[frozenset[Model]] = frozenset()
 ANTHROPIC_NO_SAMPLING_MODELS: Final[frozenset[Model]] = frozenset(
-    {Model.CLAUDE_OPUS_4_8, Model.CLAUDE_SONNET_5},
+    {Model.CLAUDE_FABLE_5_1, Model.CLAUDE_OPUS_4_8, Model.CLAUDE_SONNET_5},
 )
 
 HALFVEC_EMBEDDING_MODELS: Final[frozenset[Model]] = frozenset(
