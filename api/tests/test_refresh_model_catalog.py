@@ -24,7 +24,7 @@ def _remote_payload(
             {"id": policy.provider, "name": policy.provider, "models": {}},
         )
         model_id = policy.model.value.removeprefix("openrouter:")
-        model = {"id": model_id, "name": policy.display_name}
+        model: dict[str, object] = {"id": model_id, "name": policy.display_name}
         model.update(overrides.get(policy.model.value, {}))
         models = provider["models"]
         assert isinstance(models, dict)
@@ -149,3 +149,73 @@ def test_refresh_write_rolls_back_first_file_if_second_replace_fails(
 
     assert snapshot_path.read_bytes() == original_snapshot
     assert provenance_path.read_bytes() == original_provenance
+
+
+def test_refresh_write_restores_snapshot_when_provenance_replace_always_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    snapshot_path = tmp_path / "models_snapshot.json"
+    provenance_path = tmp_path / "models_snapshot_provenance.json"
+    original_snapshot = b"original snapshot"
+    original_provenance = b"original provenance"
+    snapshot_path.write_bytes(original_snapshot)
+    provenance_path.write_bytes(original_provenance)
+    real_replace = refresh.os.replace
+
+    def fail_provenance(source, destination):
+        if Path(destination) == provenance_path:
+            raise PermissionError("persistent provenance replace failure")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(refresh.os, "replace", fail_provenance)
+
+    with pytest.raises(PermissionError, match="persistent provenance replace failure"):
+        refresh.write_refresh_outputs(
+            b"new snapshot",
+            b"new provenance",
+            snapshot_path=snapshot_path,
+            provenance_path=provenance_path,
+        )
+
+    assert snapshot_path.read_bytes() == original_snapshot
+    assert provenance_path.read_bytes() == original_provenance
+    assert {path.name for path in tmp_path.iterdir()} == {
+        snapshot_path.name,
+        provenance_path.name,
+    }
+
+
+def test_refresh_write_cleans_first_stage_when_second_stage_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    snapshot_path = tmp_path / "models_snapshot.json"
+    provenance_path = tmp_path / "models_snapshot_provenance.json"
+    snapshot_path.write_bytes(b"original snapshot")
+    provenance_path.write_bytes(b"original provenance")
+    real_stage = refresh._stage
+    calls = 0
+
+    def fail_second_stage(path, payload):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("simulated provenance staging failure")
+        return real_stage(path, payload)
+
+    monkeypatch.setattr(refresh, "_stage", fail_second_stage)
+
+    with pytest.raises(OSError, match="provenance staging failure"):
+        refresh.write_refresh_outputs(
+            b"new snapshot",
+            b"new provenance",
+            snapshot_path=snapshot_path,
+            provenance_path=provenance_path,
+        )
+
+    assert calls == 2
+    assert {path.name for path in tmp_path.iterdir()} == {
+        snapshot_path.name,
+        provenance_path.name,
+    }

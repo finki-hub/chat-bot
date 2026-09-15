@@ -135,30 +135,62 @@ def write_refresh_outputs(
     original_provenance = (
         provenance_path.read_bytes() if provenance_path.exists() else None
     )
-    staged_snapshot = _stage(snapshot_path, snapshot_bytes)
-    staged_provenance = _stage(provenance_path, provenance_bytes)
+    staged_snapshot: Path | None = None
+    staged_provenance: Path | None = None
     snapshot_replaced = False
     provenance_replaced = False
+    primary_error: BaseException | None = None
     try:
-        snapshot_replaced = True
+        staged_snapshot = _stage(snapshot_path, snapshot_bytes)
+        staged_provenance = _stage(provenance_path, provenance_bytes)
         os.replace(  # noqa: PTH105 - required atomic same-dir replace
             staged_snapshot,
             snapshot_path,
         )
-        provenance_replaced = True
+        snapshot_replaced = True
         os.replace(  # noqa: PTH105 - required atomic same-dir replace
             staged_provenance,
             provenance_path,
         )
-    except BaseException:
-        if provenance_replaced:
-            _restore(provenance_path, original_provenance)
-        if snapshot_replaced:
-            _restore(snapshot_path, original_snapshot)
+        provenance_replaced = True
+    except BaseException as error:
+        primary_error = error
+        rollback_errors: list[tuple[Path, BaseException]] = []
+        for path, original, replaced in (
+            (provenance_path, original_provenance, provenance_replaced),
+            (snapshot_path, original_snapshot, snapshot_replaced),
+        ):
+            if not replaced:
+                continue
+            try:
+                _restore(path, original)
+            except OSError as restore_exception:
+                rollback_errors.append((path, restore_exception))
+        for path, rollback_failure in rollback_errors:
+            error.add_note(f"Failed to restore {path}: {rollback_failure!r}")
         raise
     finally:
-        staged_snapshot.unlink(missing_ok=True)
-        staged_provenance.unlink(missing_ok=True)
+        cleanup_errors: list[BaseException] = []
+        for staged in (staged_snapshot, staged_provenance):
+            if staged is None:
+                continue
+            try:
+                staged.unlink(missing_ok=True)
+            except OSError as cleanup_exception:
+                cleanup_errors.append(cleanup_exception)
+        if cleanup_errors:
+            if primary_error is not None:
+                for cleanup_failure in cleanup_errors:
+                    primary_error.add_note(
+                        f"Failed to clean up staged catalog file: {cleanup_failure!r}"
+                    )
+            else:
+                first_cleanup_error, *remaining_cleanup_errors = cleanup_errors
+                for cleanup_failure in remaining_cleanup_errors:
+                    first_cleanup_error.add_note(
+                        f"Additional staged-file cleanup failure: {cleanup_failure!r}"
+                    )
+                raise first_cleanup_error
 
 
 def main() -> None:
