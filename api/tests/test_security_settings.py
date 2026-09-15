@@ -282,17 +282,39 @@ def test_sponsored_model_rejects_out_of_catalog_id():
         )
 
 
-def test_sponsored_model_accepts_non_luna_profile():
+def test_sponsored_model_accepts_visible_non_luna_profile():
     settings = Settings(
         SPONSORED_MODEL_ENABLED=True,
-        SPONSORED_MODEL_ID="gemini-3.5-flash",
+        SPONSORED_MODEL_ID="gemini-3.8-flash",
         SPONSORED_MODEL_PROVIDER="google",
         SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
         SPONSORED_DAILY_GLOBAL_LIMIT=10,
     )
 
-    assert settings.SPONSORED_MODEL_ID == "gemini-3.5-flash"
+    assert settings.SPONSORED_MODEL_ID == "gemini-3.8-flash"
     assert settings.SPONSORED_MODEL_PROVIDER == "google"
+
+
+@pytest.mark.parametrize(
+    "hidden_model",
+    [
+        "gpt-5.5",
+        "gpt-5.4",
+        "gemini-3.5-flash",
+        "openrouter:deepseek/deepseek-v4-flash",
+        "openrouter:deepseek/deepseek-v4-flash-0731",
+        "openrouter:qwen/qwen3.8-max",
+    ],
+)
+def test_sponsored_model_rejects_hidden_runtime_models(hidden_model: str):
+    with pytest.raises(ValueError, match="SPONSORED_MODEL_ID"):
+        Settings(
+            SPONSORED_MODEL_ENABLED=True,
+            SPONSORED_MODEL_ID=hidden_model,
+            SPONSORED_MODEL_PROVIDER="openai",
+            SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
+            SPONSORED_DAILY_GLOBAL_LIMIT=10,
+        )
 
 
 def test_sponsored_legacy_env_names_are_not_recognized():

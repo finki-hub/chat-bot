@@ -14,6 +14,7 @@ import {
 } from './api-chat-route-support';
 
 const STORED_TITLE = 'Stored title';
+const RETIRED_MODEL = 'gpt-5.4';
 
 type ExpectedActiveStream = {
   readonly id: string;
@@ -160,6 +161,39 @@ describe('GET /api/chat/[id]/history persisted messages', () => {
     expect(routeMocks.stateClient.loadConversation).toHaveBeenCalledWith({
       conversationId: CONVERSATION_ID,
       userId: USER_ID,
+    });
+  });
+
+  it('preserves retired conversation and assistant model metadata in the history response', async () => {
+    routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
+      conversation: { ...storedConversation(), model: RETIRED_MODEL },
+      messages: [
+        {
+          content: 'Retained answer',
+          id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d36',
+          metadata: { inferenceModel: RETIRED_MODEL },
+          parts: [{ text: 'Retained answer', type: 'text' }],
+          response_id: RESPONSE_ID,
+          role: 'assistant',
+        },
+      ],
+    });
+
+    const res = await getHistory();
+
+    await expect(res.json()).resolves.toStrictEqual({
+      conversation: { ...expectedConversation(), model: RETIRED_MODEL },
+      messages: [
+        {
+          id: '018f0f36-2b1d-7cc0-a50b-5f2d90c91d36',
+          metadata: {
+            inferenceModel: RETIRED_MODEL,
+            responseId: RESPONSE_ID,
+          },
+          parts: [{ text: 'Retained answer', type: 'text' }],
+          role: 'assistant',
+        },
+      ],
     });
   });
 

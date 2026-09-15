@@ -1,0 +1,18 @@
+{
+  "source": "https://models.dev/api.json",
+  "refreshed_at": "2026-09-14T21:39:52Z",
+  "sha256": "cd8186343399cea37c1cae2b9f300c984d324f765281406f2d8b8cb994a63472",
+  "snapshot_sha256": "aef834b65f40f9b9cb034837de0876c628a4ef7e335616806826c85d3b714c24",
+  "remote_coverage": {
+    "complete": true,
+    "missing": []
+  },
+  "verified_id_sources": {
+    "gpt-6-astra": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+    "gemini-3.8-flash": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
+    "claude-fable-5-1": "https://platform.claude.com/docs/en/models/fable-5-1/overview",
+    "openrouter:deepseek/deepseek-v4.1-flash": "https://openrouter.ai/api/v1/models",
+    "openrouter:qwen/qwen3.8-max-0902": "https://openrouter.ai/api/v1/models"
+  },
+  "entitlement_verified": false
+}

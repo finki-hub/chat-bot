@@ -277,6 +277,7 @@ async def stream_google_agent_response(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
+            reasoning=reasoning,
             credential=credential,
             upstream_model=upstream_model,
         )

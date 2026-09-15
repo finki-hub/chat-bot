@@ -28,6 +28,32 @@ def test_openai_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
     assert captured_base_urls == [None]
 
 
+def test_gpt_6_astra_uses_chat_completions_effort_without_temperature(
+    monkeypatch,
+) -> None:
+    captured: list[dict] = []
+
+    class OpenAICapturingClient:
+        def __init__(self, **kwargs):
+            captured.append(kwargs)
+
+    monkeypatch.setattr(openai, "ChatOpenAI", OpenAICapturingClient)
+
+    openai.get_openai_llm(
+        Model.GPT_6_ASTRA,
+        temperature=0.7,
+        top_p=0.9,
+        max_tokens=1024,
+        reasoning=True,
+        credential=ChatCredentialSecret(provider="openai", api_key="user-key"),
+    )
+
+    request = captured[0]
+    assert request["use_responses_api"] is False
+    assert request["reasoning_effort"] == "medium"
+    assert request["temperature"] is None
+
+
 def test_sponsored_openai_client_receives_upstream_model_and_token_cap(
     monkeypatch,
 ) -> None:
@@ -182,6 +208,30 @@ def test_gemini_3_reasoning_uses_thinking_level(monkeypatch) -> None:
     assert "thinking_budget" not in request
 
 
+def test_gemini_3_8_reasoning_uses_thinking_level(monkeypatch) -> None:
+    captured: list[dict] = []
+
+    class GoogleCapturingClient:
+        def __init__(self, **kwargs):
+            captured.append(kwargs)
+
+    monkeypatch.setattr(google, "ChatGoogleGenerativeAI", GoogleCapturingClient)
+
+    google.get_google_llm(
+        Model.GEMINI_3_8_FLASH,
+        temperature=0.2,
+        top_p=0.8,
+        max_tokens=128,
+        reasoning=True,
+        credential=ChatCredentialSecret(provider="google", api_key="user-key"),
+    )
+
+    request = captured[0]
+    assert request["thinking_level"] == "medium"
+    assert request["include_thoughts"] is True
+    assert "thinking_budget" not in request
+
+
 def test_anthropic_byok_client_does_not_inherit_deployment_base_url(
     monkeypatch,
 ) -> None:
@@ -226,6 +276,31 @@ def test_claude_haiku_keeps_temperature_and_omits_top_p(monkeypatch) -> None:
     assert request["temperature"] == pytest.approx(0.2)
     assert "top_p" not in request
     assert request["thinking"] is None
+
+
+def test_claude_fable_uses_always_on_adaptive_thinking(monkeypatch) -> None:
+    captured: list[dict] = []
+
+    class AnthropicCapturingClient:
+        def __init__(self, **kwargs):
+            captured.append(kwargs)
+
+    monkeypatch.setattr(anthropic, "ChatAnthropic", AnthropicCapturingClient)
+
+    anthropic.get_anthropic_llm(
+        Model.CLAUDE_FABLE_5_1,
+        temperature=0.2,
+        top_p=0.8,
+        max_tokens=128,
+        credential=ChatCredentialSecret(provider="anthropic", api_key="user-key"),
+    )
+
+    request = captured[0]
+    assert request["thinking"] == {"type": "adaptive", "display": "summarized"}
+    assert request["effort"] == "medium"
+    assert request["max_tokens"] == 128
+    assert request["temperature"] is None
+    assert "budget_tokens" not in request["thinking"]
 
 
 def test_ollama_byok_client_uses_user_endpoint_and_bearer_key(monkeypatch) -> None:
@@ -400,6 +475,7 @@ def test_sponsored_openrouter_client_uses_known_upstream_reasoning() -> None:
     ("model", "expected_reasoning"),
     [
         (Model.OPENROUTER_KIMI_K3, {"effort": "high"}),
+        (Model.OPENROUTER_QWEN3_8_MAX_0902, {"effort": "high"}),
         (Model.OPENROUTER_QWEN3_8_MAX, {"effort": "high"}),
         (Model.OPENROUTER_QWEN3_8_27B, {"effort": "medium"}),
         (Model.OPENROUTER_MINIMAX_M3, {}),
@@ -496,6 +572,7 @@ def test_openrouter_client_disables_optional_reasoning(monkeypatch) -> None:
     "model",
     [
         Model.OPENROUTER_GLM_5_3,
+        Model.OPENROUTER_QWEN3_8_MAX_0902,
         Model.OPENROUTER_QWEN3_8_MAX,
         Model.OPENROUTER_GROK_4_6,
     ],

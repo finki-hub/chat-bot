@@ -10,11 +10,14 @@ describe('isReasoningCapableModel', () => {
   it('is true for reasoning-capable model families', () => {
     const capable = [
       'claude-sonnet-5',
+      'claude-fable-5-1',
       'claude-opus-4-8',
       'gemini-3.5-flash',
       'claude-haiku-4-5',
       'gpt-5.4-mini',
       'gpt-5.6-sol',
+      'gpt-6-astra',
+      'openrouter:deepseek/deepseek-v4.1-flash',
       'openrouter:deepseek/deepseek-v4-pro-0813',
       'openrouter:moonshotai/kimi-k3',
       'openrouter:qwen/qwen3.8-max',
@@ -30,7 +33,11 @@ describe('isReasoningCapableModel', () => {
   });
 
   it('is false for non-reasoning models', () => {
-    const incapable = ['qwen3:30b-a3b-instruct-2507-q4_K_M', 'BAAI/bge-m3'];
+    const incapable = [
+      'qwen3:30b-a3b-instruct-2507-q4_K_M',
+      'gpt-7-unknown',
+      'BAAI/bge-m3',
+    ];
 
     expect(incapable.map(isReasoningCapableModel)).toStrictEqual(
       incapable.map(() => false),
@@ -42,6 +49,7 @@ describe('mandatory reasoning policy', () => {
   const mandatoryModels = [
     'openrouter:z-ai/glm-5.3',
     'openrouter:qwen/qwen3.8-max',
+    'openrouter:qwen/qwen3.8-max-0902',
     'openrouter:x-ai/grok-4.6',
   ];
 
@@ -52,6 +60,11 @@ describe('mandatory reasoning policy', () => {
     expect(
       isReasoningMandatoryModel('openrouter:deepseek/deepseek-v4-pro-0813'),
     ).toBe(false);
+  });
+
+  it('keeps adaptive Fable reasoning enabled', () => {
+    expect(isReasoningMandatoryModel('claude-fable-5-1')).toBe(true);
+    expect(isReasoningEnabledForModel('claude-fable-5-1', false)).toBe(true);
   });
 
   it('keeps mandatory reasoning enabled when the stored preference is false', () => {
