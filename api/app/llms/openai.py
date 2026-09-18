@@ -55,10 +55,11 @@ def get_openai_llm(
     """
     Return a user-scoped ChatOpenAI instance for the specified model and parameters.
 
-    All OpenAI requests use the Responses API (`use_responses_api=True`); reasoning content
-    is only surfaced there. When `reasoning` is on, a `reasoning` config requests a
-    summarized reasoning trace (GPT-5 reasoning models ignore `temperature`, which the
-    wrapper strips automatically). When `reasoning` is off, models in
+    OpenAI requests use the Responses API (`use_responses_api=True`) except for Astra,
+    whose documented Chat Completions surface is used for `reasoning_effort`. When
+    `reasoning` is on, a `reasoning` config requests a summarized reasoning trace (GPT-5
+    reasoning models ignore `temperature`, which the wrapper strips automatically). When
+    `reasoning` is off, models in
     `OPENAI_MINIMAL_EFFORT_MODELS` are pinned to `effort: "minimal"` so they don't burn the
     whole token budget on hidden reasoning and return an empty answer.
 
@@ -70,7 +71,13 @@ def get_openai_llm(
     # for them — fold it out of the key when it isn't forwarded.
     forwards_top_p = model not in REASONING_CAPABLE_MODELS
     client_kwargs: dict[str, object] = {"use_responses_api": True}
-    if reasoning:
+    if model == Model.GPT_6_ASTRA:
+        # Astra's documented Chat Completions surface uses reasoning_effort.  Keep this
+        # separate from the Responses-only reasoning summary shape used by older models.
+        client_kwargs["use_responses_api"] = False
+        if reasoning:
+            client_kwargs["reasoning_effort"] = "medium"
+    elif reasoning:
         client_kwargs["reasoning"] = {"effort": "medium", "summary": "auto"}
     elif model in OPENAI_MINIMAL_EFFORT_MODELS:
         client_kwargs["reasoning"] = {"effort": "minimal"}
@@ -83,7 +90,9 @@ def get_openai_llm(
         model=model.value if upstream_model is None else upstream_model,
         api_key=SecretStr(credential.api_key),
         base_url=credential.base_url or None,
-        temperature=temperature,
+        # Astra does not document temperature; omit it rather than sending an
+        # unverified provider parameter.
+        temperature=None if model == Model.GPT_6_ASTRA else temperature,
         streaming=True,
         stream_usage=True,
         max_tokens=max_tokens,
@@ -245,6 +254,7 @@ async def stream_openai_agent_response(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
+            reasoning=reasoning,
             credential=credential,
             upstream_model=upstream_model,
         )

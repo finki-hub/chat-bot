@@ -5,6 +5,7 @@ from app.llms.model_catalog_types import CatalogProvider, ExecutionPolicy
 from app.llms.models import (
     ANTHROPIC_NO_SAMPLING_MODELS,
     CHAT_MODEL_ORDER,
+    CHAT_MODELS,
     REASONING_CAPABLE_MODELS,
     Model,
 )
@@ -37,46 +38,65 @@ def _policy(
 
 
 MODEL_CATALOG: Final[tuple[CatalogPolicy, ...]] = (
+    _policy(Model.GPT_6_ASTRA, "openai", "GPT-6 Astra"),
     _policy(Model.GPT_5_6_SOL, "openai", "GPT-5.6 Sol"),
     _policy(Model.GPT_5_6_TERRA, "openai", "GPT-5.6 Terra"),
     _policy(Model.GPT_5_6_LUNA, "openai", "GPT-5.6 Luna"),
-    _policy(Model.GPT_5_5, "openai", "GPT-5.5"),
-    _policy(Model.GPT_5_4, "openai", "GPT-5.4"),
     _policy(Model.GPT_5_4_MINI, "openai", "GPT-5.4 Mini"),
     _policy(Model.GPT_5_4_NANO, "openai", "GPT-5.4 Nano"),
+    _policy(Model.GEMINI_3_8_FLASH, "google", "Gemini 3.8 Flash"),
     _policy(
         Model.GEMINI_3_1_PRO_PREVIEW,
         "google",
         "Gemini 3.1 Pro Preview",
     ),
-    _policy(Model.GEMINI_3_5_FLASH, "google", "Gemini 3.5 Flash"),
     _policy(
         Model.GEMINI_3_1_FLASH_LITE,
         "google",
         "Gemini 3.1 Flash Lite",
     ),
+    _policy(Model.CLAUDE_FABLE_5_1, "anthropic", "Claude Fable 5.1"),
     _policy(Model.CLAUDE_OPUS_4_8, "anthropic", "Claude Opus 4.8"),
     _policy(Model.CLAUDE_SONNET_5, "anthropic", "Claude Sonnet 5"),
     _policy(Model.CLAUDE_HAIKU_4_5, "anthropic", "Claude Haiku 4.5"),
+    _policy(
+        Model.OPENROUTER_DEEPSEEK_V4_1_FLASH,
+        "openrouter",
+        "DeepSeek V4.1 Flash",
+    ),
     _policy(
         Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
         "openrouter",
         "DeepSeek V4 Pro 0813",
     ),
-    _policy(
-        Model.OPENROUTER_DEEPSEEK_V4_FLASH_0731,
-        "openrouter",
-        "DeepSeek V4 Flash 0731",
-    ),
     _policy(Model.OPENROUTER_GLM_5_3, "openrouter", "GLM-5.3"),
     _policy(Model.OPENROUTER_KIMI_K3, "openrouter", "Kimi K3"),
-    _policy(Model.OPENROUTER_QWEN3_8_MAX, "openrouter", "Qwen3.8 Max"),
+    _policy(
+        Model.OPENROUTER_QWEN3_8_MAX_0902,
+        "openrouter",
+        "Qwen3.8 Max 0902",
+    ),
     _policy(Model.OPENROUTER_QWEN3_8_27B, "openrouter", "Qwen3.8 27B"),
     _policy(Model.OPENROUTER_MINIMAX_M3, "openrouter", "MiniMax M3"),
     _policy(Model.OPENROUTER_GROK_4_6, "openrouter", "Grok 4.6"),
     _policy(Model.OPENROUTER_HY3, "openrouter", "Tencent HY 3"),
 )
 
-if tuple(policy.model for policy in MODEL_CATALOG) != CHAT_MODEL_ORDER:
-    msg = "Catalog policy order must match the executable chat model order"
+_CATALOG_MODELS = tuple(policy.model for policy in MODEL_CATALOG)
+CURATED_CHAT_MODELS: Final[frozenset[Model]] = frozenset(_CATALOG_MODELS)
+if len(_CATALOG_MODELS) != len(set(_CATALOG_MODELS)):
+    msg = "Catalog policy must not contain duplicate models"
+    raise RuntimeError(msg)
+if not set(_CATALOG_MODELS).issubset(CHAT_MODELS):
+    msg = "Catalog policy models must be a subset of executable chat models"
+    raise RuntimeError(msg)
+
+# The picker is intentionally curated independently from runtime compatibility.  Keep the
+# catalog ordered according to the executable order while allowing compatibility-only models
+# to remain routable without being offered to new users.
+if (
+    tuple(model for model in CHAT_MODEL_ORDER if model in _CATALOG_MODELS)
+    != _CATALOG_MODELS
+):
+    msg = "Catalog policy order must preserve executable chat model order"
     raise RuntimeError(msg)

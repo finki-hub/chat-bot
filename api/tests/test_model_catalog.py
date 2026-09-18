@@ -14,26 +14,27 @@ from app.llms.model_catalog import (
 )
 from app.llms.model_catalog_policy import MODEL_CATALOG
 from app.llms.model_catalog_types import OllamaCatalogModel
+from app.llms.models import CHAT_MODELS
 
 EXPECTED_IDS = [
+    "gpt-6-astra",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "gpt-5.6-luna",
-    "gpt-5.5",
-    "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.4-nano",
+    "gemini-3.8-flash",
     "gemini-3.1-pro-preview",
-    "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
+    "claude-fable-5-1",
     "claude-opus-4-8",
     "claude-sonnet-5",
     "claude-haiku-4-5",
+    "openrouter:deepseek/deepseek-v4.1-flash",
     "openrouter:deepseek/deepseek-v4-pro-0813",
-    "openrouter:deepseek/deepseek-v4-flash-0731",
     "openrouter:z-ai/glm-5.3",
     "openrouter:moonshotai/kimi-k3",
-    "openrouter:qwen/qwen3.8-max",
+    "openrouter:qwen/qwen3.8-max-0902",
     "openrouter:qwen/qwen3.8-27b",
     "openrouter:minimax/minimax-m3",
     "openrouter:x-ai/grok-4.6",
@@ -53,7 +54,7 @@ def _payload(*, name: str = "Remote GPT", description: str = "display only") -> 
     return (
         "{"
         '"openai":{"id":"openai","name":"OpenAI","models":{'
-        '"gpt-5.6-sol":{"id":"gpt-5.6-sol","name":"'
+        '"gpt-6-astra":{"id":"gpt-6-astra","name":"'
         + name
         + '","description":"'
         + description
@@ -78,10 +79,10 @@ def test_static_catalog_has_exact_order_and_providers_without_tiers() -> None:
         "openai",
         "openai",
         "openai",
-        "openai",
         "google",
         "google",
         "google",
+        "anthropic",
         "anthropic",
         "anthropic",
         "anthropic",
@@ -96,6 +97,24 @@ def test_static_catalog_has_exact_order_and_providers_without_tiers() -> None:
         "openrouter",
     ]
     assert all(not hasattr(entry, "tier") for entry in MODEL_CATALOG)
+
+
+def test_picker_catalog_is_unique_curated_runtime_subset() -> None:
+    runtime_ids = {model.value for model in CHAT_MODELS}
+    catalog_ids = set(EXPECTED_IDS)
+    hidden_ids = {
+        "gpt-5.4",
+        "gpt-5.5",
+        "gemini-3.5-flash",
+        "openrouter:deepseek/deepseek-v4-flash",
+        "openrouter:deepseek/deepseek-v4-flash-0731",
+        "openrouter:qwen/qwen3.8-max",
+    }
+
+    assert catalog_ids <= runtime_ids
+    assert len(EXPECTED_IDS) == len(catalog_ids)
+    assert catalog_ids.isdisjoint(hidden_ids)
+    assert hidden_ids <= runtime_ids
 
 
 def test_catalog_can_append_dynamic_ollama_models_with_loaded_status() -> None:
@@ -153,7 +172,7 @@ def test_partial_remote_metadata_preserves_snapshot_fields() -> None:
         await anyio.lowlevel.checkpoint()
         return (
             b'{"openai":{"id":"openai","name":"OpenAI","models":{'
-            b'"gpt-5.6-sol":{"id":"gpt-5.6-sol","name":"Remote GPT",'
+            b'"gpt-6-astra":{"id":"gpt-6-astra","name":"Remote GPT",'
             b'"description":null,"reasoning":true}}}}'
         )
 

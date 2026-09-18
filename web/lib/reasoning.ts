@@ -1,10 +1,13 @@
 const REASONING_PREFIXES = ['claude-', 'gemini-', 'gpt-5', 'openrouter:'];
 const REASONING_MODEL_IDS = new Set([
+  'gpt-6-astra',
   'qwen3:14b-q4_K_M',
   'qwen3:30b-a3b-thinking-2507-q4_K_M',
 ]);
 const MANDATORY_REASONING_MODEL_IDS = new Set([
+  'claude-fable-5-1',
   'openrouter:qwen/qwen3.8-max',
+  'openrouter:qwen/qwen3.8-max-0902',
   'openrouter:x-ai/grok-4.6',
   'openrouter:z-ai/glm-5.3',
 ]);

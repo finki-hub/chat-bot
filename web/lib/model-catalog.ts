@@ -34,33 +34,42 @@ const MODEL_AVAILABILITIES = [
   'unavailable',
 ] as const;
 
+const HIDDEN_CURATED_MODEL_IDS = new Set([
+  'gemini-3.5-flash',
+  'gpt-5.4',
+  'gpt-5.5',
+  'openrouter:deepseek/deepseek-v4-flash',
+  'openrouter:deepseek/deepseek-v4-flash-0731',
+  'openrouter:qwen/qwen3.8-max',
+]);
+
 const CURATED_MODEL_DATA = [
+  ['gpt-6-astra', 'GPT-6 Astra', 'openai'],
   ['gpt-5.6-sol', 'GPT-5.6 Sol', 'openai'],
   ['gpt-5.6-terra', 'GPT-5.6 Terra', 'openai'],
   ['gpt-5.6-luna', 'GPT-5.6 Luna', 'openai'],
-  ['gpt-5.5', 'GPT-5.5', 'openai'],
-  ['gpt-5.4', 'GPT-5.4', 'openai'],
   ['gpt-5.4-mini', 'GPT-5.4 Mini', 'openai'],
   ['gpt-5.4-nano', 'GPT-5.4 Nano', 'openai'],
+  ['gemini-3.8-flash', 'Gemini 3.8 Flash', 'google'],
   ['gemini-3.1-pro-preview', 'Gemini 3.1 Pro Preview', 'google'],
-  ['gemini-3.5-flash', 'Gemini 3.5 Flash', 'google'],
   ['gemini-3.1-flash-lite', 'Gemini 3.1 Flash Lite', 'google'],
+  ['claude-fable-5-1', 'Claude Fable 5.1', 'anthropic'],
   ['claude-opus-4-8', 'Claude Opus 4.8', 'anthropic'],
   ['claude-sonnet-5', 'Claude Sonnet 5', 'anthropic'],
   ['claude-haiku-4-5', 'Claude Haiku 4.5', 'anthropic'],
+  [
+    'openrouter:deepseek/deepseek-v4.1-flash',
+    'DeepSeek V4.1 Flash',
+    'openrouter',
+  ],
   [
     'openrouter:deepseek/deepseek-v4-pro-0813',
     'DeepSeek V4 Pro 0813',
     'openrouter',
   ],
-  [
-    'openrouter:deepseek/deepseek-v4-flash-0731',
-    'DeepSeek V4 Flash 0731',
-    'openrouter',
-  ],
   ['openrouter:z-ai/glm-5.3', 'GLM-5.3', 'openrouter'],
   ['openrouter:moonshotai/kimi-k3', 'Kimi K3', 'openrouter'],
-  ['openrouter:qwen/qwen3.8-max', 'Qwen3.8 Max', 'openrouter'],
+  ['openrouter:qwen/qwen3.8-max-0902', 'Qwen3.8 Max 0902', 'openrouter'],
   ['openrouter:qwen/qwen3.8-27b', 'Qwen3.8 27B', 'openrouter'],
   ['openrouter:minimax/minimax-m3', 'MiniMax M3', 'openrouter'],
   ['openrouter:x-ai/grok-4.6', 'Grok 4.6', 'openrouter'],
@@ -210,7 +219,13 @@ export const parseModelCatalog = (value: unknown): ModelCatalog => {
     ) {
       const models = rawModels.map((entry) => normalizeDescriptor(entry, true));
       if (models.every((model): model is ModelDescriptor => model !== null)) {
-        return { models, source: rawSource, version: 1 };
+        return {
+          models: models.filter(
+            (model) => !HIDDEN_CURATED_MODEL_IDS.has(model.id),
+          ),
+          source: rawSource,
+          version: 1,
+        };
       }
     }
     return { models: [], source: 'error', version: 1 };
@@ -219,7 +234,10 @@ export const parseModelCatalog = (value: unknown): ModelCatalog => {
   if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
     const models = value
       .map((id) => CURATED_MODEL_DESCRIPTORS[id] ?? normalizeDescriptor({ id }))
-      .filter((model): model is ModelDescriptor => model !== null);
+      .filter(
+        (model): model is ModelDescriptor =>
+          model !== null && !HIDDEN_CURATED_MODEL_IDS.has(model.id),
+      );
     return { models, source: 'live', version: 1 };
   }
 

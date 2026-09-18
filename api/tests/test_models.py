@@ -12,7 +12,7 @@ from app.constants.defaults import (
     DEFAULT_INFERENCE_MODEL,
     DEFAULT_QUERY_TRANSFORM_MODEL,
 )
-from app.llms import anthropic, google, query_transform, streams
+from app.llms import anthropic, google, openai, query_transform, streams
 from app.llms.agents import StreamObservation
 from app.llms.models import (
     ACTIVE_EMBEDDING_MODELS,
@@ -31,6 +31,7 @@ from app.schemas.chat import ChatSchema
 from app.schemas.chat_credentials import ChatCredentialSecret
 
 EXPECTED_CHAT_IDS = (
+    "gpt-6-astra",
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "gpt-5.6-luna",
@@ -38,16 +39,21 @@ EXPECTED_CHAT_IDS = (
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.4-nano",
+    "gemini-3.8-flash",
     "gemini-3.1-pro-preview",
     "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
+    "claude-fable-5-1",
     "claude-opus-4-8",
     "claude-sonnet-5",
     "claude-haiku-4-5",
+    "openrouter:deepseek/deepseek-v4.1-flash",
+    "openrouter:deepseek/deepseek-v4-flash",
     "openrouter:deepseek/deepseek-v4-pro-0813",
     "openrouter:deepseek/deepseek-v4-flash-0731",
     "openrouter:z-ai/glm-5.3",
     "openrouter:moonshotai/kimi-k3",
+    "openrouter:qwen/qwen3.8-max-0902",
     "openrouter:qwen/qwen3.8-max",
     "openrouter:qwen/qwen3.8-27b",
     "openrouter:minimax/minimax-m3",
@@ -74,7 +80,6 @@ def test_removed_chat_values_are_not_parseable_or_active() -> None:
         "gpt-5-nano",
         "gpt-5.2",
         "mistral:latest",
-        "openrouter:deepseek/deepseek-v4-flash",
         "openrouter:deepseek/deepseek-v4-pro",
         "openrouter:moonshotai/kimi-k2.6",
         "openrouter:mistralai/mistral-small-2603",
@@ -194,6 +199,55 @@ def test_stream_openrouter_route_receives_user_credential(monkeypatch) -> None:
     anyio.run(route_response)
 
     assert captured == [(credential, "sponsored/upstream-model")]
+
+
+@pytest.mark.parametrize(
+    ("model", "provider_function", "provider"),
+    [
+        (Model.GPT_6_ASTRA, "stream_openai_agent_response", "openai"),
+        (Model.GEMINI_3_8_FLASH, "stream_google_agent_response", "google"),
+        (Model.CLAUDE_FABLE_5_1, "stream_anthropic_agent_response", "anthropic"),
+        (
+            Model.OPENROUTER_DEEPSEEK_V4_1_FLASH,
+            "stream_openrouter_agent_response",
+            "openrouter",
+        ),
+    ],
+)
+def test_new_models_use_direct_provider_stream_dispatch(
+    monkeypatch,
+    model: Model,
+    provider_function: str,
+    provider: str,
+) -> None:
+    captured: list[str] = []
+
+    async def fake_stream(*args, **kwargs) -> StreamingResponse:
+        captured.append(provider)
+
+        async def empty_body() -> AsyncIterator[bytes]:
+            if False:
+                yield b""
+
+        return StreamingResponse(empty_body(), media_type="text/event-stream")
+
+    monkeypatch.setattr(streams, provider_function, fake_stream)
+
+    async def route_response() -> StreamingResponse:
+        return await streams.stream_response_with_agent(
+            "test",
+            model,
+            system_prompt="system",
+            history=[],
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=1024,
+            interface="web",
+        )
+
+    anyio.run(route_response)
+
+    assert captured == [provider]
 
 
 def test_query_transform_routes_openrouter_credential(monkeypatch) -> None:
@@ -344,7 +398,7 @@ def test_stream_google_route_receives_upstream_model(monkeypatch) -> None:
 
 
 def test_google_agent_fallback_receives_upstream_model(monkeypatch) -> None:
-    captured: list[tuple[ChatCredentialSecret | None, str | None]] = []
+    captured: list[tuple[ChatCredentialSecret | None, str | None, bool]] = []
 
     async def fail_get_agent_tools() -> list[object]:
         msg = "agent tools unavailable"
@@ -363,7 +417,7 @@ def test_google_agent_fallback_receives_upstream_model(monkeypatch) -> None:
         credential: ChatCredentialSecret | None = None,
         upstream_model: str | None = None,
     ) -> StreamingResponse:
-        captured.append((credential, upstream_model))
+        captured.append((credential, upstream_model, reasoning))
 
         async def empty_body() -> AsyncIterator[bytes]:
             if False:
@@ -378,19 +432,61 @@ def test_google_agent_fallback_receives_upstream_model(monkeypatch) -> None:
     async def route_response() -> StreamingResponse:
         return await google.stream_google_agent_response(
             "test",
-            Model.GEMINI_3_5_FLASH,
+            Model.GEMINI_3_8_FLASH,
             system_prompt="system",
             history=[],
             temperature=0.0,
             top_p=1.0,
             max_tokens=1024,
+            reasoning=True,
             credential=credential,
             upstream_model="upstream-gemini",
         )
 
     anyio.run(route_response)
 
-    assert captured == [(credential, "upstream-gemini")]
+    assert captured == [(credential, "upstream-gemini", True)]
+
+
+def test_openai_agent_fallback_forwards_reasoning_parameter_for_astra(
+    monkeypatch,
+) -> None:
+    captured: list[dict[str, object]] = []
+
+    async def fail_get_agent_tools() -> list[object]:
+        msg = "agent tools unavailable"
+        raise RuntimeError(msg)
+
+    def fake_stream_openai_response(*args, **kwargs) -> StreamingResponse:
+        captured.append(kwargs)
+
+        async def empty_body() -> AsyncIterator[bytes]:
+            if False:
+                yield b""
+
+        return StreamingResponse(empty_body(), media_type="text/event-stream")
+
+    monkeypatch.setattr(openai, "get_openai_llm", lambda *args, **kwargs: object())
+    monkeypatch.setattr(openai, "get_agent_tools", fail_get_agent_tools)
+    monkeypatch.setattr(openai, "stream_openai_response", fake_stream_openai_response)
+
+    async def route_response() -> StreamingResponse:
+        return await openai.stream_openai_agent_response(
+            "test",
+            Model.GPT_6_ASTRA,
+            system_prompt="system",
+            history=[],
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=1024,
+            reasoning=True,
+            credential=ChatCredentialSecret(provider="openai", api_key="user-key"),
+        )
+
+    anyio.run(route_response)
+
+    assert len(captured) == 1
+    assert captured[0]["reasoning"] is True
 
 
 def test_stream_anthropic_route_receives_upstream_model(monkeypatch) -> None:
@@ -445,7 +541,7 @@ def test_stream_anthropic_route_receives_upstream_model(monkeypatch) -> None:
 
 
 def test_anthropic_agent_fallback_receives_upstream_model(monkeypatch) -> None:
-    captured: list[tuple[ChatCredentialSecret | None, str | None]] = []
+    captured: list[tuple[ChatCredentialSecret | None, str | None, bool]] = []
 
     async def fail_get_agent_tools() -> list[object]:
         msg = "agent tools unavailable"
@@ -464,7 +560,7 @@ def test_anthropic_agent_fallback_receives_upstream_model(monkeypatch) -> None:
         credential: ChatCredentialSecret | None = None,
         upstream_model: str | None = None,
     ) -> StreamingResponse:
-        captured.append((credential, upstream_model))
+        captured.append((credential, upstream_model, reasoning))
 
         async def empty_body() -> AsyncIterator[bytes]:
             if False:
@@ -483,19 +579,20 @@ def test_anthropic_agent_fallback_receives_upstream_model(monkeypatch) -> None:
     async def route_response() -> StreamingResponse:
         return await anthropic.stream_anthropic_agent_response(
             "test",
-            Model.CLAUDE_HAIKU_4_5,
+            Model.CLAUDE_FABLE_5_1,
             system_prompt="system",
             history=[],
             temperature=0.0,
             top_p=1.0,
             max_tokens=1024,
+            reasoning=True,
             credential=credential,
             upstream_model="upstream-claude",
         )
 
     anyio.run(route_response)
 
-    assert captured == [(credential, "upstream-claude")]
+    assert captured == [(credential, "upstream-claude", True)]
 
 
 def test_curated_defaults_and_embedding_policy() -> None:

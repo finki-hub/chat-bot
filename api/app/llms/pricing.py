@@ -1,14 +1,16 @@
-"""Single source of truth for hosted-model token prices (USD per 1M tokens).
+"""Single source of truth for hosted-model token price estimates (USD per 1M tokens).
 
 Update prices here when a provider changes them. Self-hosted local GPU models have no
 marginal token cost and are priced at 0; provider models without a reliable published price
-are omitted, so callers treat their cost as unknown rather than guessing.
+are omitted, so callers treat their cost as unknown rather than guessing. These static
+estimates are diagnostics, not provider billing records.
 """
 
 from app.llms.models import ChatModel, Model
 
-# (input_usd_per_1m, output_usd_per_1m) for hosted models with a reliable published price.
+# (input_usd_per_1m, output_usd_per_1m) for hosted models with published standard rates.
 HOSTED_PRICING: dict[Model, tuple[float, float]] = {
+    Model.GPT_6_ASTRA: (10.00, 50.00),
     Model.GPT_5_6_SOL: (5.00, 30.00),
     Model.GPT_5_6_TERRA: (2.50, 15.00),
     Model.GPT_5_6_LUNA: (1.00, 6.00),
@@ -16,12 +18,16 @@ HOSTED_PRICING: dict[Model, tuple[float, float]] = {
     Model.GPT_5_4: (2.50, 15.00),
     Model.GPT_5_4_MINI: (0.75, 4.50),
     Model.GPT_5_4_NANO: (0.20, 1.25),
+    Model.GEMINI_3_8_FLASH: (0.75, 3.75),
     Model.GEMINI_3_1_PRO_PREVIEW: (2.00, 12.00),
     Model.GEMINI_3_5_FLASH: (1.50, 9.00),
     Model.GEMINI_3_1_FLASH_LITE: (0.25, 1.50),
+    Model.CLAUDE_FABLE_5_1: (10.00, 50.00),
     Model.CLAUDE_OPUS_4_8: (5.00, 25.00),
     Model.CLAUDE_SONNET_5: (3.00, 15.00),
     Model.CLAUDE_HAIKU_4_5: (1.00, 5.00),
+    Model.OPENROUTER_DEEPSEEK_V4_1_FLASH: (0.15, 0.60),
+    Model.OPENROUTER_QWEN3_8_MAX_0902: (2.00, 6.00),
 }
 
 # Models we run ourselves on the local GPU: zero marginal token cost.

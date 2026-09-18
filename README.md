@@ -148,11 +148,15 @@ for six hours; refresh failures serve the last successful catalog, and cold-star
 failures use the bundled snapshot. Remote metadata cannot add executable model IDs,
 change providers or alter execution policy.
 
-The hosted catalog includes GPT-5.6 Sol, Terra, and Luna, GPT-5.5, and the current
-Gemini 3.5 Flash, Gemini 3.1 Pro Preview, and Gemini 3.1 Flash Lite models. The
-Ollama catalog uses multilingual Qwen3 30B and 14B quantizations selected to fit a
-24 GB GPU; the advertised context limits still require enough remaining memory for
-the KV cache.
+The hosted picker includes these 22 curated models: GPT-6 Astra, GPT-5.6 Sol,
+GPT-5.6 Terra, GPT-5.6 Luna, GPT-5.4 Mini, GPT-5.4 Nano, Gemini 3.8 Flash, Gemini
+3.1 Pro Preview, Gemini 3.1 Flash Lite, Claude Fable 5.1, Claude Opus 4.8, Claude
+Sonnet 5, Claude Haiku 4.5, plus the OpenRouter models DeepSeek V4.1 Flash, DeepSeek
+V4 Pro 0813, GLM-5.3, Kimi K3, Qwen3.8 Max 0902, Qwen3.8 27B, MiniMax M3, Grok 4.6
+and Tencent HY 3. Retired GPT-5.5, GPT-5.4, Gemini 3.5 Flash and DeepSeek V4 Flash
+IDs remain compatibility-only and are not offered by the picker. The Ollama catalog
+uses multilingual Qwen3 30B and 14B quantizations selected to fit a 24 GB GPU; the
+advertised context limits still require enough remaining memory for the KV cache.
 
 `BAAI/bge-m3`, `text-embedding-3-large`, and `gemini-embedding-001` are active for authenticated chat requests. Corpus fill jobs remain limited to local BGE-M3 because they do not have a user credential boundary. Legacy embedding columns and historical model values remain readable for existing data.
 
