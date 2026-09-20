@@ -131,7 +131,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
 
     // Model display names render (not raw ids).
     await expect(
-      page.getByRole('option', { exact: true, name: 'GPT-5.4' }),
+      page.getByRole('option', { exact: true, name: 'GPT-6 Astra' }),
     ).toBeVisible();
     await expect(
       page.getByRole('option', { name: 'Qwen3 30B Thinking' }),

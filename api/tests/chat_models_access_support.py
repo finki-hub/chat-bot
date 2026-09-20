@@ -93,9 +93,9 @@ def base_catalog() -> ModelCatalogResponse:
                 execution=execution,
             ),
             ModelDescriptor(
-                id="gemini-3.5-flash",
+                id="gemini-3.8-flash",
                 provider="google",
-                name="Gemini 3.5 Flash",
+                name="Gemini 3.8 Flash",
                 execution=execution,
             ),
             ModelDescriptor(

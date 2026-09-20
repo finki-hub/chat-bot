@@ -112,7 +112,7 @@ describe('buildChatTransport', () => {
     });
   });
 
-  it('reads extras lazily on every call (picks up model changes)', () => {
+  it('reads extras lazily for regeneration (picks up the current model)', () => {
     let model = 'model-a';
     const transport = buildChatTransport(() => ({
       model,
@@ -130,10 +130,11 @@ describe('buildChatTransport', () => {
     const second = transport.prepareSendMessagesRequest({
       id: 'c',
       messages: sampleMessages,
-      trigger: SUBMIT,
+      trigger: 'regenerate-message',
     });
 
     expect((second.body as { model: string }).model).toBe('model-b');
+    expect(second.body['trigger']).toBe('regenerate-message');
   });
 
   it('prepares resume requests with only the conversation stream URL', () => {

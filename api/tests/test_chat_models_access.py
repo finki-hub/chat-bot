@@ -237,7 +237,7 @@ def test_models_endpoint_overlays_configured_non_luna_sponsored_model(
         providers,
         settings: Settings,
     ) -> LlmProviderCredentials:
-        assert settings.SPONSORED_MODEL_ID == "gemini-3.5-flash"
+        assert settings.SPONSORED_MODEL_ID == "gemini-3.8-flash"
         assert settings.SPONSORED_MODEL_PROVIDER == "google"
         return credentials(openai=True)
 
@@ -262,7 +262,7 @@ def test_models_endpoint_overlays_configured_non_luna_sponsored_model(
     with client(
         monkeypatch,
         settings(
-            sponsored_model_id="gemini-3.5-flash",
+            sponsored_model_id="gemini-3.8-flash",
             sponsored_provider="google",
         ),
     ) as api_client:
@@ -275,7 +275,7 @@ def test_models_endpoint_overlays_configured_non_luna_sponsored_model(
     assert response.status_code == 200
     body = response.json()
     sponsored = next(
-        model for model in body["models"] if model["id"] == "gemini-3.5-flash"
+        model for model in body["models"] if model["id"] == "gemini-3.8-flash"
     )
     default_luna = next(
         model for model in body["models"] if model["id"] == SPONSORED_ID

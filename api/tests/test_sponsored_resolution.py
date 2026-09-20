@@ -84,7 +84,7 @@ def test_sponsored_resolution_targets_only_configured_model_id() -> None:
     )
 
     resolved = resolve_sponsored_inference(
-        "gemini-3.5-flash",
+        "gemini-3.8-flash",
         user_credential,
         settings,
     )
@@ -97,13 +97,13 @@ def test_sponsored_resolution_targets_only_configured_model_id() -> None:
 def test_sponsored_resolution_uses_configured_provider_for_credential_secret() -> None:
     settings = Settings(
         SPONSORED_MODEL_ENABLED=True,
-        SPONSORED_MODEL_ID="gemini-3.5-flash",
+        SPONSORED_MODEL_ID="gemini-3.8-flash",
         SPONSORED_MODEL_PROVIDER="google",
         SPONSORED_MODEL_API_KEY=SecretStr("sponsored-key"),
         SPONSORED_DAILY_GLOBAL_LIMIT=10,
     )
 
-    resolved = resolve_sponsored_inference("gemini-3.5-flash", None, settings)
+    resolved = resolve_sponsored_inference("gemini-3.8-flash", None, settings)
 
     assert resolved.credential == ChatCredentialSecret(
         provider="google",
