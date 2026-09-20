@@ -40,8 +40,8 @@ def _payload(
     inference_model: Model = Model.GPT_5_6_LUNA,
 ):
     query_transform_model = (
-        Model.GEMINI_3_5_FLASH
-        if inference_model == Model.GEMINI_3_5_FLASH
+        Model.GEMINI_3_8_FLASH
+        if inference_model == Model.GEMINI_3_8_FLASH
         else Model.GPT_5_4_MINI
     )
     return ChatSchema.model_validate(
@@ -152,11 +152,11 @@ async def _run_stream(
         (settings(), credentials(openai=False), Model.GPT_5_6_LUNA),
         (
             settings(
-                sponsored_model_id="gemini-3.5-flash",
+                sponsored_model_id="gemini-3.8-flash",
                 sponsored_provider="google",
             ),
             credentials(openai=False),
-            Model.GEMINI_3_5_FLASH,
+            Model.GEMINI_3_8_FLASH,
         ),
     ],
 )

@@ -133,13 +133,9 @@ def write_refresh_outputs(
 ) -> None:
     """Atomically replace each file and restore the first if the second fails."""
     original_snapshot = snapshot_path.read_bytes() if snapshot_path.exists() else None
-    original_provenance = (
-        provenance_path.read_bytes() if provenance_path.exists() else None
-    )
     staged_snapshot: Path | None = None
     staged_provenance: Path | None = None
     snapshot_replaced = False
-    provenance_replaced = False
     primary_error: BaseException | None = None
     try:
         staged_snapshot = _stage(snapshot_path, snapshot_bytes)
@@ -153,22 +149,15 @@ def write_refresh_outputs(
             staged_provenance,
             provenance_path,
         )
-        provenance_replaced = True
     except BaseException as error:
         primary_error = error
-        rollback_errors: list[tuple[Path, BaseException]] = []
-        for path, original, replaced in (
-            (provenance_path, original_provenance, provenance_replaced),
-            (snapshot_path, original_snapshot, snapshot_replaced),
-        ):
-            if not replaced:
-                continue
+        if snapshot_replaced:
             try:
-                _restore(path, original)
+                _restore(snapshot_path, original_snapshot)
             except OSError as restore_exception:
-                rollback_errors.append((path, restore_exception))
-        for path, rollback_failure in rollback_errors:
-            error.add_note(f"Failed to restore {path}: {rollback_failure!r}")
+                error.add_note(
+                    f"Failed to restore {snapshot_path}: {restore_exception!r}"
+                )
         raise
     finally:
         cleanup_errors: list[BaseException] = []

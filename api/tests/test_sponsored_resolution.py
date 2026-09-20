@@ -84,7 +84,7 @@ def test_sponsored_resolution_targets_only_configured_model_id() -> None:
     )
 
     resolved = resolve_sponsored_inference(
-        "gemini-3.5-flash",
+        "gemini-3.8-flash",
         user_credential,
         settings,
     )
