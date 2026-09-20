@@ -162,11 +162,19 @@ transcription, whose source warns that reconstructed tables need PDF verificatio
 
 For controlled answer evaluation, supply **only** each case's `query` and `context`
 through the application's normal prompt builder with the same model/settings and
-fixed evaluation date (2026-09-14) for baseline and candidate. Do not pass `rubric`,
+fixed evaluation date recorded for both baseline and candidate. Do not pass `rubric`,
 `evidence`, or `expectation` to the model, and do not provide private-record tools.
 The historical admission case must remain answerable; old content is not an automatic
 reason to abstain. New cases do not require inline source names or a specific refusal
 phrase, because either would overconstrain the current answer policy.
+
+The [2026-09-20 Luna grounding review](luna_grounding_review.md) records a controlled
+seven-case, three-repetition experiment per prompt, including the exact prompt hashes,
+request contract, independent mixed-blind ratings and residual unsupported system
+guidance. Its meaning-based rubric accepts concise correct price answers without
+mandatory conflict narration, and rates undocumented status/history checks as partial
+answers rather than total failures. Those manual counts are evaluation evidence,
+not results of the automatic lexical scorer or proof of end-to-end retrieval quality.
 
 Run the offline parser/scorer tests from `api/`:
 

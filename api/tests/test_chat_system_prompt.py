@@ -15,6 +15,19 @@ def test_system_prompt_distinguishes_source_review_date_from_applicability():
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
 
 
+def test_system_prompt_grounds_system_functions_and_preserves_tool_evidence():
+    assert (
+        "без соодветна потврда од овластена алатка.\n"
+        "Не упатувај на проверка на статус, историја или друга функција на систем "
+        "ако не е потврдена во изворите или со резултат од овластена алатка; "
+        "наместо тоа упати на наведениот канал за достава или надлежната служба."
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert (
+        "За конкретни тврдења за ФИНКИ користи го дадениот контекст "
+        "или резултат од соодветна алатка."
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+
+
 @pytest.mark.anyio
 async def test_handle_chat_ignores_client_system_prompt(monkeypatch):
     captured: dict[str, str] = {}
