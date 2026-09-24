@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi.testclient import TestClient
-from httpx import Response
+from httpx2 import Response
 
 from tests.feedback_fake import FakeFeedbackDatabase
 from tests.feedback_test_support import (
