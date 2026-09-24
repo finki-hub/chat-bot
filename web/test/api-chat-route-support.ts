@@ -4,7 +4,6 @@ import { vi } from 'vitest';
 /* eslint-disable @typescript-eslint/consistent-type-imports -- Vitest importOriginal type annotation needs inline module type. */
 /* eslint-disable @typescript-eslint/no-unused-vars -- Test doubles preserve production call signatures. */
 /* eslint-disable @typescript-eslint/require-await -- Test doubles mimic async production APIs. */
-/* eslint-disable sonarjs/void-use -- Explicitly marks intentionally ignored test-only parameter. */
 
 export const API_BASE_URL = 'https://api:8880';
 export const CONVERSATION_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d21';
@@ -98,12 +97,11 @@ export const routeMocks = {
   getAuthenticatedChatUserId: vi.fn(async () => USER_ID),
   resumableContext: {
     createNewResumableStream: vi.fn(
-      async (streamId: string, makeStream: () => ReadableStream<string>) => {
+      async (_streamId: string, makeStream: () => ReadableStream<string>) => {
         const stream = makeStream();
         routeMocks.consumedResumableStreams.push(
           await readStringStream(stream),
         );
-        void streamId;
 
         return stream;
       },
@@ -257,7 +255,6 @@ export const installRouteMocks = (): void => {
   });
 };
 
-/* eslint-enable sonarjs/void-use -- end intentional test-only ignored parameter. */
 /* eslint-enable @typescript-eslint/require-await -- end async production API test doubles. */
 /* eslint-enable @typescript-eslint/no-unused-vars -- end production call signature test doubles. */
 /* eslint-enable @typescript-eslint/consistent-type-imports -- end Vitest importOriginal type annotations. */
