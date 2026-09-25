@@ -55,6 +55,9 @@ def test_generation_telemetry_distinguishes_requested_and_effective_transform_mo
 
     assert properties["requested_query_transform_mode"] == "rewrite_hyde"
     assert properties["query_transform_mode"] == "raw"
+    assert properties["query_transform_fallback_reason"] == "not_run"
+    assert properties["reranker_fallback_reason"] == "not_run"
+    assert properties["reranker_invalid_result_count"] == 0
 
 
 @pytest.mark.parametrize(
@@ -91,6 +94,9 @@ def test_generation_telemetry_emits_content_free_retrieval_aggregates(
     timings.lexical_only_final_count = 1
     timings.retrieval_path = "hybrid"
     timings.reranker_fallback = False
+    timings.query_transform_fallback_reason = "partial_variants"
+    timings.reranker_fallback_reason = "none"
+    timings.reranker_invalid_result_count = 2
     private_query = "sakam privaten odgovor"
 
     properties = _capture_properties(monkeypatch, private_query, timings)
@@ -105,4 +111,7 @@ def test_generation_telemetry_emits_content_free_retrieval_aggregates(
     assert properties["lexical_only_final_count"] == 1
     assert properties["retrieval_path"] == "hybrid"
     assert properties["reranker_fallback"] is False
+    assert properties["query_transform_fallback_reason"] == "partial_variants"
+    assert properties["reranker_fallback_reason"] == "none"
+    assert properties["reranker_invalid_result_count"] == 2
     assert private_query not in repr(properties)

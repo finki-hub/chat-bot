@@ -7,6 +7,17 @@ from typing import Literal
 
 type LexicalSearchOutcome = Literal["skipped", "no_match", "matched", "error"]
 type RetrievalPath = Literal["none", "dense", "lexical", "hybrid"]
+type QueryTransformFallbackReason = Literal[
+    "not_run",
+    "not_requested",
+    "credential_missing",
+    "no_usable_variants",
+    "partial_variants",
+    "none",
+]
+type RerankerFallbackReason = Literal[
+    "not_run", "none", "score_floor", "empty_or_invalid_response", "error"
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +36,8 @@ class RetrievalSelectionMetrics:
     lexical_only_final_count: int
     reranker_fallback: bool
     retrieval_path: RetrievalPath
+    reranker_fallback_reason: RerankerFallbackReason = "not_run"
+    reranker_invalid_result_count: int = 0
 
 
 def _round(value: float | None, digits: int = 1) -> float | None:
@@ -61,6 +74,9 @@ class RequestTimings:
         self.lexical_only_final_count = 0
         self.retrieval_path: RetrievalPath = "none"
         self.reranker_fallback = False
+        self.query_transform_fallback_reason: QueryTransformFallbackReason = "not_run"
+        self.reranker_fallback_reason: RerankerFallbackReason = "not_run"
+        self.reranker_invalid_result_count = 0
         self.response_id: str | None = None
         self.distinct_id: str | None = None
 
@@ -90,6 +106,15 @@ class RequestTimings:
             "candidate_count": self.candidate_count,
             "top_distance": _round(self.top_distance, 4),
             "spans": {name: round(ms, 1) for name, ms in self.spans.items()},
+        }
+
+    def fallback_record(self) -> dict[str, object]:
+        """Content-free, bounded diagnostics shared by retrieval and generation events."""
+        return {
+            "query_transform_fallback_reason": self.query_transform_fallback_reason,
+            "reranker_fallback": self.reranker_fallback,
+            "reranker_fallback_reason": self.reranker_fallback_reason,
+            "reranker_invalid_result_count": self.reranker_invalid_result_count,
         }
 
 
@@ -149,7 +174,18 @@ def record_retrieval_selection(metrics: RetrievalSelectionMetrics) -> None:
         timings.final_document_count = metrics.final_document_count
         timings.lexical_only_final_count = metrics.lexical_only_final_count
         timings.reranker_fallback = metrics.reranker_fallback
+        timings.reranker_fallback_reason = metrics.reranker_fallback_reason
+        timings.reranker_invalid_result_count = min(
+            max(metrics.reranker_invalid_result_count, 0),
+            1000,
+        )
         timings.retrieval_path = metrics.retrieval_path
+
+
+def record_query_transform_reason(reason: QueryTransformFallbackReason) -> None:
+    timings = _current.get()
+    if timings is not None:
+        timings.query_transform_fallback_reason = reason
 
 
 def record_response_id(response_id: str) -> None:

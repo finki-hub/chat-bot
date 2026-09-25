@@ -321,8 +321,10 @@ def test_lexical_faq_search_records_no_match(
     assert timings.retrieval_path == "dense"
 
 
+@pytest.mark.parametrize("reranker_result", ["error", "empty", "invalid"])
 def test_reranker_failure_preserves_faq_first_dense_fallback_order(
     monkeypatch: pytest.MonkeyPatch,
+    reranker_result: str,
 ) -> None:
     fallback_faq = QuestionSchema(
         id=uuid4(),
@@ -367,8 +369,18 @@ def test_reranker_failure_preserves_faq_first_dense_fallback_order(
     async def lexical_search(*args, **kwargs):
         return []
 
+    class RerankResponse:
+        def json(self):
+            return {
+                "reranked_documents": (
+                    [] if reranker_result == "empty" else [{"index": 99, "score": 0.9}]
+                ),
+            }
+
     async def failing_reranker(*args, **kwargs):
-        raise RuntimeError("reranker unavailable")
+        if reranker_result == "error":
+            raise RuntimeError("reranker unavailable")
+        return RerankResponse()
 
     async def no_neighbor_chunks(*args, **kwargs):
         return []
@@ -396,6 +408,11 @@ def test_reranker_failure_preserves_faq_first_dense_fallback_order(
     assert fallback_faq.content in result.text
     assert dense_chunk.content not in result.text
     assert search_call == 2
+    assert result.sources == ()
+    assert timings.reranker_fallback_reason == (
+        "error" if reranker_result == "error" else "empty_or_invalid_response"
+    )
+    assert timings.reranker_invalid_result_count == (reranker_result == "invalid")
     assert timings.lexical_search_outcome == "no_match"
     assert timings.dense_faq_candidate_count == 1
     assert timings.dense_document_candidate_count == 1
@@ -407,8 +424,12 @@ def test_reranker_failure_preserves_faq_first_dense_fallback_order(
     assert timings.reranker_fallback is True
 
 
+@pytest.mark.parametrize("invalid_count", [0, 1, 1005])
+@pytest.mark.parametrize("score", [0.95, 0.01])
 def test_successful_rerank_preserves_cross_source_relevance_order(
     monkeypatch: pytest.MonkeyPatch,
+    invalid_count: int,
+    score: float,
 ) -> None:
     faq = QuestionSchema(
         id=uuid4(),
@@ -439,8 +460,9 @@ def test_successful_rerank_preserves_cross_source_relevance_order(
         def json(self):
             return {
                 "reranked_documents": [
-                    {"index": 1, "score": 0.95},
-                    {"index": 0, "score": 0.9},
+                    *[{"index": 99, "score": 1.0}] * invalid_count,
+                    {"index": 1, "score": score},
+                    {"index": 0, "score": score / 2},
                 ],
             }
 
@@ -472,11 +494,20 @@ def test_successful_rerank_preserves_cross_source_relevance_order(
     assert faq.content not in result.text
     assert timings.final_faq_count == 0
     assert timings.final_document_count == 1
-    assert timings.reranker_fallback is False
+    assert timings.reranker_fallback is (
+        score < context_module.settings.RERANKER_MIN_SCORE
+    )
+    assert timings.reranker_fallback_reason == (
+        "score_floor" if timings.reranker_fallback else "none"
+    )
+    assert timings.reranker_invalid_result_count == min(invalid_count, 1000)
+    assert timings.reranker_score_max == score
 
 
+@pytest.mark.parametrize("reranker_result", ["error", "empty", "invalid"])
 def test_reranker_failure_falls_back_to_dense_candidates_only(
     monkeypatch: pytest.MonkeyPatch,
+    reranker_result: str,
 ) -> None:
     overlapping_faq = QuestionSchema(
         id=uuid4(),
@@ -514,8 +545,18 @@ def test_reranker_failure_falls_back_to_dense_candidates_only(
     async def lexical_search(*args, **kwargs):
         return [overlapping_faq, lexical_only_faq]
 
+    class RerankResponse:
+        def json(self):
+            return {
+                "reranked_documents": (
+                    [] if reranker_result == "empty" else [{"index": -1, "score": 0.9}]
+                ),
+            }
+
     async def failing_reranker(*args, **kwargs):
-        raise RuntimeError("reranker unavailable")
+        if reranker_result == "error":
+            raise RuntimeError("reranker unavailable")
+        return RerankResponse()
 
     async def no_neighbor_chunks(*args, **kwargs):
         return []
@@ -541,6 +582,14 @@ def test_reranker_failure_falls_back_to_dense_candidates_only(
     assert overlapping_faq.content in result.text
     assert dense_chunk.content in result.text
     assert lexical_only_faq.content not in result.text
+    assert result.text.index(overlapping_faq.content) < result.text.index(
+        dense_chunk.content
+    )
+    assert result.sources == ()
+    assert timings.reranker_fallback_reason == (
+        "error" if reranker_result == "error" else "empty_or_invalid_response"
+    )
+    assert timings.reranker_invalid_result_count == (reranker_result == "invalid")
     assert timings.lexical_search_outcome == "matched"
     assert timings.dense_faq_candidate_count == 1
     assert timings.dense_document_candidate_count == 1

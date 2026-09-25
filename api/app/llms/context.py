@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Literal, assert_never
@@ -41,9 +42,11 @@ from app.utils.exceptions import RetrievalError
 from app.utils.settings import Settings
 from app.utils.timing import (
     LexicalSearchOutcome,
+    RerankerFallbackReason,
     RetrievalCandidateMetrics,
     RetrievalPath,
     RetrievalSelectionMetrics,
+    record_query_transform_reason,
     record_reranker_scores,
     record_retrieval_candidates,
     record_retrieval_ids,
@@ -279,6 +282,39 @@ def _select_fallback_candidates(
     return [*faqs, *chunks][:top_k]
 
 
+def _valid_rerank_results(
+    response: object,
+    candidate_count: int,
+) -> tuple[list[tuple[int, float]], int]:
+    """Keep valid index/finite-score pairs in service order; never expose bad values."""
+    items = response.get("reranked_documents") if isinstance(response, dict) else None
+    if not isinstance(items, list):
+        return [], 0
+    valid: list[tuple[int, float]] = []
+    invalid_count = 0
+    for item in items:
+        idx = item.get("index") if isinstance(item, dict) else None
+        score = item.get("score") if isinstance(item, dict) else None
+        if (
+            type(idx) is not int
+            or not 0 <= idx < candidate_count
+            or isinstance(score, bool)
+            or not isinstance(score, (int, float))
+        ):
+            invalid_count = min(invalid_count + 1, 1000)
+            continue
+        try:
+            numeric_score = float(score)
+        except OverflowError:
+            invalid_count = min(invalid_count + 1, 1000)
+            continue
+        if not math.isfinite(numeric_score):
+            invalid_count = min(invalid_count + 1, 1000)
+            continue
+        valid.append((idx, numeric_score))
+    return valid, invalid_count
+
+
 async def get_retrieved_context(
     db: Database,
     query: str,
@@ -336,6 +372,10 @@ async def get_retrieved_context_with_sources(
     effective_transform_mode = (
         query_transform_mode if transform_available else QueryTransformMode.RAW
     )
+    if query_transform_mode == QueryTransformMode.RAW:
+        record_query_transform_reason("not_requested")
+    elif not transform_available:
+        record_query_transform_reason("credential_missing")
     _stage("contextualize")
 
     with timed("retrieval.contextualize"):
@@ -375,6 +415,11 @@ async def get_retrieved_context_with_sources(
         original_embedding_task.cancel()
         await asyncio.gather(original_embedding_task, return_exceptions=True)
         raise RetrievalError("Failed during query transform / HyDE generation") from e
+
+    if transform_available or query_transform_mode == QueryTransformMode.RAW:
+        record_query_transform_reason(
+            variant_bundle.fallback_reason(query_transform_mode)
+        )
 
     logger.info(
         "Query transform mode %s produced variants: %s",
@@ -501,6 +546,8 @@ async def get_retrieved_context_with_sources(
     rerank_texts = [c.rerank_text for c in candidates]
     reranker_fallback = False
     dense_fallback = False
+    reranker_fallback_reason: RerankerFallbackReason = "none"
+    invalid_result_count = 0
 
     _stage("rerank")
 
@@ -511,7 +558,13 @@ async def get_retrieved_context_with_sources(
             response = await _post_rerank(
                 {"query": variant_bundle.rerank_query, "documents": rerank_texts},
             )
-        ranked = response.json()["reranked_documents"]
+        ranked, invalid_result_count = _valid_rerank_results(
+            response.json(),
+            len(candidates),
+        )
+        if not ranked:
+            dense_fallback = True
+            reranker_fallback_reason = "empty_or_invalid_response"
 
         # The reranker returns each candidate's original index, so we map straight back
         # to the candidate list — no fragile text matching that could silently drop a
@@ -519,27 +572,14 @@ async def get_retrieved_context_with_sources(
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
                 "Rerank scores (key, score): %s",
-                [
-                    (candidates[item["index"]].key, round(item["score"], 4))
-                    for item in ranked
-                    if 0 <= item["index"] < len(candidates)
-                ],
+                [(candidates[idx].key, round(score, 4)) for idx, score in ranked],
             )
 
         ranked_candidates: list[_Candidate] = []
         scores_by_key: dict[str, float] = {}
         dropped: list[tuple[str, str, float]] = []
-        for item in ranked:
-            idx = item["index"]
-            if not 0 <= idx < len(candidates):
-                logger.warning(
-                    "Reranker returned out-of-range index %d (have %d candidates)",
-                    idx,
-                    len(candidates),
-                )
-                continue
+        for idx, score in ranked:
             candidate = candidates[idx]
-            score = item["score"]
             scores_by_key[candidate.key] = score
             if score < settings.RERANKER_MIN_SCORE:
                 dropped.append(
@@ -549,7 +589,7 @@ async def get_retrieved_context_with_sources(
             ranked_candidates.append(candidate)
 
         record_reranker_scores(
-            [item["score"] for item in ranked if 0 <= item["index"] < len(candidates)],
+            [score for _, score in ranked],
             above_threshold=len(ranked_candidates),
         )
 
@@ -568,16 +608,16 @@ async def get_retrieved_context_with_sources(
         if not ranked_candidates and ranked:
             # Everything was scored but nothing cleared the floor — rather than return
             # empty context, keep the single best-scored candidate (ranked is desc).
-            best_idx = ranked[0]["index"]
-            if 0 <= best_idx < len(candidates):
-                logger.warning(
-                    "All %d reranked candidates were below RERANKER_MIN_SCORE=%.2f; "
-                    "keeping the top-scored one",
-                    len(ranked),
-                    settings.RERANKER_MIN_SCORE,
-                )
-                ranked_candidates = [candidates[best_idx]]
-                reranker_fallback = True
+            best_idx = ranked[0][0]
+            logger.warning(
+                "All %d reranked candidates were below RERANKER_MIN_SCORE=%.2f; "
+                "keeping the top-scored one",
+                len(ranked),
+                settings.RERANKER_MIN_SCORE,
+            )
+            ranked_candidates = [candidates[best_idx]]
+            reranker_fallback = True
+            reranker_fallback_reason = "score_floor"
 
         final = _select_with_source_priority(ranked_candidates, top_k)
         sources = visible_sources(
@@ -598,15 +638,18 @@ async def get_retrieved_context_with_sources(
     except Exception as exc:
         reranker_fallback = True
         dense_fallback = True
+        reranker_fallback_reason = "error"
         logger.warning(
             "Reranking failed; using vector order error_type=%s",
             type(exc).__name__,
         )
+    if dense_fallback:
         dense_candidates = [
             candidate for candidate in candidates if candidate.distance is not None
         ]
         final = _select_fallback_candidates(dense_candidates, top_k)
         sources = ()
+        reranker_fallback = reranker_fallback or bool(final)
 
     final_has_dense = any(
         candidate.retrieval_path in {"dense", "hybrid"} for candidate in final
@@ -635,6 +678,8 @@ async def get_retrieved_context_with_sources(
                 candidate.retrieval_path == "lexical" for candidate in final
             ),
             reranker_fallback=reranker_fallback,
+            reranker_fallback_reason=reranker_fallback_reason,
+            reranker_invalid_result_count=invalid_result_count,
             retrieval_path=retrieval_path,
         ),
     )
