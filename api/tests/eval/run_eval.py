@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -124,6 +125,8 @@ def final_context_hit(
 @dataclass
 class Result:
     example: Example
+    execution_status: Literal["completed", "error"] = "completed"
+    error_type: str | None = None
     ann_ideal: bool = False
     ann_prod: bool = False
     final: bool = False
@@ -141,12 +144,28 @@ class Aggregate:
     model_threshold: float = 0.5
 
     def _subset(self, pred) -> list[Result]:
-        return [r for r in self.results if pred(r)]
+        return [
+            r for r in self.results if r.execution_status == "completed" and pred(r)
+        ]
 
     def report(self) -> str:
         retr = self._subset(lambda r: not r.example.is_abstain)
         abst = self._subset(lambda r: r.example.is_abstain)
-        lines: list[str] = []
+        errors = [r for r in self.results if r.execution_status == "error"]
+        lines = [
+            (
+                "EXECUTION: "
+                f"total={len(self.results)} completed={len(self.results) - len(errors)} "
+                f"errors={len(errors)}"
+            ),
+        ]
+        if errors:
+            lines.append(
+                "INVALID RUN: quality metrics below cover completed cases only."
+            )
+            lines.extend(
+                f"  [EXECUTION-ERROR] {r.example.id}: {r.error_type}" for r in errors
+            )
 
         def block(title: str, rs: list[Result]) -> None:
             if not rs:
@@ -448,6 +467,11 @@ async def evaluate_one(
     )
 
 
+def execution_error_type(exc: Exception) -> str:
+    """Keep a bounded class label, never an exception message or representation."""
+    return re.sub(r"[^A-Za-z0-9_]", "_", type(exc).__name__[:80]) or "Exception"
+
+
 def load_golden(path: Path) -> list[Example]:
     examples: list[Example] = []
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -499,11 +523,16 @@ async def main_async(ns: argparse.Namespace) -> int:
                     )
                 # ruff: ignore[BLE001] -- one failed case must not abort the evaluation run
                 except Exception as exc:
+                    error_type = execution_error_type(exc)
                     print(
-                        f"  ! error on {ex.id}: {type(exc).__name__}: {exc}",
+                        f"  ! execution error on {ex.id}: {error_type}",
                         file=sys.stderr,
                     )
-                    return Result(example=ex)
+                    return Result(
+                        example=ex,
+                        execution_status="error",
+                        error_type=error_type,
+                    )
 
         agg.results = await asyncio.gather(*(run(ex) for ex in examples))
     finally:
@@ -540,6 +569,8 @@ async def main_async(ns: argparse.Namespace) -> int:
             "results": [
                 {
                     "id": r.example.id,
+                    "execution_status": r.execution_status,
+                    "error_type": r.error_type,
                     "difficulty": r.example.difficulty,
                     "category": r.example.category,
                     "cohort": r.example.cohort,
@@ -566,7 +597,7 @@ async def main_async(ns: argparse.Namespace) -> int:
         )
         print(f"\nwrote per-example JSON to {ns.json}")
 
-    return 0
+    return 2 if any(r.execution_status == "error" for r in agg.results) else 0
 
 
 def build_parser() -> argparse.ArgumentParser:
