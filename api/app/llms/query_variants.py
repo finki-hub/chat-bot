@@ -8,7 +8,7 @@ from app.llms.prompts import HYDE_SYSTEM_PROMPT
 from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.query_modes import QueryTransformMode
 from app.llms.query_transform import transform_query
-from app.utils.timing import timed
+from app.utils.timing import QueryTransformFallbackReason, timed
 
 QueryVariantKind = Literal["raw", "rewrite", "hyde"]
 
@@ -26,6 +26,18 @@ class QueryVariant:
 class QueryVariantBundle:
     variants: tuple[QueryVariant, ...]
     rerank_query: str
+
+    def fallback_reason(
+        self, requested: QueryTransformMode
+    ) -> QueryTransformFallbackReason:
+        """Classify retained variants, including failed, blank and unchanged output."""
+        if requested == QueryTransformMode.RAW:
+            return "not_requested"
+        if self.mode == requested:
+            return "none"
+        if self.mode == QueryTransformMode.RAW:
+            return "no_usable_variants"
+        return "partial_variants"
 
     @property
     def mode(self) -> QueryTransformMode:
