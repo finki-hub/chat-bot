@@ -74,6 +74,20 @@ CLI inputs, while each result's `effective_transform_mode`, `effective_initial_k
 `effective_per_query_k` record the variants and retrieval budget actually used after a
 transform is omitted or fails.
 
+Each result also records `execution_status` (`completed` or `error`) and
+`error_type` (a sanitized, at-most-80-character exception class name, or `null`
+for completed cases). Exception messages are not emitted by the per-case error
+handler. Failed cases remain in the JSON with null effective configuration;
+other cases continue and partial results are written before the runner exits **2**.
+The report shows total/completed/error counts for the selected cases (after
+`--limit`), marks runs with execution errors invalid, and excludes failed cases
+from every quality denominator and abstention metric.
+
+A completed run exits **0** even when retrieval recall is poor or zero. This is
+an informational scorer; the comparison command below owns the quality regression
+gate. Missing corpus anchors require a separate corpus preflight: an ordinary
+retrieval miss alone does not establish an execution error.
+
 ## Comparing two runs
 
 Use the committed golden set as a decision tool by saving a known-good baseline and
@@ -107,6 +121,11 @@ Cases whose effective query-transform mode or retrieval budget differs from that
 requested configuration are reported as incomparable and make the comparison invalid
 instead of being counted as retrieval regressions. Intentional comparisons between two
 different requested modes remain valid when each run actually used its requested mode.
+Explicit `execution_status: "error"` in either artifact makes comparison invalid
+(exit **2**) regardless of effective configuration or regression budget. Older
+artifacts without execution status remain supported, including the existing
+legacy effective-configuration behavior; modern null effective configurations
+still make comparison invalid.
 
 Run the same golden set across modes to isolate query-transformation impact:
 

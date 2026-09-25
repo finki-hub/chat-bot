@@ -161,6 +161,12 @@ def _case(
     requested_config: EffectiveRetrievalConfig,
 ) -> EvalCase:
     row = _mapping(value, path)
+    if "execution_status" in row:
+        status = row["execution_status"]
+        if status == "error":
+            raise EvalJsonError(f"{path}: execution failed; comparison is invalid")
+        if status != "completed":
+            raise EvalJsonError(f"{path}.execution_status: expected completed or error")
     return EvalCase(
         id=_text(row.get("id"), f"{path}.id"),
         anchor_type=_anchor_type(row.get("anchor"), f"{path}.anchor"),
