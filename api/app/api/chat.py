@@ -379,6 +379,25 @@ def _complete_sse_frames(
     return parts[:-1], parts[-1]
 
 
+def _is_provider_error_frame(frame: str) -> bool:
+    if _sse_event_name(frame) != "error":
+        return False
+    data = "\n".join(
+        line[len(_SSE_DATA_PREFIX) :].removeprefix(" ")
+        for line in frame.splitlines()
+        if line.startswith(_SSE_DATA_PREFIX)
+    )
+    try:
+        payload = json.loads(data)
+    except json.JSONDecodeError:
+        return False
+    # Empty answers and credential/quota denials are not caught provider failures.
+    return isinstance(payload, dict) and payload.get("code") in (
+        "agent_error",
+        "interrupted",
+    )
+
+
 def _log_sponsored_release_failure(task: asyncio.Task[None]) -> None:
     try:
         task.result()
@@ -439,8 +458,6 @@ async def _instrument_stream(
                     answered = True
             if event_name == "reset":
                 answer_parts.clear()
-            if event_name == "error":
-                provider_failure = True
             sniffed = _sniff_tokens(chunk)
             if sniffed is not None:
                 usage = sniffed
@@ -449,6 +466,11 @@ async def _instrument_stream(
                 chunk,
             )
             for frame in frames:
+                if _is_provider_error_frame(frame):
+                    # The agent catches provider exceptions and drains normally.
+                    # A later cancellation still overrides this outcome below.
+                    outcome = "provider_error"
+                    provider_failure = True
                 if _sse_event_name(frame) == "reset":
                     answer_parts.clear()
                     continue
