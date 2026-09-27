@@ -1,4 +1,6 @@
 import json
+from contextlib import asynccontextmanager
+from copy import deepcopy
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -12,7 +14,38 @@ class FakeChatDatabase:
         self.credentials: dict[tuple[object, object], dict[str, object]] = {}
         self.now = datetime(2026, 7, 7, tzinfo=UTC)
 
+    @asynccontextmanager
+    async def transaction(self):
+        snapshot = deepcopy((self.conversations, self.messages, self.feedback))
+        try:
+            yield self
+        except BaseException:
+            self.conversations, self.messages, self.feedback = snapshot
+            raise
+
     async def fetchrow(self, query: str, *args: object) -> dict[str, object] | None:
+        if "SELECT id FROM chat_conversation" in query and "FOR UPDATE" in query:
+            conversation_id, user_id, active_stream_id = args
+            conversation = self._owned_conversation(conversation_id, user_id)
+            if (
+                conversation is None
+                or conversation["active_stream_id"] != active_stream_id
+            ):
+                return None
+            return conversation
+        if "UPDATE chat_message\n" in query:
+            message_id, conversation_id, content, response_id, metadata, parts = args
+            target = self.messages.get(message_id)
+            if target is None or target["conversation_id"] != conversation_id:
+                return None
+            target.update(
+                content=content,
+                response_id=response_id,
+                metadata=metadata,
+                parts=parts,
+                updated_at=self.now,
+            )
+            return target
         if "INSERT INTO chat_user (" in query:
             provider, provider_subject, email, name, avatar_url = args
             user_key = (provider, provider_subject)
@@ -310,48 +343,6 @@ class FakeChatDatabase:
             self.messages[message_id] = inserted_assistant
             return inserted_assistant
 
-        if "WITH target AS" in query and "DELETE FROM chat_message stale" in query:
-            if "FOR UPDATE OF conversation" not in query:
-                raise AssertionError("assistant replacement must lock stream ownership")
-            (
-                message_id,
-                conversation_id,
-                user_id,
-                active_stream_id,
-                content,
-                response_id,
-                metadata_json,
-                parts_json,
-                retained_message_ids,
-            ) = args
-            target = self.messages.get(message_id)
-            conversation = self.conversations.get(conversation_id)
-            if (
-                target is None
-                or conversation is None
-                or conversation["user_id"] != user_id
-                or conversation["active_stream_id"] != active_stream_id
-                or target["conversation_id"] != conversation_id
-                or target["role"] != "assistant"
-                or not isinstance(retained_message_ids, list)
-            ):
-                return None
-            retained_ids = set(retained_message_ids)
-            stale_message_ids = [
-                stale_id
-                for stale_id, stale in self.messages.items()
-                if stale["conversation_id"] == conversation_id
-                and stale_id not in retained_ids
-            ]
-            target["content"] = content
-            target["response_id"] = response_id
-            target["metadata"] = metadata_json
-            target["parts"] = parts_json
-            target["updated_at"] = self.now
-            for stale_id in stale_message_ids:
-                del self.messages[stale_id]
-            return target
-
         if "INSERT INTO chat_message" in query:
             (
                 message_id,
@@ -377,7 +368,11 @@ class FakeChatDatabase:
                 }
                 self.messages[message_id] = inserted_message
                 return inserted_message
-            if current_message["conversation_id"] != conversation_id:
+            if (
+                current_message["conversation_id"] != conversation_id
+                or current_message["role"] != role
+                or current_message["response_id"] != response_id
+            ):
                 return None
             current_message["role"] = role
             current_message["content"] = content
@@ -391,6 +386,31 @@ class FakeChatDatabase:
         raise AssertionError(msg)
 
     async def fetch(self, query: str, *args: object) -> list[dict[str, object]]:
+        if "FROM chat_message" in query and "id = $2 OR" in query:
+            conversation_id, target_id, retained_ids = args
+            assert isinstance(retained_ids, list)
+            return [
+                row
+                for row in self.messages.values()
+                if row["conversation_id"] == conversation_id
+                and (row["id"] == target_id or row["id"] not in retained_ids)
+            ]
+        if "FROM chat_conversation" in query and "FOR UPDATE" in query:
+            user_id, conversation_id = args
+            return [
+                row
+                for row in self.conversations.values()
+                if row["user_id"] == user_id
+                and (conversation_id is None or row["id"] == conversation_id)
+            ]
+        if "FROM chat_message" in query and "FOR UPDATE" in query:
+            (conversation_ids,) = args
+            assert isinstance(conversation_ids, list)
+            return [
+                row
+                for row in self.messages.values()
+                if row["conversation_id"] in conversation_ids
+            ]
         if "FROM chat_user_credential" in query:
             (user_id,) = args
             rows = [
@@ -399,9 +419,12 @@ class FakeChatDatabase:
             return sorted(rows, key=lambda row: str(row["provider"]))
 
         if "DELETE FROM chat_conversation" in query:
-            (user_id,) = args
+            conversation_ids, user_id = args
+            assert isinstance(conversation_ids, list)
             deleted = [
-                row for row in self.conversations.values() if row["user_id"] == user_id
+                row
+                for row in self.conversations.values()
+                if row["user_id"] == user_id and row["id"] in conversation_ids
             ]
             deleted_ids = {row["id"] for row in deleted}
             for conversation_id in deleted_ids:
@@ -458,6 +481,47 @@ class FakeChatDatabase:
         return cleared
 
     async def execute(self, query: str, *args: object) -> str:
+        if "DELETE FROM chat_message" in query:
+            conversation_id, retained_ids = args
+            assert isinstance(retained_ids, list)
+            deleted_message_ids = [
+                key
+                for key, row in self.messages.items()
+                if row["conversation_id"] == conversation_id and key not in retained_ids
+            ]
+            for key in deleted_message_ids:
+                del self.messages[key]
+            return f"DELETE {len(deleted_message_ids)}"
+        if "DELETE FROM feedback" in query and "response_id = ANY($2" in query:
+            user_id, response_ids = args
+            assert isinstance(response_ids, list)
+            deleted_feedback_keys = [
+                key
+                for key in self.feedback
+                if key[0] in response_ids and key[1:] == ("web", user_id)
+            ]
+            for key in deleted_feedback_keys:
+                del self.feedback[key]
+            return f"DELETE {len(deleted_feedback_keys)}"
+        if query == "SET TRANSACTION ISOLATION LEVEL READ COMMITTED":
+            return "SET"
+        if "DELETE FROM feedback" in query:
+            conversation_ids, user_id = args
+            assert isinstance(conversation_ids, list)
+            response_ids = {
+                row["response_id"]
+                for row in self.messages.values()
+                if row["conversation_id"] in conversation_ids
+                and row["response_id"] is not None
+            }
+            deleted_conversation_feedback_keys = [
+                key
+                for key in self.feedback
+                if key[0] in response_ids and key[1:] == ("web", user_id)
+            ]
+            for key in deleted_conversation_feedback_keys:
+                del self.feedback[key]
+            return f"DELETE {len(deleted_conversation_feedback_keys)}"
         if "DELETE FROM chat_user_credential" in query:
             user_id, provider = args
             self.credentials.pop((user_id, provider), None)

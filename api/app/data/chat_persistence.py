@@ -181,6 +181,8 @@ async def upsert_message(
             parts = EXCLUDED.parts,
             updated_at = NOW()
         WHERE chat_message.conversation_id = EXCLUDED.conversation_id
+          AND chat_message.role = EXCLUDED.role
+          AND chat_message.response_id IS NOT DISTINCT FROM EXCLUDED.response_id
         RETURNING *
         """,
         message.id,

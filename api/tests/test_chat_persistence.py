@@ -274,3 +274,44 @@ def test_chat_persistence_rejects_malformed_role_and_status() -> None:
 
     with pytest.raises(ValueError, match="Input should be"):
         ChatConversationUpdate.model_validate({"active_status": "lost"})
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("mutation", ["role", "response"])
+async def test_ordinary_upsert_cannot_change_message_identity(mutation):
+    db = FakeChatDatabase()
+    message = ChatMessageUpsert(
+        id=uuid4(),
+        conversation_id=uuid4(),
+        role=ChatMessageRole.ASSISTANT,
+        content="synthetic answer",
+        response_id=uuid4(),
+    )
+    original = await upsert_message(db, message)
+    changes = (
+        {"role": ChatMessageRole.USER}
+        if mutation == "role"
+        else {"response_id": uuid4()}
+    )
+    with pytest.raises(ChatMessageConflictError):
+        await upsert_message(db, message.model_copy(update=changes))
+    assert await upsert_message(db, message) == original
+
+
+@pytest.mark.anyio
+async def test_ordinary_upsert_allows_user_edit_with_null_response_id():
+    db = FakeChatDatabase()
+    message = ChatMessageUpsert(
+        id=uuid4(),
+        conversation_id=uuid4(),
+        role=ChatMessageRole.USER,
+        content="synthetic original",
+    )
+    await upsert_message(db, message)
+    edited = await upsert_message(
+        db, message.model_copy(update={"content": "synthetic edit"})
+    )
+    assert edited.id == message.id
+    assert edited.role == ChatMessageRole.USER
+    assert edited.response_id is None
+    assert edited.content == "synthetic edit"
