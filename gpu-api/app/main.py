@@ -1,5 +1,5 @@
 import logging
-from asyncio import gather, to_thread
+from asyncio import to_thread
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -33,6 +33,11 @@ settings = Settings()
 setup_logging(level=settings.LOG_LEVEL)
 
 
+def _init_models() -> None:
+    init_reranker(settings.RERANKER_MODEL)
+    init_bge_m3_embedder()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     cuda_available = torch.cuda.is_available()
@@ -50,12 +55,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         if not cuda_available:
             capture("gpu-api", "cuda_fallback", {"device": "cpu"})
 
-        tasks = [
-            to_thread(init_reranker, settings.RERANKER_MODEL),
-            to_thread(init_bge_m3_embedder),
-        ]
-
-        await gather(*tasks)
+        await to_thread(_init_models)
         yield
     finally:
         shutdown_analytics()

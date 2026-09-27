@@ -25,6 +25,43 @@ def _patch_lifespan_dependencies(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 @pytest.mark.anyio
+async def test_gpu_lifespan_initializes_models_in_one_ordered_offload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events = _patch_lifespan_dependencies(monkeypatch)
+
+    async def one_offload(function: Callable[..., object], *args: object) -> object:
+        events.append("offload-start")
+        result = function(*args)
+        events.append("offload-end")
+        return result
+
+    monkeypatch.setattr(main, "to_thread", one_offload)
+    monkeypatch.setattr(
+        main,
+        "init_reranker",
+        lambda _model: events.append("reranker"),
+    )
+    monkeypatch.setattr(
+        main,
+        "init_bge_m3_embedder",
+        lambda: events.append("bge"),
+    )
+
+    async with main.lifespan(FastAPI()):
+        pass
+
+    assert events == [
+        "init",
+        "offload-start",
+        "reranker",
+        "bge",
+        "offload-end",
+        "shutdown",
+    ]
+
+
+@pytest.mark.anyio
 async def test_gpu_lifespan_shuts_down_analytics_when_model_startup_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
