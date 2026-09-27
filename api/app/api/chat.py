@@ -870,6 +870,14 @@ async def _chat_response_stream(
                     task.cancel()
             await asyncio.gather(retrieval_task, links_task, return_exceptions=True)
 
+        model_access_mode: Literal["sponsored", "byok", "ordinary"]
+        if inference_resolution.sponsored:
+            model_access_mode = "sponsored"
+        elif user_inference_credential is not None:
+            model_access_mode = "byok"
+        else:
+            model_access_mode = "ordinary"
+
         response.body_iterator = _instrument_stream(
             response.body_iterator,
             payload=payload,
@@ -881,13 +889,7 @@ async def _chat_response_stream(
             session_id=session_id,
             effective_transform_mode=retrieved.effective_transform_mode,
             sponsored_mode=sponsored_mode,
-            model_access_mode=(
-                "sponsored"
-                if inference_resolution.sponsored
-                else "byok"
-                if user_inference_credential is not None
-                else "ordinary"
-            ),
+            model_access_mode=model_access_mode,
         )
 
         if retrieved.sources:
