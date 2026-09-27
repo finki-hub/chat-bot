@@ -1,6 +1,8 @@
+from copy import deepcopy
 from datetime import timedelta
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.data.db import get_db
@@ -28,6 +30,112 @@ def _auth_headers() -> dict[str, str]:
 
 OWNER_ID = "00000000-0000-4000-8000-000000000001"
 INTRUDER_ID = "00000000-0000-4000-8000-000000000002"
+
+
+def test_user_message_endpoint_rejects_assistant_id_reuse_and_keeps_feedback_deletable():
+    db = FakeChatDatabase()
+    client = _client(db)
+    conversation_id, assistant_id, response_id, user_message_id = (
+        uuid4() for _ in range(4)
+    )
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={"id": str(conversation_id), "user_id": OWNER_ID},
+    )
+    db.messages[assistant_id] = {
+        "id": assistant_id,
+        "conversation_id": conversation_id,
+        "role": "assistant",
+        "response_id": response_id,
+        "content": "synthetic answer",
+        "metadata": {"feedback": "like"},
+        "created_at": db.now,
+        "updated_at": db.now,
+    }
+    db.feedback[(response_id, "web", OWNER_ID)] = {"answer_text": "synthetic answer"}
+    assistant_before = deepcopy(db.messages[assistant_id])
+    feedback_before = deepcopy(db.feedback)
+    endpoint = f"/chat/state/conversations/{conversation_id}/messages/user"
+    rejected = client.post(
+        endpoint,
+        headers=_auth_headers(),
+        json={
+            "id": str(assistant_id),
+            "user_id": OWNER_ID,
+            "content": "synthetic overwrite",
+        },
+    )
+    assert rejected.status_code == 404
+    assert db.messages[assistant_id] == assistant_before
+    assert db.feedback == feedback_before
+    for content in ("synthetic original", "synthetic edit"):
+        edited = client.post(
+            endpoint,
+            headers=_auth_headers(),
+            json={"id": str(user_message_id), "user_id": OWNER_ID, "content": content},
+        )
+        assert edited.status_code == 200
+        assert edited.json()["content"] == content
+        assert edited.json()["response_id"] is None
+    deleted = client.delete(
+        f"/chat/state/conversations/{conversation_id}",
+        headers=_auth_headers(),
+        params={"user_id": OWNER_ID},
+    )
+    assert deleted.status_code == 200
+    assert not db.feedback
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_status"),
+    [
+        ("owner", 404),
+        ("api_key", 401),
+        ("stream", 404),
+        ("missing", 404),
+    ],
+)
+def test_replacement_rejects_invalid_requests_without_touching_feedback(
+    failure, expected_status
+):
+    db = FakeChatDatabase()
+    client = _client(db)
+    conversation_id, message_id, old_response, stream_id = (uuid4() for _ in range(4))
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={"id": str(conversation_id), "user_id": OWNER_ID},
+    )
+    db.conversations[conversation_id]["active_stream_id"] = stream_id
+    db.messages[message_id] = {
+        "id": message_id,
+        "conversation_id": conversation_id,
+        "role": "assistant",
+        "content": "synthetic answer",
+        "response_id": old_response,
+        "metadata": {"feedback": "like"},
+        "created_at": db.now,
+        "updated_at": db.now,
+    }
+    db.feedback[(old_response, "web", OWNER_ID)] = {
+        "question_text": "synthetic question",
+        "answer_text": "synthetic answer",
+    }
+    before = deepcopy((db.messages, db.feedback))
+    target = uuid4() if failure == "missing" else message_id
+    response = client.put(
+        f"/chat/state/conversations/{conversation_id}/messages/assistant/{target}/replacement/{stream_id}",
+        headers={} if failure == "api_key" else _auth_headers(),
+        json={
+            "user_id": INTRUDER_ID if failure == "owner" else OWNER_ID,
+            "active_stream_id": str(uuid4() if failure == "stream" else stream_id),
+            "content": "synthetic replacement",
+            "retained_message_ids": [str(target)],
+        },
+    )
+    assert response.status_code == expected_status
+    assert (db.messages, db.feedback) == before
 
 
 def test_chat_state_upserts_provider_user() -> None:
