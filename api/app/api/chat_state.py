@@ -29,6 +29,7 @@ from app.data.chat_state import (
     upsert_assistant_message_by_response_id,
 )
 from app.data.chat_users import upsert_chat_user
+from app.data.connection import Database
 from app.data.db import get_db
 from app.schemas.chat_credentials import (
     OLLAMA_DEFAULT_BASE_URL,
@@ -210,7 +211,7 @@ async def list_conversation_state(
 )
 async def delete_conversation_state_all(
     user_id: UserIdQuery,
-    db: ChatPersistenceDatabase = db_dep,
+    db: Database = db_dep,
 ) -> list[ChatConversation]:
     return await delete_conversations(db, user_id=user_id)
 
@@ -264,7 +265,7 @@ async def update_conversation_state(
 async def delete_conversation_state(
     conversation_id: UUID,
     user_id: UserIdQuery,
-    db: ChatPersistenceDatabase = db_dep,
+    db: Database = db_dep,
 ) -> ChatConversation:
     deleted = await delete_conversation(
         db,
@@ -343,7 +344,7 @@ async def replace_assistant_message_state(
     message_id: UUID,
     response_id: UUID,
     payload: AssistantMessageReplacementRequest,
-    db: ChatPersistenceDatabase = db_dep,
+    db: Database = db_dep,
 ) -> ChatMessage:
     if message_id not in payload.retained_message_ids:
         raise HTTPException(

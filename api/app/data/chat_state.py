@@ -3,6 +3,7 @@ from uuid import UUID
 
 from app.data.chat_persistence import ChatPersistenceDatabase
 from app.data.chat_rows import conversation_from_row, message_from_row
+from app.data.connection import Database
 from app.schemas.chat_persistence import (
     ChatConversation,
     ChatMessage,
@@ -48,56 +49,101 @@ async def upsert_assistant_message_by_response_id(
 
 
 async def replace_assistant_message_and_prune_after(
-    db: ChatPersistenceDatabase,
+    db: Database,
     message: ChatMessageUpsert,
     *,
     active_stream_id: UUID,
     retained_message_ids: list[UUID],
     user_id: UUID,
 ) -> ChatMessage | None:
-    row = await db.fetchrow(
-        """
-        WITH target AS (
-            SELECT assistant.id, assistant.conversation_id
-            FROM chat_message assistant
-            JOIN chat_conversation conversation
-              ON conversation.id = assistant.conversation_id
-            WHERE assistant.id = $1
-              AND assistant.conversation_id = $2
-              AND assistant.role = 'assistant'
-              AND conversation.user_id = $3
-              AND conversation.active_stream_id = $4
-            FOR UPDATE OF conversation
-        ), updated AS (
-            UPDATE chat_message assistant
-            SET content = $5,
-                response_id = $6,
-                metadata = $7::jsonb,
-                parts = $8::jsonb,
-                updated_at = NOW()
-            FROM target
-            WHERE assistant.id = target.id
-            RETURNING assistant.*
-        ), deleted AS (
-            DELETE FROM chat_message stale
-            USING target
-            WHERE stale.conversation_id = target.conversation_id
-              AND NOT (stale.id = ANY($9::uuid[]))
-            RETURNING stale.id
+    async with db.transaction() as connection:
+        await connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        conversation = await connection.fetchrow(
+            """
+            SELECT id FROM chat_conversation
+            WHERE id = $1 AND user_id = $2 AND active_stream_id = $3
+            FOR UPDATE
+            """,
+            message.conversation_id,
+            user_id,
+            active_stream_id,
         )
-        SELECT * FROM updated
-        """,
-        message.id,
-        message.conversation_id,
-        user_id,
-        active_stream_id,
-        message.content,
-        message.response_id,
-        json.dumps(message.metadata),
-        None if message.parts is None else json.dumps(message.parts),
-        retained_message_ids,
-    )
-    return None if row is None else message_from_row(row)
+        if conversation is None:
+            return None
+        # Match deletion's lock order: conversation, messages by id, feedback.
+        rows = await connection.fetch(
+            """
+            SELECT * FROM chat_message
+            WHERE conversation_id = $1
+              AND (id = $2 OR NOT (id = ANY($3::uuid[])))
+            ORDER BY id
+            FOR UPDATE
+            """,
+            message.conversation_id,
+            message.id,
+            retained_message_ids,
+        )
+        target = next((row for row in rows if row["id"] == message.id), None)
+        if (
+            target is None
+            or target["role"] != "assistant"
+            or message.id not in retained_message_ids
+        ):
+            return None
+        invalidated_response_ids = list(
+            {
+                row["response_id"]
+                for row in rows
+                if row["role"] == "assistant"
+                and row["response_id"] is not None
+                and (
+                    row["id"] != message.id or row["response_id"] != message.response_id
+                )
+            }
+        )
+        if invalidated_response_ids:
+            # A new statement snapshot sees feedback committed while the locks
+            # above waited. Delete copies before losing their response-id links.
+            await connection.execute(
+                """
+                DELETE FROM feedback
+                WHERE client = 'web' AND user_id = $1
+                  AND response_id = ANY($2::uuid[])
+                """,
+                str(user_id),
+                invalidated_response_ids,
+            )
+        metadata = dict(message.metadata)
+        metadata.pop("feedback", None)
+        if target["response_id"] == message.response_id:
+            # Replaying the same completion must not retract an intervening vote.
+            stored_metadata = message_from_row(dict(target)).metadata
+            if "feedback" in stored_metadata:
+                metadata["feedback"] = stored_metadata["feedback"]
+        updated = await connection.fetchrow(
+            """
+            UPDATE chat_message
+            SET content = $3, response_id = $4, metadata = $5::jsonb,
+                parts = $6::jsonb, updated_at = NOW()
+            WHERE id = $1 AND conversation_id = $2
+            RETURNING *
+            """,
+            message.id,
+            message.conversation_id,
+            message.content,
+            message.response_id,
+            json.dumps(metadata),
+            None if message.parts is None else json.dumps(message.parts),
+        )
+        await connection.execute(
+            """
+            DELETE FROM chat_message
+            WHERE conversation_id = $1 AND NOT (id = ANY($2::uuid[]))
+            """,
+            message.conversation_id,
+            retained_message_ids,
+        )
+        return None if updated is None else message_from_row(dict(updated))
 
 
 async def mark_active_stream_stopped_if_current(
