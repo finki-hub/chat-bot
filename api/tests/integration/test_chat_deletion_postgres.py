@@ -356,8 +356,12 @@ def test_replacement_prunes_feedback_preserves_boundaries_and_same_response_repl
             assert updated.metadata["preserved"] == "incoming"
             assert (
                 await database.fetchval(
-                    "SELECT count(*) FROM feedback WHERE response_id = $1",
+                    """
+                    SELECT count(*) FROM feedback
+                    WHERE response_id = $1 AND client = 'web' AND user_id = $2
+                    """,
                     case.old.response_id,
+                    str(case.owner),
                 )
                 == 0
             )
