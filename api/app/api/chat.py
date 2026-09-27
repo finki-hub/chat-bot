@@ -3,7 +3,7 @@ import json
 import logging
 from collections.abc import AsyncGenerator, AsyncIterable
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -240,6 +240,7 @@ def _capture_chat_response(
     answer_text: str,
     session_id: str | None,
     effective_transform_mode: QueryTransformMode,
+    model_access_mode: Literal["sponsored", "byok", "ordinary"] = "ordinary",
 ) -> None:
     model = payload.inference_model
     generation_ms: float | None = None
@@ -264,6 +265,7 @@ def _capture_chat_response(
         ),
         "response_id": str(response_id),
         "retrieval_hit": retrieval_hit,
+        "model_access_mode": model_access_mode,
         "outcome": outcome,
         "language": classify_language(payload.query),
         "query_script": classify_script(payload.query),
@@ -297,6 +299,17 @@ def _capture_chat_response(
         "used_web_search": _used_web_search(observation.tool_names),
         **_session_props(session_id),
     }
+
+    props.update(
+        {
+            name: score
+            for name, score in {
+                "reranker_min_score": settings.RERANKER_MIN_SCORE,
+                "source_reranker_min_score": settings.SOURCE_RERANKER_MIN_SCORE,
+            }.items()
+            if 0.0 <= score <= 1.0
+        }
+    )
 
     if observation.finish_reason:
         props["finish_reason"] = observation.finish_reason
@@ -424,6 +437,7 @@ async def _instrument_stream(
     observation: StreamObservation,
     effective_transform_mode: QueryTransformMode,
     sponsored_mode: str | None = None,
+    model_access_mode: Literal["sponsored", "byok", "ordinary"] = "ordinary",
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
     log one chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
@@ -525,6 +539,7 @@ async def _instrument_stream(
             answer_text="".join(answer_parts),
             session_id=session_id,
             effective_transform_mode=effective_transform_mode,
+            model_access_mode=model_access_mode,
         )
         if sponsored_mode is not None:
             capture_sponsored_event(
@@ -866,6 +881,13 @@ async def _chat_response_stream(
             session_id=session_id,
             effective_transform_mode=retrieved.effective_transform_mode,
             sponsored_mode=sponsored_mode,
+            model_access_mode=(
+                "sponsored"
+                if inference_resolution.sponsored
+                else "byok"
+                if user_inference_credential is not None
+                else "ordinary"
+            ),
         )
 
         if retrieved.sources:

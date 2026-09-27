@@ -1,5 +1,7 @@
+import type { ChatTransport, UIMessageChunk } from 'ai';
+
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ModelDescriptor, MyUIMessage } from '@/lib/api-types';
 
@@ -15,6 +17,7 @@ type UseChatOptions = {
     readonly message: MyUIMessage;
   }) => void;
   readonly resume?: boolean;
+  readonly transport: ChatTransport<MyUIMessage>;
 };
 
 const {
@@ -67,6 +70,24 @@ const useChatOptions: UseChatOptions[] = [];
 const refetchModels = vi.fn<() => Promise<unknown>>();
 const runtimeModels: ModelDescriptor[] = [];
 const retryHydration = vi.fn<() => void>();
+const ACTIVE_RESPONSE_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d22';
+const liveReaders: Array<ReadableStreamDefaultReader<UIMessageChunk>> = [];
+
+const startLiveStream = async (): Promise<void> => {
+  const options = useChatOptions.at(-1);
+  if (options?.id === undefined) {
+    throw new Error('Missing active conversation');
+  }
+  const stream = await options.transport.reconnectToStream({
+    chatId: options.id,
+  });
+  if (stream === null) {
+    throw new Error('Missing live stream');
+  }
+  const reader = stream.getReader();
+  liveReaders.push(reader);
+  await reader.read();
+};
 
 vi.mock('@/lib/use-models', () => ({
   useModels: () => ({
@@ -95,9 +116,19 @@ vi.mock('posthog-js', () => ({
 }));
 
 vi.mock('@/lib/transport', () => ({
-  buildChatTransport: vi.fn<() => { readonly kind: 'transport' }>(() => ({
-    kind: 'transport',
-  })),
+  buildChatTransport: () => ({
+    reconnectToStream: () =>
+      Promise.resolve(
+        new ReadableStream<UIMessageChunk>({
+          start: (controller) => {
+            controller.enqueue({
+              messageMetadata: { responseId: ACTIVE_RESPONSE_ID },
+              type: 'start',
+            });
+          },
+        }),
+      ),
+  }),
   ChatConversationRequestError,
   clearChatConversations: () => clearChatConversations(),
   deleteChatConversation: (id: string) => deleteChatConversation(id),
@@ -152,6 +183,12 @@ describe('useConversations resumable streaming', () => {
     chatState.status = 'ready';
     useChatOptions.length = 0;
     useUiStore.setState({ activeConversationId: null, model: 'model-a' });
+  });
+
+  afterEach(async () => {
+    const readers = [...liveReaders];
+    liveReaders.length = 0;
+    await Promise.all(readers.map((reader) => reader.cancel()));
   });
 
   it('configures useChat with stable active conversation id and resume enabled only when active', () => {
@@ -237,6 +274,7 @@ describe('useConversations resumable streaming', () => {
       calls.push('local');
     });
     const { result } = renderHook(() => useConversations('model-a'));
+    await startLiveStream();
 
     act(() => {
       result.current.onSelect('conv-b');
@@ -246,7 +284,9 @@ describe('useConversations resumable streaming', () => {
     expect(useUiStore.getState().activeConversationId).toBe('conv-a');
 
     await waitFor(() => {
-      expect(stopChatStream).toHaveBeenCalledWith('conv-a', undefined);
+      expect(stopChatStream).toHaveBeenCalledWith('conv-a', {
+        activeStreamId: ACTIVE_RESPONSE_ID,
+      });
     });
 
     await waitFor(() => {
@@ -322,13 +362,16 @@ describe('useConversations resumable streaming', () => {
       calls.push('local');
     });
     const { result } = renderHook(() => useConversations('model-a'));
+    await startLiveStream();
 
     act(() => {
       result.current.onStop();
     });
 
     expect(calls).toStrictEqual(['local', 'server']);
-    expect(stopChatStream).toHaveBeenCalledWith('conv-stop', undefined);
+    expect(stopChatStream).toHaveBeenCalledWith('conv-stop', {
+      activeStreamId: ACTIVE_RESPONSE_ID,
+    });
 
     if (resolveServerStop === undefined) {
       throw new Error('Server stop resolver was not captured');
@@ -356,6 +399,7 @@ describe('useConversations resumable streaming', () => {
       },
     );
     const { result } = renderHook(() => useConversations('model-a'));
+    await startLiveStream();
 
     act(() => {
       result.current.onStop();
@@ -405,6 +449,7 @@ describe('useConversations resumable streaming', () => {
       return Promise.resolve();
     });
     const { result } = renderHook(() => useConversations('model-a'));
+    await startLiveStream();
 
     act(() => {
       void result.current.onDelete(activeConversationId);
@@ -422,6 +467,7 @@ describe('useConversations resumable streaming', () => {
     chatState.status = 'streaming';
     stopChatStream.mockRejectedValueOnce(new StopChatStreamError(503));
     const { result } = renderHook(() => useConversations('model-a'));
+    await startLiveStream();
     let deleted = true;
 
     await act(async () => {
@@ -448,6 +494,7 @@ describe('useConversations resumable streaming', () => {
       return Promise.resolve();
     });
     const { result } = renderHook(() => useConversations('model-a'));
+    await startLiveStream();
 
     await act(async () => {
       await result.current.onClearAll();
@@ -462,6 +509,7 @@ describe('useConversations resumable streaming', () => {
     chatState.status = 'streaming';
     stopChatStream.mockRejectedValueOnce(new StopChatStreamError(503));
     const { result } = renderHook(() => useConversations('model-a'));
+    await startLiveStream();
     let cleared = true;
 
     await act(async () => {

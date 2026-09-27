@@ -5,6 +5,7 @@ import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
 
+import { ActiveChatRequest } from '@/lib/active-chat-request';
 import { fireAndForget } from '@/lib/async';
 import {
   finalizeMessage,
@@ -83,13 +84,19 @@ export const useConversationChatRuntime = ({
   modelRef.current = model;
   const reasoningRef = useRef(reasoning);
   reasoningRef.current = reasoning;
+  const activeRequest = useMemo(
+    () => new ActiveChatRequest(activeId),
+    [activeId],
+  );
   const transport = useMemo(
     () =>
-      buildChatTransport(() => ({
-        model: modelRef.current,
-        reasoning: reasoningRef.current,
-      })),
-    [],
+      activeRequest.transport(
+        buildChatTransport(() => ({
+          model: modelRef.current,
+          reasoning: reasoningRef.current,
+        })),
+      ),
+    [activeRequest],
   );
 
   const { messages, regenerate, sendMessage, setMessages, status, stop } =
@@ -187,8 +194,14 @@ export const useConversationChatRuntime = ({
   if (activeId !== null && status !== 'ready') {
     activeStreamConversationIdRef.current = activeId;
   }
-  const sendMessageRef = useRef(sendMessage);
-  sendMessageRef.current = sendMessage;
+  const sendCurrentMessage: typeof sendMessage = (message, options) =>
+    activeRequest.run((metadata) =>
+      sendMessage(message, { ...options, metadata }),
+    );
+  const regenerateCurrentMessage: typeof regenerate = (options) =>
+    activeRequest.run((metadata) => regenerate({ ...options, metadata }));
+  const sendMessageRef = useRef(sendCurrentMessage);
+  sendMessageRef.current = sendCurrentMessage;
 
   useStreamTiming({
     firstTokenAtRef,
@@ -210,12 +223,13 @@ export const useConversationChatRuntime = ({
 
   return {
     activeError,
+    activeRequest,
     activeStatus,
     convoIdRef,
     hydratingConversation,
     messages,
     modelRef,
-    regenerate,
+    regenerate: regenerateCurrentMessage,
     regeneratingMessageId,
     regeneratingMessageIdRef,
     retryHydration,

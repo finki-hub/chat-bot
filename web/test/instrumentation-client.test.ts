@@ -41,6 +41,57 @@ describe('client instrumentation', () => {
     expect(posthog.register).not.toHaveBeenCalled();
   });
 
+  it('disables automatic content capture and strips SDK URL enrichment from explicit events', async () => {
+    await importInstrumentation();
+    const config = posthog.init.mock.calls[0]?.[1];
+
+    /* eslint-disable camelcase -- PostHog SDK field names. */
+    expect(config).toMatchObject({
+      autocapture: false,
+      capture_exceptions: false,
+      capture_pageleave: false,
+      capture_pageview: false,
+      disable_session_recording: true,
+    });
+
+    const beforeSend = config?.before_send;
+    if (typeof beforeSend !== 'function') {
+      throw new TypeError('Missing before_send');
+    }
+    const sentinel =
+      'https://host/private?key=sk-secret&email=person@example.test';
+    for (const name of ['answer_copied', 'chat_regenerated', 'chat_stopped']) {
+      const result = beforeSend({
+        event: name,
+        properties: {
+          $current_url: sentinel,
+          $pathname: '/private',
+          $referrer: sentinel,
+          $set_once: { $initial_current_url: sentinel },
+          distinct_id: 'anonymous-user',
+          inference_model: 'catalog-model',
+          response_id: 'opaque-response',
+          utm_source: sentinel,
+        },
+        uuid: 'event-id',
+      });
+
+      expect(result?.event).toBe(name);
+      expect(result?.properties).toStrictEqual({
+        distinct_id: 'anonymous-user',
+        inference_model: 'catalog-model',
+        response_id: 'opaque-response',
+      });
+      expect(JSON.stringify(result)).not.toContain(sentinel);
+    }
+    /* eslint-enable camelcase -- PostHog SDK field names. */
+    history.replaceState({}, '', '/share/private');
+
+    expect(
+      beforeSend({ event: 'chat_stopped', properties: {}, uuid: 'event-id' }),
+    ).toBeNull();
+  });
+
   it('drops shared-route events and stops session recording', async () => {
     await importInstrumentation();
     const config = posthog.init.mock.calls[0]?.[1];

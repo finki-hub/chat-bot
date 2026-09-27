@@ -34,6 +34,7 @@ export const useConversations = (
   } = useConversationList();
   const {
     activeError,
+    activeRequest,
     activeStatus,
     convoIdRef,
     hydratingConversation,
@@ -60,7 +61,7 @@ export const useConversations = (
   });
   const { applyGeneratedTitle, generatingTitleId, handleGenerateTitle } =
     useGeneratedTitle({ conversations, modelRef, refreshConversations });
-  const handleStop = useStopChat({ convoIdRef, messages, model, stop });
+  const handleStop = useStopChat({ activeRequest, convoIdRef, model, stop });
   const {
     handleClearAll,
     handleDelete,
