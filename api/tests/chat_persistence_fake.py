@@ -388,6 +388,7 @@ class FakeChatDatabase:
     async def fetch(self, query: str, *args: object) -> list[dict[str, object]]:
         if "FROM chat_message" in query and "id = $2 OR" in query:
             conversation_id, target_id, retained_ids = args
+            assert isinstance(retained_ids, list)
             return [
                 row
                 for row in self.messages.values()
@@ -404,6 +405,7 @@ class FakeChatDatabase:
             ]
         if "FROM chat_message" in query and "FOR UPDATE" in query:
             (conversation_ids,) = args
+            assert isinstance(conversation_ids, list)
             return [
                 row
                 for row in self.messages.values()
@@ -418,6 +420,7 @@ class FakeChatDatabase:
 
         if "DELETE FROM chat_conversation" in query:
             conversation_ids, user_id = args
+            assert isinstance(conversation_ids, list)
             deleted = [
                 row
                 for row in self.conversations.values()
@@ -480,42 +483,45 @@ class FakeChatDatabase:
     async def execute(self, query: str, *args: object) -> str:
         if "DELETE FROM chat_message" in query:
             conversation_id, retained_ids = args
-            deleted = [
+            assert isinstance(retained_ids, list)
+            deleted_message_ids = [
                 key
                 for key, row in self.messages.items()
                 if row["conversation_id"] == conversation_id and key not in retained_ids
             ]
-            for key in deleted:
+            for key in deleted_message_ids:
                 del self.messages[key]
-            return f"DELETE {len(deleted)}"
+            return f"DELETE {len(deleted_message_ids)}"
         if "DELETE FROM feedback" in query and "response_id = ANY($2" in query:
             user_id, response_ids = args
-            deleted = [
+            assert isinstance(response_ids, list)
+            deleted_feedback_keys = [
                 key
                 for key in self.feedback
                 if key[0] in response_ids and key[1:] == ("web", user_id)
             ]
-            for key in deleted:
+            for key in deleted_feedback_keys:
                 del self.feedback[key]
-            return f"DELETE {len(deleted)}"
+            return f"DELETE {len(deleted_feedback_keys)}"
         if query == "SET TRANSACTION ISOLATION LEVEL READ COMMITTED":
             return "SET"
         if "DELETE FROM feedback" in query:
             conversation_ids, user_id = args
+            assert isinstance(conversation_ids, list)
             response_ids = {
                 row["response_id"]
                 for row in self.messages.values()
                 if row["conversation_id"] in conversation_ids
                 and row["response_id"] is not None
             }
-            deleted = [
+            deleted_conversation_feedback_keys = [
                 key
                 for key in self.feedback
                 if key[0] in response_ids and key[1:] == ("web", user_id)
             ]
-            for key in deleted:
+            for key in deleted_conversation_feedback_keys:
                 del self.feedback[key]
-            return f"DELETE {len(deleted)}"
+            return f"DELETE {len(deleted_conversation_feedback_keys)}"
         if "DELETE FROM chat_user_credential" in query:
             user_id, provider = args
             self.credentials.pop((user_id, provider), None)

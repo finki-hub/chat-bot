@@ -269,6 +269,7 @@ class _ReplacementCase:
     retained: list[UUID]
 
     async def replace(self, database):
+        assert isinstance(self.message.response_id, UUID)
         return await replace_assistant_message_and_prune_after(
             database,
             self.message,
