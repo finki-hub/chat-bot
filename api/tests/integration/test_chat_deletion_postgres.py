@@ -325,6 +325,7 @@ async def _replacement_case(database):
             role=ChatMessageRole.ASSISTANT,
             content="synthetic replacement",
             response_id=new_response,
+            metadata={"feedback": "stale", "preserved": "incoming"},
         ),
         retained,
     )
@@ -351,6 +352,15 @@ def test_replacement_prunes_feedback_preserves_boundaries_and_same_response_repl
             updated = await case.replace(database)
             assert updated is not None
             assert updated.response_id == case.message.response_id
+            assert "feedback" not in updated.metadata
+            assert updated.metadata["preserved"] == "incoming"
+            assert (
+                await database.fetchval(
+                    "SELECT count(*) FROM feedback WHERE response_id = $1",
+                    case.old.response_id,
+                )
+                == 0
+            )
             assert {
                 row["id"] for row in await database.fetch("SELECT id FROM chat_message")
             } == set(case.retained)
@@ -369,9 +379,13 @@ def test_replacement_prunes_feedback_preserves_boundaries_and_same_response_repl
                 update={"response_id": case.message.response_id}
             )
             assert await upsert_web_feedback(database, new_feedback) is not None
+            case.message = case.message.model_copy(
+                update={"metadata": {"feedback": "bogus", "preserved": "replay"}}
+            )
             replay = await case.replace(database)
             assert replay is not None
             assert replay.metadata["feedback"] == "like"
+            assert replay.metadata["preserved"] == "replay"
             assert (
                 await database.fetchval(
                     "SELECT count(*) FROM feedback WHERE response_id = $1",

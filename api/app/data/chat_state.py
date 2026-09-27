@@ -114,6 +114,7 @@ async def replace_assistant_message_and_prune_after(
                 invalidated_response_ids,
             )
         metadata = dict(message.metadata)
+        metadata.pop("feedback", None)
         if target["response_id"] == message.response_id:
             # Replaying the same completion must not retract an intervening vote.
             stored_metadata = message_from_row(dict(target)).metadata
