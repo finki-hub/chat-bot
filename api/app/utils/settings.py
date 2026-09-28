@@ -134,6 +134,9 @@ class Settings(BaseSettings):
 
     POSTHOG_KEY: str = ""
     POSTHOG_HOST: str = "https://eu.i.posthog.com"
+    APP_REVISION: str = ""
+    # Document source pin only; FAQ content is updated independently.
+    RAG_SYNC_EXPECTED_SOURCE_COMMIT: str = ""
 
     CHAT_HISTORY_MAX_TURNS: int = 10
 

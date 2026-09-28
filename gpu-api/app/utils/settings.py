@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     POSTHOG_KEY: str = ""
     POSTHOG_HOST: str = "https://eu.i.posthog.com"
+    APP_REVISION: str = ""
 
     ALLOWED_ORIGINS: list[str] = ["*"]
     EXPOSE_HEADERS: list[str] = ["*"]

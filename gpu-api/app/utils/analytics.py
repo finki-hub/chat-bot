@@ -34,11 +34,19 @@ def safe_distinct_id(raw: str | None) -> str | None:
 class _State:
     client: Posthog | None = None
 
+    def __init__(self) -> None:
+        self.revisions: dict[str, str] = {}
+
 
 _state = _State()
 
 
 def init_analytics(settings: Settings) -> None:
+    _state.revisions = (
+        {"app_revision": settings.APP_REVISION}
+        if re.fullmatch(r"[0-9a-f]{40}", settings.APP_REVISION)
+        else {}
+    )
     if not settings.POSTHOG_KEY:
         return
 
@@ -61,7 +69,20 @@ def capture(
         client.capture(
             distinct_id=distinct_id,
             event=event,
-            properties={"service": _SERVICE, **(properties or {})},
+            properties={
+                **{
+                    key: value
+                    for key, value in (properties or {}).items()
+                    if key
+                    not in {
+                        "app_revision",
+                        "document_corpus_revision",
+                        "corpus_revision",
+                    }
+                },
+                "service": _SERVICE,
+                **_state.revisions,
+            },
         )
     except Exception:
         logger.exception("PostHog capture failed (event=%s)", event)
@@ -72,19 +93,32 @@ def capture_exception(
     distinct_id: str = "server",
     properties: dict[str, object] | None = None,
 ) -> None:
-    client = _state.client
-    if client is None:
-        return
-
-    # Capture the real exception (type, message, stacktrace) for debugging.
-    try:
-        client.capture_exception(
-            exc,
-            distinct_id=distinct_id,
-            properties={"service": _SERVICE, **(properties or {})},
-        )
-    except Exception:
-        logger.exception("PostHog capture_exception failed")
+    # Never give the SDK the original exception, chain, message, or traceback.
+    exception_type = next(
+        (
+            kind.__name__
+            for kind in (
+                TimeoutError,
+                ConnectionError,
+                ValueError,
+                TypeError,
+                KeyError,
+                RuntimeError,
+                OSError,
+            )
+            if isinstance(exc, kind)
+        ),
+        "Exception",
+    )
+    capture(
+        distinct_id,
+        "$exception",
+        {
+            **(properties or {}),
+            "$exception_list": [{"type": exception_type, "value": "Redacted"}],
+            "$process_person_profile": False,
+        },
+    )
 
 
 def shutdown_analytics() -> None:
@@ -157,7 +191,10 @@ def capture_request_exception(request: Request, exc: Exception) -> None:
     """Report an unhandled request exception (path/method metadata only, redacted body)."""
     capture_exception(
         exc,
-        properties={"path": request.url.path, "method": request.method},
+        properties={
+            "path": getattr(request.scope.get("route"), "path", None) or "unmatched",
+            "method": request.method,
+        },
     )
 
 
@@ -210,7 +247,7 @@ class _RequestTrackingMiddleware:
             await self.app(scope, receive, send_wrapper)
         finally:
             route = scope.get("route")
-            template = getattr(route, "path", None) or path
+            template = getattr(route, "path", None) or "unmatched"
             capture(
                 safe_response_id(Headers(scope=scope).get("x-response-id"))
                 or "gpu-api",

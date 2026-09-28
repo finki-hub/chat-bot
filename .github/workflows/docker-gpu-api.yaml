@@ -16,6 +16,8 @@ jobs:
       context: ./gpu-api
       package-name: chat-bot-gpu-api
       cache-backend: registry
+      build-args: |
+        APP_REVISION=${{ github.sha }}
       platforms: linux/amd64
       free-disk-space: true
     secrets: inherit

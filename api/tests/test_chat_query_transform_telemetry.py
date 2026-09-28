@@ -13,6 +13,7 @@ def _capture_properties(
     monkeypatch: pytest.MonkeyPatch,
     query: str,
     timings: RequestTimings | None = None,
+    model_access_mode="ordinary",
 ):
     captured = []
 
@@ -43,9 +44,33 @@ def _capture_properties(
         answer_text="",
         session_id=None,
         effective_transform_mode=QueryTransformMode.RAW,
+        model_access_mode=model_access_mode,
     )
 
     return captured[0][2]
+
+
+@pytest.mark.parametrize("mode", ["sponsored", "byok", "ordinary"])
+def test_generation_records_bounded_access_mode_and_thresholds(monkeypatch, mode):
+    properties = _capture_properties(
+        monkeypatch, "private prompt", model_access_mode=mode
+    )
+    assert properties["model_access_mode"] == mode
+    assert properties["reranker_min_score"] == chat_api.settings.RERANKER_MIN_SCORE
+    assert (
+        properties["source_reranker_min_score"]
+        == chat_api.settings.SOURCE_RERANKER_MIN_SCORE
+    )
+    assert "private prompt" not in repr(properties)
+
+
+@pytest.mark.parametrize("score", [float("nan"), float("inf"), -1.0, 2.0])
+def test_invalid_thresholds_are_missing_not_zero(monkeypatch, score):
+    monkeypatch.setattr(chat_api.settings, "RERANKER_MIN_SCORE", score)
+    monkeypatch.setattr(chat_api.settings, "SOURCE_RERANKER_MIN_SCORE", score)
+    properties = _capture_properties(monkeypatch, "private prompt")
+    assert "reranker_min_score" not in properties
+    assert "source_reranker_min_score" not in properties
 
 
 def test_generation_telemetry_distinguishes_requested_and_effective_transform_modes(

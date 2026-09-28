@@ -72,10 +72,11 @@ async def submit_feedback(
         )
 
     capture(
-        str(feedback.user_id),
+        "feedback",
         "chat_feedback",
         {
             "response_id": str(feedback.response_id),
+            "$process_person_profile": False,
             "client": feedback.client,
             "feedback_type": feedback.feedback_type,
             "inference_model": feedback.inference_model,
@@ -126,10 +127,11 @@ async def retract_feedback(
         )
 
     capture(
-        payload.user_id,
+        "feedback",
         "chat_feedback_retracted",
         {
             "response_id": str(payload.response_id),
+            "$process_person_profile": False,
             "client": payload.client,
         },
     )

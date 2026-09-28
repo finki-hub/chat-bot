@@ -19,6 +19,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.14-bookworm AS final
 
+ARG APP_REVISION=""
+ENV APP_REVISION=${APP_REVISION}
+
 WORKDIR /app
 
 COPY --from=builder /app /app

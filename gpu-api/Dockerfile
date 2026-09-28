@@ -22,6 +22,9 @@ RUN find /app/.venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null ||
 
 FROM python:3.14-slim-bookworm AS final
 
+ARG APP_REVISION=""
+ENV APP_REVISION=${APP_REVISION}
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends wget && \
