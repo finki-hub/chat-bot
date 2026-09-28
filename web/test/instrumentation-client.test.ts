@@ -1,4 +1,5 @@
 import type { CaptureResult, PostHogConfig } from 'posthog-js';
+import type * as PostHogModule from 'posthog-js';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -113,5 +114,57 @@ describe('client instrumentation', () => {
 
     expect(result).toBeNull();
     expect(posthog.stopSessionRecording).toHaveBeenCalledOnce();
+  });
+
+  it('filters enrichment through the installed SDK capture pipeline', async () => {
+    await importInstrumentation();
+    const config = posthog.init.mock.calls[0]?.[1];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(Response.json({})),
+    );
+    const xhrSend = vi
+      .spyOn(XMLHttpRequest.prototype, 'send')
+      .mockImplementation(() => {});
+    const { PostHog } =
+      await vi.importActual<typeof PostHogModule>('posthog-js');
+    const sdk = new PostHog();
+    /* eslint-disable camelcase -- PostHog SDK field names. */
+    sdk.init('test-key', {
+      ...config,
+      advanced_disable_flags: true,
+      disable_external_dependency_loading: true,
+      persistence: 'memory',
+    });
+    const sentinel = 'private@example.test';
+    history.replaceState({}, '', `/private?email=${sentinel}`);
+    sdk.register({ private_content: sentinel, service: 'chat-bot-web' });
+    const event = sdk.capture(
+      'chat_stopped',
+      { inference_model: 'catalog-model', response_id: 'opaque-response' },
+      { send_instantly: true },
+    );
+
+    expect(event?.properties).toMatchObject({
+      inference_model: 'catalog-model',
+      response_id: 'opaque-response',
+      service: 'chat-bot-web',
+    });
+    expect(JSON.stringify(event)).not.toContain(sentinel);
+    expect(event?.properties).not.toHaveProperty('$current_url');
+    expect(event?.properties).not.toHaveProperty('$set_once');
+    expect(sdk.config.autocapture).toBe(false);
+    expect(sdk.config.disable_session_recording).toBe(true);
+    expect(sdk.sessionRecordingStarted()).toBe(false);
+
+    history.replaceState({}, '', '/share/private');
+
+    expect(sdk.capture('chat_stopped')).toBeUndefined();
+
+    sdk.opt_out_capturing();
+    await sdk.shutdown();
+    xhrSend.mockRestore();
+    vi.unstubAllGlobals();
+    /* eslint-enable camelcase -- PostHog SDK field names. */
   });
 });
