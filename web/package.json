@@ -37,7 +37,7 @@
     "nanoid": "^6.0.1",
     "next": "^16.3.6",
     "next-auth": "^5.0.0-beta.32",
-    "posthog-js": "^1.434.12",
+    "posthog-js": "^1.434.13",
     "radix-ui": "^1.6.7",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
