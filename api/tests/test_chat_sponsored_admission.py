@@ -333,9 +333,8 @@ async def test_cancellation_releases_admitted_lease(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_cancellation_observes_deferred_release_completion(monkeypatch):
+async def test_cancellation_waits_for_shielded_release_completion(monkeypatch):
     release_finished = anyio.Event()
-    callback_called = anyio.Event()
 
     async def admit(db, **kwargs):
         return _admission(kwargs["request_id"])
@@ -347,16 +346,6 @@ async def test_cancellation_observes_deferred_release_completion(monkeypatch):
     async def release(db, *, user_id, request_id):
         await anyio.lowlevel.checkpoint()
         release_finished.set()
-
-    def observe_release(task):
-        task.result()
-        callback_called.set()
-
-    monkeypatch.setattr(
-        chat_api,
-        "_log_sponsored_release_failure",
-        observe_release,
-    )
 
     async def consume():
         await _run_stream(
@@ -371,8 +360,7 @@ async def test_cancellation_observes_deferred_release_completion(monkeypatch):
     with anyio.move_on_after(0.1) as scope:
         await consume()
     assert scope.cancelled_caught
-    await release_finished.wait()
-    await callback_called.wait()
+    assert release_finished.is_set()
 
 
 @pytest.mark.anyio
