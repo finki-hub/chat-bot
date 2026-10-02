@@ -1,6 +1,8 @@
 import logging
 import re
 import time
+from typing import Literal
+from uuid import UUID
 
 from fastapi import FastAPI, Request
 from posthog import Posthog
@@ -99,6 +101,46 @@ def capture(
         )
     except Exception:
         logger.exception("PostHog capture failed (event=%s)", event)
+
+
+ChatPreparationPhase = Literal["credentials", "admission", "context", "agent_setup"]
+ChatPreparationOutcome = Literal["denied", "error", "client_disconnect"]
+ChatPreparationReason = Literal[
+    "credential_required", "free_tier_unavailable", "preparation_failed", "cancelled"
+]
+
+
+def capture_chat_pre_stream_outcome(
+    response_id: UUID,
+    *,
+    phase: ChatPreparationPhase,
+    outcome: ChatPreparationOutcome,
+    reason: ChatPreparationReason,
+) -> None:
+    """Request-scoped, content-free terminal preparation telemetry."""
+    if (
+        not isinstance(response_id, UUID)
+        or phase not in {"credentials", "admission", "context", "agent_setup"}
+        or (outcome, reason)
+        not in {
+            ("denied", "credential_required"),
+            ("denied", "free_tier_unavailable"),
+            ("error", "preparation_failed"),
+            ("client_disconnect", "cancelled"),
+        }
+    ):
+        return
+    capture(
+        str(response_id),
+        "chat_pre_stream_outcome",
+        {
+            "response_id": str(response_id),
+            "phase": phase,
+            "outcome": outcome,
+            "reason": reason,
+            "$process_person_profile": False,
+        },
+    )
 
 
 def capture_sponsored_event(
