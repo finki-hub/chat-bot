@@ -2,13 +2,16 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator, AsyncIterable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
+import anyio
 from fastapi import APIRouter, Depends, Header, Request, status
 from fastapi.responses import StreamingResponse
+from starlette.types import Send
 
 from app.api.provider_credentials import (
     credential_providers_for_models,
@@ -51,9 +54,14 @@ from app.llms.query_modes import QueryTransformMode
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
 from app.schemas.sponsored_access import SponsoredQuotaSnapshot
+from app.utils.async_iterators import closing_stream
 from app.utils.auth import verify_api_key
 from app.utils.posthog_client import (
+    ChatPreparationOutcome,
+    ChatPreparationPhase,
+    ChatPreparationReason,
     capture,
+    capture_chat_pre_stream_outcome,
     capture_sponsored_event,
     safe_distinct_id,
     safe_session_id,
@@ -425,6 +433,15 @@ def _log_sponsored_release_failure(task: asyncio.Task[None]) -> None:
         )
 
 
+class _ChatStreamingResponse(StreamingResponse):
+    async def stream_response(self, send: Send) -> None:
+        # Starlette's older-ASGI disconnect listener cancels this task. Closing
+        # here (rather than in __call__) also keeps timing ContextVars in-task.
+        async with closing_stream(self.body_iterator) as stream:
+            self.body_iterator = stream
+            await super().stream_response(send)
+
+
 async def _instrument_stream(
     body: AsyncIterable[bytes | str | memoryview],
     *,
@@ -458,40 +475,41 @@ async def _instrument_stream(
     answered = False
     provider_failure = False
     try:
-        async for chunk in body:
-            timings.mark_ttft()
-            event_name = _sse_event_name(chunk)
-            if marking or not answered:
-                if marking:
-                    if event_name == "thinking":
-                        timings.mark_thinking()
-                    elif event_name == "token":
-                        timings.mark_answer()
-                        marking = False
-                if not answered and _is_answer_chunk(event_name, chunk):
-                    answered = True
-            if event_name == "reset":
-                answer_parts.clear()
-            sniffed = _sniff_tokens(chunk)
-            if sniffed is not None:
-                usage = sniffed
-            frames, answer_frame_buffer = _complete_sse_frames(
-                answer_frame_buffer,
-                chunk,
-            )
-            for frame in frames:
-                if _is_provider_error_frame(frame):
-                    # The agent catches provider exceptions and drains normally.
-                    # A later cancellation still overrides this outcome below.
-                    outcome = "provider_error"
-                    provider_failure = True
-                if _sse_event_name(frame) == "reset":
+        async with closing_stream(body) as stream:
+            async for chunk in stream:
+                timings.mark_ttft()
+                event_name = _sse_event_name(chunk)
+                if marking or not answered:
+                    if marking:
+                        if event_name == "thinking":
+                            timings.mark_thinking()
+                        elif event_name == "token":
+                            timings.mark_answer()
+                            marking = False
+                    if not answered and _is_answer_chunk(event_name, chunk):
+                        answered = True
+                if event_name == "reset":
                     answer_parts.clear()
-                    continue
-                token_text = _sniff_token_text(frame)
-                if token_text is not None:
-                    answer_parts.append(token_text)
-            yield chunk
+                sniffed = _sniff_tokens(chunk)
+                if sniffed is not None:
+                    usage = sniffed
+                frames, answer_frame_buffer = _complete_sse_frames(
+                    answer_frame_buffer,
+                    chunk,
+                )
+                for frame in frames:
+                    if _is_provider_error_frame(frame):
+                        # The agent catches provider exceptions and drains normally.
+                        # A later cancellation still overrides this outcome below.
+                        outcome = "provider_error"
+                        provider_failure = True
+                    if _sse_event_name(frame) == "reset":
+                        answer_parts.clear()
+                        continue
+                    token_text = _sniff_token_text(frame)
+                    if token_text is not None:
+                        answer_parts.append(token_text)
+                yield chunk
     except GeneratorExit:
         outcome = "client_disconnect"
         raise
@@ -579,11 +597,56 @@ router = APIRouter(
 )
 
 
+@dataclass(slots=True)
+class _PreparationOutcome:
+    response_id: UUID
+    phase: ChatPreparationPhase = "credentials"
+    handled: bool = False
+
+    def capture(
+        self,
+        outcome: ChatPreparationOutcome,
+        reason: ChatPreparationReason,
+    ) -> None:
+        if not self.handled:
+            self.handled = True
+            capture_chat_pre_stream_outcome(
+                self.response_id,
+                phase=self.phase,
+                outcome=outcome,
+                reason=reason,
+            )
+
+
 async def _chat_response_stream(
     payload: ChatSchema,
     request: Request,
     db: Database,
     response_id: UUID,
+) -> AsyncGenerator[bytes | str | memoryview]:
+    preparation = _PreparationOutcome(response_id)
+    try:
+        async with closing_stream(
+            _prepare_chat_response_stream(
+                payload, request, db, response_id, preparation
+            ),
+        ) as stream:
+            async for chunk in stream:
+                yield chunk
+    except asyncio.CancelledError, GeneratorExit:
+        preparation.capture("client_disconnect", "cancelled")
+        raise
+    except Exception:
+        preparation.capture("error", "preparation_failed")
+        raise
+
+
+async def _prepare_chat_response_stream(
+    payload: ChatSchema,
+    request: Request,
+    db: Database,
+    response_id: UUID,
+    preparation: _PreparationOutcome,
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Build context (streaming retrieval status), then yield the agent answer stream."""
     logger.info(
@@ -634,12 +697,14 @@ async def _chat_response_stream(
             and missing_credential.stage == "inference"
             and not user_credential_rejected
         ):
+            preparation.capture("denied", "free_tier_unavailable")
             yield sponsored_error_event(
                 "free_tier_unavailable",
                 _SPONSORED_UNAVAILABLE_MSG,
             )
             return
         provider_label = _CREDENTIAL_PROVIDER_LABELS[missing_credential.provider]
+        preparation.capture("denied", "credential_required")
         yield error_event(
             "credential_required",
             f"Потребен е ваш {provider_label} API клуч. Додајте го во поставките за провајдери.",
@@ -658,8 +723,10 @@ async def _chat_response_stream(
     )
     admitted_sponsored_user_id: UUID | None = None
     try:
+        preparation.phase = "admission"
         if inference_resolution.sponsored:
             if payload.user_id is None:
+                preparation.capture("denied", "credential_required")
                 yield error_event(
                     "credential_required",
                     f"Потребен е ваш {_CREDENTIAL_PROVIDER_LABELS[settings.SPONSORED_MODEL_PROVIDER]} API клуч. Додајте го во поставките за провајдери.",
@@ -669,6 +736,7 @@ async def _chat_response_stream(
                 return
             global_limit = settings.SPONSORED_DAILY_GLOBAL_LIMIT
             if global_limit is None:
+                preparation.capture("denied", "free_tier_unavailable")
                 yield sponsored_error_event(
                     "free_tier_unavailable",
                     _SPONSORED_UNAVAILABLE_MSG,
@@ -686,6 +754,8 @@ async def _chat_response_stream(
                     ),
                 )
             except SponsoredRequestInProgressError:
+                # Existing sponsored_denied owns this outcome.
+                preparation.handled = True
                 capture_sponsored_event(
                     distinct_id,
                     "sponsored_denied",
@@ -701,6 +771,7 @@ async def _chat_response_stream(
                 )
                 return
             except SponsoredQuotaExceededError as exc:
+                preparation.handled = True
                 capture_sponsored_event(
                     distinct_id,
                     "sponsored_denied",
@@ -730,6 +801,7 @@ async def _chat_response_stream(
                 remaining_global_requests=admission.snapshot.remaining_global_requests,
             )
 
+        preparation.phase = "context"
         session_id = safe_session_id(request.headers.get("X-PostHog-Session-Id"))
         record_distinct_id(distinct_id)
         observation = StreamObservation(
@@ -841,6 +913,7 @@ async def _chat_response_stream(
             today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
             context = f"Денешен датум: {today}.\n\n{context}"
 
+            preparation.phase = "agent_setup"
             with timed("agent.setup"):
                 response = await handle_chat(
                     payload,
@@ -857,6 +930,7 @@ async def _chat_response_stream(
                 )
         # ruff: ignore[BLE001] -- the stream boundary converts every provider failure to a safe event
         except Exception as exc:
+            preparation.capture("error", "preparation_failed")
             logger.log(
                 logging.ERROR,
                 "Chat context build failed before streaming error_type=%s",
@@ -868,7 +942,8 @@ async def _chat_response_stream(
             for task in (retrieval_task, links_task):
                 if not task.done():
                     task.cancel()
-            await asyncio.gather(retrieval_task, links_task, return_exceptions=True)
+            with anyio.CancelScope(shield=True):
+                await asyncio.gather(retrieval_task, links_task, return_exceptions=True)
 
         model_access_mode: Literal["sponsored", "byok", "ordinary"]
         if inference_resolution.sponsored:
@@ -895,8 +970,12 @@ async def _chat_response_stream(
         if retrieved.sources:
             yield sources_event(retrieved.sources_payload())
 
-        async for chunk in response.body_iterator:
-            yield chunk
+        # No suspension between handoff and first iteration: generation owns all
+        # subsequent terminal outcomes, including provider failure/disconnect.
+        async with closing_stream(response.body_iterator) as stream:
+            preparation.handled = True
+            async for chunk in stream:
+                yield chunk
     finally:
         if admitted_sponsored_user_id is not None:
             release_task = asyncio.create_task(
@@ -907,7 +986,8 @@ async def _chat_response_stream(
                 ),
             )
             try:
-                await asyncio.shield(release_task)
+                with anyio.CancelScope(shield=True):
+                    await asyncio.shield(release_task)
             except asyncio.CancelledError:
                 release_task.add_done_callback(_log_sponsored_release_failure)
                 raise
@@ -959,7 +1039,7 @@ async def chat(
     response_id = x_response_id or uuid4()
     record_response_id(str(response_id))
     stream = _chat_response_stream(payload, request, db, response_id)
-    response = StreamingResponse(stream, media_type="text/event-stream")
+    response = _ChatStreamingResponse(stream, media_type="text/event-stream")
     response.headers["X-Response-Id"] = str(response_id)
     return response
 

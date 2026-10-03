@@ -3,10 +3,12 @@ import json
 import logging
 import time
 from collections.abc import AsyncGenerator, Generator
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import assert_never
+from typing import assert_never, cast
 
+import anyio
 from fastapi.responses import StreamingResponse
 from langchain.agents.middleware.types import (
     AgentState,
@@ -18,6 +20,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from app.llms.retrieval_result import RetrievalSourcePayload
 from app.schemas.sponsored_access import SafeErrorDetails, SponsoredErrorCode
+from app.utils.async_iterators import closing_stream
 from app.utils.posthog_client import capture
 
 logger = logging.getLogger(__name__)
@@ -206,24 +209,68 @@ def capture_model_fallback(
 def stream_sync_gen_as_sse(
     gen: Generator[str | AIMessageChunk],
 ) -> StreamingResponse:
+    async def source() -> AsyncGenerator[str | AIMessageChunk]:
+        advance: asyncio.Task[object] | None = None
+        primary: BaseException | None = None
+
+        async def settle(task: asyncio.Task[object]) -> object:
+            while True:
+                try:
+                    with anyio.CancelScope(shield=True):
+                        return await asyncio.shield(task)
+                except anyio.get_cancelled_exc_class(), GeneratorExit:
+                    if task.done():
+                        return task.result()
+
+        try:
+            while True:
+                advance = asyncio.create_task(
+                    asyncio.to_thread(next, gen, _SENTINEL),
+                )
+                try:
+                    chunk = await asyncio.shield(advance)
+                except BaseException as exc:
+                    primary = exc
+                    with suppress(BaseException):
+                        await settle(advance)
+                    raise
+                finally:
+                    advance = None
+                if chunk is _SENTINEL:
+                    break
+                yield cast("str | AIMessageChunk", chunk)
+        except BaseException as exc:
+            primary = exc
+            raise
+        finally:
+            try:
+                if advance is not None:
+                    try:
+                        await settle(advance)
+                    except BaseException:
+                        if primary is None:
+                            raise
+                gen.close()
+            except BaseException:
+                if primary is None:
+                    raise
+
     async def async_token_gen() -> AsyncGenerator[str]:
         streamed = False
         try:
-            while True:
-                chunk = await asyncio.to_thread(next, gen, _SENTINEL)
-                if chunk is _SENTINEL:
-                    break
-                if isinstance(chunk, AIMessageChunk):
-                    reasoning = _chunk_reasoning(chunk)
-                    if reasoning:
-                        yield thinking_event(reasoning)
-                    text = _chunk_text(chunk)
-                else:
-                    text = str(chunk)
-                if not text:
-                    continue
-                streamed = True
-                yield token_event(text)
+            async with closing_stream(source()) as stream:
+                async for chunk in stream:
+                    if isinstance(chunk, AIMessageChunk):
+                        reasoning = _chunk_reasoning(chunk)
+                        if reasoning:
+                            yield thinking_event(reasoning)
+                        text = _chunk_text(chunk)
+                    else:
+                        text = str(chunk)
+                    if not text:
+                        continue
+                    streamed = True
+                    yield token_event(text)
             if not streamed:
                 yield error_event("no_answer", _NO_ANSWER_MSG)
             yield DONE_EVENT
@@ -375,77 +422,80 @@ async def create_agent_token_generator[ResponseT](
         agent_input = InputAgentState(
             messages=[message.model_dump() for message in messages],
         )
-        async for event in agent.astream_events(
-            agent_input,
-            {"configurable": {"thread_id": "default"}},
-            version="v2",
-        ):
-            kind = event["event"]
-            if kind == "on_tool_start":
-                tool_runs[event["run_id"]] = (
-                    event["name"],
-                    time.perf_counter(),
-                    _content_len(event["data"].get("input")),
-                )
-                yield status_event(stage="retrieve", tool=event["name"])
-                pending_reset = True
-                continue
-
-            if kind in ("on_tool_end", "on_tool_error"):
-                started = tool_runs.pop(event["run_id"], None)
-                if started is not None:
-                    name, start, arg_len = started
-                    is_error = kind == "on_tool_error"
-                    output = None if is_error else event["data"].get("output")
-                    capture_tool_called(
-                        observation,
-                        tool=name,
-                        latency_ms=(time.perf_counter() - start) * 1000.0,
-                        success=not is_error and _tool_succeeded(output),
-                        arg_len=arg_len,
-                        result_len=_content_len(output),
+        async with closing_stream(
+            agent.astream_events(
+                agent_input,
+                {"configurable": {"thread_id": "default"}},
+                version="v2",
+            ),
+        ) as events:
+            async for event in events:
+                kind = event["event"]
+                if kind == "on_tool_start":
+                    tool_runs[event["run_id"]] = (
+                        event["name"],
+                        time.perf_counter(),
+                        _content_len(event["data"].get("input")),
                     )
+                    yield status_event(stage="retrieve", tool=event["name"])
+                    pending_reset = True
+                    continue
+
+                if kind in ("on_tool_end", "on_tool_error"):
+                    started = tool_runs.pop(event["run_id"], None)
+                    if started is not None:
+                        name, start, arg_len = started
+                        is_error = kind == "on_tool_error"
+                        output = None if is_error else event["data"].get("output")
+                        capture_tool_called(
+                            observation,
+                            tool=name,
+                            latency_ms=(time.perf_counter() - start) * 1000.0,
+                            success=not is_error and _tool_succeeded(output),
+                            arg_len=arg_len,
+                            result_len=_content_len(output),
+                        )
+                        if observation is not None:
+                            observation.tool_call_count += 1
+                            observation.tool_names.add(name)
+                    continue
+
+                if kind == "on_chat_model_end":
+                    output = event["data"].get("output")
+                    _accumulate_usage(usage, output)
                     if observation is not None:
-                        observation.tool_call_count += 1
-                        observation.tool_names.add(name)
-                continue
+                        reason = _finish_reason(output)
+                        if reason:
+                            observation.finish_reason = reason
+                    continue
 
-            if kind == "on_chat_model_end":
-                output = event["data"].get("output")
-                _accumulate_usage(usage, output)
+                if kind != "on_chat_model_stream":
+                    continue
+
+                chunk = event["data"].get("chunk")
+                if not isinstance(chunk, AIMessageChunk):
+                    continue
+
+                reasoning = _chunk_reasoning(chunk)
+                if reasoning:
+                    yield thinking_event(reasoning)
+
+                text = _chunk_text(chunk)
+                if not text:
+                    continue
+
+                if pending_reset:
+                    pending_reset = False
+                    # The client clears any pre-tool preamble on reset; mirror that so the
+                    # length reflects the final answer only.
+                    if observation is not None:
+                        observation.answer_chars = 0
+                    yield RESET_EVENT
+
+                streamed_text = True
                 if observation is not None:
-                    reason = _finish_reason(output)
-                    if reason:
-                        observation.finish_reason = reason
-                continue
-
-            if kind != "on_chat_model_stream":
-                continue
-
-            chunk = event["data"].get("chunk")
-            if not isinstance(chunk, AIMessageChunk):
-                continue
-
-            reasoning = _chunk_reasoning(chunk)
-            if reasoning:
-                yield thinking_event(reasoning)
-
-            text = _chunk_text(chunk)
-            if not text:
-                continue
-
-            if pending_reset:
-                pending_reset = False
-                # The client clears any pre-tool preamble on reset; mirror that so the
-                # length reflects the final answer only.
-                if observation is not None:
-                    observation.answer_chars = 0
-                yield RESET_EVENT
-
-            streamed_text = True
-            if observation is not None:
-                observation.answer_chars += len(text)
-            yield token_event(text)
+                    observation.answer_chars += len(text)
+                yield token_event(text)
 
         if not streamed_text:
             yield RESET_EVENT

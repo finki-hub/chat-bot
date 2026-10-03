@@ -1,5 +1,7 @@
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import create_autospec
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI, Request
@@ -129,3 +131,75 @@ def test_capture_failures_do_not_interrupt_requests_and_shutdown_flushes(client)
     posthog_client.shutdown_posthog()
     client.flush.assert_called_once()
     client.shutdown.assert_called_once()
+
+
+def test_pre_stream_event_is_request_scoped_and_inherits_only_trusted_revisions(client):
+    posthog_client.init_posthog(
+        Settings(
+            APP_REVISION="a" * 40,
+            RAG_SYNC_EXPECTED_SOURCE_COMMIT="b" * 40,
+            POSTHOG_KEY="",
+        )
+    )
+    response_id = uuid4()
+    posthog_client.capture_chat_pre_stream_outcome(
+        response_id,
+        phase="context",
+        outcome="error",
+        reason="preparation_failed",
+    )
+    assert client.capture.call_args.kwargs == {
+        "distinct_id": str(response_id),
+        "event": "chat_pre_stream_outcome",
+        "properties": {
+            "response_id": str(response_id),
+            "phase": "context",
+            "outcome": "error",
+            "reason": "preparation_failed",
+            "$process_person_profile": False,
+            "service": "chat-bot-api",
+            "app_revision": "a" * 40,
+            "document_corpus_revision": "b" * 40,
+        },
+    }
+
+
+@pytest.mark.parametrize("field", ["response_id", "phase", "outcome", "reason"])
+def test_pre_stream_helper_rejects_untrusted_string_fields(client, field):
+    fields: dict[str, Any] = {
+        "response_id": uuid4(),
+        "phase": "context",
+        "outcome": "error",
+        "reason": "preparation_failed",
+    }
+    fields[field] = "sk-secret person@example.test private prompt answer"
+    posthog_client.capture_chat_pre_stream_outcome(**fields)
+    client.capture.assert_not_called()
+
+
+def test_pre_stream_helper_does_not_accept_extra_payload_or_revision_fields(client):
+    fields: dict[str, Any] = {
+        "response_id": uuid4(),
+        "phase": "context",
+        "outcome": "error",
+        "reason": "preparation_failed",
+        "payload": {
+            "headers": {"key": "sk-secret"},
+            "exception": RuntimeError("private"),
+        },
+        "app_revision": "c" * 40,
+    }
+    with pytest.raises(TypeError):
+        posthog_client.capture_chat_pre_stream_outcome(**fields)
+    client.capture.assert_not_called()
+
+
+def test_pre_stream_capture_is_fail_open_without_per_request_flush(client):
+    client.capture.side_effect = RuntimeError("offline")
+    posthog_client.capture_chat_pre_stream_outcome(
+        uuid4(),
+        phase="credentials",
+        outcome="denied",
+        reason="credential_required",
+    )
+    client.flush.assert_not_called()

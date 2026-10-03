@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from typing import cast
 from uuid import uuid4
 
+import anyio
 import httpx
 import pytest
 from fastapi import FastAPI, Request
@@ -61,26 +62,31 @@ def _assert_outcome(events, outcome, *, provider_failure):
     assert sponsored["provider_failure"] is provider_failure
 
 
-def _configure_route(monkeypatch, *, case, mode):
+def _configure_route(monkeypatch, *, case, mode, graph_closed=None):
     admitted, released, provider_calls = [], [], []
     started = asyncio.Event()
 
     class GraphEdge:
         async def astream_events(self, agent_input, config, *, version):
-            assert version == "v2"
-            provider_calls.append(agent_input)
-            if case in ("after_504", "success", "cancel"):
-                yield {
-                    "event": "on_chat_model_stream",
-                    "data": {"chunk": AIMessageChunk(content="partial answer")},
-                }
-            if case == "cancel":
-                started.set()
-                await asyncio.Future()
-            elif case == "before_401":
-                raise DirectStatusError(_PRIVATE_ERROR)
-            elif case in ("before_504", "after_504"):
-                raise NestedStatusError(_PRIVATE_ERROR)
+            try:
+                assert version == "v2"
+                provider_calls.append(agent_input)
+                if case in ("after_504", "success", "cancel"):
+                    yield {
+                        "event": "on_chat_model_stream",
+                        "data": {"chunk": AIMessageChunk(content="partial answer")},
+                    }
+                if case == "cancel":
+                    started.set()
+                    await asyncio.Future()
+                elif case == "before_401":
+                    raise DirectStatusError(_PRIVATE_ERROR)
+                elif case in ("before_504", "after_504"):
+                    raise NestedStatusError(_PRIVATE_ERROR)
+            finally:
+                if graph_closed is not None:
+                    await anyio.lowlevel.checkpoint()
+                    graph_closed.set()
 
     async def tools():
         return []
@@ -244,6 +250,55 @@ async def test_real_agent_cancellation_releases_lease(monkeypatch, captured, mod
     )
     _assert_outcome(captured, "client_disconnect", provider_failure=False)
     assert all(event != "model_error" for event, _ in captured)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("mode", ["byok", "sponsored"])
+async def test_asgi_disconnect_closes_paused_agent_before_response_cleanup(
+    monkeypatch, captured, mode
+):
+    graph_closed = asyncio.Event()
+    app, admitted, released, _, started = _configure_route(
+        monkeypatch,
+        case="cancel",
+        mode=mode,
+        graph_closed=graph_closed,
+    )
+    response_id = uuid4()
+    response = await chat_api.chat(
+        _payload(),
+        Request({"type": "http", "app": app, "headers": []}),
+        response_id,
+        Database.__new__(Database),
+    )
+    token_sent = asyncio.Event()
+
+    async def send(message):
+        if message["type"] == "http.response.body":
+            token_sent.set()
+            await asyncio.Event().wait()
+
+    async def receive():
+        await token_sent.wait()
+        return {"type": "http.disconnect"}
+
+    async with asyncio.timeout(2):
+        await response(
+            {"type": "http", "asgi": {"spec_version": "2.3"}},
+            receive,
+            send,
+        )
+
+    assert graph_closed.is_set()
+    assert not started.is_set()
+    assert (
+        admitted
+        == released
+        == ([(USER_ID, response_id)] if mode == "sponsored" else [])
+    )
+    assert [event for event, _ in captured].count("$ai_generation") == 1
+    assert [event for event, _ in captured].count("sponsored_stream") == 1
+    _assert_outcome(captured, "client_disconnect", provider_failure=False)
 
 
 def _instrument(body):
