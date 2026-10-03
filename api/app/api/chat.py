@@ -1,8 +1,7 @@
 import asyncio
 import json
 import logging
-from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncGenerator, AsyncIterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
@@ -55,6 +54,7 @@ from app.llms.query_modes import QueryTransformMode
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
 from app.schemas.sponsored_access import SponsoredQuotaSnapshot
+from app.utils.async_iterators import closing_stream
 from app.utils.auth import verify_api_key
 from app.utils.posthog_client import (
     ChatPreparationOutcome,
@@ -433,34 +433,11 @@ def _log_sponsored_release_failure(task: asyncio.Task[None]) -> None:
         )
 
 
-@asynccontextmanager
-async def _closing_stream(
-    body: AsyncIterable[bytes | str | memoryview],
-) -> AsyncIterator[AsyncIterator[bytes | str | memoryview]]:
-    """Close the consumed iterator in its task, preserving any primary exception."""
-    iterator = aiter(body)
-    failed = False
-    try:
-        yield iterator
-    except BaseException:
-        failed = True
-        raise
-    finally:
-        close = getattr(iterator, "aclose", None)
-        if callable(close):
-            try:
-                with anyio.CancelScope(shield=True):
-                    await close()
-            except BaseException:
-                if not failed:
-                    raise
-
-
 class _ChatStreamingResponse(StreamingResponse):
     async def stream_response(self, send: Send) -> None:
         # Starlette's older-ASGI disconnect listener cancels this task. Closing
         # here (rather than in __call__) also keeps timing ContextVars in-task.
-        async with _closing_stream(self.body_iterator) as stream:
+        async with closing_stream(self.body_iterator) as stream:
             self.body_iterator = stream
             await super().stream_response(send)
 
@@ -498,7 +475,7 @@ async def _instrument_stream(
     answered = False
     provider_failure = False
     try:
-        async with _closing_stream(body) as stream:
+        async with closing_stream(body) as stream:
             async for chunk in stream:
                 timings.mark_ttft()
                 event_name = _sse_event_name(chunk)
@@ -649,7 +626,7 @@ async def _chat_response_stream(
 ) -> AsyncGenerator[bytes | str | memoryview]:
     preparation = _PreparationOutcome(response_id)
     try:
-        async with _closing_stream(
+        async with closing_stream(
             _prepare_chat_response_stream(
                 payload, request, db, response_id, preparation
             ),
@@ -777,9 +754,8 @@ async def _prepare_chat_response_stream(
                     ),
                 )
             except SponsoredRequestInProgressError:
-                preparation.handled = (
-                    True  # Existing sponsored_denied owns this outcome.
-                )
+                # Existing sponsored_denied owns this outcome.
+                preparation.handled = True
                 capture_sponsored_event(
                     distinct_id,
                     "sponsored_denied",
@@ -996,7 +972,7 @@ async def _prepare_chat_response_stream(
 
         # No suspension between handoff and first iteration: generation owns all
         # subsequent terminal outcomes, including provider failure/disconnect.
-        async with _closing_stream(response.body_iterator) as stream:
+        async with closing_stream(response.body_iterator) as stream:
             preparation.handled = True
             async for chunk in stream:
                 yield chunk

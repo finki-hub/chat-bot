@@ -21,6 +21,7 @@ from app.llms.query_modes import QueryTransformMode
 from app.llms.retrieval_result import RetrievalSource, RetrievedContext
 from app.main import make_app
 from app.utils import posthog_client
+from app.utils.async_iterators import closing_stream
 from tests.chat_models_access_support import (
     RESET,
     USER_WITHOUT_KEY,
@@ -377,10 +378,10 @@ async def test_asgi_send_failure_closes_all_streams_preserving_exception(
         Database.__new__(Database),
     )
     expected = ClientDisconnect if send_error is OSError else RuntimeError
+    receive = AsyncMock()
     with pytest.raises(expected) as caught:
-        await response(
-            {"type": "http", "asgi": {"spec_version": "2.4"}}, AsyncMock(), send
-        )
+        await response({"type": "http", "asgi": {"spec_version": "2.4"}}, receive, send)
+    receive.assert_not_awaited()
     if send_error is RuntimeError:
         assert caught.value is failure
     else:
@@ -552,6 +553,46 @@ async def test_provider_closes_actual_iterator_and_reports_normal_cleanup_failur
     assert [
         event["properties"]["outcome"] for event in _events(prepared, "$ai_generation")
     ] == ["provider_error" if close_kind == "failure" else "completed"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("primary", ["none", "cancelled", "generator_exit", "error"])
+async def test_closing_stream_cleanup_failure_preserves_primary_exception(primary):
+    cleanup_failure = RuntimeError(SENTINEL)
+
+    class Iterator:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+        async def aclose(self):
+            raise cleanup_failure
+
+    class Body:
+        def __aiter__(self):
+            return Iterator()
+
+    async def consume():
+        async with closing_stream(Body()):
+            if primary == "cancelled":
+                raise asyncio.CancelledError
+            if primary == "generator_exit":
+                raise GeneratorExit
+            if primary == "error":
+                raise ValueError("primary")
+
+    expected = {
+        "none": RuntimeError,
+        "cancelled": asyncio.CancelledError,
+        "generator_exit": GeneratorExit,
+        "error": ValueError,
+    }[primary]
+    with pytest.raises(expected) as caught:
+        await consume()
+    if primary == "none":
+        assert caught.value is cleanup_failure
 
 
 @pytest.mark.parametrize(
