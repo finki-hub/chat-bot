@@ -8,7 +8,7 @@ dependencies = [
   "langchain-huggingface>=1.2.2",
   "posthog>=7.60.1",
   "sentence-transformers>=6.1.0",
-  "torch>=2.14.0",
+  "torch>=2.14.1",
   "transformers>=5.17.0",
 ]
 
