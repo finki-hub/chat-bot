@@ -20,7 +20,7 @@ dependencies = [
     "langgraph>=1.2.12",
     "posthog>=7.62.1",
     "pydantic>=2.13.5",
-    "tzdata>=2026.4",
+    "tzdata>=2026.5",
 ]
 
 [dependency-groups]
