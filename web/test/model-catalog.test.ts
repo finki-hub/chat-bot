@@ -23,21 +23,11 @@ const GPT = 'gpt-6-astra';
 const LUNA = 'gpt-6-luna';
 const RETIRED_GPT = 'gpt-5.4';
 const RETIRED_GPT_5_5 = 'gpt-5.5';
-const RETIRED_GEMINI = 'gemini-3.5-flash';
 const RETIRED_DEEPSEEK_FLASH = 'openrouter:deepseek/deepseek-v4-flash';
 const RETIRED_DEEPSEEK_FLASH_DATED =
   'openrouter:deepseek/deepseek-v4-flash-0731';
 const RETIRED_QWEN_MAX_ALIAS = 'openrouter:qwen/qwen3.8-max';
 const QWEN_MAX = 'openrouter:qwen/qwen3.8-max-0902';
-const HIDDEN_CURATED_IDS = [
-  RETIRED_GPT,
-  RETIRED_GPT_5_5,
-  RETIRED_GEMINI,
-  RETIRED_DEEPSEEK_FLASH,
-  RETIRED_DEEPSEEK_FLASH_DATED,
-  RETIRED_QWEN_MAX_ALIAS,
-] as const;
-
 const GPT_TERRA = 'gpt-5.6-terra';
 const GPT_MINI = 'gpt-5.4-mini';
 const GPT_MINI_NAME = 'GPT-5.4 Mini';
@@ -121,10 +111,12 @@ describe('parseModelCatalog', () => {
     expect(Object.keys(CURATED_MODEL_DESCRIPTORS)).toStrictEqual(
       EXPECTED_CURATED_IDS,
     );
-  });
-
-  it.each(HIDDEN_CURATED_IDS)('does not expose retired model %s', (id) => {
-    expect(Object.keys(CURATED_MODEL_DESCRIPTORS)).not.toContain(id);
+    expect(Object.keys(CURATED_MODEL_DESCRIPTORS)).toHaveLength(25);
+    expect(Object.keys(CURATED_MODEL_DESCRIPTORS).slice(-3)).toStrictEqual([
+      'qwen3:30b-a3b-thinking-2507-q4_K_M',
+      'qwen3:30b-a3b-instruct-2507-q4_K_M',
+      'qwen3:14b-q4_K_M',
+    ]);
   });
 
   it('parses a typed catalog and keeps only the web-relevant fields', () => {
@@ -251,24 +243,29 @@ describe('parseModelCatalog', () => {
     ]);
   });
 
-  it('filters hidden ids from mixed legacy catalogs without dropping dynamic values', () => {
+  it('preserves all backend-provided ids from mixed legacy catalogs', () => {
     const catalog = parseModelCatalog([
       RETIRED_GPT,
       'ollama:runtime-model',
       GPT_MINI,
+      'gemini-3.5-flash',
       RETIRED_DEEPSEEK_FLASH_DATED,
       RETIRED_QWEN_MAX_ALIAS,
       QWEN_MAX,
     ]);
 
     expect(catalog.models.map((model) => model.id)).toStrictEqual([
+      RETIRED_GPT,
       'ollama:runtime-model',
       GPT_MINI,
+      'gemini-3.5-flash',
+      RETIRED_DEEPSEEK_FLASH_DATED,
+      RETIRED_QWEN_MAX_ALIAS,
       QWEN_MAX,
     ]);
   });
 
-  it('filters hidden ids from typed catalogs without dropping dynamic values', () => {
+  it('preserves backend-provided ids from typed catalogs', () => {
     const catalog = parseModelCatalog({
       models: [
         { id: RETIRED_GPT_5_5, name: 'GPT-5.5', provider: OPENAI },
@@ -303,8 +300,11 @@ describe('parseModelCatalog', () => {
     });
 
     expect(catalog.models.map((model) => model.id)).toStrictEqual([
+      RETIRED_GPT_5_5,
       'llama3.3:runtime',
       'gpt-5.4-mini',
+      RETIRED_DEEPSEEK_FLASH,
+      RETIRED_QWEN_MAX_ALIAS,
       QWEN_MAX,
     ]);
   });
@@ -501,12 +501,12 @@ describe('recoverSelectedModel', () => {
     expect(recoverSelectedModel([], CLAUDE_LEGACY, GPT)).toBe(CLAUDE_LEGACY);
   });
 
-  it('recovers a retired persisted selection to the current visible default', () => {
+  it('recovers an unsupported selection to the current visible default', () => {
     const { models: curatedModels } = parseModelCatalog(EXPECTED_CURATED_IDS);
 
-    expect(recoverSelectedModel(curatedModels, RETIRED_GPT, GPT_MINI)).toBe(
-      GPT_MINI,
-    );
+    expect(
+      recoverSelectedModel(curatedModels, 'unknown-selection', GPT_MINI),
+    ).toBe(GPT_MINI);
   });
 });
 

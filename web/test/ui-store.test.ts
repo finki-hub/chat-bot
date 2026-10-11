@@ -4,6 +4,18 @@ import { DEFAULT_MODEL, useUiStore } from '@/lib/ui-store';
 
 const STORAGE_KEY = 'finkiHub.ui';
 const LEGACY_MAPPINGS = [
+  ['gpt-5.4', 'gpt-5.6-terra'],
+  ['gpt-5.5', 'gpt-6.1-sol'],
+  ['gemini-3.5-flash', 'gemini-3.8-flash'],
+  [
+    'openrouter:deepseek/deepseek-v4-flash',
+    'openrouter:deepseek/deepseek-v4.1-flash',
+  ],
+  [
+    'openrouter:deepseek/deepseek-v4-flash-0731',
+    'openrouter:deepseek/deepseek-v4.1-flash',
+  ],
+  ['openrouter:qwen/qwen3.8-max', 'openrouter:qwen/qwen3.8-max-0902'],
   ['gpt-5.6-luna', 'gpt-6-luna'],
   ['gpt-5.6-sol', 'gpt-6.1-sol'],
   ['claude-opus-4-8', 'claude-opus-5-5'],
@@ -27,6 +39,10 @@ describe('versioned persisted model selection', () => {
       model: DEFAULT_MODEL,
       reasoning: false,
     });
+  });
+
+  it('keeps exactly thirteen one-time migration entries', () => {
+    expect(LEGACY_MAPPINGS).toHaveLength(13);
   });
 
   it.each(LEGACY_MAPPINGS)(

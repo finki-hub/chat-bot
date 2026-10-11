@@ -21,7 +21,7 @@ _PRIVATE_PROVIDER_ERROR = (
             google_module,
             "transform_query_with_google",
             "get_google_llm",
-            Model.GEMINI_3_5_FLASH,
+            Model.GEMINI_3_5_FLASH_LITE,
         ),
         (
             anthropic_module,
@@ -70,7 +70,7 @@ def test_provider_query_failure_omits_raw_error(
             "stream_google_agent_response",
             "get_google_llm",
             "stream_google_response",
-            Model.GEMINI_3_5_FLASH,
+            Model.GEMINI_3_5_FLASH_LITE,
         ),
         (
             anthropic_module,

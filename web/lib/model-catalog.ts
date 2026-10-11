@@ -34,15 +34,6 @@ const MODEL_AVAILABILITIES = [
   'unavailable',
 ] as const;
 
-const HIDDEN_CURATED_MODEL_IDS = new Set([
-  'gemini-3.5-flash',
-  'gpt-5.4',
-  'gpt-5.5',
-  'openrouter:deepseek/deepseek-v4-flash',
-  'openrouter:deepseek/deepseek-v4-flash-0731',
-  'openrouter:qwen/qwen3.8-max',
-]);
-
 const CURATED_MODEL_DATA = [
   ['gpt-6-astra', 'GPT-6 Astra', 'openai'],
   ['gpt-6.1-sol', 'GPT-6.1 Sol', 'openai'],
@@ -220,9 +211,7 @@ export const parseModelCatalog = (value: unknown): ModelCatalog => {
       const models = rawModels.map((entry) => normalizeDescriptor(entry, true));
       if (models.every((model): model is ModelDescriptor => model !== null)) {
         return {
-          models: models.filter(
-            (model) => !HIDDEN_CURATED_MODEL_IDS.has(model.id),
-          ),
+          models,
           source: rawSource,
           version: 1,
         };
@@ -234,10 +223,7 @@ export const parseModelCatalog = (value: unknown): ModelCatalog => {
   if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
     const models = value
       .map((id) => CURATED_MODEL_DESCRIPTORS[id] ?? normalizeDescriptor({ id }))
-      .filter(
-        (model): model is ModelDescriptor =>
-          model !== null && !HIDDEN_CURATED_MODEL_IDS.has(model.id),
-      );
+      .filter((model): model is ModelDescriptor => model !== null);
     return { models, source: 'live', version: 1 };
   }
 

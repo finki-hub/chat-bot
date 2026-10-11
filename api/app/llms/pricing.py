@@ -12,13 +12,10 @@ from app.llms.models import ChatModel, Model
 HOSTED_PRICING: dict[Model, tuple[float, float]] = {
     Model.GPT_6_ASTRA: (10.00, 50.00),
     Model.GPT_5_6_TERRA: (2.50, 15.00),
-    Model.GPT_5_5: (5.00, 30.00),
-    Model.GPT_5_4: (2.50, 15.00),
     Model.GPT_5_4_MINI: (0.75, 4.50),
     Model.GPT_5_4_NANO: (0.20, 1.25),
     Model.GEMINI_3_8_FLASH: (0.75, 3.75),
     Model.GEMINI_3_1_PRO_PREVIEW: (2.00, 12.00),
-    Model.GEMINI_3_5_FLASH: (1.50, 9.00),
     Model.GEMINI_3_5_FLASH_LITE: (0.30, 2.50),
     Model.CLAUDE_FABLE_5_1: (10.00, 50.00),
     Model.CLAUDE_OPUS_5_5: (4.00, 20.00),

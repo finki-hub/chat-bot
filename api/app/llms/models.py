@@ -10,15 +10,12 @@ class Model(StrEnum):
     GPT_6_1_SOL = "gpt-6.1-sol"
     GPT_5_6_TERRA = "gpt-5.6-terra"
     GPT_6_LUNA = "gpt-6-luna"
-    GPT_5_5 = "gpt-5.5"
-    GPT_5_4 = "gpt-5.4"
     GPT_5_4_MINI = "gpt-5.4-mini"
     GPT_5_4_NANO = "gpt-5.4-nano"
     TEXT_EMBEDDING_3_LARGE = "text-embedding-3-large"
 
     GEMINI_3_8_FLASH = "gemini-3.8-flash"
     GEMINI_3_1_PRO_PREVIEW = "gemini-3.1-pro-preview"
-    GEMINI_3_5_FLASH = "gemini-3.5-flash"
     GEMINI_3_5_FLASH_LITE = "gemini-3.5-flash-lite"
     GEMINI_EMBEDDING_001 = "gemini-embedding-001"
 
@@ -28,13 +25,10 @@ class Model(StrEnum):
     CLAUDE_HAIKU_5_5 = "claude-haiku-5-5"
 
     OPENROUTER_DEEPSEEK_V4_1_FLASH = "openrouter:deepseek/deepseek-v4.1-flash"
-    OPENROUTER_DEEPSEEK_V4_FLASH = "openrouter:deepseek/deepseek-v4-flash"
     OPENROUTER_DEEPSEEK_V4_PRO_0813 = "openrouter:deepseek/deepseek-v4-pro-0813"
-    OPENROUTER_DEEPSEEK_V4_FLASH_0731 = "openrouter:deepseek/deepseek-v4-flash-0731"
     OPENROUTER_GLM_5_3 = "openrouter:z-ai/glm-5.3"
     OPENROUTER_KIMI_K3 = "openrouter:moonshotai/kimi-k3"
     OPENROUTER_QWEN3_8_MAX_0902 = "openrouter:qwen/qwen3.8-max-0902"
-    OPENROUTER_QWEN3_8_MAX = "openrouter:qwen/qwen3.8-max"
     OPENROUTER_QWEN3_8_27B = "openrouter:qwen/qwen3.8-27b"
     OPENROUTER_MINIMAX_M3 = "openrouter:minimax/minimax-m3"
     OPENROUTER_GROK_4_7 = "openrouter:x-ai/grok-4.7"
@@ -71,26 +65,20 @@ CHAT_MODEL_ORDER: Final[tuple[Model, ...]] = (
     Model.GPT_6_1_SOL,
     Model.GPT_5_6_TERRA,
     Model.GPT_6_LUNA,
-    Model.GPT_5_5,
-    Model.GPT_5_4,
     Model.GPT_5_4_MINI,
     Model.GPT_5_4_NANO,
     Model.GEMINI_3_8_FLASH,
     Model.GEMINI_3_1_PRO_PREVIEW,
-    Model.GEMINI_3_5_FLASH,
     Model.GEMINI_3_5_FLASH_LITE,
     Model.CLAUDE_FABLE_5_1,
     Model.CLAUDE_OPUS_5_5,
     Model.CLAUDE_SONNET_5_5,
     Model.CLAUDE_HAIKU_5_5,
     Model.OPENROUTER_DEEPSEEK_V4_1_FLASH,
-    Model.OPENROUTER_DEEPSEEK_V4_FLASH,
     Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
-    Model.OPENROUTER_DEEPSEEK_V4_FLASH_0731,
     Model.OPENROUTER_GLM_5_3,
     Model.OPENROUTER_KIMI_K3,
     Model.OPENROUTER_QWEN3_8_MAX_0902,
-    Model.OPENROUTER_QWEN3_8_MAX,
     Model.OPENROUTER_QWEN3_8_27B,
     Model.OPENROUTER_MINIMAX_M3,
     Model.OPENROUTER_GROK_4_7,
@@ -110,8 +98,6 @@ OPENAI_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
         Model.GPT_6_1_SOL,
         Model.GPT_5_6_TERRA,
         Model.GPT_6_LUNA,
-        Model.GPT_5_5,
-        Model.GPT_5_4,
         Model.GPT_5_4_MINI,
         Model.GPT_5_4_NANO,
     },
@@ -120,7 +106,6 @@ GOOGLE_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     {
         Model.GEMINI_3_8_FLASH,
         Model.GEMINI_3_1_PRO_PREVIEW,
-        Model.GEMINI_3_5_FLASH,
         Model.GEMINI_3_5_FLASH_LITE,
     },
 )
@@ -135,13 +120,10 @@ ANTHROPIC_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
 OPENROUTER_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     {
         Model.OPENROUTER_DEEPSEEK_V4_1_FLASH,
-        Model.OPENROUTER_DEEPSEEK_V4_FLASH,
         Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
-        Model.OPENROUTER_DEEPSEEK_V4_FLASH_0731,
         Model.OPENROUTER_GLM_5_3,
         Model.OPENROUTER_KIMI_K3,
         Model.OPENROUTER_QWEN3_8_MAX_0902,
-        Model.OPENROUTER_QWEN3_8_MAX,
         Model.OPENROUTER_QWEN3_8_27B,
         Model.OPENROUTER_MINIMAX_M3,
         Model.OPENROUTER_GROK_4_7,
@@ -152,7 +134,6 @@ OPENROUTER_MANDATORY_REASONING_MODELS: Final[frozenset[Model]] = frozenset(
     {
         Model.OPENROUTER_GLM_5_3,
         Model.OPENROUTER_QWEN3_8_MAX_0902,
-        Model.OPENROUTER_QWEN3_8_MAX,
         Model.OPENROUTER_GROK_4_7,
     },
 )
@@ -173,13 +154,10 @@ REASONING_CAPABLE_MODELS: Final[frozenset[Model]] = frozenset(
         Model.GPT_6_1_SOL,
         Model.GPT_5_6_TERRA,
         Model.GPT_6_LUNA,
-        Model.GPT_5_5,
-        Model.GPT_5_4,
         Model.GPT_5_4_MINI,
         Model.GPT_5_4_NANO,
         Model.GEMINI_3_8_FLASH,
         Model.GEMINI_3_1_PRO_PREVIEW,
-        Model.GEMINI_3_5_FLASH,
         Model.GEMINI_3_5_FLASH_LITE,
         Model.CLAUDE_FABLE_5_1,
         Model.CLAUDE_OPUS_5_5,

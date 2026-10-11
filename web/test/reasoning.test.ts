@@ -12,7 +12,7 @@ describe('isReasoningCapableModel', () => {
       'claude-sonnet-5-5',
       'claude-fable-5-1',
       'claude-opus-5-5',
-      'gemini-3.5-flash',
+      'gemini-3.8-flash',
       'claude-haiku-5-5',
       'gpt-5.4-mini',
       'gpt-6.1-sol',
@@ -21,7 +21,7 @@ describe('isReasoningCapableModel', () => {
       'openrouter:deepseek/deepseek-v4.1-flash',
       'openrouter:deepseek/deepseek-v4-pro-0813',
       'openrouter:moonshotai/kimi-k3',
-      'openrouter:qwen/qwen3.8-max',
+      'openrouter:qwen/qwen3.8-max-0902',
       'openrouter:x-ai/grok-4.7',
       'openrouter:tencent/hy3',
       'qwen3:30b-a3b-thinking-2507-q4_K_M',
@@ -49,7 +49,6 @@ describe('isReasoningCapableModel', () => {
 describe('mandatory reasoning policy', () => {
   const mandatoryModels = [
     'openrouter:z-ai/glm-5.3',
-    'openrouter:qwen/qwen3.8-max',
     'openrouter:qwen/qwen3.8-max-0902',
     'openrouter:x-ai/grok-4.7',
   ];
@@ -61,6 +60,9 @@ describe('mandatory reasoning policy', () => {
     expect(
       isReasoningMandatoryModel('openrouter:deepseek/deepseek-v4-pro-0813'),
     ).toBe(false);
+    expect(isReasoningMandatoryModel('openrouter:qwen/qwen3.8-max')).toBe(
+      false,
+    );
   });
 
   it('keeps adaptive Fable reasoning enabled', () => {

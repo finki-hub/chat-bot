@@ -88,8 +88,6 @@ async def stream_response_with_agent(
             | Model.GPT_6_1_SOL
             | Model.GPT_5_6_TERRA
             | Model.GPT_6_LUNA
-            | Model.GPT_5_5
-            | Model.GPT_5_4
             | Model.GPT_5_4_MINI
             | Model.GPT_5_4_NANO
         ):
@@ -111,7 +109,6 @@ async def stream_response_with_agent(
         case (
             Model.GEMINI_3_8_FLASH
             | Model.GEMINI_3_1_PRO_PREVIEW
-            | Model.GEMINI_3_5_FLASH
             | Model.GEMINI_3_5_FLASH_LITE
         ):
             _tag_provider(observation, "google")

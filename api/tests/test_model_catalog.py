@@ -102,19 +102,8 @@ def test_static_catalog_has_exact_order_and_providers_without_tiers() -> None:
 def test_picker_catalog_is_unique_curated_runtime_subset() -> None:
     runtime_ids = {model.value for model in CHAT_MODELS}
     catalog_ids = set(EXPECTED_IDS)
-    hidden_ids = {
-        "gpt-5.4",
-        "gpt-5.5",
-        "gemini-3.5-flash",
-        "openrouter:deepseek/deepseek-v4-flash",
-        "openrouter:deepseek/deepseek-v4-flash-0731",
-        "openrouter:qwen/qwen3.8-max",
-    }
-
-    assert catalog_ids <= runtime_ids
+    assert catalog_ids == runtime_ids
     assert len(EXPECTED_IDS) == len(catalog_ids)
-    assert catalog_ids.isdisjoint(hidden_ids)
-    assert hidden_ids <= runtime_ids
 
 
 def test_catalog_can_append_dynamic_ollama_models_with_loaded_status() -> None:

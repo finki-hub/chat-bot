@@ -91,9 +91,7 @@ if not set(_CATALOG_MODELS).issubset(CHAT_MODELS):
     msg = "Catalog policy models must be a subset of executable chat models"
     raise RuntimeError(msg)
 
-# The picker is intentionally curated independently from runtime compatibility.  Keep the
-# catalog ordered according to the executable order while allowing compatibility-only models
-# to remain routable without being offered to new users.
+# Keep the executable models in the same order as the curated picker catalog.
 if (
     tuple(model for model in CHAT_MODEL_ORDER if model in _CATALOG_MODELS)
     != _CATALOG_MODELS

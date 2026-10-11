@@ -11,6 +11,12 @@ RETIRED_MODEL_IDS = (
     "claude-haiku-4-5",
     "gemini-3.1-flash-lite",
     "openrouter:x-ai/grok-4.6",
+    "gpt-5.5",
+    "gpt-5.4",
+    "gemini-3.5-flash",
+    "openrouter:deepseek/deepseek-v4-flash",
+    "openrouter:deepseek/deepseek-v4-flash-0731",
+    "openrouter:qwen/qwen3.8-max",
 )
 
 

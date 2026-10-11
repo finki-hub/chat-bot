@@ -314,28 +314,6 @@ def test_sponsored_model_accepts_visible_non_luna_profile():
     assert settings.SPONSORED_MODEL_PROVIDER == "google"
 
 
-@pytest.mark.parametrize(
-    "hidden_model",
-    [
-        "gpt-5.5",
-        "gpt-5.4",
-        "gemini-3.5-flash",
-        "openrouter:deepseek/deepseek-v4-flash",
-        "openrouter:deepseek/deepseek-v4-flash-0731",
-        "openrouter:qwen/qwen3.8-max",
-    ],
-)
-def test_sponsored_model_rejects_hidden_runtime_models(hidden_model: str):
-    with pytest.raises(ValueError, match="SPONSORED_MODEL_ID"):
-        Settings(
-            SPONSORED_MODEL_ENABLED=True,
-            SPONSORED_MODEL_ID=hidden_model,
-            SPONSORED_MODEL_PROVIDER="openai",
-            SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
-            SPONSORED_DAILY_GLOBAL_LIMIT=10,
-        )
-
-
 def test_sponsored_legacy_env_names_are_not_recognized():
     assert "SPONSORED_LUNA_ENABLED" not in Settings.model_fields
     assert "SPONSORED_OPENAI_API_KEY" not in Settings.model_fields

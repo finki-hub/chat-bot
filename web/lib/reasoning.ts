@@ -12,7 +12,6 @@ const REASONING_MODEL_IDS = new Set([
 ]);
 const MANDATORY_REASONING_MODEL_IDS = new Set([
   'claude-fable-5-1',
-  'openrouter:qwen/qwen3.8-max',
   'openrouter:qwen/qwen3.8-max-0902',
   'openrouter:x-ai/grok-4.7',
   'openrouter:z-ai/glm-5.3',

@@ -151,7 +151,7 @@ def test_query_transform_logs_lengths_without_raw_query(caplog, monkeypatch):
             google_module,
             "transform_query_with_google",
             "get_google_llm",
-            Model.GEMINI_3_5_FLASH,
+            Model.GEMINI_3_5_FLASH_LITE,
         ),
         (
             anthropic_module,

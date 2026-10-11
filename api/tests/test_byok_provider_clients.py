@@ -104,7 +104,7 @@ def test_sponsored_google_client_receives_upstream_model_and_token_cap(
     monkeypatch.setattr(google, "ChatGoogleGenerativeAI", GoogleCapturingClient)
 
     google.get_google_llm(
-        Model.GEMINI_3_5_FLASH,
+        Model.GEMINI_3_5_FLASH_LITE,
         temperature=0.0,
         top_p=1.0,
         max_tokens=1024,
@@ -174,7 +174,7 @@ def test_google_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
     monkeypatch.setattr(google, "ChatGoogleGenerativeAI", GoogleCapturingClient)
 
     google.get_google_llm(
-        Model.GEMINI_3_5_FLASH,
+        Model.GEMINI_3_5_FLASH_LITE,
         temperature=0.0,
         top_p=1.0,
         max_tokens=128,
@@ -194,7 +194,7 @@ def test_gemini_3_reasoning_uses_thinking_level(monkeypatch) -> None:
     monkeypatch.setattr(google, "ChatGoogleGenerativeAI", GoogleCapturingClient)
 
     google.get_google_llm(
-        Model.GEMINI_3_5_FLASH,
+        Model.GEMINI_3_5_FLASH_LITE,
         temperature=0.2,
         top_p=0.8,
         max_tokens=128,
@@ -463,7 +463,7 @@ def test_sponsored_openrouter_client_omits_alias_reasoning_for_unknown_upstream(
     None
 ):
     llm = openrouter.get_openrouter_llm(
-        Model.OPENROUTER_QWEN3_8_MAX,
+        Model.OPENROUTER_QWEN3_8_MAX_0902,
         temperature=0.0,
         top_p=1.0,
         max_tokens=1024,
@@ -480,7 +480,7 @@ def test_sponsored_openrouter_client_omits_alias_reasoning_for_unknown_upstream(
 
 def test_sponsored_openrouter_client_uses_known_upstream_reasoning() -> None:
     llm = openrouter.get_openrouter_llm(
-        Model.OPENROUTER_QWEN3_8_MAX,
+        Model.OPENROUTER_QWEN3_8_MAX_0902,
         temperature=0.0,
         top_p=1.0,
         max_tokens=1024,
@@ -499,7 +499,6 @@ def test_sponsored_openrouter_client_uses_known_upstream_reasoning() -> None:
     [
         (Model.OPENROUTER_KIMI_K3, {"effort": "high"}),
         (Model.OPENROUTER_QWEN3_8_MAX_0902, {"effort": "high"}),
-        (Model.OPENROUTER_QWEN3_8_MAX, {"effort": "high"}),
         (Model.OPENROUTER_QWEN3_8_27B, {"effort": "medium"}),
         (Model.OPENROUTER_MINIMAX_M3, {}),
         (Model.OPENROUTER_GROK_4_7, {"effort": "high"}),
@@ -596,7 +595,6 @@ def test_openrouter_client_disables_optional_reasoning(monkeypatch) -> None:
     [
         Model.OPENROUTER_GLM_5_3,
         Model.OPENROUTER_QWEN3_8_MAX_0902,
-        Model.OPENROUTER_QWEN3_8_MAX,
         Model.OPENROUTER_GROK_4_7,
     ],
 )
@@ -633,7 +631,7 @@ def test_openrouter_client_keeps_mandatory_reasoning_enabled(
     ("provider", "factory", "model"),
     [
         ("openai", openai.get_openai_llm, Model.GPT_5_4_MINI),
-        ("google", google.get_google_llm, Model.GEMINI_3_5_FLASH),
+        ("google", google.get_google_llm, Model.GEMINI_3_5_FLASH_LITE),
         ("anthropic", anthropic.get_anthropic_llm, Model.CLAUDE_HAIKU_5_5),
         ("ollama", ollama.get_llm, Model.QWEN3_14B),
         (

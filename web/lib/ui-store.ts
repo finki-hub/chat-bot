@@ -22,8 +22,20 @@ const LEGACY_MODEL_MIGRATIONS = new Map([
   ['claude-opus-4-8', 'claude-opus-5-5'],
   ['claude-sonnet-5', 'claude-sonnet-5-5'],
   ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'],
+  ['gemini-3.5-flash', 'gemini-3.8-flash'],
+  ['gpt-5.4', 'gpt-5.6-terra'],
+  ['gpt-5.5', 'gpt-6.1-sol'],
   ['gpt-5.6-luna', 'gpt-6-luna'],
   ['gpt-5.6-sol', 'gpt-6.1-sol'],
+  [
+    'openrouter:deepseek/deepseek-v4-flash',
+    'openrouter:deepseek/deepseek-v4.1-flash',
+  ],
+  [
+    'openrouter:deepseek/deepseek-v4-flash-0731',
+    'openrouter:deepseek/deepseek-v4.1-flash',
+  ],
+  ['openrouter:qwen/qwen3.8-max', 'openrouter:qwen/qwen3.8-max-0902'],
   ['openrouter:x-ai/grok-4.6', 'openrouter:x-ai/grok-4.7'],
 ]);
 
