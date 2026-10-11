@@ -31,13 +31,13 @@ export type ThreadProps = {
 };
 
 const SUGGESTIONS = [
-  'Колку кредити ми требаат за да се запишам во наредна година?',
-  'Колку изнесува школарината за една учебна година?',
+  'Колку кредити ми требаат за\u{A0}да\u{A0}се\u{A0}запишам во наредна година?',
+  'Колку изнесува школарината за\u{A0}една\u{A0}учебна\u{A0}година?',
   'Колку пати можам да полагам еден испит?',
   'Кои се условите за дипломирање?',
 ] as const;
 
-const NON_BREAKING_SPACE = ' ';
+const NON_BREAKING_SPACE = '\u{A0}';
 const STAGGER = ['stagger-1', 'stagger-2', 'stagger-3', 'stagger-4'];
 
 const CHIP =
@@ -151,10 +151,10 @@ export const Thread = ({
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
             {messages.map((m) => {
               if (
+                activeStatus === undefined &&
+                streaming &&
                 m.role === 'assistant' &&
                 m.id === lastAssistantId &&
-                streaming &&
-                activeStatus === undefined &&
                 !hasText(m) &&
                 !hasReasoning(m)
               ) {
@@ -223,7 +223,7 @@ export const Thread = ({
             ) : null}
           </div>
         )}
-        {messages.length > 0 && activeError && lastAssistantId === undefined ? (
+        {activeError && lastAssistantId === undefined && messages.length > 0 ? (
           <div className="mx-auto w-full max-w-3xl">
             <MessageError
               errorPart={activeError}

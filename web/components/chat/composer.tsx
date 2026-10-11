@@ -128,7 +128,7 @@ export const Composer = ({
           active.matches(TYPEAHEAD_CONTROL_SELECTOR));
       if (
         consumesTyping ||
-        (e.key === ' ' && hasFocusedControl) ||
+        (hasFocusedControl && e.key === ' ') ||
         document.querySelector('[role="dialog"]') !== null
       ) {
         return;
@@ -166,7 +166,7 @@ export const Composer = ({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!(e.key === 'Enter' && !e.shiftKey)) {
+    if (e.key !== 'Enter' || e.shiftKey) {
       return;
     }
 

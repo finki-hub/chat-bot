@@ -32,7 +32,7 @@ describe('lib/api-types', () => {
     expect(body.interface).toBe('web');
     expect(body.messages.at(-1)?.role).toBe('user');
     expect(body.query_transform_mode).toBe('rewrite_hyde');
-    expect(body.temperature).toBe(0.3);
+    expect(body.temperature).toBeCloseTo(0.3);
   });
 
   it('models a protocol-v2 token event', () => {

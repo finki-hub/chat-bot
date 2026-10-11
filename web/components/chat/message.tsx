@@ -366,11 +366,9 @@ const formatResetTime = (resetsAt: string | undefined): string | undefined => {
   }
 
   const year = parts.get('year');
-  if (year === undefined) {
-    return undefined;
-  }
-
-  return `${day} ${month} ${year}, ${hours}:${minutes}`;
+  return year === undefined
+    ? undefined
+    : `${day} ${month} ${year}, ${hours}:${minutes}`;
 };
 
 const SponsoredQuotaError = ({
@@ -560,11 +558,7 @@ const AssistantMessageStatus = ({
     );
   }
 
-  if (showDots) {
-    return <TypingIndicator />;
-  }
-
-  return null;
+  return showDots ? <TypingIndicator /> : null;
 };
 export const AssistantMessage = ({
   actions,

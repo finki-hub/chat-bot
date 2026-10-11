@@ -350,10 +350,8 @@ describe('useConversations resumable streaming', () => {
   it('stops the local chat before awaiting the BFF stop endpoint on explicit stop', async () => {
     useUiStore.setState({ activeConversationId: 'conv-stop' });
     const calls: string[] = [];
-    let resolveServerStop: (() => void) | undefined;
-    const serverStopReleased = new Promise<void>((resolve) => {
-      resolveServerStop = resolve;
-    });
+    const { promise: serverStopReleased, resolve: resolveServerStop } =
+      Promise.withResolvers<undefined>();
     stopChatStream.mockImplementation(async () => {
       calls.push('server');
       await serverStopReleased;
@@ -373,10 +371,7 @@ describe('useConversations resumable streaming', () => {
       activeStreamId: ACTIVE_RESPONSE_ID,
     });
 
-    if (resolveServerStop === undefined) {
-      throw new Error('Server stop resolver was not captured');
-    }
-    resolveServerStop();
+    resolveServerStop(undefined);
     await serverStopReleased;
   });
 
@@ -523,10 +518,8 @@ describe('useConversations resumable streaming', () => {
   it('keeps a newly selected conversation when active delete finishes later', async () => {
     const activeConversationId = ACTIVE_CONVERSATION_ID;
     useUiStore.setState({ activeConversationId });
-    let resolveServerDelete: (() => void) | undefined;
-    const serverDeleteReleased = new Promise<void>((resolve) => {
-      resolveServerDelete = resolve;
-    });
+    const { promise: serverDeleteReleased, resolve: resolveServerDelete } =
+      Promise.withResolvers<undefined>();
     deleteChatConversation.mockImplementation(async () => {
       await serverDeleteReleased;
     });
@@ -548,10 +541,7 @@ describe('useConversations resumable streaming', () => {
       expect(useUiStore.getState().activeConversationId).toBe('conv-next');
     });
 
-    if (resolveServerDelete === undefined) {
-      throw new Error('Server delete resolver was not captured');
-    }
-    resolveServerDelete();
+    resolveServerDelete(undefined);
 
     await waitFor(() => {
       expect(refreshConversations).toHaveBeenCalled();

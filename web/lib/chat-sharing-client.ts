@@ -50,13 +50,9 @@ const isJsonValue = (value: unknown): value is ChatStateJsonValue => {
   ) {
     return true;
   }
-  if (Array.isArray(value)) {
-    return value.every(isJsonValue);
-  }
-  if (isRecord(value)) {
-    return Object.values(value).every(isJsonValue);
-  }
-  return false;
+  return Array.isArray(value)
+    ? value.every(isJsonValue)
+    : isRecord(value) && Object.values(value).every(isJsonValue);
 };
 
 const invalidResponse = (): ChatStateRequestError =>
@@ -127,7 +123,6 @@ export const createChatSharingClient = (): ChatSharingClient => ({
       `${API_BASE_URL}/chat/state/conversations/${encodeURIComponent(conversationId)}/share?${userQuery.toString()}`,
       {
         headers: { 'x-api-key': CHAT_API_KEY },
-        method: 'GET',
       },
     );
     if (response.status === 204) {
@@ -144,7 +139,6 @@ export const createChatSharingClient = (): ChatSharingClient => ({
       {
         cache: 'no-store',
         headers: { 'x-api-key': CHAT_API_KEY },
-        method: 'GET',
       },
     );
     if (!response.ok) {

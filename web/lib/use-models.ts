@@ -35,10 +35,9 @@ export const getModelsSessionKey = (
 
   const provider = session?.user?.provider;
   const providerSubject = session?.user?.providerSubject;
-  if (provider !== undefined && providerSubject !== undefined) {
-    return `${provider}:${providerSubject}`;
-  }
-  return 'authenticated:unknown';
+  return provider !== undefined && providerSubject !== undefined
+    ? `${provider}:${providerSubject}`
+    : 'authenticated:unknown';
 };
 
 export const useModels = () => {

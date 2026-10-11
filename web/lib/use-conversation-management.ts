@@ -145,7 +145,7 @@ export const useConversationManagement = ({
 
   const handleSelect = useCallback(
     (id: string) => {
-      if (id !== convoIdRef.current && status !== 'ready') {
+      if (status !== 'ready' && id !== convoIdRef.current) {
         fireAndForget(
           (async () => {
             await handleStop('local-first');

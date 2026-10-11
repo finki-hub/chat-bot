@@ -109,10 +109,9 @@ export const PUT = async (request: Request): Promise<Response> => {
       return jsonError('Authentication required', 401);
     }
     if (error instanceof ChatStateRequestError) {
-      if (error.status === 422) {
-        return jsonError('Credential base URL is not allowed', error.status);
-      }
-      return jsonError('Credential service request failed', error.status);
+      return error.status === 422
+        ? jsonError('Credential base URL is not allowed', error.status)
+        : jsonError('Credential service request failed', error.status);
     }
     throw error;
   }

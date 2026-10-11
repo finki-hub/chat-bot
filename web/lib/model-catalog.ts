@@ -140,17 +140,17 @@ const normalizeSponsoredQuota = (value: unknown): null | SponsoredQuota => {
   }
 
   const { limit, remaining, resets_at: resetsAt } = value;
-  if (
-    !isNonNegativeInteger(limit) ||
-    !isNonNegativeInteger(remaining) ||
-    remaining > limit ||
+  const limitIsValid = isNonNegativeInteger(limit);
+  const remainingIsValid = isNonNegativeInteger(remaining);
+  const remainingExceedsLimit =
+    limitIsValid && remainingIsValid && remaining > limit;
+  return !remainingIsValid ||
+    !limitIsValid ||
+    remainingExceedsLimit ||
     typeof resetsAt !== 'string' ||
     resetsAt.length === 0
-  ) {
-    return null;
-  }
-
-  return { limit, remaining, resets_at: resetsAt };
+    ? null
+    : { limit, remaining, resets_at: resetsAt };
 };
 
 const normalizeDescriptor = (
@@ -289,10 +289,9 @@ export const recoverSelectedModel = (
   if (models.some((model) => model.id === current)) {
     return current;
   }
-  if (models.some((model) => model.id === fallback)) {
-    return fallback;
-  }
-  return models[0]?.id ?? current;
+  return models.some((model) => model.id === fallback)
+    ? fallback
+    : (models[0]?.id ?? current);
 };
 
 export const providerLabel = (provider: string): string =>

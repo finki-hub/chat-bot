@@ -34,9 +34,9 @@ export const getAuthenticatedChatUserId = async (): Promise<string> => {
   const providerSubject = user?.providerSubject;
 
   if (
-    !isChatUserProvider(provider) ||
     providerSubject === undefined ||
-    providerSubject.length === 0
+    providerSubject.length === 0 ||
+    !isChatUserProvider(provider)
   ) {
     throw new AuthenticationRequiredError();
   }

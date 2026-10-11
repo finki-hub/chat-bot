@@ -30,14 +30,13 @@ type Deferred = {
 };
 
 const createDeferred = (): Deferred => {
-  let resolvePromise: (() => void) | undefined;
-  const promise = new Promise<void>((resolve) => {
-    resolvePromise = resolve;
-  });
-  if (resolvePromise === undefined) {
-    throw new Error('Deferred resolver was not captured');
-  }
-  return { promise, resolve: resolvePromise };
+  const { promise, resolve } = Promise.withResolvers<undefined>();
+  return {
+    promise,
+    resolve: () => {
+      resolve(undefined);
+    },
+  };
 };
 
 describe('ConversationList async actions', () => {

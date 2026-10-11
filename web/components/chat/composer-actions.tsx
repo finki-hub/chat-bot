@@ -76,7 +76,7 @@ const getOptionAccess = (
 
 export const ComposerActions = ({
   availableProviders,
-  disabled,
+  disabled = false,
   groups,
   isBusy,
   model,
@@ -137,9 +137,7 @@ export const ComposerActions = ({
           className="min-h-11 w-fit shrink-0 gap-1.5 rounded-full px-3 text-xs font-medium sm:pointer-fine:min-h-8"
           data-testid="composer-reasoning"
           disabled={
-            (disabled ?? false) ||
-            mandatoryReasoning ||
-            !isReasoningCapableModel(model)
+            disabled || mandatoryReasoning || !isReasoningCapableModel(model)
           }
           onClick={() => {
             onReasoningChange(!reasoningEnabled);

@@ -84,20 +84,13 @@ const urlOf = (input: RequestInfo | URL): string => {
   if (typeof input === 'string') {
     return input;
   }
-  if (input instanceof URL) {
-    return input.href;
-  }
-
-  return input.url;
+  return input instanceof URL ? input.href : input.url;
 };
 
-const methodOf = (input: RequestInfo | URL, init?: RequestInit): string => {
-  if (typeof input !== 'string' && !(input instanceof URL)) {
-    return input.method;
-  }
-
-  return init?.method ?? 'GET';
-};
+const methodOf = (input: RequestInfo | URL, init?: RequestInit): string =>
+  typeof input !== 'string' && !(input instanceof URL)
+    ? input.method
+    : (init?.method ?? 'GET');
 
 describe('useUiStore', () => {
   beforeEach(() => {
@@ -430,11 +423,9 @@ const respondTo = (
   if (CHAT_STOP_URL_PATTERN.test(url)) {
     return Promise.resolve(new Response(null, { status: 204 }));
   }
-  if (url.endsWith('/api/chat/title')) {
-    return Promise.resolve(jsonOk({ title: 'Испитен рок' }));
-  }
-
-  return Promise.resolve(jsonOk({}));
+  return url.endsWith('/api/chat/title')
+    ? Promise.resolve(jsonOk({ title: 'Испитен рок' }))
+    : Promise.resolve(jsonOk({}));
 };
 
 const renderChatPage = (): ReturnType<typeof rtlRender> => {
@@ -525,11 +516,9 @@ describe('ChatPage persistence', () => {
   it('shows the unavailable banner and disables the composer when the backend is down', async () => {
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init) => {
       const url = urlOf(input);
-      if (url.endsWith('/api/health')) {
-        return Promise.resolve(Response.json({ ok: false }, { status: 503 }));
-      }
-
-      return respondTo(url, methodOf(input, init));
+      return url.endsWith('/api/health')
+        ? Promise.resolve(Response.json({ ok: false }, { status: 503 }))
+        : respondTo(url, methodOf(input, init));
     });
 
     renderChatPage();
@@ -621,11 +610,9 @@ describe('ChatPage persistence', () => {
           }),
         );
       }
-      if (url.endsWith('/api/feedback') && methodOf(input, init) === 'POST') {
-        return Promise.resolve(jsonOk({ ok: true }));
-      }
-
-      return respondTo(url, methodOf(input, init));
+      return url.endsWith('/api/feedback') && methodOf(input, init) === 'POST'
+        ? Promise.resolve(jsonOk({ ok: true }))
+        : respondTo(url, methodOf(input, init));
     });
 
     const user = userEvent.setup();

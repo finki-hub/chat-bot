@@ -64,7 +64,7 @@ const conversationIdFrom = (routeUrl: string): string =>
     new URL(routeUrl).pathname.split('/', 4)[3] ?? 'conversation',
   );
 
-const emptyHistoryBody = (id: null | string): string =>
+const emptyHistoryBody = (id: null | string = 'conversation'): string =>
   JSON.stringify({
     conversation: {
       id: id ?? 'conversation',
@@ -91,11 +91,8 @@ const chunksForAnswer = (
   { type: 'finish' },
 ];
 
-const installModelRoute = async (
-  page: Page,
-  catalog: ModelCatalog = SPONSORED_CATALOG,
-): Promise<void> => {
-  await mockModels(page, { catalog });
+const installModelRoute = async (page: Page): Promise<void> => {
+  await mockModels(page, { catalog: SPONSORED_CATALOG });
 };
 
 const installHealthRoute = async (page: Page): Promise<void> => {

@@ -20,7 +20,7 @@ const setupSharingTests = () => {
   writeText.mockClear();
   fetchMock.mockReset();
   fetchMock.mockImplementation((_input, init) =>
-    init?.method === 'GET'
+    (init?.method ?? 'GET') === 'GET'
       ? Promise.resolve(new Response(null, { status: 204 }))
       : Promise.resolve(
           Response.json({ shareToken: SHARE_TOKEN }, { status: 200 }),
@@ -147,10 +147,8 @@ describe('ShareConversationButton', () => {
   });
 
   it('discards a pending share when the active conversation changes', async () => {
-    let resolveShareRequest: ((response: Response) => void) | undefined;
-    const pendingResponse = new Promise<Response>((resolve) => {
-      resolveShareRequest = resolve;
-    });
+    const { promise: pendingResponse, resolve: resolveShareRequest } =
+      Promise.withResolvers<Response>();
     const { ShareConversationButton } =
       await import('@/components/chat/share-conversation-button');
     const { rerender } = render(
@@ -165,12 +163,8 @@ describe('ShareConversationButton', () => {
     });
     rerender(<ShareConversationButton conversationId="conversation-2" />);
 
-    const resolveRequest = resolveShareRequest;
-    if (resolveRequest === undefined) {
-      throw new TypeError('share request did not start');
-    }
     await act(() => {
-      resolveRequest(
+      resolveShareRequest(
         Response.json({ shareToken: SHARE_TOKEN }, { status: 200 }),
       );
       return Promise.resolve();

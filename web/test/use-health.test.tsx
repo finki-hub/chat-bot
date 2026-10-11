@@ -54,21 +54,19 @@ describe('useHealth', () => {
       .mockResolvedValueOnce(healthResponse(200));
     vi.stubGlobal('fetch', fetchMock);
 
-    let resolveFirstRecovery: (() => void) | undefined;
+    const { promise: firstRecovery, resolve: resolveFirstRecovery } =
+      Promise.withResolvers<undefined>();
     const { queryClient } = renderHealthProbe((client) => {
       const state = client.getQueryState(['health']);
-      if (state?.fetchStatus === 'idle' && state.status === 'success') {
-        resolveFirstRecovery?.();
-        resolveFirstRecovery = undefined;
+      if (!(state?.fetchStatus === 'idle' && state.status === 'success')) {
+        return;
       }
+
+      resolveFirstRecovery(undefined);
     });
 
     await waitFor(() => {
       expect(screen.getByTestId('health-state')).toHaveTextContent('down');
-    });
-
-    const firstRecovery = new Promise<void>((resolve) => {
-      resolveFirstRecovery = resolve;
     });
 
     await act(async () => {

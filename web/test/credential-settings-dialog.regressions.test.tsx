@@ -411,12 +411,11 @@ describe('CredentialSettingsDialog save reconciliation', () => {
   });
 
   it('attributes simultaneous save failures to each provider field', async () => {
-    saveCredentialMock.mockImplementation(({ provider }) => {
-      if (provider === 'google') {
-        return Promise.reject(new CredentialBaseUrlRejectedError());
-      }
-      return Promise.resolve(null);
-    });
+    saveCredentialMock.mockImplementation(({ provider }) =>
+      provider === 'google'
+        ? Promise.reject(new CredentialBaseUrlRejectedError())
+        : Promise.resolve(null),
+    );
     renderDialog();
 
     const openaiKey = await screen.findByLabelText(OPENAI_API_KEY_LABEL);

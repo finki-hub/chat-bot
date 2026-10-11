@@ -49,15 +49,11 @@ const persistedTurnFrom = (value: ChatStateJsonValue): null | PersistedTurn => {
   const id = value['id'];
   const role = value['role'];
 
-  if (
-    typeof content !== 'string' ||
+  return typeof content !== 'string' ||
     typeof id !== 'string' ||
     !isConversationRole(role)
-  ) {
-    return null;
-  }
-
-  return { content, id, role };
+    ? null
+    : { content, id, role };
 };
 
 export const persistedTurns = (
