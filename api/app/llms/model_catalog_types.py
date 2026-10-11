@@ -46,8 +46,6 @@ class ModelPricing(BaseModel):
 
     input: float | None = Field(default=None, ge=0)
     output: float | None = Field(default=None, ge=0)
-    cache_read: float | None = Field(default=None, ge=0)
-    cache_write: float | None = Field(default=None, ge=0)
 
 
 class DisplayMetadata(BaseModel):

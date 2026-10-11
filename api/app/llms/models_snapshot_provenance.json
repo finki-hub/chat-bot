@@ -2,7 +2,7 @@
   "source": "https://models.dev/api.json",
   "refreshed_at": "2026-10-11T10:18:03Z",
   "sha256": "0f6e03cfb79703b466f51fd591484d58103c0f8125650502de2511ba391424cc",
-  "snapshot_sha256": "c0cd5af8e3817a4a76babed2ba6697bf01e4837fd8beb605a2bae861de1364c9",
+  "snapshot_sha256": "11cd9f5787801b023fea2710d55dcdc6f7a85ade7fd0801d0089a63af7720a0b",
   "remote_coverage": {
     "complete": false,
     "missing": [
@@ -43,13 +43,11 @@
           "id",
           "name",
           "pricing.input",
-          "pricing.output",
-          "pricing.cache_read"
+          "pricing.output"
         ],
         "pricing_usd_per_1m": {
           "input": 0.3,
-          "output": 2.5,
-          "cache_read": 0.03
+          "output": 2.5
         }
       },
       "claude-opus-5-5": {
@@ -57,15 +55,11 @@
           "id",
           "name",
           "pricing.input",
-          "pricing.output",
-          "pricing.cache_read",
-          "pricing.cache_write"
+          "pricing.output"
         ],
         "pricing_usd_per_1m": {
           "input": 4.0,
-          "output": 20.0,
-          "cache_read": 0.2,
-          "cache_write": 5.0
+          "output": 20.0
         }
       },
       "claude-sonnet-5-5": {
@@ -73,32 +67,23 @@
           "id",
           "name",
           "pricing.input",
-          "pricing.output",
-          "pricing.cache_read",
-          "pricing.cache_write"
+          "pricing.output"
         ],
         "pricing_usd_per_1m": {
           "input": 2.0,
-          "output": 10.0,
-          "cache_read": 0.2,
-          "cache_write": 2.5
+          "output": 10.0
         }
       },
       "claude-haiku-5-5": {
         "fields": [
           "id",
           "name",
-          "pricing.input",
-          "pricing.output",
-          "pricing.cache_read",
-          "pricing.cache_write",
           "pricing.high_context_tier"
         ],
-        "pricing_usd_per_1m": {
+        "pricing_usd_per_1m": null,
+        "base_tier_registry_pricing_usd_per_1m": {
           "input": 0.1,
-          "output": 0.5,
-          "cache_read": 0.01,
-          "cache_write": 0.125
+          "output": 0.5
         },
         "high_context_threshold_input_tokens": 100000,
         "high_context_pricing_usd_per_1m": {

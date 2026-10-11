@@ -157,9 +157,19 @@ and Tencent HY 3. Retired GPT-5.5, GPT-5.4, Gemini 3.5 Flash and DeepSeek V4 Fla
 IDs remain compatibility-only and are not offered by the picker. The Ollama catalog
 uses multilingual Qwen3 30B and 14B quantizations selected to fit a 24 GB GPU; the
 advertised context limits still require enough remaining memory for the KV cache.
-The seven recently retired hosted IDs remain accepted as request/configuration aliases
-and are normalized to their current catalog IDs; stored conversation and message model
-metadata is deliberately read and retained verbatim.
+These seven model replacements require a coordinated API/browser deployment:
+`gpt-5.6-luna` → `gpt-6-luna`, `gpt-5.6-sol` → `gpt-6.1-sol`,
+`claude-opus-4-8` → `claude-opus-5-5`, `claude-sonnet-5` → `claude-sonnet-5-5`,
+`claude-haiku-4-5` → `claude-haiku-5-5`, `gemini-3.1-flash-lite` →
+`gemini-3.5-flash-lite`, and `openrouter:x-ai/grok-4.6` →
+`openrouter:x-ai/grok-4.7`. The API rejects retired IDs at inference, query-transform,
+title-generation, and sponsored-model configuration boundaries; there is no runtime
+alias layer or database migration. Before deploying, update an existing `.env`
+`SPONSORED_MODEL_ID` from `gpt-5.6-luna` to `gpt-6-luna` (or another current curated
+ID with its matching provider). The versioned browser preference migration upgrades
+saved inference-model preferences as part of the coordinated browser release. Existing
+conversation/message model metadata remains readable and unchanged; conversation history
+does not select the current inference preference.
 
 `BAAI/bge-m3`, `text-embedding-3-large`, and `gemini-embedding-001` are active for authenticated chat requests. Corpus fill jobs remain limited to local BGE-M3 because they do not have a user credential boundary. Legacy embedding columns and historical model values remain readable for existing data.
 
@@ -178,7 +188,7 @@ is unchanged.
 | Setting | Default | Meaning and security requirement |
 | --- | --- | --- |
 | `SPONSORED_MODEL_ENABLED` | `false` | Kill switch. Keep `false` until the release gate below passes. |
-| `SPONSORED_MODEL_ID` | `gpt-6-luna` | Public catalog model ID for the sponsored profile. Retired model IDs are accepted as configuration aliases and normalized to the current ID. |
+| `SPONSORED_MODEL_ID` | `gpt-6-luna` | Current public catalog model ID for the sponsored profile; retired IDs are rejected. |
 | `SPONSORED_MODEL_PROVIDER` | `openai` | Provider name for the sponsored profile. |
 | `SPONSORED_MODEL_API_KEY` | empty | Dedicated provider secret for sponsored inference. It must not be copied from or substituted with `API_KEY`, a user BYOK key, or a Discord secret. |
 | `SPONSORED_MODEL_BASE_URL` | empty | Optional dedicated HTTPS OpenAI-compatible endpoint for sponsored inference only. It is canonicalized and validated separately from `BYOK_ALLOWED_BASE_URLS`; it must not be used as a user endpoint allowlist. |

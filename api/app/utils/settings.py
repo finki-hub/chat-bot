@@ -14,7 +14,7 @@ from pydantic import (
 from pydantic_settings import BaseSettings
 
 from app.llms.model_catalog_policy import CURATED_CHAT_MODELS
-from app.llms.models import Model, resolve_chat_model_alias
+from app.llms.models import Model
 from app.llms.provider_credentials import ProviderName, provider_for_model
 
 _API_KEY_DEFAULT: Final[str] = "your_api_key_here"
@@ -163,6 +163,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_sponsored_model_settings(self) -> Self:
+        try:
+            model = Model(self.SPONSORED_MODEL_ID)
+        except ValueError:
+            msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
+            raise ValueError(msg) from None
+        if model not in CURATED_CHAT_MODELS:
+            msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
+            raise ValueError(msg)
         if not self.SPONSORED_MODEL_ENABLED:
             return self
         if (
@@ -173,14 +181,6 @@ class Settings(BaseSettings):
             raise ValueError(msg)
         if self.SPONSORED_DAILY_GLOBAL_LIMIT is None:
             msg = "SPONSORED_DAILY_GLOBAL_LIMIT is required when SPONSORED_MODEL_ENABLED is true"
-            raise ValueError(msg)
-        try:
-            model = Model(self.SPONSORED_MODEL_ID)
-        except ValueError:
-            msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
-            raise ValueError(msg) from None
-        if model not in CURATED_CHAT_MODELS:
-            msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
             raise ValueError(msg)
         derived_provider = provider_for_model(model)
         if derived_provider == "ollama":
@@ -211,13 +211,6 @@ class Settings(BaseSettings):
     ) -> int | str | None:
         if isinstance(value, str) and not value.strip():
             return None
-        return value
-
-    @field_validator("SPONSORED_MODEL_ID", mode="before")
-    @classmethod
-    def normalize_sponsored_model_alias(cls, value: object) -> object:
-        if isinstance(value, str):
-            return resolve_chat_model_alias(value)
         return value
 
     @field_validator("SPONSORED_MODEL_BASE_URL", mode="before")

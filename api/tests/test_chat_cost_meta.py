@@ -76,14 +76,14 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
     chunks, props = _run_captured_stream(
         monkeypatch,
         _body(),
-        Model.CLAUDE_HAIKU_5_5,
+        Model.CLAUDE_SONNET_5_5,
     )
     meta = json.loads(chunks[-1].split("data:", 1)[1].strip())
 
-    assert meta["cost"]["input_usd"] == pytest.approx(0.0001)
-    assert meta["cost"]["output_usd"] == pytest.approx(0.0005)
-    assert meta["cost"]["total_usd"] == pytest.approx(0.0006)
-    assert props["$ai_total_cost_usd"] == pytest.approx(0.0006)
+    assert meta["cost"]["input_usd"] == pytest.approx(0.002)
+    assert meta["cost"]["output_usd"] == pytest.approx(0.01)
+    assert meta["cost"]["total_usd"] == pytest.approx(0.012)
+    assert props["$ai_total_cost_usd"] == pytest.approx(0.012)
     assert props["$ai_input"] == {"count": 1, "roles": ["user"]}
     assert props["$session_id"] == "session-1"
     assert props["$ai_output_choices"] == [{"role": "assistant", "content_length": 6}]

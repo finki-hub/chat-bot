@@ -282,6 +282,25 @@ def test_sponsored_model_rejects_out_of_catalog_id():
         )
 
 
+@pytest.mark.parametrize(
+    "retired_model",
+    [
+        "gpt-5.6-luna",
+        "gpt-5.6-sol",
+        "claude-opus-4-8",
+        "claude-sonnet-5",
+        "claude-haiku-4-5",
+        "gemini-3.1-flash-lite",
+        "openrouter:x-ai/grok-4.6",
+    ],
+)
+def test_sponsored_model_config_rejects_retired_ids_even_when_disabled(
+    retired_model: str,
+) -> None:
+    with pytest.raises(ValueError, match="SPONSORED_MODEL_ID"):
+        Settings(SPONSORED_MODEL_ID=retired_model)
+
+
 def test_sponsored_model_accepts_visible_non_luna_profile():
     settings = Settings(
         SPONSORED_MODEL_ENABLED=True,

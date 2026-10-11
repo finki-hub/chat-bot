@@ -130,7 +130,7 @@ describe('useConversationChatRuntime sponsored errors', () => {
     const { result } = renderHook(() =>
       useConversationChatRuntime({
         activeId: 'legacy-model-conversation',
-        model: 'claude-sonnet-5',
+        model: 'claude-sonnet-5-5',
         preserveEmptyHydrationIdRef: { current: null },
         reasoning: false,
         refreshConversations,

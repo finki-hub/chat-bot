@@ -1,7 +1,17 @@
 import pytest
 
-from app.llms.models import LEGACY_CHAT_MODEL_ALIASES
 from app.schemas.chat import ChatSchema
+from app.schemas.chat_title import ChatTitleSchema
+
+RETIRED_MODEL_IDS = (
+    "gpt-5.6-luna",
+    "gpt-5.6-sol",
+    "claude-opus-4-8",
+    "claude-sonnet-5",
+    "claude-haiku-4-5",
+    "gemini-3.1-flash-lite",
+    "openrouter:x-ai/grok-4.6",
+)
 
 
 def test_chat_schema_accepts_dynamic_ollama_chat_model_tag():
@@ -35,24 +45,53 @@ def test_chat_schema_rejects_unknown_non_ollama_chat_model_id():
         )
 
 
-@pytest.mark.parametrize(
-    ("legacy_id", "canonical"),
-    [(alias, model.value) for alias, model in LEGACY_CHAT_MODEL_ALIASES.items()],
-)
-def test_chat_schema_normalizes_legacy_inference_and_query_transform_ids(
-    legacy_id: str,
-    canonical: str,
-) -> None:
-    payload = ChatSchema.model_validate(
-        {
-            "inference_model": legacy_id,
-            "query_transform_model": legacy_id,
-            "messages": [{"role": "user", "content": "hi"}],
-        },
-    )
+@pytest.mark.parametrize("model_id", RETIRED_MODEL_IDS)
+def test_chat_schema_rejects_retired_inference_model_ids(model_id: str) -> None:
+    with pytest.raises(
+        ValueError, match="inference_model must be an active chat model"
+    ):
+        ChatSchema.model_validate(
+            {
+                "inference_model": model_id,
+                "messages": [{"role": "user", "content": "hi"}],
+            },
+        )
 
-    assert payload.inference_model == canonical
-    assert payload.query_transform_model == canonical
+
+@pytest.mark.parametrize("model_id", RETIRED_MODEL_IDS)
+def test_chat_schema_rejects_retired_query_transform_model_ids(model_id: str) -> None:
+    with pytest.raises(
+        ValueError,
+        match="query_transform_model must be a chat-capable model",
+    ):
+        ChatSchema.model_validate(
+            {
+                "query_transform_model": model_id,
+                "messages": [{"role": "user", "content": "hi"}],
+            },
+        )
+
+
+@pytest.mark.parametrize("model_id", RETIRED_MODEL_IDS)
+@pytest.mark.parametrize(
+    ("field", "error"),
+    [
+        ("provider_model", "provider_model must be a chat-capable model"),
+        ("query_transform_model", "query_transform_model must be a chat-capable model"),
+    ],
+)
+def test_chat_title_schema_rejects_retired_model_ids(
+    model_id: str,
+    field: str,
+    error: str,
+) -> None:
+    with pytest.raises(ValueError, match=error):
+        ChatTitleSchema.model_validate(
+            {
+                "messages": [{"role": "user", "content": "hi"}],
+                field: model_id,
+            },
+        )
 
 
 @pytest.mark.parametrize(

@@ -99,16 +99,6 @@ CHAT_MODEL_ORDER: Final[tuple[Model, ...]] = (
 CHAT_MODELS: Final[frozenset[Model]] = frozenset(CHAT_MODEL_ORDER)
 type ChatModel = Model | str
 
-LEGACY_CHAT_MODEL_ALIASES: Final[dict[str, Model]] = {
-    "gpt-5.6-luna": Model.GPT_6_LUNA,
-    "gpt-5.6-sol": Model.GPT_6_1_SOL,
-    "claude-opus-4-8": Model.CLAUDE_OPUS_5_5,
-    "claude-sonnet-5": Model.CLAUDE_SONNET_5_5,
-    "claude-haiku-4-5": Model.CLAUDE_HAIKU_5_5,
-    "gemini-3.1-flash-lite": Model.GEMINI_3_5_FLASH_LITE,
-    "openrouter:x-ai/grok-4.6": Model.OPENROUTER_GROK_4_7,
-}
-
 _OLLAMA_MODEL_TAG_PATTERN: Final = re.compile(
     r"[A-Za-z0-9][A-Za-z0-9._/-]*:[A-Za-z0-9][A-Za-z0-9._-]*",
 )
@@ -256,15 +246,7 @@ def is_ollama_model_tag(value: str) -> bool:
     )
 
 
-def resolve_chat_model_alias(value: Model | str) -> Model | str:
-    """Resolve retired public chat IDs without changing persisted historical data."""
-    if isinstance(value, Model):
-        return value
-    return LEGACY_CHAT_MODEL_ALIASES.get(value, value)
-
-
 def parse_chat_model(value: Model | str, active_models: frozenset[Model]) -> ChatModel:
-    value = resolve_chat_model_alias(value)
     if isinstance(value, Model):
         if value in active_models:
             return value

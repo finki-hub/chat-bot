@@ -8,7 +8,6 @@ import type {
 } from '@/lib/api-types';
 
 import { t, type TKey } from '@/lib/i18n';
-import { normalizeModelId } from '@/lib/model-aliases';
 
 /* eslint-disable camelcase -- catalog fields mirror the Python wire contract. */
 
@@ -88,43 +87,6 @@ export const CURATED_MODEL_DESCRIPTORS: Readonly<
     { id, name, provider },
   ]),
 );
-
-// Keep readable labels for legacy ids only when an older server still returns
-// them in its string-array catalog. They remain legacy ids, not supported-model
-// aliases to their replacements.
-const LEGACY_MODEL_DESCRIPTORS: Readonly<Record<string, ModelDescriptor>> = {
-  'claude-haiku-4-5': {
-    id: 'claude-haiku-4-5',
-    name: 'Claude Haiku 4.5',
-    provider: 'anthropic',
-  },
-  'claude-opus-4-8': {
-    id: 'claude-opus-4-8',
-    name: 'Claude Opus 4.8',
-    provider: 'anthropic',
-  },
-  'claude-sonnet-5': {
-    id: 'claude-sonnet-5',
-    name: 'Claude Sonnet 5',
-    provider: 'anthropic',
-  },
-  'gemini-3.1-flash-lite': {
-    id: 'gemini-3.1-flash-lite',
-    name: 'Gemini 3.1 Flash Lite',
-    provider: 'google',
-  },
-  'gpt-5.6-luna': {
-    id: 'gpt-5.6-luna',
-    name: 'GPT-5.6 Luna',
-    provider: 'openai',
-  },
-  'gpt-5.6-sol': { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', provider: 'openai' },
-  'openrouter:x-ai/grok-4.6': {
-    id: 'openrouter:x-ai/grok-4.6',
-    name: 'Grok 4.6',
-    provider: 'openrouter',
-  },
-};
 
 const PROVIDER_PREFIXES: ReadonlyArray<readonly [string, CatalogProvider]> = [
   ['openrouter:', 'openrouter'],
@@ -271,12 +233,7 @@ export const parseModelCatalog = (value: unknown): ModelCatalog => {
 
   if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
     const models = value
-      .map(
-        (id) =>
-          CURATED_MODEL_DESCRIPTORS[id] ??
-          LEGACY_MODEL_DESCRIPTORS[id] ??
-          normalizeDescriptor({ id }),
-      )
+      .map((id) => CURATED_MODEL_DESCRIPTORS[id] ?? normalizeDescriptor({ id }))
       .filter(
         (model): model is ModelDescriptor =>
           model !== null && !HIDDEN_CURATED_MODEL_IDS.has(model.id),
@@ -318,9 +275,9 @@ export const isModelAvailable = (
   (model.availability !== 'unavailable' &&
     availableProviders.has(model.provider));
 
-// Repair a persisted selection when the catalog no longer contains it: prefer the current
-// model, then the default, then the first available model, and only keep an unknown id when
-// the catalog is empty (so a transient miss never wipes it).
+// Repair a selection when the catalog no longer contains it: prefer the current
+// model, then the default, then the first available model, preserving it on an
+// empty catalog so a transient miss never wipes it.
 export const recoverSelectedModel = (
   models: readonly ModelDescriptor[],
   current: string,
@@ -329,14 +286,11 @@ export const recoverSelectedModel = (
   if (models.length === 0) {
     return current;
   }
-  const normalizedCurrent = normalizeModelId(current);
-  if (models.some((model) => model.id === normalizedCurrent)) {
-    return normalizedCurrent;
+  if (models.some((model) => model.id === current)) {
+    return current;
   }
-  if (models.some((model) => model.id === current)) return current;
-  const normalizedFallback = normalizeModelId(fallback);
-  if (models.some((model) => model.id === normalizedFallback)) {
-    return normalizedFallback;
+  if (models.some((model) => model.id === fallback)) {
+    return fallback;
   }
   return models[0]?.id ?? current;
 };

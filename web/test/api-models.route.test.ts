@@ -27,8 +27,8 @@ const OPENAI = 'openai';
 const ANTHROPIC = 'anthropic';
 const GPT_MINI = 'gpt-5.4-mini';
 const GPT_MINI_NAME = 'GPT-5.4 Mini';
-const CLAUDE_5 = 'claude-sonnet-5';
-const CLAUDE_5_NAME = 'Claude Sonnet 5';
+const CLAUDE_5 = 'claude-sonnet-5-5';
+const CLAUDE_5_NAME = 'Claude Sonnet 5.5';
 const OLLAMA_MODEL = 'llama3.2:latest';
 
 const okJson = (body: unknown, init?: ResponseInit): Response =>

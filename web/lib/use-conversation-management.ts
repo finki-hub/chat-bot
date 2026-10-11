@@ -12,7 +12,6 @@ import type { StopOrder } from '@/lib/use-stop-chat';
 import { fireAndForget } from '@/lib/async';
 import { t } from '@/lib/i18n';
 import { deriveTitle } from '@/lib/messages';
-import { normalizeModelId } from '@/lib/model-aliases';
 import {
   ChatConversationRequestError,
   clearChatConversations,
@@ -93,7 +92,7 @@ export const useConversationManagement = ({
         try {
           await saveChatConversation({
             id: cid,
-            model: normalizeModelId(model),
+            model,
             title: expectedTitle,
           });
         } catch (error) {

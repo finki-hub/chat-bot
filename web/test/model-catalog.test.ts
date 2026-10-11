@@ -45,7 +45,6 @@ const GPT_NANO = 'gpt-5.4-nano';
 const GEMINI_PRO = 'gemini-3.1-pro-preview';
 const CLAUDE_OPUS = 'claude-opus-5-5';
 const CLAUDE_LEGACY = 'claude-sonnet-4-6';
-const LEGACY_LUNA = 'gpt-5.6-luna';
 const QWEN_THINKING = 'qwen3:30b-a3b-thinking-2507-q4_K_M';
 
 const EXPECTED_CURATED_IDS = [
@@ -487,32 +486,19 @@ describe('recoverSelectedModel', () => {
     expect(recoverSelectedModel(models, 'ghost', 'also-ghost')).toBe(GPT);
   });
 
+  it('does not translate retired ids outside the persisted-state migration', () => {
+    const replacementAndDefault = [
+      descriptor('gpt-6-luna', OPENAI),
+      descriptor(GPT_MINI, OPENAI),
+    ];
+
+    expect(
+      recoverSelectedModel(replacementAndDefault, 'gpt-5.6-luna', GPT_MINI),
+    ).toBe(GPT_MINI);
+  });
+
   it('keeps the current model when the catalog is empty', () => {
     expect(recoverSelectedModel([], CLAUDE_LEGACY, GPT)).toBe(CLAUDE_LEGACY);
-  });
-
-  it('prefers a supported replacement and otherwise preserves a supported legacy id', () => {
-    const oldCatalog = [descriptor(LEGACY_LUNA, OPENAI)];
-
-    expect(recoverSelectedModel(oldCatalog, LEGACY_LUNA, GPT)).toBe(
-      LEGACY_LUNA,
-    );
-    expect(oldCatalog[0]?.id).toBe(LEGACY_LUNA);
-    expect(
-      recoverSelectedModel(
-        [descriptor('gpt-6-luna', OPENAI)],
-        LEGACY_LUNA,
-        GPT,
-      ),
-    ).toBe('gpt-6-luna');
-  });
-
-  it('recovers an unsupported legacy selection against unrelated nonempty catalogs', () => {
-    const unrelatedCatalog = [descriptor('unrelated-model', OPENAI)];
-
-    expect(recoverSelectedModel(unrelatedCatalog, 'gpt-5.6-luna', GPT)).toBe(
-      'unrelated-model',
-    );
   });
 
   it('recovers a retired persisted selection to the current visible default', () => {
