@@ -79,7 +79,6 @@ MODEL_CATALOG: Final[tuple[CatalogPolicy, ...]] = (
     _policy(Model.OPENROUTER_QWEN3_8_27B, "openrouter", "Qwen3.8 27B"),
     _policy(Model.OPENROUTER_MINIMAX_M3, "openrouter", "MiniMax M3"),
     _policy(Model.OPENROUTER_GROK_4_7, "openrouter", "Grok 4.7"),
-    _policy(Model.OPENROUTER_HY3, "openrouter", "Tencent HY 3"),
 )
 
 _CATALOG_MODELS = tuple(policy.model for policy in MODEL_CATALOG)

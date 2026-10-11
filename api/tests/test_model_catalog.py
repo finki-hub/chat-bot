@@ -38,7 +38,6 @@ EXPECTED_IDS = [
     "openrouter:qwen/qwen3.8-27b",
     "openrouter:minimax/minimax-m3",
     "openrouter:x-ai/grok-4.7",
-    "openrouter:tencent/hy3",
 ]
 
 
@@ -86,7 +85,6 @@ def test_static_catalog_has_exact_order_and_providers_without_tiers() -> None:
         "anthropic",
         "anthropic",
         "anthropic",
-        "openrouter",
         "openrouter",
         "openrouter",
         "openrouter",

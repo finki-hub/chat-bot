@@ -17,6 +17,7 @@ RETIRED_MODEL_IDS = (
     "openrouter:deepseek/deepseek-v4-flash",
     "openrouter:deepseek/deepseek-v4-flash-0731",
     "openrouter:qwen/qwen3.8-max",
+    "openrouter:tencent/hy3",
 )
 
 

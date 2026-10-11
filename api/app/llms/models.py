@@ -32,7 +32,6 @@ class Model(StrEnum):
     OPENROUTER_QWEN3_8_27B = "openrouter:qwen/qwen3.8-27b"
     OPENROUTER_MINIMAX_M3 = "openrouter:minimax/minimax-m3"
     OPENROUTER_GROK_4_7 = "openrouter:x-ai/grok-4.7"
-    OPENROUTER_HY3 = "openrouter:tencent/hy3"
 
     QWEN3_30B_THINKING = "qwen3:30b-a3b-thinking-2507-q4_K_M"
     QWEN3_30B_INSTRUCT = "qwen3:30b-a3b-instruct-2507-q4_K_M"
@@ -82,7 +81,6 @@ CHAT_MODEL_ORDER: Final[tuple[Model, ...]] = (
     Model.OPENROUTER_QWEN3_8_27B,
     Model.OPENROUTER_MINIMAX_M3,
     Model.OPENROUTER_GROK_4_7,
-    Model.OPENROUTER_HY3,
 )
 CHAT_MODELS: Final[frozenset[Model]] = frozenset(CHAT_MODEL_ORDER)
 type ChatModel = Model | str
@@ -127,7 +125,6 @@ OPENROUTER_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
         Model.OPENROUTER_QWEN3_8_27B,
         Model.OPENROUTER_MINIMAX_M3,
         Model.OPENROUTER_GROK_4_7,
-        Model.OPENROUTER_HY3,
     },
 )
 OPENROUTER_MANDATORY_REASONING_MODELS: Final[frozenset[Model]] = frozenset(

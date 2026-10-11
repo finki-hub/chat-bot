@@ -52,7 +52,6 @@ EXPECTED_CHAT_IDS = (
     "openrouter:qwen/qwen3.8-27b",
     "openrouter:minimax/minimax-m3",
     "openrouter:x-ai/grok-4.7",
-    "openrouter:tencent/hy3",
 )
 
 
@@ -89,6 +88,7 @@ def test_removed_chat_values_are_not_parseable_or_active() -> None:
         "openrouter:deepseek/deepseek-v4-flash",
         "openrouter:deepseek/deepseek-v4-flash-0731",
         "openrouter:qwen/qwen3.8-max",
+        "openrouter:tencent/hy3",
     }
 
     # When active and enum values are compared with the removed values

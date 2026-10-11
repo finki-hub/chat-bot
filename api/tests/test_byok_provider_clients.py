@@ -502,7 +502,6 @@ def test_sponsored_openrouter_client_uses_known_upstream_reasoning() -> None:
         (Model.OPENROUTER_QWEN3_8_27B, {"effort": "medium"}),
         (Model.OPENROUTER_MINIMAX_M3, {}),
         (Model.OPENROUTER_GROK_4_7, {"effort": "high"}),
-        (Model.OPENROUTER_HY3, {"effort": "high"}),
     ],
 )
 def test_openrouter_client_uses_supported_reasoning_configuration(

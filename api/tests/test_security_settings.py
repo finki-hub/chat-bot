@@ -292,6 +292,7 @@ def test_sponsored_model_rejects_out_of_catalog_id():
         "claude-haiku-4-5",
         "gemini-3.1-flash-lite",
         "openrouter:x-ai/grok-4.6",
+        "openrouter:tencent/hy3",
     ],
 )
 def test_sponsored_model_config_rejects_retired_ids_even_when_disabled(

@@ -148,12 +148,13 @@ for six hours; refresh failures serve the last successful catalog, and cold-star
 failures use the bundled snapshot. Remote metadata cannot add executable model IDs,
 change providers or alter execution policy.
 
-The hosted picker includes these 22 curated models: GPT-6 Astra, GPT-6.1 Sol,
+The hosted picker includes these 21 curated models: GPT-6 Astra, GPT-6.1 Sol,
 GPT-5.6 Terra, GPT-6 Luna, GPT-5.4 Mini, GPT-5.4 Nano, Gemini 3.8 Flash, Gemini
 3.1 Pro Preview, Gemini 3.5 Flash Lite, Claude Fable 5.1, Claude Opus 5.5, Claude
 Sonnet 5.5, Claude Haiku 5.5, plus the OpenRouter models DeepSeek V4.1 Flash, DeepSeek
-V4 Pro 0813, GLM-5.3, Kimi K3, Qwen3.8 Max 0902, Qwen3.8 27B, MiniMax M3, Grok 4.7
-and Tencent HY 3. The retired GPT-5.5/GPT-5.4, Gemini 3.5 Flash, DeepSeek V4 Flash,
+V4 Pro 0813, GLM-5.3, Kimi K3, Qwen3.8 Max 0902, Qwen3.8 27B, MiniMax M3, and Grok 4.7.
+Tencent HY 3 is retired and rejected by the API; its old browser preference is migrated
+to the current default model. The retired GPT-5.5/GPT-5.4, Gemini 3.5 Flash, DeepSeek V4 Flash,
 and unsuffixed Qwen3.8 Max IDs are no longer executable and are rejected by the API;
 Qwen3.8 Max 0902 remains an active, distinct model. The Ollama catalog uses multilingual
 Qwen3 30B and 14B quantizations selected to fit a 24 GB GPU; the advertised context

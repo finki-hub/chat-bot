@@ -23,7 +23,6 @@ describe('isReasoningCapableModel', () => {
       'openrouter:moonshotai/kimi-k3',
       'openrouter:qwen/qwen3.8-max-0902',
       'openrouter:x-ai/grok-4.7',
-      'openrouter:tencent/hy3',
       'qwen3:30b-a3b-thinking-2507-q4_K_M',
       'qwen3:14b-q4_K_M',
     ];

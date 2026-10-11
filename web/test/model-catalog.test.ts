@@ -59,7 +59,6 @@ const EXPECTED_CURATED_IDS = [
   'openrouter:qwen/qwen3.8-27b',
   'openrouter:minimax/minimax-m3',
   'openrouter:x-ai/grok-4.7',
-  'openrouter:tencent/hy3',
   'qwen3:30b-a3b-thinking-2507-q4_K_M',
   'qwen3:30b-a3b-instruct-2507-q4_K_M',
   'qwen3:14b-q4_K_M',
@@ -111,7 +110,7 @@ describe('parseModelCatalog', () => {
     expect(Object.keys(CURATED_MODEL_DESCRIPTORS)).toStrictEqual(
       EXPECTED_CURATED_IDS,
     );
-    expect(Object.keys(CURATED_MODEL_DESCRIPTORS)).toHaveLength(25);
+    expect(Object.keys(CURATED_MODEL_DESCRIPTORS)).toHaveLength(24);
     expect(Object.keys(CURATED_MODEL_DESCRIPTORS).slice(-3)).toStrictEqual([
       'qwen3:30b-a3b-thinking-2507-q4_K_M',
       'qwen3:30b-a3b-instruct-2507-q4_K_M',

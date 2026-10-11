@@ -36,6 +36,7 @@ const LEGACY_MODEL_MIGRATIONS = new Map([
     'openrouter:deepseek/deepseek-v4.1-flash',
   ],
   ['openrouter:qwen/qwen3.8-max', 'openrouter:qwen/qwen3.8-max-0902'],
+  ['openrouter:tencent/hy3', DEFAULT_MODEL],
   ['openrouter:x-ai/grok-4.6', 'openrouter:x-ai/grok-4.7'],
 ]);
 

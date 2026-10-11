@@ -23,6 +23,7 @@ const LEGACY_MAPPINGS = [
   ['claude-haiku-4-5', 'claude-haiku-5-5'],
   ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'],
   ['openrouter:x-ai/grok-4.6', 'openrouter:x-ai/grok-4.7'],
+  ['openrouter:tencent/hy3', DEFAULT_MODEL],
 ] as const;
 
 const storeValue = (): { state: Record<string, unknown>; version: number } =>
@@ -41,8 +42,8 @@ describe('versioned persisted model selection', () => {
     });
   });
 
-  it('keeps exactly thirteen one-time migration entries', () => {
-    expect(LEGACY_MAPPINGS).toHaveLength(13);
+  it('keeps exactly fourteen one-time migration entries', () => {
+    expect(LEGACY_MAPPINGS).toHaveLength(14);
   });
 
   it.each(LEGACY_MAPPINGS)(

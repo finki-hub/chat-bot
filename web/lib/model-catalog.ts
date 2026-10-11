@@ -64,7 +64,6 @@ const CURATED_MODEL_DATA = [
   ['openrouter:qwen/qwen3.8-27b', 'Qwen3.8 27B', 'openrouter'],
   ['openrouter:minimax/minimax-m3', 'MiniMax M3', 'openrouter'],
   ['openrouter:x-ai/grok-4.7', 'Grok 4.7', 'openrouter'],
-  ['openrouter:tencent/hy3', 'Tencent HY 3', 'openrouter'],
   ['qwen3:30b-a3b-thinking-2507-q4_K_M', 'Qwen3 30B Thinking', 'ollama'],
   ['qwen3:30b-a3b-instruct-2507-q4_K_M', 'Qwen3 30B Instruct', 'ollama'],
   ['qwen3:14b-q4_K_M', 'Qwen3 14B', 'ollama'],
