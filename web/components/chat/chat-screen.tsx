@@ -75,9 +75,9 @@ export const ChatScreen = () => {
     [showCredentialSettings],
   );
   const openCredentialSettingsFromAccount = useCallback(
-    (accountTrigger?: HTMLButtonElement) => {
+    (accountTrigger: HTMLButtonElement | null = null) => {
       showCredentialSettings(
-        desktopSidebar ? (accountTrigger ?? null) : sidebarTriggerRef.current,
+        desktopSidebar ? accountTrigger : sidebarTriggerRef.current,
       );
     },
     [desktopSidebar, showCredentialSettings],

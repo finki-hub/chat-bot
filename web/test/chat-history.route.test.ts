@@ -40,9 +40,7 @@ const importGet = async (): Promise<
 };
 
 const historyRequest = (): Request =>
-  new Request(`http://localhost/api/chat/${CONVERSATION_ID}/history`, {
-    method: 'GET',
-  });
+  new Request(`http://localhost/api/chat/${CONVERSATION_ID}/history`);
 
 const routeContext = () => ({
   params: Promise.resolve({ id: CONVERSATION_ID }),

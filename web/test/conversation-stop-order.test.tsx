@@ -65,10 +65,8 @@ describe('conversation stop order', () => {
   });
 
   it('waits for local stop before selecting another streaming conversation', async () => {
-    let resolveLocalStop: (() => void) | undefined;
-    const localStopReleased = new Promise<void>((resolve) => {
-      resolveLocalStop = resolve;
-    });
+    const { promise: localStopReleased, resolve: resolveLocalStop } =
+      Promise.withResolvers<undefined>();
     localStop.mockReturnValue(localStopReleased);
     const { result } = renderHook(() => useConversations('model-a'));
 
@@ -78,10 +76,7 @@ describe('conversation stop order', () => {
 
     expect(useUiStore.getState().activeConversationId).toBe('conv-a');
 
-    if (resolveLocalStop === undefined) {
-      throw new Error('Local stop resolver was not captured');
-    }
-    resolveLocalStop();
+    resolveLocalStop(undefined);
 
     await waitFor(() => {
       expect(useUiStore.getState().activeConversationId).toBe('conv-b');

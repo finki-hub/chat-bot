@@ -285,7 +285,7 @@ export const ChatShowcase = () => {
 
     const [first] = EXCHANGES;
 
-    if (prefersReducedMotion() && first !== undefined) {
+    if (first !== undefined && prefersReducedMotion()) {
       setMessages([
         { key: 'static-q', role: 'user', text: first.question },
         {

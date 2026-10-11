@@ -406,10 +406,8 @@ export const POST = async (req: Request): Promise<Response> => {
       stream,
     });
   } catch (error) {
-    if (error instanceof AuthenticationRequiredError) {
-      return unauthenticated();
-    }
-
-    return errorResponse({}, 'internal', 'Request failed');
+    return error instanceof AuthenticationRequiredError
+      ? unauthenticated()
+      : errorResponse({}, 'internal', 'Request failed');
   }
 };

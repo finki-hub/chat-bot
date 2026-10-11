@@ -66,13 +66,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const asNumberOrNull = (value: unknown): null | number =>
   typeof value === 'number' ? value : null;
 
-const toSourceKind = (value: unknown): null | RetrievedSourceKind => {
-  if (value === 'chunk' || value === 'faq') {
-    return value;
-  }
-
-  return null;
-};
+const toSourceKind = (value: unknown): null | RetrievedSourceKind =>
+  value === 'chunk' || value === 'faq' ? value : null;
 
 const toSourceLinks = (value: unknown): readonly RetrievedSourceLink[] => {
   if (!Array.isArray(value)) {
@@ -326,7 +321,7 @@ const buildEvent = (
 const parseFrame = (frame: string): null | ParsedEvent => {
   const { dataRaw, eventName } = splitFrame(frame);
 
-  if (dataRaw.length === 0 && eventName === null) {
+  if (eventName === null && dataRaw.length === 0) {
     return null;
   }
 
@@ -378,12 +373,13 @@ export const parseProtocolV2 = async function* (
 
   const tail = buffer.replaceAll('\r\n', '\n').trim();
 
-  if (tail) {
-    const ev = parseFrame(tail);
+  if (!tail) {
+    return;
+  }
 
-    if (ev) {
-      yield ev;
-    }
+  const tailEvent = parseFrame(tail);
+  if (tailEvent) {
+    yield tailEvent;
   }
 };
 

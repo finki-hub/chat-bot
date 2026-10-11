@@ -1,22 +1,24 @@
-import { defineConfig, devices } from '@playwright/test';
+import { devices, type PlaywrightTestConfig } from '@playwright/test';
 
 const isCI = Boolean(process.env['CI']);
 const port = process.env['PLAYWRIGHT_PORT'] ?? '3000';
 const baseURL =
   process.env['PLAYWRIGHT_BASE_URL'] ?? `http://127.0.0.1:${port}`;
+const DESKTOP_CHAT_REGEX = /mobile-chat\.spec\.ts/u;
+const MOBILE_CHAT_REGEX = /mobile-chat\.spec\.ts/u;
 
-export default defineConfig({
+const config = {
   forbidOnly: isCI,
   fullyParallel: true,
   projects: [
     {
       name: 'chromium',
-      testIgnore: /mobile-chat\.spec\.ts/u,
+      testIgnore: DESKTOP_CHAT_REGEX,
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'mobile-chromium',
-      testMatch: /mobile-chat\.spec\.ts/u,
+      testMatch: MOBILE_CHAT_REGEX,
       use: { ...devices['Pixel 5'] },
     },
   ],
@@ -37,4 +39,6 @@ export default defineConfig({
     timeout: 120_000,
     url: baseURL,
   },
-});
+} satisfies PlaywrightTestConfig;
+
+export default config;

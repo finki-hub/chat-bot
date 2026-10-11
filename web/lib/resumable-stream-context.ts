@@ -20,7 +20,7 @@ type ActiveProducerRegistry = {
 };
 
 type CreateContextOptions = {
-  readonly waitUntil?: WaitUntil;
+  readonly waitUntil?: null | WaitUntil;
 };
 
 const resumableContextCache: { current: null | ResumableStreamContext } = {
@@ -67,14 +67,14 @@ export const normalizePythonResponseStreamId = (
 };
 
 export const createChatResumableStreamContext = ({
-  waitUntil,
+  waitUntil = null,
 }: CreateContextOptions = {}): ResumableStreamContext => {
   if (resumableContextCache.current === null) {
     process.env['REDIS_URL'] = RESUMABLE_STREAM_REDIS_URL;
 
     resumableContextCache.current = createResumableStreamContext({
       keyPrefix: STREAM_KEY_PREFIX,
-      waitUntil: waitUntil ?? null,
+      waitUntil,
     });
   }
 

@@ -96,10 +96,8 @@ test.describe('chat streaming (mocked BFF)', () => {
       ],
     } satisfies ChatConversationHistory;
     let historyRequests = 0;
-    let releaseRetryResponse: (() => void) | undefined;
-    const retryResponse = new Promise<void>((resolve) => {
-      releaseRetryResponse = resolve;
-    });
+    const { promise: retryResponse, resolve: releaseRetryResponse } =
+      Promise.withResolvers<undefined>();
     await mockModels(page);
     await installMockChatState(page, {
       conversations: [{ id: conversationId, model: null, title }],
@@ -137,10 +135,7 @@ test.describe('chat streaming (mocked BFF)', () => {
     await expect(retryButton).toHaveAttribute('aria-busy', 'true');
     await expect(page.getByText('Започни разговор')).toHaveCount(0);
 
-    if (releaseRetryResponse === undefined) {
-      throw new Error('Retry response release was not initialized');
-    }
-    releaseRetryResponse();
+    releaseRetryResponse(undefined);
 
     // Then the selected conversation reloads instead of returning to Welcome.
     await expect(page.getByText(recoveredText)).toBeVisible();

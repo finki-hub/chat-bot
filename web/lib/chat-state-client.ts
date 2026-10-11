@@ -245,7 +245,6 @@ const putStateJson = async <T>(path: string, body: string): Promise<T> =>
 const readStateJson = async <T>(path: string): Promise<T> => {
   const response = await fetch(stateUrl(path), {
     headers: { 'x-api-key': CHAT_API_KEY },
-    method: 'GET',
   });
 
   if (!response.ok) {

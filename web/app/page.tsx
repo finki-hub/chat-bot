@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { auth, isAuthConfigured, isPlaywrightAuthBypassEnabled } from '@/auth';
 import { ChatScreen } from '@/components/chat/chat-screen';
 
-const HomePage = async () => {
+export default async function HomePage() {
   if (isPlaywrightAuthBypassEnabled()) {
     return <ChatScreen />;
   }
@@ -15,6 +15,4 @@ const HomePage = async () => {
   }
 
   return <ChatScreen />;
-};
-
-export default HomePage;
+}

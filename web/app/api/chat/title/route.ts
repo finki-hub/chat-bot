@@ -30,18 +30,13 @@ const parseTurn = (value: unknown): ConversationTurn | null => {
     return null;
   }
 
-  const candidate = value as Record<string, unknown>;
-  const { content, role } = candidate;
+  const { content, role } = value as Record<string, unknown>;
 
-  if (typeof content !== 'string' || content.trim().length === 0) {
-    return null;
-  }
-
-  if (!isRole(role)) {
-    return null;
-  }
-
-  return { content, role };
+  return typeof content !== 'string' ||
+    content.trim().length === 0 ||
+    !isRole(role)
+    ? null
+    : { content, role };
 };
 
 const readModelField = (
@@ -153,10 +148,9 @@ const parseResponse = async (
     return null;
   }
 
-  if (typeof body.title !== 'string' || body.title.trim().length === 0) {
-    return null;
-  }
-  return { title: body.title };
+  return typeof body.title !== 'string' || body.title.trim().length === 0
+    ? null
+    : { title: body.title };
 };
 
 export const POST = async (req: Request): Promise<Response> => {

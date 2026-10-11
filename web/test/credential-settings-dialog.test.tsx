@@ -47,8 +47,8 @@ const openaiCredential = (baseUrl: string): ChatCredentialPublic => ({
   [USER_ID_FIELD]: USER_ID,
 });
 
-const ollamaCredential = (baseUrl: string): ChatCredentialPublic => ({
-  [BASE_URL_FIELD]: baseUrl,
+const ollamaCredential = (): ChatCredentialPublic => ({
+  [BASE_URL_FIELD]: OLLAMA_BASE_URL,
   [HAS_API_KEY_FIELD]: true,
   provider: 'ollama',
   [USER_ID_FIELD]: USER_ID,
@@ -224,7 +224,7 @@ describe('CredentialSettingsDialog', () => {
   it('saves every entered provider credential from one action', async () => {
     saveCredentialMock
       .mockResolvedValueOnce(openaiCredential(OPENAI_ALT_BASE_URL))
-      .mockResolvedValueOnce(ollamaCredential(OLLAMA_BASE_URL));
+      .mockResolvedValueOnce(ollamaCredential());
     renderDialog();
 
     fireEvent.change(await screen.findByLabelText(OPENAI_API_KEY_LABEL), {
@@ -521,7 +521,7 @@ describe('CredentialSettingsDialog', () => {
   });
 
   it('saves an Ollama key and custom endpoint', async () => {
-    saveCredentialMock.mockResolvedValueOnce(ollamaCredential(OLLAMA_BASE_URL));
+    saveCredentialMock.mockResolvedValueOnce(ollamaCredential());
     renderDialog();
 
     const keyInput = await screen.findByLabelText('Ollama API клуч');

@@ -25,14 +25,13 @@ const parsePayload = (value: unknown): FeedbackClientPayload | null => {
     return null;
   }
 
-  const candidate = value as Record<string, unknown>;
-  const { feedbackType, responseId } = candidate;
+  const { feedbackType, responseId } = value as Record<string, unknown>;
 
-  if (typeof responseId !== 'string' || responseId.length === 0) {
-    return null;
-  }
-
-  if (!isFeedbackType(feedbackType)) {
+  if (
+    typeof responseId !== 'string' ||
+    responseId.length === 0 ||
+    !isFeedbackType(feedbackType)
+  ) {
     return null;
   }
   return {
@@ -60,12 +59,10 @@ const parseRetractionPayload = (
     return null;
   }
 
-  const candidate = value as Record<string, unknown>;
-  const { responseId } = candidate;
-  if (typeof responseId !== 'string' || responseId.length === 0) {
-    return null;
-  }
-  return { responseId };
+  const { responseId } = value as Record<string, unknown>;
+  return typeof responseId !== 'string' || responseId.length === 0
+    ? null
+    : { responseId };
 };
 
 const toRetractionSchema = (

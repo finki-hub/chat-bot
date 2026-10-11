@@ -53,13 +53,13 @@ const message = (id: string, text: string): MyUIMessage => ({
 });
 
 const useHydratedMessages = ({
-  activeStreamConversationId,
+  activeStreamConversationId = null,
   initialMessages,
-  preserveEmptyHydrationId,
+  preserveEmptyHydrationId = null,
 }: {
-  readonly activeStreamConversationId?: string;
+  readonly activeStreamConversationId?: null | string;
   readonly initialMessages?: readonly MyUIMessage[];
-  readonly preserveEmptyHydrationId?: string;
+  readonly preserveEmptyHydrationId?: null | string;
 } = {}): MyUIMessage[] => {
   const [messages, setMessages] = useState<MyUIMessage[]>(() =>
     initialMessages === undefined
@@ -68,10 +68,10 @@ const useHydratedMessages = ({
   );
   const convoIdRef = useRef<null | string>(null);
   const preserveEmptyHydrationIdRef = useRef<null | string>(
-    preserveEmptyHydrationId ?? null,
+    preserveEmptyHydrationId,
   );
   const activeStreamConversationIdRef = useRef<null | string>(
-    activeStreamConversationId ?? null,
+    activeStreamConversationId,
   );
   const setActiveStatus = useRef(
     vi.fn<(value: ActiveStatus) => void>(),

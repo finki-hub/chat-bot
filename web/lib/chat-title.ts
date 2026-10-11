@@ -9,11 +9,7 @@ type GenerateTitleInput = {
 };
 
 const parseTitle = (value: unknown): null | string => {
-  if (typeof value !== 'object' || value === null) {
-    return null;
-  }
-
-  if (!('title' in value)) {
+  if (typeof value !== 'object' || value === null || !('title' in value)) {
     return null;
   }
 

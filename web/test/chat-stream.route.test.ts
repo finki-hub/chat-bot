@@ -50,9 +50,7 @@ const importGet = async (): Promise<
 };
 
 const streamRequest = (): Request =>
-  new Request(`http://localhost/api/chat/${CONVERSATION_ID}/stream`, {
-    method: 'GET',
-  });
+  new Request(`http://localhost/api/chat/${CONVERSATION_ID}/stream`);
 
 const routeContext = () => ({
   params: Promise.resolve({ id: CONVERSATION_ID }),
