@@ -47,8 +47,8 @@ const ack: FeedbackAck = {
   response_id: 'r-123',
 };
 
-const okJson = (body: unknown): Response =>
-  Response.json(body, {
+const okJson = (): Response =>
+  Response.json(ack, {
     headers: { 'content-type': 'application/json' },
     status: 200,
   });
@@ -69,7 +69,7 @@ describe('POST /api/feedback', () => {
   });
 
   it('injects x-api-key and forwards only server-owned feedback identifiers, returning the ack', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson(ack));
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson());
 
     vi.stubGlobal('fetch', fetchMock);
 
@@ -101,7 +101,7 @@ describe('POST /api/feedback', () => {
   });
 
   it('ignores forged browser metadata fields', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson(ack));
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson());
 
     vi.stubGlobal('fetch', fetchMock);
 
@@ -128,7 +128,7 @@ describe('POST /api/feedback', () => {
   });
 
   it('never leaks the api key to the response or to the browser-facing body', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson(ack));
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson());
 
     vi.stubGlobal('fetch', fetchMock);
 

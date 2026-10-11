@@ -102,21 +102,19 @@ const parseConversations = (value: unknown): ConversationRow[] => {
     return [];
   }
 
-  return value.flatMap((item) => {
-    if (typeof item !== 'object' || item === null) {
-      return [];
-    }
-    const candidate = item as Record<string, unknown>;
-    const { id, model, title } = candidate;
-    if (
-      typeof id !== 'string' ||
-      (model !== null && typeof model !== 'string') ||
-      (title !== null && typeof title !== 'string')
-    ) {
-      return [];
-    }
-    return [{ id, model, title: title ?? 'New conversation' }];
-  });
+  return value
+    .map((item): ConversationRow | null => {
+      if (typeof item !== 'object' || item === null) {
+        return null;
+      }
+      const { id, model, title } = item as Record<string, unknown>;
+      return typeof id !== 'string' ||
+        (model !== null && typeof model !== 'string') ||
+        (title !== null && typeof title !== 'string')
+        ? null
+        : { id, model, title: title ?? 'New conversation' };
+    })
+    .filter((conversation) => conversation !== null);
 };
 
 const MESSAGE_ROLES = new Set(['assistant', 'system', 'user']);
@@ -125,17 +123,10 @@ const TEXT_PART_TYPES = new Set(['reasoning', 'text']);
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-const isMessagePart = (value: unknown): value is Record<string, unknown> => {
-  if (!isRecord(value) || typeof value['type'] !== 'string') {
-    return false;
-  }
-
-  if (TEXT_PART_TYPES.has(value['type'])) {
-    return typeof value['text'] === 'string';
-  }
-
-  return true;
-};
+const isMessagePart = (value: unknown): value is Record<string, unknown> =>
+  isRecord(value) &&
+  typeof value['type'] === 'string' &&
+  (!TEXT_PART_TYPES.has(value['type']) || typeof value['text'] === 'string');
 
 const parseJsonOrNull = async (response: Response): Promise<unknown> => {
   try {
@@ -163,26 +154,20 @@ const isUiMessage = (value: unknown): value is MyUIMessage => {
 };
 
 const parseActiveStream = (value: unknown): ActiveConversationStream | null => {
-  if (value === null || value === undefined) {
+  if (value === null || value === undefined || !isRecord(value)) {
     return null;
   }
-  if (!isRecord(value)) {
-    return null;
-  }
-  const { id, replacementMessageId } = value;
-  const normalizedReplacementMessageId = replacementMessageId ?? null;
-  if (
-    typeof id !== 'string' ||
+  const { id, replacementMessageId = null } = value;
+  const normalizedReplacementMessageId = replacementMessageId;
+  return typeof id !== 'string' ||
     (normalizedReplacementMessageId !== null &&
       typeof normalizedReplacementMessageId !== 'string')
-  ) {
-    return null;
-  }
-  return { id, replacementMessageId: normalizedReplacementMessageId };
+    ? null
+    : { id, replacementMessageId: normalizedReplacementMessageId };
 };
 
 export const listChatConversations = async (): Promise<ConversationRow[]> => {
-  const response = await fetch('/api/chat', { method: 'GET' });
+  const response = await fetch('/api/chat');
 
   if (!response.ok) {
     throw new ChatConversationRequestError(response.status);
@@ -225,13 +210,14 @@ const parseConversationHistory = (
   if (typeof value !== 'object' || value === null) {
     return null;
   }
-  const candidate = value as Record<string, unknown>;
-  const { conversation, messages } = candidate;
+  const { conversation, messages } = value as Record<string, unknown>;
   if (typeof conversation !== 'object' || conversation === null) {
     return null;
   }
-  const conversationRecord = conversation as Record<string, unknown>;
-  const { activeStream, id, model, title } = conversationRecord;
+  const { activeStream, id, model, title } = conversation as Record<
+    string,
+    unknown
+  >;
   if (
     typeof id !== 'string' ||
     (model !== null && typeof model !== 'string') ||
@@ -257,7 +243,6 @@ export const loadChatConversationHistory = async (
 ): Promise<ChatConversationHistory | null> => {
   const response = await fetch(
     `/api/chat/${encodeURIComponent(conversationId)}/history`,
-    { method: 'GET' },
   );
 
   if (!response.ok) {

@@ -144,7 +144,7 @@ const events = async function* (
   ...evs: ParsedEvent[]
 ): AsyncGenerator<ParsedEvent> {
   for (const event of evs) {
-    yield await Promise.resolve(event);
+    yield await event;
   }
 };
 
@@ -181,9 +181,9 @@ const reasoningStart = (id: string): UiStreamPart => ({
   type: 'reasoning-start',
 });
 
-const reasoningDelta = (id: string, delta: string): UiStreamPart => ({
+const reasoningDelta = (delta: string): UiStreamPart => ({
   delta,
-  id,
+  id: T1,
   type: 'reasoning-delta',
 });
 
@@ -211,8 +211,8 @@ describe('translateToUiStream', () => {
     expect(writer.parts).toStrictEqual([
       startWith({ inferenceModel: MODEL, responseId: 'r3' }),
       reasoningStart(T1),
-      reasoningDelta(T1, 'раз'),
-      reasoningDelta(T1, 'мислам'),
+      reasoningDelta('раз'),
+      reasoningDelta('мислам'),
       reasoningEnd(T1),
       textStart(T2),
       textDelta(T2, 'одговор'),

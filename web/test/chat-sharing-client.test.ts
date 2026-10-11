@@ -69,7 +69,6 @@ describe('chat sharing client', () => {
       `${API_BASE_URL}/chat/state/conversations/${CONVERSATION_ID}/share?user_id=${encodeURIComponent(USER_ID)}`,
       {
         headers: { 'x-api-key': 'test-key' },
-        method: 'GET',
       },
     );
   });
@@ -172,7 +171,6 @@ describe('chat sharing client', () => {
       {
         cache: 'no-store',
         headers: { 'x-api-key': 'test-key' },
-        method: 'GET',
       },
     );
   });

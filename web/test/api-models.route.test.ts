@@ -31,11 +31,10 @@ const CLAUDE_5 = 'claude-sonnet-5';
 const CLAUDE_5_NAME = 'Claude Sonnet 5';
 const OLLAMA_MODEL = 'llama3.2:latest';
 
-const okJson = (body: unknown, init?: ResponseInit): Response =>
+const okJson = (body: unknown): Response =>
   Response.json(body, {
     headers: { 'content-type': 'application/json' },
     status: 200,
-    ...init,
   });
 
 const gptMini = {

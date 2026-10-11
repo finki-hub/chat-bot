@@ -31,7 +31,6 @@ export const GET = async (): Promise<Response> => {
     const url = `${API_BASE_URL}/chat/models?user_id=${encodeURIComponent(userId)}`;
     upstream = await fetch(url, {
       headers: { accept: 'application/json', 'x-api-key': CHAT_API_KEY },
-      method: 'GET',
     });
   } catch {
     return fallback();
@@ -50,9 +49,7 @@ export const GET = async (): Promise<Response> => {
   }
 
   const parsedCatalog = parseModelCatalog(body);
-  if (parsedCatalog.source === 'error') {
-    return fallback();
-  }
-
-  return respond(parsedCatalog, true);
+  return parsedCatalog.source === 'error'
+    ? fallback()
+    : respond(parsedCatalog, true);
 };

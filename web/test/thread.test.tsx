@@ -45,17 +45,12 @@ const userMessage = (text: string): MyUIMessage => ({
 
 const hasText =
   (needle: string) =>
-  (_content: string, element: Element | null): boolean => {
-    if (element === null) {
-      return false;
-    }
-    if (!element.textContent.includes(needle)) {
-      return false;
-    }
-    return [...element.children].every(
-      (child) => !child.textContent.includes(needle),
-    );
-  };
+  (_content: string, element: Element | null): boolean =>
+    element?.textContent.includes(needle)
+      ? [...element.children].every(
+          (child) => !child.textContent.includes(needle),
+        )
+      : false;
 
 describe('SearchStatus', () => {
   it('renders the label and exposes a status role', () => {

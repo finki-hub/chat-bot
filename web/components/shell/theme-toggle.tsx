@@ -44,11 +44,7 @@ const readStoredTheme = (): Theme => {
   }
 
   const stored = readStoredThemeValue();
-  if (isTheme(stored)) {
-    return stored;
-  }
-
-  return fallbackTheme();
+  return isTheme(stored) ? stored : fallbackTheme();
 };
 
 const syncThemeChrome = (theme: Theme) => {

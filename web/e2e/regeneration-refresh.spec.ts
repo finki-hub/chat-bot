@@ -33,7 +33,7 @@ const assistantMessage = (
   role: 'assistant',
 });
 
-const regenerationChunks = (answer: string): UiChunk[] => [
+const regenerationChunks = (): UiChunk[] => [
   {
     messageId: TARGET_MESSAGE_ID,
     messageMetadata: {
@@ -44,7 +44,7 @@ const regenerationChunks = (answer: string): UiChunk[] => [
     type: 'start',
   },
   { id: 'txt-answer', type: 'text-start' },
-  { delta: answer, id: 'txt-answer', type: 'text-delta' },
+  { delta: NEW_ANSWER, id: 'txt-answer', type: 'text-delta' },
   { id: 'txt-answer', type: 'text-end' },
   { type: 'finish' },
 ];
@@ -80,7 +80,7 @@ test('refresh during regeneration replaces the target without restoring later tu
   };
   const firstLegServer = await startChatStreamServer({
     gapMs: 30_000,
-    head: regenerationChunks(NEW_ANSWER).slice(0, 3),
+    head: regenerationChunks().slice(0, 3),
     tail: [],
   });
 
@@ -121,7 +121,7 @@ test('refresh during regeneration replaces the target without restoring later tu
         await route.fulfill({ status: 204 });
         return;
       }
-      const body = regenerationChunks(NEW_ANSWER)
+      const body = regenerationChunks()
         .map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`)
         .join('');
       await route.fulfill({

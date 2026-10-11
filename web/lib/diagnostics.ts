@@ -14,8 +14,7 @@ export const formatThroughput = (
     return null;
   }
   const generationMs = serverTotalMs - serverTtftMs;
-  if (generationMs <= 0 || tokens.output <= 0) {
-    return null;
-  }
-  return String(Math.round(tokens.output / (generationMs / 1_000)));
+  return generationMs <= 0 || tokens.output <= 0
+    ? null
+    : String(Math.round(tokens.output / (generationMs / 1_000)));
 };

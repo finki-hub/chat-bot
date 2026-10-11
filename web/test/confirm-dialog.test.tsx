@@ -42,13 +42,9 @@ describe('ConfirmDialog', () => {
   });
 
   it('ignores a late failure after a controlled close', async () => {
-    let resolveConfirmation: ((confirmed: boolean) => void) | undefined;
-    const onConfirm = vi.fn<() => Promise<boolean>>(
-      () =>
-        new Promise<boolean>((resolve) => {
-          resolveConfirmation = resolve;
-        }),
-    );
+    const { promise: confirmation, resolve: resolveConfirmation } =
+      Promise.withResolvers<boolean>();
+    const onConfirm = vi.fn<() => Promise<boolean>>(() => confirmation);
     const dialog = (open: boolean) => (
       <ConfirmDialog
         confirmLabel="Избриши"
@@ -65,12 +61,8 @@ describe('ConfirmDialog', () => {
     fireEvent.click(screen.getByTestId('confirm-action'));
     rerender(dialog(false));
 
-    const finishConfirmation = resolveConfirmation;
-    if (finishConfirmation === undefined) {
-      throw new TypeError('confirmation did not start');
-    }
     await act(async () => {
-      finishConfirmation(false);
+      resolveConfirmation(false);
       await Promise.resolve();
     });
     rerender(dialog(true));

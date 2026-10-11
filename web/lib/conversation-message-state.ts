@@ -40,19 +40,15 @@ export const replaceFinishedMessage =
   (messages) => {
     const responseId = replacement.metadata?.responseId;
     const canDedupeByResponseId = replacement.id === streamMessageId;
-    const replacementIndex = messages.findIndex((message) => {
-      if (message.id === replacement.id) {
-        return true;
-      }
-
-      return (
-        canDedupeByResponseId &&
-        responseId !== undefined &&
-        message.role === 'assistant' &&
-        message.id !== streamMessageId &&
-        message.metadata?.responseId === responseId
-      );
-    });
+    const replacementIndex = messages.findIndex(
+      (message) =>
+        message.id === replacement.id ||
+        (canDedupeByResponseId &&
+          responseId !== undefined &&
+          message.role === 'assistant' &&
+          message.id !== streamMessageId &&
+          message.metadata?.responseId === responseId),
+    );
 
     if (replacementIndex === -1) {
       return [
@@ -75,7 +71,7 @@ export const replaceFinishedMessage =
           };
 
     return messages.flatMap((message, messageIndex): MyUIMessage[] => {
-      if (messageIndex > replacementIndex && pruneAfterReplacement) {
+      if (pruneAfterReplacement && messageIndex > replacementIndex) {
         return [];
       }
 
@@ -83,11 +79,7 @@ export const replaceFinishedMessage =
         return [normalizedReplacement];
       }
 
-      if (message.id === streamMessageId) {
-        return [];
-      }
-
-      return [message];
+      return message.id === streamMessageId ? [] : [message];
     });
   };
 

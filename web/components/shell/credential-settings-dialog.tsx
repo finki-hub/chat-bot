@@ -117,12 +117,13 @@ const saveFailureSummary = (
     providersByKind[failure.kind].push(providerLabel);
   }
   return failureKinds
-    .flatMap((kind) => {
+    .map((kind) => {
       const providers = providersByKind[kind];
       return providers.length === 0
-        ? []
-        : [`${providers.join(', ')}: ${saveFailureMessage(kind)}`];
+        ? null
+        : `${providers.join(', ')}: ${saveFailureMessage(kind)}`;
     })
+    .filter((summary) => summary !== null)
     .join(' ');
 };
 
@@ -269,10 +270,12 @@ export const CredentialSettingsDialog = ({
   useIsomorphicLayoutEffect(() => {
     const previous = lifecycleRef.current;
     sessionKeyRef.current = sessionKey;
-    if (previous.open !== open || previous.sessionKey !== sessionKey) {
-      dialogCycleRef.current += 1;
-      lifecycleRef.current = { open, sessionKey };
+    if (previous.open === open && previous.sessionKey === sessionKey) {
+      return;
     }
+
+    dialogCycleRef.current += 1;
+    lifecycleRef.current = { open, sessionKey };
   }, [open, sessionKey]);
   const runForCurrentDialogOperation = (
     operation: DialogOperation,
@@ -467,14 +470,17 @@ export const CredentialSettingsDialog = ({
       revealSaveErrorRef.current = false;
       return;
     }
+    const providerScroller = providerScrollerRef.current;
     if (
-      revealSaveErrorRef.current &&
-      shortDialogHeight &&
-      providerScrollerRef.current !== null
+      providerScroller === null ||
+      !shortDialogHeight ||
+      !revealSaveErrorRef.current
     ) {
-      providerScrollerRef.current.scrollTop = 0;
-      revealSaveErrorRef.current = false;
+      return;
     }
+
+    providerScroller.scrollTop = 0;
+    revealSaveErrorRef.current = false;
   }, [saveError, shortDialogHeight]);
 
   return (

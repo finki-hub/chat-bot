@@ -31,7 +31,7 @@ const metadataFrom = (
     ? diagnostics['serverTtftMs']
     : undefined;
   const derivedTiming =
-    base['timing'] === undefined && typeof serverTotalMs === 'number'
+    typeof serverTotalMs === 'number' && base['timing'] === undefined
       ? {
           totalMs: serverTotalMs,
           ttftMs: typeof serverTtftMs === 'number' ? serverTtftMs : null,
@@ -97,16 +97,13 @@ const parseMessage = (value: ChatStateJsonValue): ChatStateMessage | null => {
   const parts = Array.isArray(persistedParts) ? persistedParts : null;
   const responseId = value['response_id'];
   const role = value['role'];
-  if (
-    typeof content !== 'string' ||
+  return typeof content !== 'string' ||
     typeof id !== 'string' ||
     metadata === undefined ||
     (responseId !== null && typeof responseId !== 'string') ||
     (role !== 'assistant' && role !== 'user')
-  ) {
-    return null;
-  }
-  return { content, id, metadata, parts, responseId, role };
+    ? null
+    : { content, id, metadata, parts, responseId, role };
 };
 
 export const parseChatStateMessages = async (

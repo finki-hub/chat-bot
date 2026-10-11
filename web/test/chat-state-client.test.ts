@@ -107,7 +107,7 @@ describe('createChatStateClient', () => {
     expect(url).toBe(
       `https://api:8880/chat/state/conversations?user_id=${CHAT_USER_ID}`,
     );
-    expect(init.method).toBe('GET');
+    expect(init.method ?? 'GET').toBe('GET');
     expect(conversations[0]?.id).toBe('conv-list');
   });
 
@@ -137,7 +137,7 @@ describe('createChatStateClient', () => {
     expect(url).toBe(
       `https://api:8880/chat/state/conversations/conv-load?user_id=${CHAT_USER_ID}`,
     );
-    expect(init.method).toBe('GET');
+    expect(init.method ?? 'GET').toBe('GET');
     expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
     expect(loaded.conversation.id).toBe('conv-load');
   });

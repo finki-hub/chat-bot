@@ -18,13 +18,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isAbortError = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'AbortError';
 
-const shareUrlFromResponseBody = (body: unknown): null | string => {
-  if (!isRecord(body) || typeof body['shareToken'] !== 'string') return null;
-  return new URL(
-    `/share/${encodeURIComponent(body['shareToken'])}`,
-    location.origin,
-  ).href;
-};
+const shareUrlFromResponseBody = (body: unknown): null | string =>
+  !isRecord(body) || typeof body['shareToken'] !== 'string'
+    ? null
+    : new URL(
+        `/share/${encodeURIComponent(body['shareToken'])}`,
+        location.origin,
+      ).href;
 
 export const useConversationSharing = (conversationId: null | string) => {
   const [state, setState] = useState<ConversationShareState>({
@@ -46,7 +46,7 @@ export const useConversationSharing = (conversationId: null | string) => {
         try {
           const response = await fetch(
             `/api/chat/${encodeURIComponent(conversationId)}/share`,
-            { method: 'GET', signal: controller?.signal },
+            { signal: controller?.signal },
           );
           if (requestControllerRef.current !== controller) return;
           if (response.status === 200) {

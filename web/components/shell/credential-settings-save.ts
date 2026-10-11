@@ -39,17 +39,20 @@ export const saveEnteredCredentials = async (
     const form = forms[provider];
     const apiKey = form.apiKey.trim();
     return apiKey.length === 0
-      ? []
-      : [{ apiKey, baseUrl: form.baseUrl.trim(), provider }];
+      ? null
+      : { apiKey, baseUrl: form.baseUrl.trim(), provider };
   });
+  const credentialsToSave = pendingCredentials.filter(
+    (credential) => credential !== null,
+  );
   const results = await Promise.allSettled(
-    pendingCredentials.map((credential) => saveCredential(credential)),
+    credentialsToSave.map((credential) => saveCredential(credential)),
   );
   const credentials: ChatCredentialPublic[] = [];
   const failures: CredentialSaveFailure[] = [];
   let unexpectedError: CredentialSaveBatch['unexpectedError'] = null;
   for (const [index, result] of results.entries()) {
-    const pendingCredential = pendingCredentials.at(index);
+    const pendingCredential = credentialsToSave.at(index);
     if (pendingCredential === undefined) {
       continue;
     }
@@ -80,9 +83,9 @@ export const saveEnteredCredentials = async (
           };
     failures.push(failure);
     if (
+      unexpectedError === null &&
       !(reason instanceof CredentialBaseUrlRejectedError) &&
-      !(reason instanceof TypeError) &&
-      unexpectedError === null
+      !(reason instanceof TypeError)
     ) {
       unexpectedError = { reason };
     }

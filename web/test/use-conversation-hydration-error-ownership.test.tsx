@@ -63,11 +63,10 @@ describe('useConversationHydration error ownership', () => {
       conversation: { activeStream: null };
       messages: MyUIMessage[];
     };
-    let releaseHistory: ((value: typeof history) => void) | undefined;
+    const { promise: pendingHistory, resolve: releaseHistory } =
+      Promise.withResolvers<typeof history>();
     transportMocks.loadChatConversationHistory.mockReturnValueOnce(
-      new Promise((resolve) => {
-        releaseHistory = resolve;
-      }),
+      pendingHistory,
     );
     const { result } = renderHook(useHydrationErrorHarness);
     const streamError = {
@@ -79,9 +78,6 @@ describe('useConversationHydration error ownership', () => {
     act(() => {
       result.current.setActiveError(streamError);
     });
-    if (releaseHistory === undefined) {
-      throw new Error('History release was not initialized');
-    }
     const resolveHistory = releaseHistory;
     act(() => {
       resolveHistory(history);

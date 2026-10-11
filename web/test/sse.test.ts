@@ -12,7 +12,7 @@ const token = (text: string): ParsedEvent => ({ text, type: 'token' });
 const source = (chunks: string[]): AsyncIterable<string> => ({
   async *[Symbol.asyncIterator]() {
     for (const chunk of chunks) {
-      yield await Promise.resolve(chunk);
+      yield await chunk;
     }
   },
 });

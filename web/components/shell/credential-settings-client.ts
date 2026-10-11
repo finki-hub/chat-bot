@@ -43,7 +43,7 @@ export const saveCredential = async ({
   const response = await fetch('/api/chat/credentials', {
     body: JSON.stringify({
       [API_KEY_FIELD]: apiKey,
-      [BASE_URL_FIELD]: baseUrl || null,
+      [BASE_URL_FIELD]: baseUrl === '' ? null : baseUrl,
       provider,
     }),
     headers: { 'content-type': 'application/json' },
