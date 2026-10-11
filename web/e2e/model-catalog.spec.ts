@@ -19,7 +19,7 @@ const ACCOUNT_MENU_LABEL = /Корисничко мени:/u;
 const LUNA_ID = 'gpt-6-luna';
 const LUNA_NAME = 'GPT-6 Luna';
 const EMPTY_JSON = '{}';
-const LUNA_OPTION_PATTERN = /GPT-5\.6 Luna/u;
+const LUNA_OPTION_PATTERN = /GPT-6 Luna/u;
 const lunaCatalog = (
   remaining: number,
   availability: 'both' | 'byok' | 'sponsored' = 'sponsored',
