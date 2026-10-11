@@ -142,38 +142,20 @@ the new values:
 docker compose -f compose.prod.yaml up -d --force-recreate api
 ```
 
-The API owns the executable chat catalog. `/chat/models` returns the fixed, ordered
-allowlist enriched with display metadata from models.dev. Metadata is cached in process
-for six hours; refresh failures serve the last successful catalog, and cold-start
-failures use the bundled snapshot. Remote metadata cannot add executable model IDs,
-change providers or alter execution policy.
+The API owns the executable chat catalog. Supported providers are OpenAI, Anthropic,
+Google, OpenRouter, and Ollama. The hosted picker and `GET /chat/models` are the
+authoritative sources for currently available models.
 
-The hosted picker includes these 21 curated models: GPT-6 Astra, GPT-6.1 Sol,
-GPT-5.6 Terra, GPT-6 Luna, GPT-5.4 Mini, GPT-5.4 Nano, Gemini 3.8 Flash, Gemini
-3.1 Pro Preview, Gemini 3.5 Flash Lite, Claude Fable 5.1, Claude Opus 5.5, Claude
-Sonnet 5.5, Claude Haiku 5.5, plus the OpenRouter models DeepSeek V4.1 Flash, DeepSeek
-V4 Pro 0813, GLM-5.3, Kimi K3, Qwen3.8 Max 0902, Qwen3.8 27B, MiniMax M3, and Grok 4.7.
-Tencent HY 3 is retired and rejected by the API; its old browser preference is migrated
-to the current default model. The retired GPT-5.5/GPT-5.4, Gemini 3.5 Flash, DeepSeek V4 Flash,
-and unsuffixed Qwen3.8 Max IDs are no longer executable and are rejected by the API;
-Qwen3.8 Max 0902 remains an active, distinct model. The Ollama catalog uses multilingual
-Qwen3 30B and 14B quantizations selected to fit a 24 GB GPU; the advertised context
-limits still require enough remaining memory for the KV cache.
-These seven model replacements require a coordinated API/browser deployment:
-`gpt-5.6-luna` → `gpt-6-luna`, `gpt-5.6-sol` → `gpt-6.1-sol`,
-`claude-opus-4-8` → `claude-opus-5-5`, `claude-sonnet-5` → `claude-sonnet-5-5`,
-`claude-haiku-4-5` → `claude-haiku-5-5`, `gemini-3.1-flash-lite` →
-`gemini-3.5-flash-lite`, and `openrouter:x-ai/grok-4.6` →
-`openrouter:x-ai/grok-4.7`. The API rejects retired IDs at inference, query-transform,
-title-generation, and sponsored-model configuration boundaries; there is no runtime
-alias layer or database migration. Before deploying, update an existing `.env`
-`SPONSORED_MODEL_ID` from `gpt-5.6-luna` to `gpt-6-luna` (or another current curated
-ID with its matching provider). The versioned browser preference migration upgrades
-saved inference-model preferences as part of the coordinated browser release. Existing
-conversation/message model metadata remains readable and unchanged; conversation history
-does not select the current inference preference.
+When the model catalog changes, deploy the API and web app together and reload clients
+to apply any saved preference updates. Before deployment, check that an existing
+`SPONSORED_MODEL_ID` in `.env` is available in the current catalog and uses its matching
+provider; the default is documented in the sponsored model configuration below. Saved
+model preferences may be updated once by the web app. Historical chats and their model
+metadata remain readable and unchanged; no database rewrite is needed.
 
-`BAAI/bge-m3`, `text-embedding-3-large`, and `gemini-embedding-001` are active for authenticated chat requests. Corpus fill jobs remain limited to local BGE-M3 because they do not have a user credential boundary. Legacy embedding columns and historical model values remain readable for existing data.
+Authenticated chat requests support the configured embedding providers. Corpus fill jobs
+remain limited to local BGE-M3 because they do not have a user credential boundary.
+Legacy embedding columns and historical model values remain readable for existing data.
 
 The compose files also support optional variables that are not listed in `.env.sample` because they have built-in defaults: `POSTHOG_KEY`, `POSTHOG_HOST`, `RERANKER_MODEL`, and `WEB_API_BASE_URL`.
 
