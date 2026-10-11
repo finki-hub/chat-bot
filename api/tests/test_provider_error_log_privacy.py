@@ -27,7 +27,7 @@ _PRIVATE_PROVIDER_ERROR = (
             anthropic_module,
             "transform_query_with_anthropic",
             "get_anthropic_llm",
-            Model.CLAUDE_HAIKU_4_5,
+            Model.CLAUDE_HAIKU_5_5,
         ),
         (ollama_module, "transform_query_with_ollama", "get_llm", Model.QWEN3_14B),
     ],
@@ -77,7 +77,7 @@ def test_provider_query_failure_omits_raw_error(
             "stream_anthropic_agent_response",
             "get_anthropic_llm",
             "stream_anthropic_response",
-            Model.CLAUDE_HAIKU_4_5,
+            Model.CLAUDE_HAIKU_5_5,
         ),
         (
             ollama_module,

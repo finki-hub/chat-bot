@@ -42,7 +42,7 @@ _REASONING_EFFORT_BY_MODEL: Final[dict[Model, str]] = {
     Model.OPENROUTER_QWEN3_8_MAX_0902: "high",
     Model.OPENROUTER_QWEN3_8_MAX: "high",
     Model.OPENROUTER_QWEN3_8_27B: "medium",
-    Model.OPENROUTER_GROK_4_6: "high",
+    Model.OPENROUTER_GROK_4_7: "high",
     Model.OPENROUTER_HY3: "high",
 }
 

@@ -54,7 +54,7 @@ def test_api_exposes_liveness_and_model_catalog_over_http(monkeypatch):
     assert body["version"] == 1
     assert body["source"] in {"live", "stale", "snapshot"}
     assert len(body["models"]) == 22
-    assert "claude-sonnet-5" in {model["id"] for model in body["models"]}
+    assert "claude-sonnet-5-5" in {model["id"] for model in body["models"]}
 
 
 def test_models_endpoint_returns_typed_envelope_with_api_key(monkeypatch):

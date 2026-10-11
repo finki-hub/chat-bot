@@ -7,7 +7,9 @@ import {
   type StateStorage,
 } from 'zustand/middleware';
 
-export const DEFAULT_MODEL = 'claude-sonnet-5';
+import { normalizeModelId } from '@/lib/model-aliases';
+
+export const DEFAULT_MODEL = 'claude-sonnet-5-5';
 
 const STORAGE_KEY = 'finkiHub.ui';
 
@@ -67,6 +69,8 @@ export const useUiStore = create<UiState>()(
         set({ activeConversationId: id });
       },
       setModel: (model) => {
+        // Keep catalog-supported legacy ids intact; request/persistence
+        // boundaries canonicalize them without inventing catalog entries.
         set({ model });
       },
       setReasoning: (reasoning) => {
@@ -81,12 +85,26 @@ export const useUiStore = create<UiState>()(
       },
     }),
     {
+      merge: (persisted, current) => {
+        const persistedState =
+          typeof persisted === 'object' && persisted !== null
+            ? (persisted as Partial<UiState>)
+            : undefined;
+        return {
+          ...current,
+          ...persistedState,
+          model:
+            typeof persistedState?.model === 'string'
+              ? normalizeModelId(persistedState.model)
+              : current.model,
+        };
+      },
       name: STORAGE_KEY,
       // Only persist user-meaningful selections; sidebar open state stays
       // per-session so mobile/desktop layouts decide it on load.
       partialize: (state) => ({
         activeConversationId: state.activeConversationId,
-        model: state.model,
+        model: normalizeModelId(state.model),
         reasoning: state.reasoning,
       }),
       // Hydrate manually after mount (see Providers) to avoid SSR/client

@@ -12,6 +12,7 @@ import {
   replaceFinishedMessage,
 } from '@/lib/conversation-message-state';
 import { t } from '@/lib/i18n';
+import { normalizeModelId } from '@/lib/model-aliases';
 import { isSponsoredModel } from '@/lib/model-catalog';
 import { buildChatTransport } from '@/lib/transport';
 import { useConversationHydration } from '@/lib/use-conversation-hydration';
@@ -92,7 +93,7 @@ export const useConversationChatRuntime = ({
     () =>
       activeRequest.transport(
         buildChatTransport(() => ({
-          model: modelRef.current,
+          model: normalizeModelId(modelRef.current),
           reasoning: reasoningRef.current,
         })),
       ),

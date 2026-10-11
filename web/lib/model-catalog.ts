@@ -8,6 +8,7 @@ import type {
 } from '@/lib/api-types';
 
 import { t, type TKey } from '@/lib/i18n';
+import { normalizeModelId } from '@/lib/model-aliases';
 
 /* eslint-disable camelcase -- catalog fields mirror the Python wire contract. */
 
@@ -45,18 +46,18 @@ const HIDDEN_CURATED_MODEL_IDS = new Set([
 
 const CURATED_MODEL_DATA = [
   ['gpt-6-astra', 'GPT-6 Astra', 'openai'],
-  ['gpt-5.6-sol', 'GPT-5.6 Sol', 'openai'],
+  ['gpt-6.1-sol', 'GPT-6.1 Sol', 'openai'],
   ['gpt-5.6-terra', 'GPT-5.6 Terra', 'openai'],
-  ['gpt-5.6-luna', 'GPT-5.6 Luna', 'openai'],
+  ['gpt-6-luna', 'GPT-6 Luna', 'openai'],
   ['gpt-5.4-mini', 'GPT-5.4 Mini', 'openai'],
   ['gpt-5.4-nano', 'GPT-5.4 Nano', 'openai'],
   ['gemini-3.8-flash', 'Gemini 3.8 Flash', 'google'],
   ['gemini-3.1-pro-preview', 'Gemini 3.1 Pro Preview', 'google'],
-  ['gemini-3.1-flash-lite', 'Gemini 3.1 Flash Lite', 'google'],
+  ['gemini-3.5-flash-lite', 'Gemini 3.5 Flash Lite', 'google'],
   ['claude-fable-5-1', 'Claude Fable 5.1', 'anthropic'],
-  ['claude-opus-4-8', 'Claude Opus 4.8', 'anthropic'],
-  ['claude-sonnet-5', 'Claude Sonnet 5', 'anthropic'],
-  ['claude-haiku-4-5', 'Claude Haiku 4.5', 'anthropic'],
+  ['claude-opus-5-5', 'Claude Opus 5.5', 'anthropic'],
+  ['claude-sonnet-5-5', 'Claude Sonnet 5.5', 'anthropic'],
+  ['claude-haiku-5-5', 'Claude Haiku 5.5', 'anthropic'],
   [
     'openrouter:deepseek/deepseek-v4.1-flash',
     'DeepSeek V4.1 Flash',
@@ -72,7 +73,7 @@ const CURATED_MODEL_DATA = [
   ['openrouter:qwen/qwen3.8-max-0902', 'Qwen3.8 Max 0902', 'openrouter'],
   ['openrouter:qwen/qwen3.8-27b', 'Qwen3.8 27B', 'openrouter'],
   ['openrouter:minimax/minimax-m3', 'MiniMax M3', 'openrouter'],
-  ['openrouter:x-ai/grok-4.6', 'Grok 4.6', 'openrouter'],
+  ['openrouter:x-ai/grok-4.7', 'Grok 4.7', 'openrouter'],
   ['openrouter:tencent/hy3', 'Tencent HY 3', 'openrouter'],
   ['qwen3:30b-a3b-thinking-2507-q4_K_M', 'Qwen3 30B Thinking', 'ollama'],
   ['qwen3:30b-a3b-instruct-2507-q4_K_M', 'Qwen3 30B Instruct', 'ollama'],
@@ -87,6 +88,43 @@ export const CURATED_MODEL_DESCRIPTORS: Readonly<
     { id, name, provider },
   ]),
 );
+
+// Keep readable labels for legacy ids only when an older server still returns
+// them in its string-array catalog. They remain legacy ids, not supported-model
+// aliases to their replacements.
+const LEGACY_MODEL_DESCRIPTORS: Readonly<Record<string, ModelDescriptor>> = {
+  'claude-haiku-4-5': {
+    id: 'claude-haiku-4-5',
+    name: 'Claude Haiku 4.5',
+    provider: 'anthropic',
+  },
+  'claude-opus-4-8': {
+    id: 'claude-opus-4-8',
+    name: 'Claude Opus 4.8',
+    provider: 'anthropic',
+  },
+  'claude-sonnet-5': {
+    id: 'claude-sonnet-5',
+    name: 'Claude Sonnet 5',
+    provider: 'anthropic',
+  },
+  'gemini-3.1-flash-lite': {
+    id: 'gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash Lite',
+    provider: 'google',
+  },
+  'gpt-5.6-luna': {
+    id: 'gpt-5.6-luna',
+    name: 'GPT-5.6 Luna',
+    provider: 'openai',
+  },
+  'gpt-5.6-sol': { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', provider: 'openai' },
+  'openrouter:x-ai/grok-4.6': {
+    id: 'openrouter:x-ai/grok-4.6',
+    name: 'Grok 4.6',
+    provider: 'openrouter',
+  },
+};
 
 const PROVIDER_PREFIXES: ReadonlyArray<readonly [string, CatalogProvider]> = [
   ['openrouter:', 'openrouter'],
@@ -233,7 +271,12 @@ export const parseModelCatalog = (value: unknown): ModelCatalog => {
 
   if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
     const models = value
-      .map((id) => CURATED_MODEL_DESCRIPTORS[id] ?? normalizeDescriptor({ id }))
+      .map(
+        (id) =>
+          CURATED_MODEL_DESCRIPTORS[id] ??
+          LEGACY_MODEL_DESCRIPTORS[id] ??
+          normalizeDescriptor({ id }),
+      )
       .filter(
         (model): model is ModelDescriptor =>
           model !== null && !HIDDEN_CURATED_MODEL_IDS.has(model.id),
@@ -283,11 +326,17 @@ export const recoverSelectedModel = (
   current: string,
   fallback: string,
 ): string => {
-  if (models.some((model) => model.id === current)) {
+  if (models.length === 0) {
     return current;
   }
-  if (models.some((model) => model.id === fallback)) {
-    return fallback;
+  const normalizedCurrent = normalizeModelId(current);
+  if (models.some((model) => model.id === normalizedCurrent)) {
+    return normalizedCurrent;
+  }
+  if (models.some((model) => model.id === current)) return current;
+  const normalizedFallback = normalizeModelId(fallback);
+  if (models.some((model) => model.id === normalizedFallback)) {
+    return normalizedFallback;
   }
   return models[0]?.id ?? current;
 };

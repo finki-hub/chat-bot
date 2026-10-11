@@ -32,9 +32,9 @@ from app.schemas.chat_credentials import ChatCredentialSecret
 
 EXPECTED_CHAT_IDS = (
     "gpt-6-astra",
-    "gpt-5.6-sol",
+    "gpt-6.1-sol",
     "gpt-5.6-terra",
-    "gpt-5.6-luna",
+    "gpt-6-luna",
     "gpt-5.5",
     "gpt-5.4",
     "gpt-5.4-mini",
@@ -42,11 +42,11 @@ EXPECTED_CHAT_IDS = (
     "gemini-3.8-flash",
     "gemini-3.1-pro-preview",
     "gemini-3.5-flash",
-    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
     "claude-fable-5-1",
-    "claude-opus-4-8",
-    "claude-sonnet-5",
-    "claude-haiku-4-5",
+    "claude-opus-5-5",
+    "claude-sonnet-5-5",
+    "claude-haiku-5-5",
     "openrouter:deepseek/deepseek-v4.1-flash",
     "openrouter:deepseek/deepseek-v4-flash",
     "openrouter:deepseek/deepseek-v4-pro-0813",
@@ -57,7 +57,7 @@ EXPECTED_CHAT_IDS = (
     "openrouter:qwen/qwen3.8-max",
     "openrouter:qwen/qwen3.8-27b",
     "openrouter:minimax/minimax-m3",
-    "openrouter:x-ai/grok-4.6",
+    "openrouter:x-ai/grok-4.7",
     "openrouter:tencent/hy3",
 )
 
@@ -119,7 +119,7 @@ def test_stream_response_requires_explicit_interface() -> None:
 
 
 def test_claude_sonnet_5_is_a_supported_anthropic_chat_model():
-    model = Model("claude-sonnet-5")
+    model = Model("claude-sonnet-5-5")
 
     assert model in CHAT_MODELS
     assert model in ANTHROPIC_QUERY_TRANSFORM_MODELS
@@ -205,10 +205,21 @@ def test_stream_openrouter_route_receives_user_credential(monkeypatch) -> None:
     ("model", "provider_function", "provider"),
     [
         (Model.GPT_6_ASTRA, "stream_openai_agent_response", "openai"),
+        (Model.GPT_6_1_SOL, "stream_openai_agent_response", "openai"),
+        (Model.GPT_6_LUNA, "stream_openai_agent_response", "openai"),
         (Model.GEMINI_3_8_FLASH, "stream_google_agent_response", "google"),
+        (Model.GEMINI_3_5_FLASH_LITE, "stream_google_agent_response", "google"),
         (Model.CLAUDE_FABLE_5_1, "stream_anthropic_agent_response", "anthropic"),
+        (Model.CLAUDE_OPUS_5_5, "stream_anthropic_agent_response", "anthropic"),
+        (Model.CLAUDE_SONNET_5_5, "stream_anthropic_agent_response", "anthropic"),
+        (Model.CLAUDE_HAIKU_5_5, "stream_anthropic_agent_response", "anthropic"),
         (
             Model.OPENROUTER_DEEPSEEK_V4_1_FLASH,
+            "stream_openrouter_agent_response",
+            "openrouter",
+        ),
+        (
+            Model.OPENROUTER_GROK_4_7,
             "stream_openrouter_agent_response",
             "openrouter",
         ),
@@ -330,7 +341,7 @@ def test_stream_openai_route_receives_direct_sponsored_credential_and_override(
     async def route_response() -> StreamingResponse:
         return await streams.stream_response_with_agent(
             "test",
-            Model.GPT_5_6_LUNA,
+            Model.GPT_6_LUNA,
             system_prompt="system",
             history=[],
             temperature=0.0,
@@ -524,7 +535,7 @@ def test_stream_anthropic_route_receives_upstream_model(monkeypatch) -> None:
     async def route_response() -> StreamingResponse:
         return await streams.stream_response_with_agent(
             "test",
-            Model.CLAUDE_HAIKU_4_5,
+            Model.CLAUDE_HAIKU_5_5,
             system_prompt="system",
             history=[],
             temperature=0.0,
@@ -598,7 +609,7 @@ def test_anthropic_agent_fallback_receives_upstream_model(monkeypatch) -> None:
 def test_curated_defaults_and_embedding_policy() -> None:
     values = {model.value for model in ACTIVE_EMBEDDING_MODELS}
 
-    assert DEFAULT_INFERENCE_MODEL.value == "claude-sonnet-5"
+    assert DEFAULT_INFERENCE_MODEL.value == "claude-sonnet-5-5"
     assert DEFAULT_QUERY_TRANSFORM_MODEL.value == "gpt-5.4-mini"
     assert DEFAULT_EMBEDDINGS_MODEL.value == "BAAI/bge-m3"
     assert values == {
@@ -646,7 +657,7 @@ def test_ollama_models_are_not_priced_as_self_hosted() -> None:
 
 
 def test_claude_sonnet_5_routes_to_anthropic(monkeypatch):
-    model = Model("claude-sonnet-5")
+    model = Model("claude-sonnet-5-5")
 
     async def fake_stream_anthropic_agent_response(
         user_prompt: str,
@@ -690,4 +701,4 @@ def test_claude_sonnet_5_routes_to_anthropic(monkeypatch):
 
     response = anyio.run(route_response)
 
-    assert response.headers["x-routed-model"] == "claude-sonnet-5"
+    assert response.headers["x-routed-model"] == "claude-sonnet-5-5"

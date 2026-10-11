@@ -42,7 +42,7 @@ def test_credential_providers_for_models_includes_retrieval_time_models() -> Non
     # Given/When: a chat request uses OpenAI embeddings and Anthropic title/generation.
     providers = credential_providers_for_models(
         Model.TEXT_EMBEDDING_3_LARGE,
-        Model.CLAUDE_HAIKU_4_5,
+        Model.CLAUDE_HAIKU_5_5,
     )
 
     # Then: only the providers needed by the selected models are resolved.

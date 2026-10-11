@@ -14,7 +14,7 @@ from pydantic import (
 from pydantic_settings import BaseSettings
 
 from app.llms.model_catalog_policy import CURATED_CHAT_MODELS
-from app.llms.models import Model
+from app.llms.models import Model, resolve_chat_model_alias
 from app.llms.provider_credentials import ProviderName, provider_for_model
 
 _API_KEY_DEFAULT: Final[str] = "your_api_key_here"
@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     BYOK_ALLOWED_BASE_URLS: str = ""
 
     SPONSORED_MODEL_ENABLED: bool = False
-    SPONSORED_MODEL_ID: NonBlankString = "gpt-5.6-luna"
+    SPONSORED_MODEL_ID: NonBlankString = "gpt-6-luna"
     SPONSORED_MODEL_PROVIDER: ProviderName = "openai"
     SPONSORED_MODEL_API_KEY: SecretStr | None = None
     SPONSORED_MODEL_BASE_URL: str | None = None
@@ -211,6 +211,13 @@ class Settings(BaseSettings):
     ) -> int | str | None:
         if isinstance(value, str) and not value.strip():
             return None
+        return value
+
+    @field_validator("SPONSORED_MODEL_ID", mode="before")
+    @classmethod
+    def normalize_sponsored_model_alias(cls, value: object) -> object:
+        if isinstance(value, str):
+            return resolve_chat_model_alias(value)
         return value
 
     @field_validator("SPONSORED_MODEL_BASE_URL", mode="before")

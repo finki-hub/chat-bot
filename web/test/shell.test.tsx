@@ -36,7 +36,7 @@ beforeAll(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
 
-const CLAUDE = 'claude-sonnet-5';
+const CLAUDE = 'claude-sonnet-5-5';
 const GPT = 'gpt-5.4-mini';
 const RESPONSE_ID = 'resp-123';
 const FIRST_TITLE = 'Прв разговор';
@@ -885,8 +885,8 @@ describe('ChatPage persistence', () => {
           jsonOk({
             models: [
               {
-                id: 'claude-sonnet-5',
-                name: 'Claude Sonnet 5',
+                id: 'claude-sonnet-5-5',
+                name: 'Claude Sonnet 5.5',
                 provider: 'anthropic',
               },
               {
@@ -907,7 +907,7 @@ describe('ChatPage persistence', () => {
     renderChatPage();
 
     await waitFor(() => {
-      expect(useUiStore.getState().model).toBe('claude-sonnet-5');
+      expect(useUiStore.getState().model).toBe('claude-sonnet-5-5');
     });
   });
 });

@@ -10,9 +10,9 @@ import {
   type ComposerActionsProps,
 } from '@/components/chat/composer-actions';
 
-const LUNA_ID = 'gpt-5.6-luna';
-const LUNA_NAME = 'GPT-5.6 Luna';
-const LUNA_OPTION_NAME = /GPT-5\.6 Luna.*Бесплатно/u;
+const LUNA_ID = 'gpt-6-luna';
+const LUNA_NAME = 'GPT-6 Luna';
+const LUNA_OPTION_NAME = /GPT-6 Luna.*Бесплатно/u;
 const GEMINI_ID = 'gemini-3.5-flash';
 const GEMINI_NAME = 'Gemini 3.5 Flash';
 const GEMINI_OPTION_NAME = /Gemini 3\.5 Flash.*Бесплатно/u;

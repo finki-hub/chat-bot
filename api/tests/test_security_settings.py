@@ -141,7 +141,7 @@ def test_sponsored_model_defaults_are_disabled_and_safe():
     settings = Settings(SPONSORED_MODEL_ENABLED=False)
 
     assert settings.SPONSORED_MODEL_ENABLED is False
-    assert settings.SPONSORED_MODEL_ID == "gpt-5.6-luna"
+    assert settings.SPONSORED_MODEL_ID == "gpt-6-luna"
     assert settings.SPONSORED_MODEL_PROVIDER == "openai"
     assert settings.SPONSORED_MODEL_API_KEY is None
     assert settings.SPONSORED_MODEL_BASE_URL is None
@@ -246,7 +246,7 @@ def test_sponsored_model_rejects_provider_mismatch():
     with pytest.raises(ValueError, match="SPONSORED_MODEL_PROVIDER"):
         Settings(
             SPONSORED_MODEL_ENABLED=True,
-            SPONSORED_MODEL_ID="gpt-5.6-luna",
+            SPONSORED_MODEL_ID="gpt-6-luna",
             SPONSORED_MODEL_PROVIDER="google",
             SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
             SPONSORED_DAILY_GLOBAL_LIMIT=10,
@@ -262,7 +262,7 @@ def test_sponsored_model_reports_derived_provider_mismatch_before_configured_oll
     ):
         Settings(
             SPONSORED_MODEL_ENABLED=True,
-            SPONSORED_MODEL_ID="gpt-5.6-luna",
+            SPONSORED_MODEL_ID="gpt-6-luna",
             SPONSORED_MODEL_PROVIDER="ollama",
             SPONSORED_MODEL_API_KEY=SecretStr("sponsored-secret"),
             SPONSORED_DAILY_GLOBAL_LIMIT=10,

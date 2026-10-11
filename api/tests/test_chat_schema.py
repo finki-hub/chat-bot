@@ -1,5 +1,6 @@
 import pytest
 
+from app.llms.models import LEGACY_CHAT_MODEL_ALIASES
 from app.schemas.chat import ChatSchema
 
 
@@ -32,6 +33,26 @@ def test_chat_schema_rejects_unknown_non_ollama_chat_model_id():
                 "messages": [{"role": "user", "content": "hi"}],
             },
         )
+
+
+@pytest.mark.parametrize(
+    ("legacy_id", "canonical"),
+    [(alias, model.value) for alias, model in LEGACY_CHAT_MODEL_ALIASES.items()],
+)
+def test_chat_schema_normalizes_legacy_inference_and_query_transform_ids(
+    legacy_id: str,
+    canonical: str,
+) -> None:
+    payload = ChatSchema.model_validate(
+        {
+            "inference_model": legacy_id,
+            "query_transform_model": legacy_id,
+            "messages": [{"role": "user", "content": "hi"}],
+        },
+    )
+
+    assert payload.inference_model == canonical
+    assert payload.query_transform_model == canonical
 
 
 @pytest.mark.parametrize(

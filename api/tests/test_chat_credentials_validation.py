@@ -34,7 +34,7 @@ def _client() -> TestClient:
     ("inference_model", "embeddings_model", "provider", "stage"),
     [
         (
-            Model.CLAUDE_HAIKU_4_5,
+            Model.CLAUDE_HAIKU_5_5,
             Model.BGE_M3_LOCAL,
             "anthropic",
             "inference",

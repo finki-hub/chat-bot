@@ -52,6 +52,8 @@ class _RemoteCost(BaseModel):
 
     input: StrictFloat | None = None
     output: StrictFloat | None = None
+    cache_read: StrictFloat | None = None
+    cache_write: StrictFloat | None = None
 
 
 class _RemoteModel(BaseModel):
@@ -108,7 +110,12 @@ def _metadata(remote: _RemoteModel) -> DisplayMetadata:
     pricing = (
         None
         if remote.cost is None
-        else ModelPricing(input=remote.cost.input, output=remote.cost.output)
+        else ModelPricing(
+            input=remote.cost.input,
+            output=remote.cost.output,
+            cache_read=remote.cost.cache_read,
+            cache_write=remote.cost.cache_write,
+        )
     )
     return DisplayMetadata(
         name=remote.name,

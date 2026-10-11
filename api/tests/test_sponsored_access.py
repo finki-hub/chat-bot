@@ -25,7 +25,7 @@ RESET = datetime(2026, 7, 19, tzinfo=UTC)
 
 
 def _descriptor(
-    model_id: str = "gpt-5.6-luna",
+    model_id: str = "gpt-6-luna",
     provider: CatalogProvider = "openai",
 ) -> ModelDescriptor:
     return ModelDescriptor(
@@ -48,7 +48,7 @@ def _context(
     provider_configured: bool = True,
     personal_remaining: int = 4,
     global_remaining: int = 10,
-    sponsored_model_id: str | None = "gpt-5.6-luna",
+    sponsored_model_id: str | None = "gpt-6-luna",
     sponsored_provider: ProviderName | None = "openai",
 ) -> ModelAccessContext:
     return ModelAccessContext(
@@ -75,7 +75,7 @@ def _context(
 
 def test_legacy_model_descriptor_payload_parses_without_access_fields() -> None:
     payload = {
-        "id": "gpt-5.6-sol",
+        "id": "gpt-6.1-sol",
         "provider": "openai",
         "name": "GPT-5.6 Sol",
         "execution": {
@@ -121,7 +121,7 @@ def test_sponsored_overlay_covers_all_availability_states(
 
 def test_non_luna_overlay_never_grants_sponsored_access() -> None:
     resolved = overlay_model_access(
-        _descriptor("gpt-5.6-sol"),
+        _descriptor("gpt-6.1-sol"),
         _context(),
     )
 

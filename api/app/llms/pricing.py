@@ -11,9 +11,7 @@ from app.llms.models import ChatModel, Model
 # (input_usd_per_1m, output_usd_per_1m) for hosted models with published standard rates.
 HOSTED_PRICING: dict[Model, tuple[float, float]] = {
     Model.GPT_6_ASTRA: (10.00, 50.00),
-    Model.GPT_5_6_SOL: (5.00, 30.00),
     Model.GPT_5_6_TERRA: (2.50, 15.00),
-    Model.GPT_5_6_LUNA: (1.00, 6.00),
     Model.GPT_5_5: (5.00, 30.00),
     Model.GPT_5_4: (2.50, 15.00),
     Model.GPT_5_4_MINI: (0.75, 4.50),
@@ -21,11 +19,11 @@ HOSTED_PRICING: dict[Model, tuple[float, float]] = {
     Model.GEMINI_3_8_FLASH: (0.75, 3.75),
     Model.GEMINI_3_1_PRO_PREVIEW: (2.00, 12.00),
     Model.GEMINI_3_5_FLASH: (1.50, 9.00),
-    Model.GEMINI_3_1_FLASH_LITE: (0.25, 1.50),
+    Model.GEMINI_3_5_FLASH_LITE: (0.30, 2.50),
     Model.CLAUDE_FABLE_5_1: (10.00, 50.00),
-    Model.CLAUDE_OPUS_4_8: (5.00, 25.00),
-    Model.CLAUDE_SONNET_5: (3.00, 15.00),
-    Model.CLAUDE_HAIKU_4_5: (1.00, 5.00),
+    Model.CLAUDE_OPUS_5_5: (4.00, 20.00),
+    Model.CLAUDE_SONNET_5_5: (2.00, 10.00),
+    Model.CLAUDE_HAIKU_5_5: (0.10, 0.50),
     Model.OPENROUTER_DEEPSEEK_V4_1_FLASH: (0.15, 0.60),
     Model.OPENROUTER_QWEN3_8_MAX_0902: (2.00, 6.00),
 }
@@ -61,6 +59,8 @@ def cost_usd(
     price = HOSTED_PRICING.get(model)
     if price is None:
         return None
+    if model == Model.CLAUDE_HAIKU_5_5 and input_tokens > 100_000:
+        price = (0.50, 2.50)
     input_cost = input_tokens / 1_000_000 * price[0]
     output_cost = output_tokens / 1_000_000 * price[1]
     return (input_cost, output_cost, input_cost + output_cost)

@@ -26,7 +26,7 @@ def test_generation_access_mode_follows_resolved_credential_path(monkeypatch, by
             current_settings=settings(enabled=True),
             user_credentials=credentials(openai=byok),
             admit=admit,
-            inference_model=Model.GPT_5_6_LUNA,
+            inference_model=Model.GPT_6_LUNA,
         )
     )
     generation = next(props for event, props in events if event == "$ai_generation")

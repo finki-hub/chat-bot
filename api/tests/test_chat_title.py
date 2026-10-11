@@ -168,7 +168,7 @@ def test_chat_title_does_not_call_hosted_provider_without_user_credential(
     payload = ChatTitleSchema(
         user_id=None,
         messages=[ConversationTurn(role="user", content="Како да пријавам испит?")],
-        query_transform_model=Model.CLAUDE_HAIKU_4_5,
+        query_transform_model=Model.CLAUDE_HAIKU_5_5,
     )
 
     response = anyio.run(chat_title.generate_chat_title, payload)
@@ -217,7 +217,7 @@ def test_chat_title_uses_runtime_settings_for_user_credentials(monkeypatch):
                 messages=[
                     ConversationTurn(role="user", content="Кога е јунската сесија?"),
                 ],
-                query_transform_model=Model.CLAUDE_HAIKU_4_5,
+                query_transform_model=Model.CLAUDE_HAIKU_5_5,
                 user_id=user_id,
             ),
             db,

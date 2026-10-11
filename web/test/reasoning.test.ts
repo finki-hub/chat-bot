@@ -9,19 +9,20 @@ import {
 describe('isReasoningCapableModel', () => {
   it('is true for reasoning-capable model families', () => {
     const capable = [
-      'claude-sonnet-5',
+      'claude-sonnet-5-5',
       'claude-fable-5-1',
-      'claude-opus-4-8',
+      'claude-opus-5-5',
       'gemini-3.5-flash',
-      'claude-haiku-4-5',
+      'claude-haiku-5-5',
       'gpt-5.4-mini',
-      'gpt-5.6-sol',
+      'gpt-6.1-sol',
+      'gpt-6-luna',
       'gpt-6-astra',
       'openrouter:deepseek/deepseek-v4.1-flash',
       'openrouter:deepseek/deepseek-v4-pro-0813',
       'openrouter:moonshotai/kimi-k3',
       'openrouter:qwen/qwen3.8-max',
-      'openrouter:x-ai/grok-4.6',
+      'openrouter:x-ai/grok-4.7',
       'openrouter:tencent/hy3',
       'qwen3:30b-a3b-thinking-2507-q4_K_M',
       'qwen3:14b-q4_K_M',
@@ -50,7 +51,7 @@ describe('mandatory reasoning policy', () => {
     'openrouter:z-ai/glm-5.3',
     'openrouter:qwen/qwen3.8-max',
     'openrouter:qwen/qwen3.8-max-0902',
-    'openrouter:x-ai/grok-4.6',
+    'openrouter:x-ai/grok-4.7',
   ];
 
   it('identifies only models whose provider cannot disable reasoning', () => {

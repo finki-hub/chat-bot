@@ -66,7 +66,7 @@ def test_sponsored_openai_client_receives_upstream_model_and_token_cap(
     monkeypatch.setattr(openai, "ChatOpenAI", OpenAICapturingClient)
 
     openai.get_openai_llm(
-        Model.GPT_5_6_LUNA,
+        Model.GPT_6_LUNA,
         temperature=0.0,
         top_p=1.0,
         max_tokens=1024,
@@ -140,7 +140,7 @@ def test_sponsored_anthropic_client_receives_upstream_model_and_token_cap(
     monkeypatch.setattr(anthropic, "ChatAnthropic", AnthropicCapturingClient)
 
     anthropic.get_anthropic_llm(
-        Model.CLAUDE_HAIKU_4_5,
+        Model.CLAUDE_HAIKU_5_5,
         temperature=0.0,
         top_p=1.0,
         max_tokens=1024,
@@ -244,7 +244,7 @@ def test_anthropic_byok_client_does_not_inherit_deployment_base_url(
     monkeypatch.setattr(anthropic, "ChatAnthropic", AnthropicCapturingClient)
 
     anthropic.get_anthropic_llm(
-        Model.CLAUDE_HAIKU_4_5,
+        Model.CLAUDE_HAIKU_5_5,
         temperature=0.0,
         top_p=1.0,
         max_tokens=128,
@@ -264,7 +264,7 @@ def test_claude_haiku_keeps_temperature_and_omits_top_p(monkeypatch) -> None:
     monkeypatch.setattr(anthropic, "ChatAnthropic", AnthropicCapturingClient)
 
     anthropic.get_anthropic_llm(
-        Model.CLAUDE_HAIKU_4_5,
+        Model.CLAUDE_HAIKU_5_5,
         temperature=0.2,
         top_p=0.8,
         max_tokens=128,
@@ -276,6 +276,29 @@ def test_claude_haiku_keeps_temperature_and_omits_top_p(monkeypatch) -> None:
     assert request["temperature"] == pytest.approx(0.2)
     assert "top_p" not in request
     assert request["thinking"] is None
+
+
+def test_claude_sonnet_5_5_disables_default_adaptive_thinking(monkeypatch) -> None:
+    captured: list[dict] = []
+
+    class AnthropicCapturingClient:
+        def __init__(self, **kwargs):
+            captured.append(kwargs)
+
+    monkeypatch.setattr(anthropic, "ChatAnthropic", AnthropicCapturingClient)
+
+    anthropic.get_anthropic_llm(
+        Model.CLAUDE_SONNET_5_5,
+        temperature=0.2,
+        top_p=0.8,
+        max_tokens=1024,
+        credential=ChatCredentialSecret(provider="anthropic", api_key="user-key"),
+    )
+
+    request = captured[0]
+    assert request["thinking"] == {"type": "disabled"}
+    assert request["temperature"] is None
+    assert request["max_tokens"] == 1024
 
 
 def test_claude_fable_uses_always_on_adaptive_thinking(monkeypatch) -> None:
@@ -479,7 +502,7 @@ def test_sponsored_openrouter_client_uses_known_upstream_reasoning() -> None:
         (Model.OPENROUTER_QWEN3_8_MAX, {"effort": "high"}),
         (Model.OPENROUTER_QWEN3_8_27B, {"effort": "medium"}),
         (Model.OPENROUTER_MINIMAX_M3, {}),
-        (Model.OPENROUTER_GROK_4_6, {"effort": "high"}),
+        (Model.OPENROUTER_GROK_4_7, {"effort": "high"}),
         (Model.OPENROUTER_HY3, {"effort": "high"}),
     ],
 )
@@ -574,7 +597,7 @@ def test_openrouter_client_disables_optional_reasoning(monkeypatch) -> None:
         Model.OPENROUTER_GLM_5_3,
         Model.OPENROUTER_QWEN3_8_MAX_0902,
         Model.OPENROUTER_QWEN3_8_MAX,
-        Model.OPENROUTER_GROK_4_6,
+        Model.OPENROUTER_GROK_4_7,
     ],
 )
 def test_openrouter_client_keeps_mandatory_reasoning_enabled(
@@ -611,7 +634,7 @@ def test_openrouter_client_keeps_mandatory_reasoning_enabled(
     [
         ("openai", openai.get_openai_llm, Model.GPT_5_4_MINI),
         ("google", google.get_google_llm, Model.GEMINI_3_5_FLASH),
-        ("anthropic", anthropic.get_anthropic_llm, Model.CLAUDE_HAIKU_4_5),
+        ("anthropic", anthropic.get_anthropic_llm, Model.CLAUDE_HAIKU_5_5),
         ("ollama", ollama.get_llm, Model.QWEN3_14B),
         (
             "openrouter",

@@ -37,7 +37,7 @@ def _request(current_settings):
 
 def _payload(
     user_id: UUID | None = USER_ID,
-    inference_model: Model = Model.GPT_5_6_LUNA,
+    inference_model: Model = Model.GPT_6_LUNA,
 ):
     query_transform_model = (
         Model.GEMINI_3_8_FLASH
@@ -84,7 +84,7 @@ async def _run_stream(
     body=_body,
     release_func=None,
     handle_func=None,
-    inference_model: Model = Model.GPT_5_6_LUNA,
+    inference_model: Model = Model.GPT_6_LUNA,
 ):
     released: list[tuple[UUID, UUID]] = []
     captured: list[tuple[str, dict[str, object]]] = []
@@ -149,7 +149,7 @@ async def _run_stream(
 @pytest.mark.parametrize(
     ("current_settings", "user_credentials", "inference_model"),
     [
-        (settings(), credentials(openai=False), Model.GPT_5_6_LUNA),
+        (settings(), credentials(openai=False), Model.GPT_6_LUNA),
         (
             settings(
                 sponsored_model_id="gemini-3.8-flash",

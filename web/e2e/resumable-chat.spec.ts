@@ -18,7 +18,7 @@ const SPONSORED_CATALOG: ModelCatalog = {
     {
       availability: 'sponsored',
       id: INFERENCE_MODEL,
-      name: 'Claude Sonnet 5',
+      name: 'Claude Sonnet 5.5',
       provider: 'anthropic',
       sponsored_quota: {
         limit: 5,

@@ -380,7 +380,7 @@ def test_chat_state_requires_api_key() -> None:
         json={
             "id": str(uuid4()),
             "user_id": OWNER_ID,
-            "model": "claude-sonnet-5",
+            "model": "claude-sonnet-5-5",
         },
     )
 
@@ -409,7 +409,7 @@ def test_chat_state_lifecycle_persists_messages_and_active_stream() -> None:
         json={
             "id": str(conversation_id),
             "user_id": OWNER_ID,
-            "model": "claude-sonnet-5",
+            "model": "claude-sonnet-5-5",
             "title": "Enrollment",
         },
     )

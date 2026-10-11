@@ -31,7 +31,7 @@ def seed_owned_response(db: FakeFeedbackDatabase) -> tuple[UUID, UUID]:
         "active_stream_id": None,
         "created_at": db.now,
         "id": conversation_id,
-        "model": "claude-sonnet-5",
+        "model": "claude-sonnet-5-5",
         "title": "Enrollment",
         "updated_at": db.now,
         "user_id": UUID(OWNER_ID),

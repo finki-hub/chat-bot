@@ -343,3 +343,35 @@ describe('buildChatTransport', () => {
     await expect(loadChatConversationHistory('conv-7')).resolves.toBeNull();
   });
 });
+
+describe('loadChatConversationHistory', () => {
+  it('preserves legacy model provenance in loaded conversation messages', async () => {
+    const legacyModel = 'claude-sonnet-5';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          conversation: {
+            activeStream: null,
+            id: 'legacy-chat',
+            model: legacyModel,
+            title: 'Old chat',
+          },
+          messages: [
+            {
+              id: 'legacy-answer',
+              metadata: { inferenceModel: legacyModel, responseId: 'r-old' },
+              parts: [{ text: 'Historic answer', type: 'text' }],
+              role: 'assistant',
+            },
+          ],
+        }),
+      ),
+    );
+
+    const history = await loadChatConversationHistory('legacy-chat');
+
+    expect(history?.conversation.model).toBe(legacyModel);
+    expect(history?.messages[0]?.metadata?.inferenceModel).toBe(legacyModel);
+  });
+});

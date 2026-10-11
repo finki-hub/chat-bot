@@ -15,8 +15,8 @@ from app.main import make_app
 from app.schemas.chat_credentials import ChatCredentialSecret
 from app.utils.settings import Settings
 
-SPONSORED_ID = "gpt-5.6-luna"
-OTHER_MODEL_ID = "gpt-5.6-sol"
+SPONSORED_ID = "gpt-6-luna"
+OTHER_MODEL_ID = "gpt-6.1-sol"
 OPENROUTER_MODEL_ID = "openrouter:deepseek/deepseek-v4-pro-0813"
 USER_WITH_KEY = UUID("00000000-0000-4000-8000-000000000001")
 USER_WITHOUT_KEY = UUID("00000000-0000-4000-8000-000000000002")

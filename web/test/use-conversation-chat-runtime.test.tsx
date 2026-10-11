@@ -5,7 +5,7 @@ import type { MyUIMessage } from '@/lib/api-types';
 
 import { useConversationChatRuntime } from '@/lib/use-conversation-chat-runtime';
 
-const SPONSORED_MODEL_ID = 'gpt-5.6-luna';
+const SPONSORED_MODEL_ID = 'gpt-6-luna';
 
 type MessageUpdate =
   ((messages: MyUIMessage[]) => MyUIMessage[]) | MyUIMessage[];
@@ -44,7 +44,15 @@ const useChatOptions: RuntimeOptions[] = [];
 const setMessages = vi.fn<(messages: MessageUpdate) => void>();
 const refreshConversations = vi.fn<() => Promise<void>>();
 const getChatStatus = vi.fn<() => 'ready' | 'submitted'>(() => 'ready');
-const { refetchModels } = vi.hoisted(() => ({
+const regenerateMessage =
+  vi.fn<
+    (options: {
+      messageId: string;
+      metadata?: Record<string, unknown>;
+    }) => Promise<void>
+  >();
+const { getChatExtras, refetchModels } = vi.hoisted(() => ({
+  getChatExtras: vi.fn<() => { model: string; reasoning: boolean }>(),
   refetchModels: vi.fn<() => Promise<void>>(),
 }));
 
@@ -53,7 +61,7 @@ vi.mock('@ai-sdk/react', () => ({
     useChatOptions.push(options);
     return {
       messages: previousMessages,
-      regenerate: vi.fn<() => Promise<void>>(),
+      regenerate: regenerateMessage,
       sendMessage: vi.fn<() => Promise<void>>(),
       setMessages,
       status: getChatStatus(),
@@ -63,9 +71,14 @@ vi.mock('@ai-sdk/react', () => ({
 }));
 
 vi.mock('@/lib/transport', () => ({
-  buildChatTransport: vi.fn<() => { readonly kind: 'transport' }>(() => ({
-    kind: 'transport',
-  })),
+  buildChatTransport: vi.fn<
+    (getExtras: () => { model: string; reasoning: boolean }) => {
+      readonly kind: 'transport';
+    }
+  >((getExtras) => {
+    getChatExtras.mockImplementation(getExtras);
+    return { kind: 'transport' };
+  }),
 }));
 
 vi.mock('@/lib/use-models', () => ({
@@ -96,11 +109,48 @@ describe('useConversationChatRuntime sponsored errors', () => {
     setMessages.mockReset();
     getChatStatus.mockReset();
     getChatStatus.mockReturnValue('ready');
+    regenerateMessage.mockReset();
+    regenerateMessage.mockResolvedValue();
+    getChatExtras.mockReset();
     useChatOptions.length = 0;
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('regenerates legacy history with the replacement model and retains provenance', async () => {
+    const oldHistoryAnswer: MyUIMessage = {
+      id: 'legacy-answer',
+      metadata: { inferenceModel: 'claude-sonnet-5' },
+      parts: [{ text: 'Historic answer', type: 'text' }],
+      role: 'assistant',
+    };
+    previousMessages.push(oldHistoryAnswer);
+    const { result } = renderHook(() =>
+      useConversationChatRuntime({
+        activeId: 'legacy-model-conversation',
+        model: 'claude-sonnet-5',
+        preserveEmptyHydrationIdRef: { current: null },
+        reasoning: false,
+        refreshConversations,
+        setActiveId: vi.fn<(id: null | string) => void>(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.regenerate({ messageId: oldHistoryAnswer.id });
+    });
+
+    expect(regenerateMessage).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ messageId: oldHistoryAnswer.id }),
+    );
+    expect(getChatExtras().model).toBe('claude-sonnet-5-5');
+    expect(result.current.messages.at(-1)?.metadata?.inferenceModel).toBe(
+      'claude-sonnet-5',
+    );
+
+    previousMessages.pop();
   });
 
   it('refreshes the model catalog and preserves the prior conversation on terminal quota errors', async () => {

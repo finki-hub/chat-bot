@@ -75,7 +75,7 @@ def test_chat_title_uses_cheapest_model_for_active_provider(monkeypatch):
                             content="Кога е јунската сесија?",
                         ),
                     ],
-                    "provider_model": Model.CLAUDE_SONNET_5,
+                    "provider_model": Model.CLAUDE_SONNET_5_5,
                 },
             ),
             db,
@@ -85,7 +85,7 @@ def test_chat_title_uses_cheapest_model_for_active_provider(monkeypatch):
     response = anyio.run(run_title)
 
     assert response.title == "Испитен рок"
-    assert selected_models == [Model.CLAUDE_HAIKU_4_5]
+    assert selected_models == [Model.CLAUDE_HAIKU_5_5]
 
 
 def test_chat_title_uses_dynamic_ollama_provider_model_directly(monkeypatch):

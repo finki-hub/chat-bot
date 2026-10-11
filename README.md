@@ -148,15 +148,18 @@ for six hours; refresh failures serve the last successful catalog, and cold-star
 failures use the bundled snapshot. Remote metadata cannot add executable model IDs,
 change providers or alter execution policy.
 
-The hosted picker includes these 22 curated models: GPT-6 Astra, GPT-5.6 Sol,
-GPT-5.6 Terra, GPT-5.6 Luna, GPT-5.4 Mini, GPT-5.4 Nano, Gemini 3.8 Flash, Gemini
-3.1 Pro Preview, Gemini 3.1 Flash Lite, Claude Fable 5.1, Claude Opus 4.8, Claude
-Sonnet 5, Claude Haiku 4.5, plus the OpenRouter models DeepSeek V4.1 Flash, DeepSeek
-V4 Pro 0813, GLM-5.3, Kimi K3, Qwen3.8 Max 0902, Qwen3.8 27B, MiniMax M3, Grok 4.6
+The hosted picker includes these 22 curated models: GPT-6 Astra, GPT-6.1 Sol,
+GPT-5.6 Terra, GPT-6 Luna, GPT-5.4 Mini, GPT-5.4 Nano, Gemini 3.8 Flash, Gemini
+3.1 Pro Preview, Gemini 3.5 Flash Lite, Claude Fable 5.1, Claude Opus 5.5, Claude
+Sonnet 5.5, Claude Haiku 5.5, plus the OpenRouter models DeepSeek V4.1 Flash, DeepSeek
+V4 Pro 0813, GLM-5.3, Kimi K3, Qwen3.8 Max 0902, Qwen3.8 27B, MiniMax M3, Grok 4.7
 and Tencent HY 3. Retired GPT-5.5, GPT-5.4, Gemini 3.5 Flash and DeepSeek V4 Flash
 IDs remain compatibility-only and are not offered by the picker. The Ollama catalog
 uses multilingual Qwen3 30B and 14B quantizations selected to fit a 24 GB GPU; the
 advertised context limits still require enough remaining memory for the KV cache.
+The seven recently retired hosted IDs remain accepted as request/configuration aliases
+and are normalized to their current catalog IDs; stored conversation and message model
+metadata is deliberately read and retained verbatim.
 
 `BAAI/bge-m3`, `text-embedding-3-large`, and `gemini-embedding-001` are active for authenticated chat requests. Corpus fill jobs remain limited to local BGE-M3 because they do not have a user credential boundary. Legacy embedding columns and historical model values remain readable for existing data.
 
@@ -175,7 +178,7 @@ is unchanged.
 | Setting | Default | Meaning and security requirement |
 | --- | --- | --- |
 | `SPONSORED_MODEL_ENABLED` | `false` | Kill switch. Keep `false` until the release gate below passes. |
-| `SPONSORED_MODEL_ID` | `gpt-5.6-luna` | Public catalog model ID for the sponsored profile. |
+| `SPONSORED_MODEL_ID` | `gpt-6-luna` | Public catalog model ID for the sponsored profile. Retired model IDs are accepted as configuration aliases and normalized to the current ID. |
 | `SPONSORED_MODEL_PROVIDER` | `openai` | Provider name for the sponsored profile. |
 | `SPONSORED_MODEL_API_KEY` | empty | Dedicated provider secret for sponsored inference. It must not be copied from or substituted with `API_KEY`, a user BYOK key, or a Discord secret. |
 | `SPONSORED_MODEL_BASE_URL` | empty | Optional dedicated HTTPS OpenAI-compatible endpoint for sponsored inference only. It is canonicalized and validated separately from `BYOK_ALLOWED_BASE_URLS`; it must not be used as a user endpoint allowlist. |
@@ -214,7 +217,7 @@ docker compose --env-file .env -f compose.prod.yaml config --quiet
 curl --fail-with-body --no-buffer --silent --show-error \
   -H "x-api-key: ${API_KEY}" \
   -H 'content-type: application/json' \
-  --data '{"user_id":"00000000-0000-4000-8000-000000000016","interface":"web","inference_model":"gpt-5.6-luna","query_transform_mode":"raw","messages":[{"role":"user","content":"deployment preflight"}],"max_tokens":1024}' \
+  --data '{"user_id":"00000000-0000-4000-8000-000000000016","interface":"web","inference_model":"gpt-6-luna","query_transform_mode":"raw","messages":[{"role":"user","content":"deployment preflight"}],"max_tokens":1024}' \
   "${CHATBOT_URL:-http://127.0.0.1:8880}/chat/" | tee /tmp/sponsored-model-preflight.sse
 /bin/sh scripts/verify-sponsored-model-preflight.sh /tmp/sponsored-model-preflight.sse
 ```

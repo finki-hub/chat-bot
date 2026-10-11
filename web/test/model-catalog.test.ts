@@ -20,7 +20,7 @@ const OLLAMA = 'ollama';
 const OPENROUTER = 'openrouter';
 const LIVE = 'live';
 const GPT = 'gpt-6-astra';
-const LUNA = 'gpt-5.6-luna';
+const LUNA = 'gpt-6-luna';
 const RETIRED_GPT = 'gpt-5.4';
 const RETIRED_GPT_5_5 = 'gpt-5.5';
 const RETIRED_GEMINI = 'gemini-3.5-flash';
@@ -43,24 +43,25 @@ const GPT_MINI = 'gpt-5.4-mini';
 const GPT_MINI_NAME = 'GPT-5.4 Mini';
 const GPT_NANO = 'gpt-5.4-nano';
 const GEMINI_PRO = 'gemini-3.1-pro-preview';
-const CLAUDE_OPUS = 'claude-opus-4-8';
+const CLAUDE_OPUS = 'claude-opus-5-5';
 const CLAUDE_LEGACY = 'claude-sonnet-4-6';
+const LEGACY_LUNA = 'gpt-5.6-luna';
 const QWEN_THINKING = 'qwen3:30b-a3b-thinking-2507-q4_K_M';
 
 const EXPECTED_CURATED_IDS = [
   'gpt-6-astra',
-  'gpt-5.6-sol',
+  'gpt-6.1-sol',
   'gpt-5.6-terra',
   LUNA,
   GPT_MINI,
   GPT_NANO,
   'gemini-3.8-flash',
   'gemini-3.1-pro-preview',
-  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash-lite',
   'claude-fable-5-1',
-  'claude-opus-4-8',
-  'claude-sonnet-5',
-  'claude-haiku-4-5',
+  'claude-opus-5-5',
+  'claude-sonnet-5-5',
+  'claude-haiku-5-5',
   'openrouter:deepseek/deepseek-v4.1-flash',
   'openrouter:deepseek/deepseek-v4-pro-0813',
   'openrouter:z-ai/glm-5.3',
@@ -68,7 +69,7 @@ const EXPECTED_CURATED_IDS = [
   QWEN_MAX,
   'openrouter:qwen/qwen3.8-27b',
   'openrouter:minimax/minimax-m3',
-  'openrouter:x-ai/grok-4.6',
+  'openrouter:x-ai/grok-4.7',
   'openrouter:tencent/hy3',
   'qwen3:30b-a3b-thinking-2507-q4_K_M',
   'qwen3:30b-a3b-instruct-2507-q4_K_M',
@@ -99,7 +100,7 @@ const typedModels = [
   },
   {
     id: CLAUDE_OPUS,
-    name: 'Claude Opus 4.8',
+    name: 'Claude Opus 5.5',
     provider: ANTHROPIC,
   },
   {
@@ -155,7 +156,7 @@ describe('parseModelCatalog', () => {
           base_url: 'https://sponsor.invalid',
           endpoint: 'https://sponsor.invalid/v1',
           id: LUNA,
-          name: 'GPT-5.6 Luna',
+          name: 'GPT-6 Luna',
           provider: OPENAI,
           sponsored_quota: {
             limit: 10,
@@ -171,8 +172,8 @@ describe('parseModelCatalog', () => {
     expect(catalog.models).toStrictEqual([
       {
         availability: 'sponsored',
-        id: 'gpt-5.6-luna',
-        name: 'GPT-5.6 Luna',
+        id: 'gpt-6-luna',
+        name: 'GPT-6 Luna',
         provider: OPENAI,
         sponsored_quota: {
           limit: 10,
@@ -488,6 +489,30 @@ describe('recoverSelectedModel', () => {
 
   it('keeps the current model when the catalog is empty', () => {
     expect(recoverSelectedModel([], CLAUDE_LEGACY, GPT)).toBe(CLAUDE_LEGACY);
+  });
+
+  it('prefers a supported replacement and otherwise preserves a supported legacy id', () => {
+    const oldCatalog = [descriptor(LEGACY_LUNA, OPENAI)];
+
+    expect(recoverSelectedModel(oldCatalog, LEGACY_LUNA, GPT)).toBe(
+      LEGACY_LUNA,
+    );
+    expect(oldCatalog[0]?.id).toBe(LEGACY_LUNA);
+    expect(
+      recoverSelectedModel(
+        [descriptor('gpt-6-luna', OPENAI)],
+        LEGACY_LUNA,
+        GPT,
+      ),
+    ).toBe('gpt-6-luna');
+  });
+
+  it('recovers an unsupported legacy selection against unrelated nonempty catalogs', () => {
+    const unrelatedCatalog = [descriptor('unrelated-model', OPENAI)];
+
+    expect(recoverSelectedModel(unrelatedCatalog, 'gpt-5.6-luna', GPT)).toBe(
+      'unrelated-model',
+    );
   });
 
   it('recovers a retired persisted selection to the current visible default', () => {

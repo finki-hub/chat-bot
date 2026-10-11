@@ -69,14 +69,14 @@ def get_anthropic_llm(
 
     When `reasoning` is on, extended thinking additionally requires `temperature` to be
     unset (the API uses its default of 1), so we send `None` for every reasoning request.
-    Claude Sonnet 5 enables adaptive thinking by default, so non-reasoning requests
+    Claude Sonnet 5.5 enables adaptive thinking by default, so non-reasoning requests
     explicitly disable it to preserve the UI toggle's semantics. Claude Fable 5.1 is
     always-on adaptive thinking and therefore receives no budget_tokens cap.
     """
     thinking, effective_max = (None, max_tokens)
     if reasoning or model == Model.CLAUDE_FABLE_5_1:
         thinking, effective_max = _thinking_config(model, max_tokens)
-    elif model == Model.CLAUDE_SONNET_5:
+    elif model == Model.CLAUDE_SONNET_5_5:
         thinking = {"type": "disabled"}
     temperature_arg = (
         None if (reasoning or model in ANTHROPIC_NO_SAMPLING_MODELS) else temperature
