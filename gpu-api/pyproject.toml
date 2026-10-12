@@ -5,7 +5,7 @@ requires-python = ">=3.14,<3.15"
 dependencies = [
   "fastapi[all]>=0.143.0",
   "gunicorn>=26.2.0",
-  "langchain-huggingface>=1.2.2",
+  "langchain-huggingface>=1.2.3",
   "posthog>=7.67.0",
   "sentence-transformers>=6.1.0",
   "torch>=2.14.1",
