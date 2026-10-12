@@ -329,7 +329,7 @@ wheels = [
 
 [[package]]
 name = "fastapi"
-version = "0.142.2"
+version = "0.143.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -339,9 +339,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/56/4f/f7c30a73127e0a8bbffe788369b8359e530b01ae06e2757936fa35bc5e6d/fastapi-0.142.2.tar.gz", hash = "sha256:06366626f2e70576367714d9ab2fe8472e6c8456dba69b399f9f797ab5e92570", size = 466721, upload-time = "2026-09-30T09:51:11.277Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0b/d7/6a8753ab6c1d432dc53703c3e1b92974a94531b7d047c32bbaae461ea844/fastapi-0.143.0.tar.gz", hash = "sha256:1acffe48206a80917cf7dac21992b5c44b25384e8902bf745c1fd9dabcf6c51f", size = 468391, upload-time = "2026-10-08T12:29:46.54Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/b6/78aaf9141fb46742928c113f3cf6ef2259d538cb02b604b7656c1dc9883c/fastapi-0.142.2-py3-none-any.whl", hash = "sha256:bd5f4d81f1e93a88bcd77caf4dfe3c2dbffc3805407a0007e9a114c18b3a670b", size = 144409, upload-time = "2026-09-30T09:51:09.8Z" },
+    { url = "https://files.pythonhosted.org/packages/bd/f4/27e386913417ad32aae42bba48b0c0cce40e9ff2fba1a871ca2702c37324/fastapi-0.143.0-py3-none-any.whl", hash = "sha256:3e9395fd35276425b61b516a31fdd7c77fe2af83e41b4da22e30696fb1304c5d", size = 144665, upload-time = "2026-10-08T12:29:44.853Z" },
 ]
 
 [package.optional-dependencies]
@@ -496,14 +496,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi", extras = ["all"], specifier = ">=0.142.2" },
+    { name = "fastapi", extras = ["all"], specifier = ">=0.143.0" },
     { name = "gunicorn", specifier = ">=26.2.0" },
-    { name = "langchain-huggingface", specifier = ">=1.2.2" },
-    { name = "posthog", specifier = ">=7.63.0" },
+    { name = "langchain-huggingface", specifier = ">=1.2.3" },
+    { name = "posthog", specifier = ">=7.67.0" },
     { name = "sentence-transformers", specifier = ">=6.1.0" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.14.1" },
     { name = "torch", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = ">=2.14.1", index = "https://download.pytorch.org/whl/cu130" },
-    { name = "transformers", specifier = ">=5.18.0" },
+    { name = "transformers", specifier = ">=5.19.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -738,7 +738,7 @@ wheels = [
 
 [[package]]
 name = "langchain-core"
-version = "1.6.4"
+version = "1.6.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -752,23 +752,23 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uuid-utils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5d/ed/a9c3711721031d3ed8cbd681f90a856538965d1036dc5dd6ed1e48dcc569/langchain_core-1.6.4.tar.gz", hash = "sha256:c1caae770d991bb6f2376bad791970bf77bb29abd1f15823fa9ea7dbac080fa0", size = 1006637, upload-time = "2026-09-21T15:51:08.174Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f7/00/0a95f74a79908e7bc844a82fca35c1afc55689f55aaed086e95745946db8/langchain_core-1.6.10.tar.gz", hash = "sha256:3ad7a64eab150c1fea9f8a748b1c076aa1a960c5cf7c28d81a841a2f2dbffad1", size = 1010280, upload-time = "2026-10-12T14:13:51.184Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c4/f2/41435d9a5448c52a0388f75741edb979fde7415eaa820d6a42878cad7e38/langchain_core-1.6.4-py3-none-any.whl", hash = "sha256:2f940c83f787676ad4dc651d49d053c7ec34bda5a6afcd224da2863ff53a0b84", size = 571970, upload-time = "2026-09-21T15:51:06.555Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/2c/6ed698c6b451af0ed0efdbe94a703c18aea768d925347d8d1efd5645ae8c/langchain_core-1.6.10-py3-none-any.whl", hash = "sha256:14341bdd8b42d0dd9a53dbbcd8b0599ab47b0c718c7caa12e3eb5c50b32cffcb", size = 573253, upload-time = "2026-10-12T14:13:49.616Z" },
 ]
 
 [[package]]
 name = "langchain-huggingface"
-version = "1.2.2"
+version = "1.2.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "huggingface-hub" },
     { name = "langchain-core" },
     { name = "tokenizers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2c/e8/4068ad02179253f55958e59e442e5b6e8cb95ffc5e805cc4db0b1ef61d4e/langchain_huggingface-1.2.2.tar.gz", hash = "sha256:1dd91ec415190d2704e93ec149618e3145075863ba37e74afc9080d685dc2743", size = 255513, upload-time = "2026-04-16T19:57:41.046Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fd/35/17f59f4a1202de947797b76a1b898a0e040dd3ee7060255d0efbeebeb0b1/langchain_huggingface-1.2.3.tar.gz", hash = "sha256:9848339ce197d48dd95668c2aac32a4523ca879840a31ebcef59a5b616315826", size = 282933, upload-time = "2026-10-07T20:09:49.481Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0a/ed/648b87f9b67153ade616f360bf4145b76ed428b4adb89525938f611e9828/langchain_huggingface-1.2.2-py3-none-any.whl", hash = "sha256:f94944b0c0d5afc687568d426c87ed5236907464c41e72108ed76eee1a690f6d", size = 31926, upload-time = "2026-04-16T19:57:40.079Z" },
+    { url = "https://files.pythonhosted.org/packages/66/f8/222ada54c99a512bd497f3526f6c14a55f6c0bc39ba9a05a4170ebbfe561/langchain_huggingface-1.2.3-py3-none-any.whl", hash = "sha256:d687cd9554a20edb6af86aceae2465b4d0f73557acfb9b9c6778cb0e6d5929a7", size = 34219, upload-time = "2026-10-07T20:09:48.134Z" },
 ]
 
 [[package]]
@@ -1303,7 +1303,7 @@ wheels = [
 
 [[package]]
 name = "posthog"
-version = "7.63.0"
+version = "7.67.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "backoff" },
@@ -1311,9 +1311,9 @@ dependencies = [
     { name = "requests" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b8/46/54980be39d1cb1205f68d11952808fa19ee8504d706182d8367c2c630fa0/posthog-7.63.0.tar.gz", hash = "sha256:c0c2d9e62727e105144f0bef5734ce8aa2553937ec81b46298ea7c00fb7fe0f0", size = 705948, upload-time = "2026-10-05T08:01:46.451Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/34/1d/bb4b6538c94b63c32bbe32a4782393ae0560d49f9517f51b04fe3e970d4a/posthog-7.67.0.tar.gz", hash = "sha256:37feb3c125f067ca077800dd986a5a9f1d264a3d92d75ca3061047c4db93565e", size = 751479, upload-time = "2026-10-09T09:33:04.975Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e6/f3/a9dd4652b287a91e66bc25a0ee8bd762bb72433b6915814260e9565de696/posthog-7.63.0-py3-none-any.whl", hash = "sha256:9c213668f803b20d4d18551640fe53a7152067cd54ecc2cb3b786864acac0754", size = 824031, upload-time = "2026-10-05T08:01:44.67Z" },
+    { url = "https://files.pythonhosted.org/packages/8e/57/9ff310d3e7f141bc6900ad1befb493bcd48f7b7934a825f4b523c33ebc09/posthog-7.67.0-py3-none-any.whl", hash = "sha256:88ebf5810f83f338f400ab15743640548f0585075687bc9166bc2f1e3fcf036f", size = 879016, upload-time = "2026-10-09T09:33:02.916Z" },
 ]
 
 [[package]]
@@ -1926,7 +1926,7 @@ wheels = [
 
 [[package]]
 name = "transformers"
-version = "5.18.0"
+version = "5.19.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "huggingface-hub" },
@@ -1939,9 +1939,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9e/6e/5a50ca8aff5fdd4ff21271198d2fb9e1f11bcd0ea279576199c0caa34cba/transformers-5.18.0.tar.gz", hash = "sha256:d89c206e42e841af7cd314b3d2b21c03e977d819cdb4aef65ada048769a644df", size = 10028745, upload-time = "2026-09-30T16:46:00.575Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/65/4c/70012ed0795235fb6bd7806fafd4a1842f03e49ebbfa3bb9580e451948ce/transformers-5.19.0.tar.gz", hash = "sha256:87f38dd25e4521151b97e94520ac457f44a0ae8a8358a5b112daff6c64a822d6", size = 10032022, upload-time = "2026-10-06T16:39:00.229Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2d/3b/f84d7d12886147c5267216ed6c57d1163e68d24a89b2ad29d835a7089463/transformers-5.18.0-py3-none-any.whl", hash = "sha256:d79e5a515a572ee3deb33eb0d578be47d91e70c75d54cf21bf6eede6edef14a9", size = 12579646, upload-time = "2026-09-30T16:45:57.51Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/59/1e7f1212c215c73690ae6cab4678efe1555ff985953e145d88cc212859b0/transformers-5.19.0-py3-none-any.whl", hash = "sha256:afcd2dd5f603ed28c1e1fcb00a338ccbb4ef5f878ed289635df8b58187afb518", size = 12599123, upload-time = "2026-10-06T16:38:56.794Z" },
 ]
 
 [[package]]
