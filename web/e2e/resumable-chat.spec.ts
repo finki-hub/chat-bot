@@ -145,10 +145,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
           return;
         }
         conversationId = parseConversationId(route.request().postData());
-        await route.fulfill({
-          headers: { location: firstLegServer.url },
-          status: 307,
-        });
+        await route.continue({ url: firstLegServer.url });
       });
       await page.route('**/api/chat/*', async (route) => {
         if (route.request().method() === 'PATCH') {
@@ -313,10 +310,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
           });
           return;
         }
-        await route.fulfill({
-          headers: { location: activeServer.url },
-          status: 307,
-        });
+        await route.continue({ url: activeServer.url });
       });
       await page.route('**/api/chat/*', async (route) => {
         if (route.request().method() === 'PATCH') {

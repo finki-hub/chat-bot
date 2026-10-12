@@ -3,6 +3,12 @@ import { type AddressInfo } from 'node:net';
 
 import type { MyUIMessage } from '@/lib/api-types';
 
+export type StreamRequest = {
+  readonly body: Buffer;
+  readonly contentType: string | undefined;
+  readonly method: string | undefined;
+};
+
 export type UiChunk =
   | {
       data: Record<string, never>;
@@ -132,9 +138,21 @@ const closeServer = (server: Server): Promise<void> =>
 export const startChatStreamServer = (opts: {
   gapMs: number;
   head: UiChunk[];
+  holdTail?: boolean;
   tail: UiChunk[];
-}): Promise<{ close: () => Promise<void>; url: string }> => {
+}): Promise<{
+  close: () => Promise<void>;
+  hasSentTail: () => boolean;
+  releaseTail: () => void;
+  requests: StreamRequest[];
+  url: string;
+}> => {
   const timers = new Set<ReturnType<typeof setTimeout>>();
+  const requests: StreamRequest[] = [];
+  let hasSentTail = false;
+  const tailGate = opts.holdTail
+    ? Promise.withResolvers<undefined>()
+    : undefined;
   const handle: Parameters<typeof createServer>[1] = (req, res) => {
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
@@ -146,19 +164,40 @@ export const startChatStreamServer = (opts: {
       return;
     }
 
-    res.writeHead(200, {
-      'access-control-allow-origin': '*',
-      'cache-control': 'no-cache, no-transform',
-      'content-type': 'text/event-stream',
-      'x-vercel-ai-ui-message-stream': 'v1',
+    const body: Buffer[] = [];
+    req.on('data', (chunk: Buffer | string) => {
+      body.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
-    res.write(serialize(opts.head));
-    const timer = setTimeout(() => {
-      timers.delete(timer);
-      res.write(`${serialize(opts.tail)}data: [DONE]\n\n`);
-      res.end();
-    }, opts.gapMs);
-    timers.add(timer);
+    req.on('end', async () => {
+      requests.push({
+        body: Buffer.concat(body),
+        contentType: req.headers['content-type'],
+        method: req.method,
+      });
+      res.writeHead(200, {
+        'access-control-allow-origin': '*',
+        'cache-control': 'no-cache, no-transform',
+        'content-type': 'text/event-stream',
+        'x-vercel-ai-ui-message-stream': 'v1',
+      });
+      res.write(serialize(opts.head));
+      const sendTail = () => {
+        hasSentTail = true;
+        res.write(`${serialize(opts.tail)}data: [DONE]\n\n`);
+        res.end();
+      };
+      if (tailGate === undefined) {
+        const timer = setTimeout(() => {
+          timers.delete(timer);
+          sendTail();
+        }, opts.gapMs);
+        timers.add(timer);
+        return;
+      }
+
+      await tailGate.promise;
+      sendTail();
+    });
   };
 
   return new Promise((resolve) => {
@@ -167,12 +206,16 @@ export const startChatStreamServer = (opts: {
       const { port } = server.address() as AddressInfo;
       resolve({
         close: async () => {
+          tailGate?.resolve(undefined);
           for (const timer of timers) {
             clearTimeout(timer);
           }
           timers.clear();
           await closeServer(server);
         },
+        hasSentTail: () => hasSentTail,
+        releaseTail: () => tailGate?.resolve(undefined),
+        requests,
         url: `http://127.0.0.1:${port}/chat`,
       });
     });
