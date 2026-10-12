@@ -163,7 +163,6 @@ REASONING_CAPABLE_MODELS: Final[frozenset[Model]] = frozenset(
         *OPENROUTER_QUERY_TRANSFORM_MODELS,
     },
 )
-OPENAI_MINIMAL_EFFORT_MODELS: Final[frozenset[Model]] = frozenset()
 OPENAI_NO_SAMPLING_MODELS: Final[frozenset[Model]] = frozenset(
     {
         Model.GPT_6_ASTRA,
