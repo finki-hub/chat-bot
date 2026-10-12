@@ -13,9 +13,12 @@ from app.llms.agents import (
     content_to_text,
     create_agent_token_generator,
     stream_sync_gen_as_sse,
-    thinking_budget,
 )
-from app.llms.models import ANTHROPIC_NO_SAMPLING_MODELS, Model
+from app.llms.models import (
+    ANTHROPIC_MANDATORY_REASONING_MODELS,
+    ANTHROPIC_NO_SAMPLING_MODELS,
+    Model,
+)
 from app.llms.prompts import build_agent_messages
 from app.llms.provider_credentials import require_provider_credential
 from app.llms.tools import get_agent_tools
@@ -23,13 +26,8 @@ from app.schemas.chat_credentials import ChatCredentialSecret
 
 logger = logging.getLogger(__name__)
 
-# Models that reject `budget_tokens`; they use summarized adaptive thinking instead.
+# Active Claude models use summarized adaptive thinking when reasoning is enabled.
 _ADAPTIVE_THINKING_MODELS: frozenset[Model] = ANTHROPIC_NO_SAMPLING_MODELS
-
-# Anthropic rejects an enabled-thinking `budget_tokens` below 1024 and requires
-# `max_tokens` to exceed it. `thinking_budget` can fall below 1024 for small `max_tokens`
-# (e.g. max_tokens=2000 -> 1000), which 400s sonnet-4-6 / haiku-4-5, so clamp to the floor.
-_MIN_ANTHROPIC_THINKING_BUDGET = 1024
 
 
 def _thinking_config(
@@ -38,14 +36,8 @@ def _thinking_config(
 ) -> tuple[dict[str, object], int]:
     if model in _ADAPTIVE_THINKING_MODELS:
         return {"type": "adaptive", "display": "summarized"}, max_tokens
-
-    budget, effective_max = thinking_budget(max_tokens)
-    budget = max(budget, _MIN_ANTHROPIC_THINKING_BUDGET)
-    # max_tokens must exceed budget_tokens; always keep at least a budget's worth of room
-    # for the answer so a small max_tokens isn't swallowed whole by the thinking budget
-    # (without this, max_tokens just above 1024 leaves a near-empty answer).
-    effective_max = max(effective_max, budget + _MIN_ANTHROPIC_THINKING_BUDGET)
-    return {"type": "enabled", "budget_tokens": budget}, effective_max
+    msg = f"Model {model.value} is missing its adaptive thinking policy"
+    raise RuntimeError(msg)
 
 
 def get_anthropic_llm(
@@ -62,21 +54,22 @@ def get_anthropic_llm(
     Return a user-scoped ChatAnthropic instance for the specified model and parameters.
 
     Anthropic's API is stricter about sampling parameters than the other providers:
-    Some models reject non-default `temperature`, `top_p`, and `top_k` outright (HTTP 400),
-    and every Claude 4+ model rejects requests that set both `temperature` and `top_p`.
+    Some models reject sampling parameters outright (HTTP 400), and every Claude 4+ model
+    rejects requests that set both `temperature` and `top_p`.
     To stay within those limits we never forward `top_p`, and forward `temperature` only
     for models that accept it (see `ANTHROPIC_NO_SAMPLING_MODELS`).
 
-    When `reasoning` is on, extended thinking additionally requires `temperature` to be
-    unset (the API uses its default of 1), so we send `None` for every reasoning request.
-    Claude Sonnet 5.5 enables adaptive thinking by default, so non-reasoning requests
-    explicitly disable it to preserve the UI toggle's semantics. Claude Fable 5.1 is
-    always-on adaptive thinking and therefore receives no budget_tokens cap.
+    Active Claude models use adaptive thinking when reasoning is enabled. Sonnet 5.5 uses
+    `between_tools` when reasoning is off; Haiku 5.5 disables thinking at medium effort;
+    Fable 5.1 and Opus 5.5 always keep reasoning on.
     """
+    reasoning = reasoning or model in ANTHROPIC_MANDATORY_REASONING_MODELS
     thinking, effective_max = (None, max_tokens)
-    if reasoning or model == Model.CLAUDE_FABLE_5_1:
+    if reasoning:
         thinking, effective_max = _thinking_config(model, max_tokens)
     elif model == Model.CLAUDE_SONNET_5_5:
+        thinking = {"type": "between_tools"}
+    elif model == Model.CLAUDE_HAIKU_5_5:
         thinking = {"type": "disabled"}
     temperature_arg = (
         None if (reasoning or model in ANTHROPIC_NO_SAMPLING_MODELS) else temperature
@@ -90,10 +83,9 @@ def get_anthropic_llm(
         "max_tokens": effective_max,
         "thinking": thinking,
     }
-    # Fable 5.1 documents adaptive thinking with an effort level, not a
-    # budget_tokens value.  The installed client translates this alias to
-    # Anthropic's output_config.effort.
-    if model == Model.CLAUDE_FABLE_5_1:
+    # The installed client translates the effort alias to Anthropic's
+    # output_config.effort.
+    if model in ANTHROPIC_NO_SAMPLING_MODELS:
         client_kwargs["effort"] = "medium"
     # LangChain's generated Pydantic signature omits documented constructor aliases.
     return ChatAnthropic(**client_kwargs)  # type: ignore[arg-type]

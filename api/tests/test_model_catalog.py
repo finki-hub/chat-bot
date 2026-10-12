@@ -17,7 +17,11 @@ from app.llms.model_catalog import (
 )
 from app.llms.model_catalog_policy import MODEL_CATALOG
 from app.llms.model_catalog_types import OllamaCatalogModel
-from app.llms.models import CHAT_MODELS
+from app.llms.models import (
+    ANTHROPIC_NO_SAMPLING_MODELS,
+    CHAT_MODELS,
+    OPENAI_NO_SAMPLING_MODELS,
+)
 
 SNAPSHOT_PATH = Path(__file__).parents[1] / "app" / "llms" / "models_snapshot.json"
 PROVENANCE_PATH = (
@@ -117,6 +121,16 @@ def test_picker_catalog_is_unique_curated_runtime_subset() -> None:
     catalog_ids = set(EXPECTED_IDS)
     assert catalog_ids == runtime_ids
     assert len(EXPECTED_IDS) == len(catalog_ids)
+
+
+def test_unsupported_provider_sampling_is_not_advertised() -> None:
+    policies = {entry.model: entry.execution for entry in MODEL_CATALOG}
+    models_without_sampling = {
+        *ANTHROPIC_NO_SAMPLING_MODELS,
+        *OPENAI_NO_SAMPLING_MODELS,
+    }
+
+    assert all(not policies[model].sampling for model in models_without_sampling)
 
 
 def test_catalog_can_append_dynamic_ollama_models_with_loaded_status() -> None:

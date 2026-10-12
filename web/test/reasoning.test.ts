@@ -47,6 +47,7 @@ describe('isReasoningCapableModel', () => {
 
 describe('mandatory reasoning policy', () => {
   const mandatoryModels = [
+    'claude-opus-5-5',
     'openrouter:z-ai/glm-5.3',
     'openrouter:qwen/qwen3.8-max-0902',
     'openrouter:x-ai/grok-4.7',

@@ -164,8 +164,26 @@ REASONING_CAPABLE_MODELS: Final[frozenset[Model]] = frozenset(
     },
 )
 OPENAI_MINIMAL_EFFORT_MODELS: Final[frozenset[Model]] = frozenset()
+OPENAI_NO_SAMPLING_MODELS: Final[frozenset[Model]] = frozenset(
+    {
+        Model.GPT_6_ASTRA,
+        Model.GPT_6_1_SOL,
+        Model.GPT_5_6_TERRA,
+        Model.GPT_6_LUNA,
+        Model.GPT_5_4_MINI,
+        Model.GPT_5_4_NANO,
+    },
+)
+ANTHROPIC_MANDATORY_REASONING_MODELS: Final[frozenset[Model]] = frozenset(
+    {Model.CLAUDE_FABLE_5_1, Model.CLAUDE_OPUS_5_5},
+)
 ANTHROPIC_NO_SAMPLING_MODELS: Final[frozenset[Model]] = frozenset(
-    {Model.CLAUDE_FABLE_5_1, Model.CLAUDE_OPUS_5_5, Model.CLAUDE_SONNET_5_5},
+    {
+        Model.CLAUDE_FABLE_5_1,
+        Model.CLAUDE_OPUS_5_5,
+        Model.CLAUDE_SONNET_5_5,
+        Model.CLAUDE_HAIKU_5_5,
+    },
 )
 
 HALFVEC_EMBEDDING_MODELS: Final[frozenset[Model]] = frozenset(

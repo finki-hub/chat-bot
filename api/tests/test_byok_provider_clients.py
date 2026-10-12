@@ -1,4 +1,7 @@
 import pytest
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage
+from langchain_openai import ChatOpenAI
 from openrouter.components import ChatRequest
 from pydantic import SecretStr
 
@@ -54,6 +57,54 @@ def test_gpt_6_astra_uses_chat_completions_effort_without_temperature(
     assert request["temperature"] is None
 
 
+@pytest.mark.parametrize(
+    ("model", "upstream_model"),
+    [
+        (Model.GPT_6_1_SOL, None),
+        (Model.GPT_6_1_SOL, "sponsored/sol"),
+        (Model.GPT_6_LUNA, None),
+        (Model.GPT_6_LUNA, "sponsored/luna"),
+    ],
+)
+@pytest.mark.parametrize("reasoning", [False, True])
+def test_gpt6_serialized_payload_omits_sampling_and_keeps_tools(
+    model: Model,
+    upstream_model: str | None,
+    reasoning: bool,
+) -> None:
+    llm = openai.get_openai_llm(
+        model,
+        temperature=0.2,
+        top_p=0.8,
+        max_tokens=1024,
+        reasoning=reasoning,
+        credential=ChatCredentialSecret(provider="openai", api_key="fake-key"),
+        upstream_model=upstream_model,
+    )
+    assert isinstance(llm, ChatOpenAI)
+    bound = llm.bind_tools(
+        [
+            {
+                "name": "lookup",
+                "description": "Look up a record",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        ],
+    )
+
+    payload = llm._get_request_payload(
+        [HumanMessage(content="test")],
+        **bound.kwargs,
+    )
+
+    assert payload["model"] == (upstream_model or model.value)
+    assert "temperature" not in payload
+    assert "top_p" not in payload
+    assert payload["tools"][0]["name"] == "lookup"
+    if reasoning:
+        assert payload["reasoning"] == {"effort": "medium", "summary": "auto"}
+
+
 def test_sponsored_openai_client_receives_upstream_model_and_token_cap(
     monkeypatch,
 ) -> None:
@@ -83,7 +134,7 @@ def test_sponsored_openai_client_receives_upstream_model_and_token_cap(
             "model": "upstream-luna",
             "api_key": SecretStr("sponsored-key"),
             "base_url": "https://sponsored.example/v1",
-            "temperature": 0.0,
+            "temperature": None,
             "streaming": True,
             "stream_usage": True,
             "max_tokens": 1024,
@@ -157,9 +208,10 @@ def test_sponsored_anthropic_client_receives_upstream_model_and_token_cap(
             "model": "upstream-luna",
             "api_key": SecretStr("sponsored-key"),
             "base_url": "https://sponsored.example/v1",
-            "temperature": 0.0,
+            "temperature": None,
             "max_tokens": 1024,
-            "thinking": None,
+            "thinking": {"type": "disabled"},
+            "effort": "medium",
         },
     ]
 
@@ -254,7 +306,7 @@ def test_anthropic_byok_client_does_not_inherit_deployment_base_url(
     assert captured_base_urls == [None]
 
 
-def test_claude_haiku_keeps_temperature_and_omits_top_p(monkeypatch) -> None:
+def test_claude_haiku_omits_sampling_parameters(monkeypatch) -> None:
     captured: list[dict] = []
 
     class AnthropicCapturingClient:
@@ -273,12 +325,13 @@ def test_claude_haiku_keeps_temperature_and_omits_top_p(monkeypatch) -> None:
 
     assert len(captured) == 1
     request = captured[0]
-    assert request["temperature"] == pytest.approx(0.2)
+    assert request["temperature"] is None
     assert "top_p" not in request
-    assert request["thinking"] is None
+    assert request["thinking"] == {"type": "disabled"}
+    assert request["effort"] == "medium"
 
 
-def test_claude_sonnet_5_5_disables_default_adaptive_thinking(monkeypatch) -> None:
+def test_claude_sonnet_5_5_uses_between_tools_without_reasoning(monkeypatch) -> None:
     captured: list[dict] = []
 
     class AnthropicCapturingClient:
@@ -296,9 +349,99 @@ def test_claude_sonnet_5_5_disables_default_adaptive_thinking(monkeypatch) -> No
     )
 
     request = captured[0]
-    assert request["thinking"] == {"type": "disabled"}
+    assert request["thinking"] == {"type": "between_tools"}
+    assert request["effort"] == "medium"
     assert request["temperature"] is None
     assert request["max_tokens"] == 1024
+
+
+@pytest.mark.parametrize(
+    ("model", "reasoning", "expected_thinking", "expected_effort"),
+    [
+        (
+            Model.CLAUDE_HAIKU_5_5,
+            False,
+            {"type": "disabled"},
+            "medium",
+        ),
+        (
+            Model.CLAUDE_HAIKU_5_5,
+            True,
+            {"type": "adaptive", "display": "summarized"},
+            "medium",
+        ),
+        (
+            Model.CLAUDE_SONNET_5_5,
+            False,
+            {"type": "between_tools"},
+            "medium",
+        ),
+        (
+            Model.CLAUDE_SONNET_5_5,
+            True,
+            {"type": "adaptive", "display": "summarized"},
+            "medium",
+        ),
+        (
+            Model.CLAUDE_OPUS_5_5,
+            False,
+            {"type": "adaptive", "display": "summarized"},
+            "medium",
+        ),
+        (
+            Model.CLAUDE_OPUS_5_5,
+            True,
+            {"type": "adaptive", "display": "summarized"},
+            "medium",
+        ),
+    ],
+)
+@pytest.mark.parametrize("upstream_model", [None, "sponsored/claude"])
+def test_claude_serialized_payload_preserves_reasoning_tools_and_upstream(
+    model: Model,
+    reasoning: bool,
+    expected_thinking: dict[str, str] | None,
+    expected_effort: str | None,
+    upstream_model: str | None,
+) -> None:
+    llm = anthropic.get_anthropic_llm(
+        model,
+        temperature=0.2,
+        top_p=0.8,
+        max_tokens=1024,
+        reasoning=reasoning,
+        credential=ChatCredentialSecret(provider="anthropic", api_key="fake-key"),
+        upstream_model=upstream_model,
+    )
+    assert isinstance(llm, ChatAnthropic)
+    bound = llm.bind_tools(
+        [
+            {
+                "name": "lookup",
+                "description": "Look up a record",
+                "input_schema": {"type": "object", "properties": {}},
+            },
+        ],
+    )
+
+    payload = llm._get_request_payload(
+        [HumanMessage(content="test")],
+        **bound.kwargs,
+    )
+
+    assert payload["model"] == (upstream_model or model.value)
+    assert "temperature" not in payload
+    assert "top_p" not in payload
+    assert "top_k" not in payload
+    assert payload["tools"][0]["name"] == "lookup"
+    if expected_thinking is None:
+        assert "thinking" not in payload
+    else:
+        assert payload["thinking"] == expected_thinking
+    if expected_effort is None:
+        assert "output_config" not in payload
+    else:
+        assert payload["output_config"]["effort"] == expected_effort
 
 
 def test_claude_fable_uses_always_on_adaptive_thinking(monkeypatch) -> None:

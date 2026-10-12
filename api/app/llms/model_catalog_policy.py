@@ -6,6 +6,7 @@ from app.llms.models import (
     ANTHROPIC_NO_SAMPLING_MODELS,
     CHAT_MODEL_ORDER,
     CHAT_MODELS,
+    OPENAI_NO_SAMPLING_MODELS,
     REASONING_CAPABLE_MODELS,
     Model,
 )
@@ -30,7 +31,8 @@ def _policy(
         display_name=display_name,
         execution=ExecutionPolicy(
             reasoning=model in REASONING_CAPABLE_MODELS,
-            sampling=model not in ANTHROPIC_NO_SAMPLING_MODELS,
+            sampling=model
+            not in (ANTHROPIC_NO_SAMPLING_MODELS | OPENAI_NO_SAMPLING_MODELS),
             tool_call=provider != "ollama",
             structured_output=provider != "ollama",
         ),
