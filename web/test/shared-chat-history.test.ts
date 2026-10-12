@@ -11,7 +11,7 @@ describe('shared chat history', () => {
         metadata: {
           diagnostics: { serverTotalMs: 1_500 },
           feedback: 'like',
-          inferenceModel: 'claude-sonnet-5',
+          inferenceModel: 'claude-sonnet-5-5',
           responseId: 'response-1',
           sources: [
             {

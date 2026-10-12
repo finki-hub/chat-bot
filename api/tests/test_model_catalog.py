@@ -1,3 +1,6 @@
+import hashlib
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -15,6 +18,11 @@ from app.llms.model_catalog import (
 from app.llms.model_catalog_policy import MODEL_CATALOG
 from app.llms.model_catalog_types import OllamaCatalogModel
 from app.llms.models import CHAT_MODELS
+
+SNAPSHOT_PATH = Path(__file__).parents[1] / "app" / "llms" / "models_snapshot.json"
+PROVENANCE_PATH = (
+    Path(__file__).parents[1] / "app" / "llms" / "models_snapshot_provenance.json"
+)
 
 EXPECTED_IDS = [
     "gpt-6-astra",
@@ -39,6 +47,13 @@ EXPECTED_IDS = [
     "openrouter:minimax/minimax-m3",
     "openrouter:x-ai/grok-4.7",
 ]
+
+
+def test_snapshot_provenance_hash_matches_exact_snapshot_bytes() -> None:
+    snapshot_bytes = SNAPSHOT_PATH.read_bytes()
+    provenance = json.loads(PROVENANCE_PATH.read_text(encoding="utf-8"))
+
+    assert provenance["snapshot_sha256"] == hashlib.sha256(snapshot_bytes).hexdigest()
 
 
 class FakeClock:

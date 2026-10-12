@@ -2,7 +2,7 @@
   "source": "https://models.dev/api.json",
   "refreshed_at": "2026-10-11T10:18:03Z",
   "sha256": "0f6e03cfb79703b466f51fd591484d58103c0f8125650502de2511ba391424cc",
-  "snapshot_sha256": "11cd9f5787801b023fea2710d55dcdc6f7a85ade7fd0801d0089a63af7720a0b",
+  "snapshot_sha256": "33682802cbcb1a5badc588ffe270ea4c2b934d49cb9ea00cbe78e346fba9339a",
   "remote_coverage": {
     "complete": false,
     "missing": [

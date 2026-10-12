@@ -4,7 +4,7 @@ import { installMockChatState } from './helpers/chat-state';
 import { mockModels } from './helpers/models';
 import { startChatStreamServer, type UiChunk } from './helpers/sse';
 
-const MODEL = 'claude-sonnet-5';
+const MODEL = 'claude-sonnet-5-5';
 
 const chunks: UiChunk[] = [
   {

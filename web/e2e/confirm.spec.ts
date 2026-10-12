@@ -4,7 +4,7 @@ import { installMockChatState } from './helpers/chat-state';
 import { mockModels } from './helpers/models';
 import { startChatStreamServer, type UiChunk } from './helpers/sse';
 
-const MODEL = 'claude-sonnet-5';
+const MODEL = 'claude-sonnet-5-5';
 const ACCOUNT_MENU_NAME_PATTERN = /Корисничко мени:/u;
 const LONG_SAFE_URL = `https://finki.ukim.mk/${'a'.repeat(3_000)}`;
 

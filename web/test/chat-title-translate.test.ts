@@ -23,8 +23,8 @@ describe('toChatTitleRequestBody', () => {
     expect(
       toChatTitleRequestBody({
         messages,
-        providerModel: 'claude-sonnet-5',
-        queryTransformModel: 'claude-sonnet-5',
+        providerModel: 'claude-sonnet-5-5',
+        queryTransformModel: 'claude-sonnet-5-5',
       }),
     ).toStrictEqual({
       messages: [
@@ -34,9 +34,9 @@ describe('toChatTitleRequestBody', () => {
         { content: 'Уште еден одговор.', role: 'assistant' },
       ],
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
-      provider_model: 'claude-sonnet-5',
+      provider_model: 'claude-sonnet-5-5',
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract
-      query_transform_model: 'claude-sonnet-5',
+      query_transform_model: 'claude-sonnet-5-5',
     });
   });
 

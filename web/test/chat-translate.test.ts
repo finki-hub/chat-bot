@@ -11,7 +11,7 @@ import {
   type UiStreamPart,
 } from '@/lib/chat-translate';
 
-const MODEL = 'claude-sonnet-5';
+const MODEL = 'claude-sonnet-5-5';
 const DONE: ParsedEvent = { type: 'done' };
 
 const msg = (role: MyUIMessage['role'], ...texts: string[]): MyUIMessage => ({

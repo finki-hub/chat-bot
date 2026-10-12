@@ -13,7 +13,7 @@ import {
 } from './helpers/sse';
 
 const RESPONSE_ID = '11111111-2222-3333-4444-555555555555';
-const INFERENCE_MODEL = 'claude-sonnet-5';
+const INFERENCE_MODEL = 'claude-sonnet-5-5';
 const PREAMBLE = 'Дозволете да проверам…';
 const STATUS_LABEL = '🔍 Пребарувам…';
 const TOOL = 'search_documents';

@@ -117,7 +117,7 @@ describe('applyFeedback', () => {
       ...assistantMessage('a1', 'resp-1', 'Одговор'),
       metadata: {
         feedback: 'like',
-        inferenceModel: 'claude-sonnet-5',
+        inferenceModel: 'claude-sonnet-5-5',
         responseId: 'resp-1',
       },
     };
@@ -125,7 +125,7 @@ describe('applyFeedback', () => {
     const [updated] = applyFeedback('a1', null)([message]);
 
     expect(updated?.metadata).toStrictEqual({
-      inferenceModel: 'claude-sonnet-5',
+      inferenceModel: 'claude-sonnet-5-5',
       responseId: 'resp-1',
     });
   });

@@ -7,7 +7,7 @@ import { mockModels } from './helpers/models';
 import { startChatStreamServer, type UiChunk } from './helpers/sse';
 
 const RESPONSE_ID = '22222222-3333-4444-5555-666666666666';
-const INFERENCE_MODEL = 'claude-sonnet-5';
+const INFERENCE_MODEL = 'claude-sonnet-5-5';
 const FIRST_TOKEN = 'Прв дел од одговорот';
 const FINAL_TOKEN = ' и продолжение по освежување.';
 const STOP_TOKEN = 'Делумен одговор';
@@ -234,7 +234,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
       await page.goto('/');
       await page.getByTestId('composer-model').click();
       await expect(
-        page.getByTestId('model-free-badge-claude-sonnet-5'),
+        page.getByTestId('model-free-badge-claude-sonnet-5-5'),
       ).toContainText('5/5');
       await page.keyboard.press('Escape');
       await page
@@ -272,7 +272,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
       );
       await page.getByTestId('composer-model').click();
       await expect(
-        page.getByTestId('model-free-badge-claude-sonnet-5'),
+        page.getByTestId('model-free-badge-claude-sonnet-5-5'),
       ).toContainText('5/5');
       await page.screenshot({
         animations: 'disabled',
@@ -360,7 +360,7 @@ test.describe('resumable chat lifecycle (mocked BFF)', () => {
       await page.goto('/');
       await page.getByTestId('composer-model').click();
       await expect(
-        page.getByTestId('model-free-badge-claude-sonnet-5'),
+        page.getByTestId('model-free-badge-claude-sonnet-5-5'),
       ).toContainText('5/5');
       await page.keyboard.press('Escape');
       await page.getByTestId('composer-input').fill('Започни долг одговор.');

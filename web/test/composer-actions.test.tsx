@@ -14,8 +14,8 @@ const LUNA_ID = 'gpt-6-luna';
 const LUNA_NAME = 'GPT-6 Luna';
 const LUNA_OPTION_NAME = /GPT-6 Luna.*Бесплатно/u;
 const GEMINI_ID = 'gemini-3.8-flash';
-const GEMINI_NAME = 'Gemini 3.5 Flash';
-const GEMINI_OPTION_NAME = /Gemini 3\.5 Flash.*Бесплатно/u;
+const GEMINI_NAME = 'Gemini 3.8 Flash';
+const GEMINI_OPTION_NAME = /Gemini 3\.8 Flash.*Бесплатно/u;
 const GLM_ID = 'openrouter:z-ai/glm-5.3';
 
 const DEFAULT_MODEL = {

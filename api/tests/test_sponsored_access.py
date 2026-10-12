@@ -77,7 +77,7 @@ def test_legacy_model_descriptor_payload_parses_without_access_fields() -> None:
     payload = {
         "id": "gpt-6.1-sol",
         "provider": "openai",
-        "name": "GPT-5.6 Sol",
+        "name": "GPT-6.1 Sol",
         "execution": {
             "reasoning": True,
             "sampling": True,
