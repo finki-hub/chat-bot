@@ -102,7 +102,7 @@ export const installMockChatState = async (
 
     if (method === 'POST') {
       onCreate?.();
-      await route.fulfill({ headers: { location: streamUrl }, status: 307 });
+      await route.continue({ url: streamUrl });
       return;
     }
 

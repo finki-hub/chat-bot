@@ -71,6 +71,85 @@ const errorStream = (code: string, message: string, resetsAt?: string) =>
     tail: [],
   });
 
+test('forwards the original chat POST and renders SSE chunks before the stream closes', async ({
+  page,
+}) => {
+  const prompt = 'Провери го оригиналното тело на барањето.';
+  const firstChunk = 'Првиот дел пристигна.';
+  const finalChunk = ' Вториот дел пристигна.';
+  const chatServer = await startChatStreamServer({
+    gapMs: 0,
+    head: [
+      {
+        messageMetadata: {
+          inferenceModel: INFERENCE_MODEL,
+          responseId: RESPONSE_ID,
+        },
+        type: 'start',
+      },
+      { id: 'txt-answer', type: 'text-start' },
+      { delta: firstChunk, id: 'txt-answer', type: 'text-delta' },
+    ],
+    holdTail: true,
+    tail: [
+      { delta: finalChunk, id: 'txt-answer', type: 'text-delta' },
+      { id: 'txt-answer', type: 'text-end' },
+      { type: 'finish' },
+    ],
+  });
+
+  try {
+    await mockModels(page);
+    await installMockChatState(page, { streamUrl: chatServer.url });
+    await page.goto('/');
+    await page.getByTestId(COMPOSER_INPUT).fill(prompt);
+    const originalPostPromise = page.waitForRequest(
+      (request) =>
+        request.url().endsWith('/api/chat') && request.method() === 'POST',
+    );
+    await page.getByTestId(COMPOSER_SUBMIT).click();
+    const originalRequest = await originalPostPromise;
+    expect(originalRequest.method()).toBe('POST');
+
+    const answer = page.getByTestId(ANSWER_TEST_ID);
+    await expect(answer).toContainText(firstChunk);
+    expect(chatServer.hasSentTail()).toBe(false);
+    chatServer.releaseTail();
+    await expect(answer).toContainText(`${firstChunk}${finalChunk}`);
+    expect(chatServer.hasSentTail()).toBe(true);
+
+    const originalPost = chatServer.requests.find(
+      (request) => request.method === 'POST',
+    );
+    if (originalPost === undefined) {
+      throw new Error('stream server did not receive the original chat POST');
+    }
+    expect(originalPost.method).toBe(originalRequest.method());
+    expect(originalPost.contentType).toBe(
+      originalRequest.headers()['content-type'],
+    );
+    const originalBody = originalRequest.postDataBuffer();
+    if (originalBody === null) {
+      throw new Error('original chat POST did not include a request body');
+    }
+    expect(originalPost.body.equals(originalBody)).toBe(true);
+    expect(
+      JSON.parse(originalPost.body.toString('utf8')) as unknown,
+    ).toMatchObject({
+      messages: expect.arrayContaining([
+        expect.objectContaining({
+          parts: expect.arrayContaining([
+            expect.objectContaining({ text: prompt }),
+          ]),
+          role: 'user',
+        }),
+      ]),
+    });
+  } finally {
+    await chatServer.close();
+  }
+});
+
 test.describe('chat streaming (mocked BFF)', () => {
   test('retries history loading from empty conversation recovery', async ({
     page,
