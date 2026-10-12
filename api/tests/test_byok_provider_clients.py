@@ -1,6 +1,7 @@
 import pytest
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableBinding
 from langchain_openai import ChatOpenAI
 from openrouter.components import ChatRequest
 from pydantic import SecretStr
@@ -92,6 +93,7 @@ def test_gpt6_serialized_payload_omits_sampling_and_keeps_tools(
         ],
     )
 
+    assert isinstance(bound, RunnableBinding)
     payload = llm._get_request_payload(
         [HumanMessage(content="test")],
         **bound.kwargs,
@@ -424,6 +426,7 @@ def test_claude_serialized_payload_preserves_reasoning_tools_and_upstream(
         ],
     )
 
+    assert isinstance(bound, RunnableBinding)
     payload = llm._get_request_payload(
         [HumanMessage(content="test")],
         **bound.kwargs,
