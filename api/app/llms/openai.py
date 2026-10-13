@@ -25,6 +25,7 @@ from app.llms.prompts import build_agent_messages
 from app.llms.provider_credentials import require_provider_credential
 from app.llms.tools import get_agent_tools
 from app.schemas.chat_credentials import ChatCredentialSecret
+from app.utils.settings import is_opencode_go_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ def get_openai_llm(
     reasoning: bool = False,
     credential: ChatCredentialSecret | None = None,
     upstream_model: str | None = None,
+    sponsored_session_id: str | None = None,
 ) -> ChatOpenAI:
     """
     Return a user-scoped ChatOpenAI instance for the specified model and parameters.
@@ -79,6 +81,13 @@ def get_openai_llm(
         client_kwargs["top_p"] = top_p
 
     credential = require_provider_credential("openai", credential)
+    if sponsored_session_id is not None and is_opencode_go_base_url(
+        credential.base_url
+    ):
+        client_kwargs["default_headers"] = {
+            "User-Agent": "finki-hub/1.0",
+            "x-opencode-session": sponsored_session_id,
+        }
     # LangChain's generated Pydantic signature omits documented constructor aliases.
     return ChatOpenAI(  # type: ignore[call-arg]
         model=model.value if upstream_model is None else upstream_model,
@@ -145,6 +154,7 @@ def stream_openai_response(
     reasoning: bool = False,
     credential: ChatCredentialSecret | None = None,
     upstream_model: str | None = None,
+    sponsored_session_id: str | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from the specified OpenAI model using the provided user prompt and system prompt.
@@ -164,6 +174,7 @@ def stream_openai_response(
         reasoning=reasoning,
         credential=credential,
         upstream_model=upstream_model,
+        sponsored_session_id=sponsored_session_id,
     )
 
     messages = build_agent_messages(system_prompt, history or [], user_prompt)
@@ -188,6 +199,7 @@ async def stream_openai_agent_response(
     observation: StreamObservation | None = None,
     credential: ChatCredentialSecret | None = None,
     upstream_model: str | None = None,
+    sponsored_session_id: str | None = None,
 ) -> StreamingResponse:
     """
     Stream a response from an OpenAI agent with MCP tools.
@@ -208,6 +220,7 @@ async def stream_openai_agent_response(
             reasoning=reasoning,
             credential=credential,
             upstream_model=upstream_model,
+            sponsored_session_id=sponsored_session_id,
         )
 
         tools = await get_agent_tools()
@@ -251,6 +264,7 @@ async def stream_openai_agent_response(
             reasoning=reasoning,
             credential=credential,
             upstream_model=upstream_model,
+            sponsored_session_id=sponsored_session_id,
         )
 
 

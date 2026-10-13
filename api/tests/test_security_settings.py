@@ -212,6 +212,22 @@ def test_sponsored_base_url_is_normalized():
     assert settings.SPONSORED_MODEL_BASE_URL == "https://example.com/v1"
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+def test_opencode_go_rejects_non_openai_sponsored_provider(enabled: bool):
+    values: dict[str, object] = {
+        "SPONSORED_MODEL_ENABLED": enabled,
+        "SPONSORED_MODEL_ID": "claude-haiku-5-5",
+        "SPONSORED_MODEL_PROVIDER": "anthropic",
+        "SPONSORED_MODEL_BASE_URL": "https://opencode.ai/inference/go/v1/",
+    }
+    if enabled:
+        values["SPONSORED_MODEL_API_KEY"] = SecretStr("sponsored-secret")
+        values["SPONSORED_DAILY_GLOBAL_LIMIT"] = 10
+
+    with pytest.raises(ValueError, match=r"SPONSORED_MODEL_PROVIDER.*OpenCode Go"):
+        Settings.model_validate(values)
+
+
 @pytest.mark.parametrize(
     "base_url",
     [

@@ -188,6 +188,24 @@ provider keys, URLs, prompts, and raw provider errors must never be logged or
 forwarded to clients. Only the API service receives the `SPONSORED_*` variables;
 the web container and Discord bot do not need them.
 
+#### OpenCode Go (optional)
+
+Enable the sponsored rollout and required global cap from the table above, then
+configure Go for sponsored OpenAI-compatible inference with a dedicated key (never
+`API_KEY`):
+
+```dotenv
+SPONSORED_MODEL_ID=gpt-6-luna
+SPONSORED_MODEL_PROVIDER=openai
+SPONSORED_MODEL_BASE_URL=https://opencode.ai/inference/go/v1
+SPONSORED_MODEL_API_KEY=replace_with_dedicated_go_key
+```
+
+The web BFF forwards the authenticated conversation UUID as `x-opencode-session`;
+direct API callers must provide a stable UUID themselves. The API sets
+`User-Agent: finki-hub/1.0` and the session header only for sponsored Go calls.
+BYOK takes precedence and does not consume sponsored quota or send Go headers.
+
 #### Live enablement preflight (release gate)
 
 Run this on the deployment host with real values loaded in `.env`. It validates

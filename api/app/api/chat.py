@@ -66,7 +66,7 @@ from app.utils.posthog_client import (
     safe_distinct_id,
     safe_session_id,
 )
-from app.utils.settings import Settings
+from app.utils.settings import Settings, is_opencode_go_base_url
 from app.utils.timing import (
     RequestTimings,
     record_distinct_id,
@@ -684,6 +684,18 @@ async def _prepare_chat_response_stream(
         settings,
         user_credential_rejected=user_credential_rejected,
     )
+    sponsored_session_id: str | None = None
+    if inference_resolution.sponsored and is_opencode_go_base_url(
+        settings.SPONSORED_MODEL_BASE_URL
+    ):
+        supplied_session_id = request.headers.get("x-opencode-session")
+        try:
+            sponsored_session_id = str(UUID(supplied_session_id or ""))
+        except ValueError:
+            preparation.capture("denied", "session_id_required")
+            yield error_event("missing_session_id", "MissingSessionID")
+            return
+
     missing_credential = missing_mandatory_credential(
         credentials,
         inference_model=payload.inference_model,
@@ -922,6 +934,7 @@ async def _prepare_chat_response_stream(
                     db=db,
                     inference_credential=inference_resolution.credential,
                     upstream_model=inference_resolution.upstream_model,
+                    sponsored_session_id=sponsored_session_id,
                     max_tokens=(
                         min(payload.max_tokens, inference_resolution.max_output_tokens)
                         if inference_resolution.max_output_tokens is not None

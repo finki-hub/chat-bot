@@ -168,6 +168,7 @@ def settings(
     enabled: bool = True,
     sponsored_model_id: str = SPONSORED_ID,
     sponsored_provider: str = "openai",
+    sponsored_model_base_url: str | None = None,
 ) -> Settings:
     return Settings.model_validate(
         {
@@ -177,6 +178,7 @@ def settings(
             "SPONSORED_MODEL_ENABLED": enabled,
             "SPONSORED_MODEL_ID": sponsored_model_id,
             "SPONSORED_MODEL_PROVIDER": sponsored_provider,
+            "SPONSORED_MODEL_BASE_URL": sponsored_model_base_url,
             "SPONSORED_MODEL_API_KEY": "sponsored-secret" if enabled else None,
             "SPONSORED_DAILY_GLOBAL_LIMIT": 10 if enabled else None,
         },

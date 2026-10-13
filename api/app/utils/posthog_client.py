@@ -106,7 +106,11 @@ def capture(
 ChatPreparationPhase = Literal["credentials", "admission", "context", "agent_setup"]
 ChatPreparationOutcome = Literal["denied", "error", "client_disconnect"]
 ChatPreparationReason = Literal[
-    "credential_required", "free_tier_unavailable", "preparation_failed", "cancelled"
+    "credential_required",
+    "free_tier_unavailable",
+    "preparation_failed",
+    "cancelled",
+    "session_id_required",
 ]
 
 
@@ -125,6 +129,7 @@ def capture_chat_pre_stream_outcome(
         not in {
             ("denied", "credential_required"),
             ("denied", "free_tier_unavailable"),
+            ("denied", "session_id_required"),
             ("error", "preparation_failed"),
             ("client_disconnect", "cancelled"),
         }

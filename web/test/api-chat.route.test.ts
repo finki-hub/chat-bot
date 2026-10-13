@@ -102,7 +102,10 @@ describe('POST /api/chat', () => {
         sponsored_quota: { limit: 1, remaining: 1 },
         user_id: 'attacker-user-id',
       }),
-      headers: { 'content-type': JSON_CONTENT_TYPE },
+      headers: {
+        'content-type': JSON_CONTENT_TYPE,
+        'x-opencode-session': 'browser-supplied-session-must-not-win',
+      },
       method: 'POST',
     });
 
@@ -138,6 +141,7 @@ describe('POST /api/chat', () => {
       'content-type': JSON_CONTENT_TYPE,
       'x-api-key': 'test-key',
       'X-Distinct-Id': 'browser-distinct-id',
+      'x-opencode-session': CONVERSATION_ID,
       'X-PostHog-Session-Id': 'session-test-id',
       'X-Response-Id': RESPONSE_ID,
     });
@@ -398,9 +402,12 @@ describe('POST /api/chat', () => {
       throw new TypeError('Expected upstream request body to be a string');
     }
 
+    const upstreamHeaders = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+
     expect(upstreamBody.match(/Stored question/gu)).toHaveLength(1);
     expect(upstreamBody).not.toContain('Здраво');
     expect(upstreamBody).not.toContain('Стар одговор');
+    expect(upstreamHeaders.get('x-opencode-session')).toBe(CONVERSATION_ID);
 
     await vi.waitFor(() => {
       expect(
