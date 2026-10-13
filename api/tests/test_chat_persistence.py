@@ -30,6 +30,44 @@ INTRUDER_ID = UUID("00000000-0000-4000-8000-000000000002")
 
 
 @pytest.mark.anyio
+async def test_historical_conversation_model_id_loads_without_rewriting() -> None:
+    db = FakeChatDatabase()
+    conversation = await create_conversation(
+        db,
+        ChatConversationCreate(
+            id=uuid4(),
+            user_id=OWNER_ID,
+            model="claude-sonnet-5",
+            title="Historical chat",
+        ),
+    )
+    historical_metadata: dict[str, JsonValue] = {
+        "inferenceModel": "claude-sonnet-5",
+        "queryTransformModel": "gpt-5.6-luna",
+    }
+    await upsert_message(
+        db,
+        ChatMessageUpsert(
+            id=uuid4(),
+            conversation_id=conversation.id,
+            role=ChatMessageRole.ASSISTANT,
+            content="Stored response",
+            metadata=historical_metadata,
+        ),
+    )
+
+    loaded = await load_conversation(
+        db,
+        conversation_id=conversation.id,
+        user_id=OWNER_ID,
+    )
+
+    assert loaded is not None
+    assert loaded.conversation.model == "claude-sonnet-5"
+    assert loaded.messages[0].metadata == historical_metadata
+
+
+@pytest.mark.anyio
 async def test_chat_persistence_happy_path_orders_messages_and_clears_current_stream() -> (
     None
 ):
@@ -45,7 +83,7 @@ async def test_chat_persistence_happy_path_orders_messages_and_clears_current_st
         ChatConversationCreate(
             id=uuid4(),
             user_id=OWNER_ID,
-            model="claude-sonnet-5",
+            model="claude-sonnet-5-5",
             title="Enrollment",
         ),
     )

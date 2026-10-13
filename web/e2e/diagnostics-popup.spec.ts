@@ -5,7 +5,7 @@ import { mockModels } from './helpers/models';
 import { startChatStreamServer, toolRunChunks } from './helpers/sse';
 
 const RESPONSE_ID = '11111111-2222-3333-4444-555555555555';
-const INFERENCE_MODEL = 'claude-sonnet-5';
+const INFERENCE_MODEL = 'claude-sonnet-5-5';
 const ANSWER = 'Резултатите од испитите се објавуваат на https://finki.ukim.mk';
 const DIAGNOSTICS_LABEL = /Дијагностика/u;
 

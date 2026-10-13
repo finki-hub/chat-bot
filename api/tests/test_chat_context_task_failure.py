@@ -25,7 +25,7 @@ def _payload() -> ChatSchema:
         {
             "user_id": USER_ID,
             "interface": "web",
-            "inference_model": Model.GPT_5_6_LUNA,
+            "inference_model": Model.GPT_6_LUNA,
             "messages": [{"role": "user", "content": "Question"}],
         },
     )

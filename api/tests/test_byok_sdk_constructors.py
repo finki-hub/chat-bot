@@ -71,7 +71,7 @@ def test_real_byok_sdk_clients_initialize_independent_credentials(
                     assert isinstance(async_client, openai.AsyncOpenAI)
                 else:
                     anthropic_llm = get_anthropic_llm(
-                        Model.CLAUDE_HAIKU_4_5,
+                        Model.CLAUDE_HAIKU_5_5,
                         temperature=0.0,
                         top_p=1.0,
                         max_tokens=128,

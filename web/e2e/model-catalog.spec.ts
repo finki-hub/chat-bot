@@ -16,10 +16,10 @@ const BASE_URL_FIELD = 'base_url';
 const HAS_API_KEY_FIELD = 'has_api_key';
 const USER_ID_FIELD = 'user_id';
 const ACCOUNT_MENU_LABEL = /Корисничко мени:/u;
-const LUNA_ID = 'gpt-5.6-luna';
-const LUNA_NAME = 'GPT-5.6 Luna';
+const LUNA_ID = 'gpt-6-luna';
+const LUNA_NAME = 'GPT-6 Luna';
 const EMPTY_JSON = '{}';
-const LUNA_OPTION_PATTERN = /GPT-5\.6 Luna/u;
+const LUNA_OPTION_PATTERN = /GPT-6 Luna/u;
 const lunaCatalog = (
   remaining: number,
   availability: 'both' | 'byok' | 'sponsored' = 'sponsored',
@@ -117,7 +117,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     // Stale recovery: the trigger shows a valid catalog model (the recovered
     // default), not the placeholder it would show for the removed id.
     const trigger = page.getByTestId('composer-model');
-    await expect(trigger).toContainText('Claude Sonnet 5');
+    await expect(trigger).toContainText('Claude Sonnet 5.5');
 
     await trigger.click();
 
@@ -190,7 +190,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     await page.goto('/');
     await hideDevelopmentOverlay(page);
     const trigger = page.getByTestId('composer-model');
-    await expect(trigger).toContainText('Claude Sonnet 5');
+    await expect(trigger).toContainText('Claude Sonnet 5.5');
     await trigger.click();
 
     const unavailable = page
@@ -199,7 +199,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     await expect(unavailable).toHaveAttribute('aria-disabled', 'true');
     await expect(unavailable).toContainText('Потребен е API клуч');
     await unavailable.dispatchEvent('click');
-    await expect(trigger).toContainText('Claude Sonnet 5');
+    await expect(trigger).toContainText('Claude Sonnet 5.5');
     await page.screenshot({
       animations: 'disabled',
       path: 'test-results/model-selector-unavailable-desktop.png',

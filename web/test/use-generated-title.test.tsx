@@ -21,7 +21,7 @@ const saveChatConversation =
 
 const CONVERSATION_ID = 'conversation-1';
 const GENERATED_TITLE = 'Јунска испитна сесија';
-const MODEL_ID = 'claude-sonnet-5';
+const MODEL_ID = 'claude-sonnet-5-5';
 const OLD_TITLE = 'Old title';
 
 vi.mock('@/lib/chat-title', () => ({

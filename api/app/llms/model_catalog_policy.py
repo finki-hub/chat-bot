@@ -6,6 +6,7 @@ from app.llms.models import (
     ANTHROPIC_NO_SAMPLING_MODELS,
     CHAT_MODEL_ORDER,
     CHAT_MODELS,
+    OPENAI_NO_SAMPLING_MODELS,
     REASONING_CAPABLE_MODELS,
     Model,
 )
@@ -30,7 +31,8 @@ def _policy(
         display_name=display_name,
         execution=ExecutionPolicy(
             reasoning=model in REASONING_CAPABLE_MODELS,
-            sampling=model not in ANTHROPIC_NO_SAMPLING_MODELS,
+            sampling=model
+            not in (ANTHROPIC_NO_SAMPLING_MODELS | OPENAI_NO_SAMPLING_MODELS),
             tool_call=provider != "ollama",
             structured_output=provider != "ollama",
         ),
@@ -39,9 +41,9 @@ def _policy(
 
 MODEL_CATALOG: Final[tuple[CatalogPolicy, ...]] = (
     _policy(Model.GPT_6_ASTRA, "openai", "GPT-6 Astra"),
-    _policy(Model.GPT_5_6_SOL, "openai", "GPT-5.6 Sol"),
+    _policy(Model.GPT_6_1_SOL, "openai", "GPT-6.1 Sol"),
     _policy(Model.GPT_5_6_TERRA, "openai", "GPT-5.6 Terra"),
-    _policy(Model.GPT_5_6_LUNA, "openai", "GPT-5.6 Luna"),
+    _policy(Model.GPT_6_LUNA, "openai", "GPT-6 Luna"),
     _policy(Model.GPT_5_4_MINI, "openai", "GPT-5.4 Mini"),
     _policy(Model.GPT_5_4_NANO, "openai", "GPT-5.4 Nano"),
     _policy(Model.GEMINI_3_8_FLASH, "google", "Gemini 3.8 Flash"),
@@ -51,14 +53,14 @@ MODEL_CATALOG: Final[tuple[CatalogPolicy, ...]] = (
         "Gemini 3.1 Pro Preview",
     ),
     _policy(
-        Model.GEMINI_3_1_FLASH_LITE,
+        Model.GEMINI_3_5_FLASH_LITE,
         "google",
-        "Gemini 3.1 Flash Lite",
+        "Gemini 3.5 Flash Lite",
     ),
     _policy(Model.CLAUDE_FABLE_5_1, "anthropic", "Claude Fable 5.1"),
-    _policy(Model.CLAUDE_OPUS_4_8, "anthropic", "Claude Opus 4.8"),
-    _policy(Model.CLAUDE_SONNET_5, "anthropic", "Claude Sonnet 5"),
-    _policy(Model.CLAUDE_HAIKU_4_5, "anthropic", "Claude Haiku 4.5"),
+    _policy(Model.CLAUDE_OPUS_5_5, "anthropic", "Claude Opus 5.5"),
+    _policy(Model.CLAUDE_SONNET_5_5, "anthropic", "Claude Sonnet 5.5"),
+    _policy(Model.CLAUDE_HAIKU_5_5, "anthropic", "Claude Haiku 5.5"),
     _policy(
         Model.OPENROUTER_DEEPSEEK_V4_1_FLASH,
         "openrouter",
@@ -78,8 +80,7 @@ MODEL_CATALOG: Final[tuple[CatalogPolicy, ...]] = (
     ),
     _policy(Model.OPENROUTER_QWEN3_8_27B, "openrouter", "Qwen3.8 27B"),
     _policy(Model.OPENROUTER_MINIMAX_M3, "openrouter", "MiniMax M3"),
-    _policy(Model.OPENROUTER_GROK_4_6, "openrouter", "Grok 4.6"),
-    _policy(Model.OPENROUTER_HY3, "openrouter", "Tencent HY 3"),
+    _policy(Model.OPENROUTER_GROK_4_7, "openrouter", "Grok 4.7"),
 )
 
 _CATALOG_MODELS = tuple(policy.model for policy in MODEL_CATALOG)
@@ -91,9 +92,7 @@ if not set(_CATALOG_MODELS).issubset(CHAT_MODELS):
     msg = "Catalog policy models must be a subset of executable chat models"
     raise RuntimeError(msg)
 
-# The picker is intentionally curated independently from runtime compatibility.  Keep the
-# catalog ordered according to the executable order while allowing compatibility-only models
-# to remain routable without being offered to new users.
+# Keep the executable models in the same order as the curated picker catalog.
 if (
     tuple(model for model in CHAT_MODEL_ORDER if model in _CATALOG_MODELS)
     != _CATALOG_MODELS

@@ -13,7 +13,7 @@ const { getAuthenticatedChatUserIdMock } = vi.hoisted(() => ({
 }));
 
 const API_USER_ID = 'api-user-1';
-const CLAUDE_MODEL = 'claude-sonnet-5';
+const CLAUDE_MODEL = 'claude-sonnet-5-5';
 
 vi.mock('@/lib/env', () => ({
   API_BASE_URL: 'https://api:8880',

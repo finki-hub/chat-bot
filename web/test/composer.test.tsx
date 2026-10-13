@@ -9,12 +9,12 @@ import type { ModelDescriptor } from '@/lib/api-types';
 
 import { Composer } from '@/components/chat/composer';
 
-const CLAUDE_ID = 'claude-sonnet-5';
-const CLAUDE_NAME = 'Claude Sonnet 5';
+const CLAUDE_ID = 'claude-sonnet-5-5';
+const CLAUDE_NAME = 'Claude Sonnet 5.5';
 const GPT_ID = 'gpt-5.4-mini';
 const GPT_NAME = 'GPT-5.4 Mini';
-const GPT_PREMIUM_ID = 'gpt-5.4';
-const GPT_PREMIUM_NAME = 'GPT-5.4';
+const GPT_PREMIUM_ID = 'gpt-5.6-terra';
+const GPT_PREMIUM_NAME = 'GPT-5.6 Terra';
 const GPT_CHEAP_ID = 'gpt-5.4-nano';
 const GPT_CHEAP_NAME = 'GPT-5.4 Nano';
 const OLLAMA_ID = 'llama3.2:latest';
@@ -24,8 +24,8 @@ const OLLAMA_UNKNOWN_ID = 'qwen3:14b';
 const OLLAMA_UNKNOWN_NAME = 'qwen3:14b';
 const MODEL_SELECTOR_TEST_ID = 'composer-model';
 const COMPOSER_INPUT_TEST_ID = 'composer-input';
-const LUNA_ID = 'gpt-5.6-luna';
-const LUNA_NAME = 'GPT-5.6 Luna';
+const LUNA_ID = 'gpt-6-luna';
+const LUNA_NAME = 'GPT-6 Luna';
 
 const MODELS: ModelDescriptor[] = [
   {

@@ -17,7 +17,7 @@ from app.llms.agents import (
     stream_sync_gen_as_sse,
 )
 from app.llms.models import (
-    OPENAI_MINIMAL_EFFORT_MODELS,
+    OPENAI_NO_SAMPLING_MODELS,
     REASONING_CAPABLE_MODELS,
     Model,
 )
@@ -56,16 +56,12 @@ def get_openai_llm(
     Return a user-scoped ChatOpenAI instance for the specified model and parameters.
 
     OpenAI requests use the Responses API (`use_responses_api=True`) except for Astra,
-    whose documented Chat Completions surface is used for `reasoning_effort`. When
-    `reasoning` is on, a `reasoning` config requests a summarized reasoning trace (GPT-5
-    reasoning models ignore `temperature`, which the wrapper strips automatically). When
-    `reasoning` is off, models in
-    `OPENAI_MINIMAL_EFFORT_MODELS` are pinned to `effort: "minimal"` so they don't burn the
-    whole token budget on hidden reasoning and return an empty answer.
+    whose documented Chat Completions surface is used for `reasoning_effort`.
+    When `reasoning` is on, a `reasoning` config requests a summarized reasoning trace.
 
-    GPT-5 reasoning models reject `top_p` on the Responses API (HTTP 400 once a reasoning
-    request is made); the wrapper strips `temperature` for them but not `top_p`, so `top_p`
-    is forwarded only for the non-reasoning chat models. This mirrors the Anthropic client.
+    Reasoning models reject sampling controls on the Responses API, so `top_p` is
+    forwarded only for the non-reasoning chat models and temperature is explicitly omitted
+    for `OPENAI_NO_SAMPLING_MODELS`.
     """
     # top_p is dropped for reasoning-capable (GPT-5) models, so it must not split the cache
     # for them — fold it out of the key when it isn't forwarded.
@@ -79,8 +75,6 @@ def get_openai_llm(
             client_kwargs["reasoning_effort"] = "medium"
     elif reasoning:
         client_kwargs["reasoning"] = {"effort": "medium", "summary": "auto"}
-    elif model in OPENAI_MINIMAL_EFFORT_MODELS:
-        client_kwargs["reasoning"] = {"effort": "minimal"}
     if forwards_top_p:
         client_kwargs["top_p"] = top_p
 
@@ -90,9 +84,9 @@ def get_openai_llm(
         model=model.value if upstream_model is None else upstream_model,
         api_key=SecretStr(credential.api_key),
         base_url=credential.base_url or None,
-        # Astra does not document temperature; omit it rather than sending an
-        # unverified provider parameter.
-        temperature=None if model == Model.GPT_6_ASTRA else temperature,
+        # GPT-6 and GPT-5 reasoning models reject or ignore sampling controls;
+        # omit them explicitly rather than relying on provider-specific SDK cleanup.
+        temperature=(None if model in OPENAI_NO_SAMPLING_MODELS else temperature),
         streaming=True,
         stream_usage=True,
         max_tokens=max_tokens,

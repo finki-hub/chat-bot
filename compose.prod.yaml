@@ -36,7 +36,7 @@ services:
       # Sponsored model settings are API-only and fail closed unless explicitly enabled.
       # Never expose the sponsored key or endpoint through the web service.
       SPONSORED_MODEL_ENABLED: ${SPONSORED_MODEL_ENABLED:-false}
-      SPONSORED_MODEL_ID: ${SPONSORED_MODEL_ID:-gpt-5.6-luna}
+      SPONSORED_MODEL_ID: ${SPONSORED_MODEL_ID:-gpt-6-luna}
       SPONSORED_MODEL_PROVIDER: ${SPONSORED_MODEL_PROVIDER:-openai}
       SPONSORED_MODEL_API_KEY: ${SPONSORED_MODEL_API_KEY:-}
       SPONSORED_MODEL_BASE_URL: ${SPONSORED_MODEL_BASE_URL:-}

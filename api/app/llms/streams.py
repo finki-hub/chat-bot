@@ -6,7 +6,13 @@ from langchain_core.messages import BaseMessage
 from app.llms.agents import StreamObservation
 from app.llms.anthropic import stream_anthropic_agent_response
 from app.llms.google import stream_google_agent_response
-from app.llms.models import REASONING_CAPABLE_MODELS, ChatModel, Model, model_id
+from app.llms.models import (
+    ANTHROPIC_MANDATORY_REASONING_MODELS,
+    REASONING_CAPABLE_MODELS,
+    ChatModel,
+    Model,
+    model_id,
+)
 from app.llms.ollama import stream_ollama_agent_response
 from app.llms.openai import stream_openai_agent_response
 from app.llms.openrouter import stream_openrouter_agent_response
@@ -46,7 +52,9 @@ async def stream_response_with_agent(
     )
 
     reasoning = (
-        reasoning and isinstance(model, Model) and model in REASONING_CAPABLE_MODELS
+        isinstance(model, Model)
+        and model in REASONING_CAPABLE_MODELS
+        and (reasoning or model in ANTHROPIC_MANDATORY_REASONING_MODELS)
     )
 
     if observation is not None:
@@ -85,11 +93,9 @@ async def stream_response_with_agent(
 
         case (
             Model.GPT_6_ASTRA
-            | Model.GPT_5_6_SOL
+            | Model.GPT_6_1_SOL
             | Model.GPT_5_6_TERRA
-            | Model.GPT_5_6_LUNA
-            | Model.GPT_5_5
-            | Model.GPT_5_4
+            | Model.GPT_6_LUNA
             | Model.GPT_5_4_MINI
             | Model.GPT_5_4_NANO
         ):
@@ -111,8 +117,7 @@ async def stream_response_with_agent(
         case (
             Model.GEMINI_3_8_FLASH
             | Model.GEMINI_3_1_PRO_PREVIEW
-            | Model.GEMINI_3_5_FLASH
-            | Model.GEMINI_3_1_FLASH_LITE
+            | Model.GEMINI_3_5_FLASH_LITE
         ):
             _tag_provider(observation, "google")
             return await stream_google_agent_response(
@@ -131,9 +136,9 @@ async def stream_response_with_agent(
 
         case (
             Model.CLAUDE_FABLE_5_1
-            | Model.CLAUDE_OPUS_4_8
-            | Model.CLAUDE_SONNET_5
-            | Model.CLAUDE_HAIKU_4_5
+            | Model.CLAUDE_OPUS_5_5
+            | Model.CLAUDE_SONNET_5_5
+            | Model.CLAUDE_HAIKU_5_5
         ):
             _tag_provider(observation, "anthropic")
             return await stream_anthropic_agent_response(

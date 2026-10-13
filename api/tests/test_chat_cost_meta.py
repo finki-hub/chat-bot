@@ -76,14 +76,14 @@ def test_chat_stream_emits_cost_diagnostics_when_pricing_is_known(monkeypatch):
     chunks, props = _run_captured_stream(
         monkeypatch,
         _body(),
-        Model.CLAUDE_HAIKU_4_5,
+        Model.CLAUDE_SONNET_5_5,
     )
     meta = json.loads(chunks[-1].split("data:", 1)[1].strip())
 
-    assert meta["cost"]["input_usd"] == pytest.approx(0.001)
-    assert meta["cost"]["output_usd"] == pytest.approx(0.005)
-    assert meta["cost"]["total_usd"] == pytest.approx(0.006)
-    assert props["$ai_total_cost_usd"] == pytest.approx(0.006)
+    assert meta["cost"]["input_usd"] == pytest.approx(0.002)
+    assert meta["cost"]["output_usd"] == pytest.approx(0.01)
+    assert meta["cost"]["total_usd"] == pytest.approx(0.012)
+    assert props["$ai_total_cost_usd"] == pytest.approx(0.012)
     assert props["$ai_input"] == {"count": 1, "roles": ["user"]}
     assert props["$session_id"] == "session-1"
     assert props["$ai_output_choices"] == [{"role": "assistant", "content_length": 6}]
@@ -119,7 +119,7 @@ def test_chat_request_log_fields_do_not_include_message_content():
     payload = ChatSchema.model_validate(
         {
             "interface": "web",
-            "inference_model": Model.CLAUDE_HAIKU_4_5,
+            "inference_model": Model.CLAUDE_HAIKU_5_5,
             "messages": [
                 {"role": "user", "content": "private first question"},
                 {"role": "assistant", "content": "private previous answer"},
@@ -151,7 +151,7 @@ def test_chat_request_posthog_fields_include_message_metadata_only():
     payload = ChatSchema.model_validate(
         {
             "interface": "web",
-            "inference_model": Model.CLAUDE_HAIKU_4_5,
+            "inference_model": Model.CLAUDE_HAIKU_5_5,
             "messages": [
                 {"role": "user", "content": "private first question"},
                 {"role": "assistant", "content": "private previous answer"},

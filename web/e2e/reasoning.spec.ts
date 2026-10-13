@@ -11,7 +11,7 @@ import { mockModels } from './helpers/models';
 import { type UiChunk } from './helpers/sse';
 
 const RESPONSE_ID = '99999999-8888-7777-6666-555555555555';
-const INFERENCE_MODEL = 'claude-sonnet-5';
+const INFERENCE_MODEL = 'claude-sonnet-5-5';
 const REASON_HEAD = 'Размислувам чекор еден…';
 const REASON_TAIL = ' и чекор два.';
 const ANSWER = 'Конечниот одговор е дека ФИНКИ е во Скопје.';

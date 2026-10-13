@@ -62,7 +62,7 @@ const sampleMessages: MyUIMessage[] = [
 describe('buildChatTransport', () => {
   it('puts messages, id, trigger, and extras into the request body', () => {
     const prepare = getPrepare({
-      model: 'claude-sonnet-5',
+      model: 'claude-sonnet-5-5',
       temperature: 0.3,
     });
     const { body } = prepare({
@@ -76,7 +76,7 @@ describe('buildChatTransport', () => {
       id: 'conv-1',
       messageId: 'm-1',
       messages: sampleMessages,
-      model: 'claude-sonnet-5',
+      model: 'claude-sonnet-5-5',
       posthogDistinctId: 'browser-distinct-id',
       posthogSessionId: 'session-test-id',
       temperature: 0.3,
@@ -341,5 +341,37 @@ describe('buildChatTransport', () => {
     );
 
     await expect(loadChatConversationHistory('conv-7')).resolves.toBeNull();
+  });
+});
+
+describe('loadChatConversationHistory', () => {
+  it('preserves legacy model provenance in loaded conversation messages', async () => {
+    const legacyModel = 'claude-sonnet-5';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          conversation: {
+            activeStream: null,
+            id: 'legacy-chat',
+            model: legacyModel,
+            title: 'Old chat',
+          },
+          messages: [
+            {
+              id: 'legacy-answer',
+              metadata: { inferenceModel: legacyModel, responseId: 'r-old' },
+              parts: [{ text: 'Historic answer', type: 'text' }],
+              role: 'assistant',
+            },
+          ],
+        }),
+      ),
+    );
+
+    const history = await loadChatConversationHistory('legacy-chat');
+
+    expect(history?.conversation.model).toBe(legacyModel);
+    expect(history?.messages[0]?.metadata?.inferenceModel).toBe(legacyModel);
   });
 });

@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     BYOK_ALLOWED_BASE_URLS: str = ""
 
     SPONSORED_MODEL_ENABLED: bool = False
-    SPONSORED_MODEL_ID: NonBlankString = "gpt-5.6-luna"
+    SPONSORED_MODEL_ID: NonBlankString = "gpt-6-luna"
     SPONSORED_MODEL_PROVIDER: ProviderName = "openai"
     SPONSORED_MODEL_API_KEY: SecretStr | None = None
     SPONSORED_MODEL_BASE_URL: str | None = None
@@ -163,6 +163,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_sponsored_model_settings(self) -> Self:
+        try:
+            model = Model(self.SPONSORED_MODEL_ID)
+        except ValueError:
+            msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
+            raise ValueError(msg) from None
+        if model not in CURATED_CHAT_MODELS:
+            msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
+            raise ValueError(msg)
         if not self.SPONSORED_MODEL_ENABLED:
             return self
         if (
@@ -173,14 +181,6 @@ class Settings(BaseSettings):
             raise ValueError(msg)
         if self.SPONSORED_DAILY_GLOBAL_LIMIT is None:
             msg = "SPONSORED_DAILY_GLOBAL_LIMIT is required when SPONSORED_MODEL_ENABLED is true"
-            raise ValueError(msg)
-        try:
-            model = Model(self.SPONSORED_MODEL_ID)
-        except ValueError:
-            msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
-            raise ValueError(msg) from None
-        if model not in CURATED_CHAT_MODELS:
-            msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
             raise ValueError(msg)
         derived_provider = provider_for_model(model)
         if derived_provider == "ollama":

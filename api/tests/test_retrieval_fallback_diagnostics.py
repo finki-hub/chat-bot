@@ -211,7 +211,7 @@ def test_real_retrieval_propagates_diagnostics_to_events_and_timing_log(
     payload = ChatSchema.model_validate(
         {
             "user_id": str(uuid4()),
-            "inference_model": Model.GPT_5_6_LUNA,
+            "inference_model": Model.GPT_6_LUNA,
             "query_transform_model": Model.GPT_5_4_MINI,
             "query_transform_mode": "rewrite_hyde",
             "embeddings_model": Model.BGE_M3_LOCAL,

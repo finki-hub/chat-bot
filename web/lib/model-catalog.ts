@@ -34,29 +34,20 @@ const MODEL_AVAILABILITIES = [
   'unavailable',
 ] as const;
 
-const HIDDEN_CURATED_MODEL_IDS = new Set([
-  'gemini-3.5-flash',
-  'gpt-5.4',
-  'gpt-5.5',
-  'openrouter:deepseek/deepseek-v4-flash',
-  'openrouter:deepseek/deepseek-v4-flash-0731',
-  'openrouter:qwen/qwen3.8-max',
-]);
-
 const CURATED_MODEL_DATA = [
   ['gpt-6-astra', 'GPT-6 Astra', 'openai'],
-  ['gpt-5.6-sol', 'GPT-5.6 Sol', 'openai'],
+  ['gpt-6.1-sol', 'GPT-6.1 Sol', 'openai'],
   ['gpt-5.6-terra', 'GPT-5.6 Terra', 'openai'],
-  ['gpt-5.6-luna', 'GPT-5.6 Luna', 'openai'],
+  ['gpt-6-luna', 'GPT-6 Luna', 'openai'],
   ['gpt-5.4-mini', 'GPT-5.4 Mini', 'openai'],
   ['gpt-5.4-nano', 'GPT-5.4 Nano', 'openai'],
   ['gemini-3.8-flash', 'Gemini 3.8 Flash', 'google'],
   ['gemini-3.1-pro-preview', 'Gemini 3.1 Pro Preview', 'google'],
-  ['gemini-3.1-flash-lite', 'Gemini 3.1 Flash Lite', 'google'],
+  ['gemini-3.5-flash-lite', 'Gemini 3.5 Flash Lite', 'google'],
   ['claude-fable-5-1', 'Claude Fable 5.1', 'anthropic'],
-  ['claude-opus-4-8', 'Claude Opus 4.8', 'anthropic'],
-  ['claude-sonnet-5', 'Claude Sonnet 5', 'anthropic'],
-  ['claude-haiku-4-5', 'Claude Haiku 4.5', 'anthropic'],
+  ['claude-opus-5-5', 'Claude Opus 5.5', 'anthropic'],
+  ['claude-sonnet-5-5', 'Claude Sonnet 5.5', 'anthropic'],
+  ['claude-haiku-5-5', 'Claude Haiku 5.5', 'anthropic'],
   [
     'openrouter:deepseek/deepseek-v4.1-flash',
     'DeepSeek V4.1 Flash',
@@ -72,8 +63,7 @@ const CURATED_MODEL_DATA = [
   ['openrouter:qwen/qwen3.8-max-0902', 'Qwen3.8 Max 0902', 'openrouter'],
   ['openrouter:qwen/qwen3.8-27b', 'Qwen3.8 27B', 'openrouter'],
   ['openrouter:minimax/minimax-m3', 'MiniMax M3', 'openrouter'],
-  ['openrouter:x-ai/grok-4.6', 'Grok 4.6', 'openrouter'],
-  ['openrouter:tencent/hy3', 'Tencent HY 3', 'openrouter'],
+  ['openrouter:x-ai/grok-4.7', 'Grok 4.7', 'openrouter'],
   ['qwen3:30b-a3b-thinking-2507-q4_K_M', 'Qwen3 30B Thinking', 'ollama'],
   ['qwen3:30b-a3b-instruct-2507-q4_K_M', 'Qwen3 30B Instruct', 'ollama'],
   ['qwen3:14b-q4_K_M', 'Qwen3 14B', 'ollama'],
@@ -220,9 +210,7 @@ export const parseModelCatalog = (value: unknown): ModelCatalog => {
       const models = rawModels.map((entry) => normalizeDescriptor(entry, true));
       if (models.every((model): model is ModelDescriptor => model !== null)) {
         return {
-          models: models.filter(
-            (model) => !HIDDEN_CURATED_MODEL_IDS.has(model.id),
-          ),
+          models,
           source: rawSource,
           version: 1,
         };
@@ -234,10 +222,7 @@ export const parseModelCatalog = (value: unknown): ModelCatalog => {
   if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
     const models = value
       .map((id) => CURATED_MODEL_DESCRIPTORS[id] ?? normalizeDescriptor({ id }))
-      .filter(
-        (model): model is ModelDescriptor =>
-          model !== null && !HIDDEN_CURATED_MODEL_IDS.has(model.id),
-      );
+      .filter((model): model is ModelDescriptor => model !== null);
     return { models, source: 'live', version: 1 };
   }
 
@@ -275,14 +260,17 @@ export const isModelAvailable = (
   (model.availability !== 'unavailable' &&
     availableProviders.has(model.provider));
 
-// Repair a persisted selection when the catalog no longer contains it: prefer the current
-// model, then the default, then the first available model, and only keep an unknown id when
-// the catalog is empty (so a transient miss never wipes it).
+// Repair a selection when the catalog no longer contains it: prefer the current
+// model, then the default, then the first available model, preserving it on an
+// empty catalog so a transient miss never wipes it.
 export const recoverSelectedModel = (
   models: readonly ModelDescriptor[],
   current: string,
   fallback: string,
 ): string => {
+  if (models.length === 0) {
+    return current;
+  }
   if (models.some((model) => model.id === current)) {
     return current;
   }

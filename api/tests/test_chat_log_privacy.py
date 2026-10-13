@@ -40,7 +40,7 @@ def test_contextualize_query_logs_lengths_without_raw_text(caplog, monkeypatch):
     result = anyio.run(
         _contextualize_query,
         "original private query",
-        Model.CLAUDE_HAIKU_4_5,
+        Model.CLAUDE_HAIKU_5_5,
         "private history",
     )
 
@@ -97,7 +97,7 @@ def test_retrieval_logs_lengths_without_raw_query(caplog, monkeypatch):
             Database("postgresql://unused"),
             "private retrieval query",
             Model.BGE_M3,
-            Model.CLAUDE_HAIKU_4_5,
+            Model.CLAUDE_HAIKU_5_5,
             query_transform_mode=QueryTransformMode.RAW,
         )
 
@@ -151,13 +151,13 @@ def test_query_transform_logs_lengths_without_raw_query(caplog, monkeypatch):
             google_module,
             "transform_query_with_google",
             "get_google_llm",
-            Model.GEMINI_3_5_FLASH,
+            Model.GEMINI_3_5_FLASH_LITE,
         ),
         (
             anthropic_module,
             "transform_query_with_anthropic",
             "get_anthropic_llm",
-            Model.CLAUDE_HAIKU_4_5,
+            Model.CLAUDE_HAIKU_5_5,
         ),
         (ollama_module, "transform_query_with_ollama", "get_llm", Model.QWEN3_14B),
     ],

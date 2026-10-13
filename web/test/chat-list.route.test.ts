@@ -37,7 +37,7 @@ describe('GET /api/chat', () => {
     await expect(res.json()).resolves.toStrictEqual([
       {
         id: CONVERSATION_ID,
-        model: 'claude-sonnet-5',
+        model: 'claude-sonnet-5-5',
         title: 'Stored title',
       },
     ]);

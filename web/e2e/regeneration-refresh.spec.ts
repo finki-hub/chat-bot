@@ -9,7 +9,7 @@ import { startChatStreamServer, type UiChunk } from './helpers/sse';
 
 const CONVERSATION_ID = '11111111-2222-4333-8444-555555555555';
 const RESPONSE_ID = '22222222-3333-4444-8555-666666666666';
-const MODEL = 'claude-sonnet-5';
+const MODEL = 'claude-sonnet-5-5';
 const TARGET_MESSAGE_ID = 'assistant-first';
 const OLD_ANSWER = 'Стар прв одговор';
 const NEW_ANSWER = 'Регенериран прв одговор';

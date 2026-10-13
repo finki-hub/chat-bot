@@ -23,8 +23,8 @@ const catalogFor = (remaining: number) => ({
   models: [
     {
       availability: 'sponsored',
-      id: 'gpt-5.6-luna',
-      name: 'GPT-5.6 Luna',
+      id: 'gpt-6-luna',
+      name: 'GPT-6 Luna',
       provider: 'openai',
       sponsored_quota: {
         limit: 5,

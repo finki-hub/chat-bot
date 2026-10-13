@@ -25,13 +25,13 @@ const SAVE_CREDENTIALS_LABEL = 'Зачувај клучеви';
 const CREDENTIAL_FORM_REGION_SELECTOR = 'form > div';
 const EMPTY_JSON = '{}';
 const STREAM_URL = 'http://127.0.0.1:9/stream';
-const SPONSORED_MODEL = 'gpt-5.6-luna';
+const SPONSORED_MODEL = 'gpt-6-luna';
 const SPONSORED_CATALOG: ModelCatalog = {
   models: [
     {
       availability: 'sponsored',
       id: SPONSORED_MODEL,
-      name: 'GPT-5.6 Luna',
+      name: 'GPT-6 Luna',
       provider: 'openai',
       sponsored_quota: {
         limit: 5,
@@ -605,7 +605,7 @@ test('mobile model selector exposes the sponsored badge and remaining quota', as
   await page.goto('/');
 
   const trigger = page.getByTestId('composer-model');
-  await expect(trigger).toContainText('GPT-5.6 Luna');
+  await expect(trigger).toContainText('GPT-6 Luna');
   await trigger.click();
 
   await expect(page.getByTestId('model-provider-label')).toHaveText('OpenAI');

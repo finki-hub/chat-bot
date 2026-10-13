@@ -307,15 +307,6 @@ def content_to_text(content: object) -> str:
     return "".join(parts)
 
 
-_MAX_THINKING_BUDGET = 2048
-
-
-def thinking_budget(max_tokens: int) -> tuple[int, int]:
-    """A thinking budget (at most half of ``max_tokens``) and that cap returned unchanged."""
-    budget = min(_MAX_THINKING_BUDGET, max_tokens // 2)
-    return budget, max_tokens
-
-
 def _chunk_text(message: AIMessageChunk) -> str:
     """The plain text of an AIMessageChunk; '' for tool-call/non-text content blocks."""
     return content_to_text(message.content)

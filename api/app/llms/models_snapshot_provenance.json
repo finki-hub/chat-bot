@@ -1,11 +1,106 @@
 {
   "source": "https://models.dev/api.json",
-  "refreshed_at": "2026-09-14T21:39:52Z",
-  "sha256": "cd8186343399cea37c1cae2b9f300c984d324f765281406f2d8b8cb994a63472",
-  "snapshot_sha256": "aef834b65f40f9b9cb034837de0876c628a4ef7e335616806826c85d3b714c24",
+  "refreshed_at": "2026-10-11T10:18:03Z",
+  "sha256": "0f6e03cfb79703b466f51fd591484d58103c0f8125650502de2511ba391424cc",
+  "snapshot_sha256": "33682802cbcb1a5badc588ffe270ea4c2b934d49cb9ea00cbe78e346fba9339a",
   "remote_coverage": {
-    "complete": true,
-    "missing": []
+    "complete": false,
+    "missing": [
+      "gpt-6.1-sol",
+      "gpt-6-luna",
+      "gemini-3.5-flash-lite",
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5",
+      "openrouter:x-ai/grok-4.7"
+    ]
+  },
+  "manual_metadata": {
+    "source": "OpenCode registry evidence",
+    "vendor_verified": false,
+    "note": "Replacement-model prices below are registry evidence, not vendor verification. Models.dev did not provide metadata for these replacement IDs in the recorded fetch.",
+    "models": {
+      "gpt-6.1-sol": {
+        "source": "requested model mapping; no current registry metadata available",
+        "fields": [
+          "id",
+          "name"
+        ],
+        "pricing": null,
+        "limits": null
+      },
+      "gpt-6-luna": {
+        "source": "requested model mapping; no current registry metadata available",
+        "fields": [
+          "id",
+          "name"
+        ],
+        "pricing": null,
+        "limits": null
+      },
+      "gemini-3.5-flash-lite": {
+        "fields": [
+          "id",
+          "name",
+          "pricing.input",
+          "pricing.output"
+        ],
+        "pricing_usd_per_1m": {
+          "input": 0.3,
+          "output": 2.5
+        }
+      },
+      "claude-opus-5-5": {
+        "fields": [
+          "id",
+          "name",
+          "pricing.input",
+          "pricing.output"
+        ],
+        "pricing_usd_per_1m": {
+          "input": 4.0,
+          "output": 20.0
+        }
+      },
+      "claude-sonnet-5-5": {
+        "fields": [
+          "id",
+          "name",
+          "pricing.input",
+          "pricing.output"
+        ],
+        "pricing_usd_per_1m": {
+          "input": 2.0,
+          "output": 10.0
+        }
+      },
+      "claude-haiku-5-5": {
+        "fields": [
+          "id",
+          "name",
+          "pricing.high_context_tier"
+        ],
+        "pricing_usd_per_1m": null,
+        "base_tier_registry_pricing_usd_per_1m": {
+          "input": 0.1,
+          "output": 0.5
+        },
+        "high_context_threshold_input_tokens": 100000,
+        "high_context_pricing_usd_per_1m": {
+          "input": 0.5,
+          "output": 2.5
+        }
+      },
+      "openrouter:x-ai/grok-4.7": {
+        "source": "requested model mapping; no current registry metadata available",
+        "fields": [
+          "id",
+          "name"
+        ],
+        "pricing": null,
+        "limits": null
+      }
+    }
   },
   "verified_id_sources": {
     "gpt-6-astra": "https://developers.openai.com/api/docs/models/gpt-6-astra",

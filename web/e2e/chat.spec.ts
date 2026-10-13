@@ -13,7 +13,7 @@ import {
 } from './helpers/sse';
 
 const RESPONSE_ID = '11111111-2222-3333-4444-555555555555';
-const INFERENCE_MODEL = 'claude-sonnet-5';
+const INFERENCE_MODEL = 'claude-sonnet-5-5';
 const PREAMBLE = 'Дозволете да проверам…';
 const STATUS_LABEL = '🔍 Пребарувам…';
 const TOOL = 'search_documents';
@@ -22,6 +22,7 @@ const LINK_NAME = /finki\.ukim\.mk/u;
 const SEARCH_STEPPER_TEXT =
   /Разбирање….*Пребарување….*Рерангирање….*Составување…/su;
 const DIAGNOSTICS_LABEL = /Дијагностика/u;
+const TOTAL_DURATION_PATTERN = /\d{1,2}(?:\.\d)?s/u;
 const OBSERVABLE_STAGE_GAP_MS = 5_000;
 const ANSWER_TEST_ID = 'answer-text';
 const ANSWER_PREVIEW = 'Резултатите од испитите се објавуваат';
@@ -313,7 +314,8 @@ test.describe('chat streaming (mocked BFF)', () => {
 
     const timing = page.getByTestId('message-timing');
     await expect(timing).toBeVisible();
-    await expect(timing).toContainText('прв токен');
+    // TTFT is optional in the timing contract; total duration is always present.
+    await expect(timing).toContainText(TOTAL_DURATION_PATTERN);
     const diagnosticsTrigger = page.getByRole('button', {
       name: DIAGNOSTICS_LABEL,
     });

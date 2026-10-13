@@ -142,23 +142,20 @@ the new values:
 docker compose -f compose.prod.yaml up -d --force-recreate api
 ```
 
-The API owns the executable chat catalog. `/chat/models` returns the fixed, ordered
-allowlist enriched with display metadata from models.dev. Metadata is cached in process
-for six hours; refresh failures serve the last successful catalog, and cold-start
-failures use the bundled snapshot. Remote metadata cannot add executable model IDs,
-change providers or alter execution policy.
+The API owns the executable chat catalog. Supported providers are OpenAI, Anthropic,
+Google, OpenRouter, and Ollama. The hosted picker and `GET /chat/models` are the
+authoritative sources for currently available models.
 
-The hosted picker includes these 22 curated models: GPT-6 Astra, GPT-5.6 Sol,
-GPT-5.6 Terra, GPT-5.6 Luna, GPT-5.4 Mini, GPT-5.4 Nano, Gemini 3.8 Flash, Gemini
-3.1 Pro Preview, Gemini 3.1 Flash Lite, Claude Fable 5.1, Claude Opus 4.8, Claude
-Sonnet 5, Claude Haiku 4.5, plus the OpenRouter models DeepSeek V4.1 Flash, DeepSeek
-V4 Pro 0813, GLM-5.3, Kimi K3, Qwen3.8 Max 0902, Qwen3.8 27B, MiniMax M3, Grok 4.6
-and Tencent HY 3. Retired GPT-5.5, GPT-5.4, Gemini 3.5 Flash and DeepSeek V4 Flash
-IDs remain compatibility-only and are not offered by the picker. The Ollama catalog
-uses multilingual Qwen3 30B and 14B quantizations selected to fit a 24 GB GPU; the
-advertised context limits still require enough remaining memory for the KV cache.
+When the model catalog changes, deploy the API and web app together and reload clients
+to apply any saved preference updates. Before deployment, check that an existing
+`SPONSORED_MODEL_ID` in `.env` is available in the current catalog and uses its matching
+provider; the default is documented in the sponsored model configuration below. Saved
+model preferences may be updated once by the web app. Historical chats and their model
+metadata remain readable and unchanged; no database rewrite is needed.
 
-`BAAI/bge-m3`, `text-embedding-3-large`, and `gemini-embedding-001` are active for authenticated chat requests. Corpus fill jobs remain limited to local BGE-M3 because they do not have a user credential boundary. Legacy embedding columns and historical model values remain readable for existing data.
+Authenticated chat requests support the configured embedding providers. Corpus fill jobs
+remain limited to local BGE-M3 because they do not have a user credential boundary.
+Legacy embedding columns and historical model values remain readable for existing data.
 
 The compose files also support optional variables that are not listed in `.env.sample` because they have built-in defaults: `POSTHOG_KEY`, `POSTHOG_HOST`, `RERANKER_MODEL`, and `WEB_API_BASE_URL`.
 
@@ -175,7 +172,7 @@ is unchanged.
 | Setting | Default | Meaning and security requirement |
 | --- | --- | --- |
 | `SPONSORED_MODEL_ENABLED` | `false` | Kill switch. Keep `false` until the release gate below passes. |
-| `SPONSORED_MODEL_ID` | `gpt-5.6-luna` | Public catalog model ID for the sponsored profile. |
+| `SPONSORED_MODEL_ID` | `gpt-6-luna` | Current public catalog model ID for the sponsored profile; retired IDs are rejected. |
 | `SPONSORED_MODEL_PROVIDER` | `openai` | Provider name for the sponsored profile. |
 | `SPONSORED_MODEL_API_KEY` | empty | Dedicated provider secret for sponsored inference. It must not be copied from or substituted with `API_KEY`, a user BYOK key, or a Discord secret. |
 | `SPONSORED_MODEL_BASE_URL` | empty | Optional dedicated HTTPS OpenAI-compatible endpoint for sponsored inference only. It is canonicalized and validated separately from `BYOK_ALLOWED_BASE_URLS`; it must not be used as a user endpoint allowlist. |
@@ -214,7 +211,7 @@ docker compose --env-file .env -f compose.prod.yaml config --quiet
 curl --fail-with-body --no-buffer --silent --show-error \
   -H "x-api-key: ${API_KEY}" \
   -H 'content-type: application/json' \
-  --data '{"user_id":"00000000-0000-4000-8000-000000000016","interface":"web","inference_model":"gpt-5.6-luna","query_transform_mode":"raw","messages":[{"role":"user","content":"deployment preflight"}],"max_tokens":1024}' \
+  --data '{"user_id":"00000000-0000-4000-8000-000000000016","interface":"web","inference_model":"gpt-6-luna","query_transform_mode":"raw","messages":[{"role":"user","content":"deployment preflight"}],"max_tokens":1024}' \
   "${CHATBOT_URL:-http://127.0.0.1:8880}/chat/" | tee /tmp/sponsored-model-preflight.sse
 /bin/sh scripts/verify-sponsored-model-preflight.sh /tmp/sponsored-model-preflight.sse
 ```

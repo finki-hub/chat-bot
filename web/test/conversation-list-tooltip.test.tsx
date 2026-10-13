@@ -9,7 +9,7 @@ import { ConversationList } from '@/components/shell/conversation-list';
 const conversations: ConversationRow[] = [
   {
     id: 'c1',
-    model: 'claude-sonnet-5',
+    model: 'claude-sonnet-5-5',
     title: 'Прв разговор',
   },
 ];

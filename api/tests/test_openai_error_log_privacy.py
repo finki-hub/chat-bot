@@ -52,7 +52,7 @@ def test_openai_agent_setup_failure_omits_raw_error(caplog, monkeypatch):
     async def collect():
         return await openai_module.stream_openai_agent_response(
             _PRIVATE_PROMPT,
-            Model.GPT_5_6_LUNA,
+            Model.GPT_6_LUNA,
             system_prompt="Answer safely.",
             temperature=0.0,
             top_p=1.0,

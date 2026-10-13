@@ -7,7 +7,7 @@ import { startChatStreamServer, type UiChunk } from './helpers/sse';
 const ARIA_EXPANDED = 'aria-expanded';
 const COMPOSER_INPUT = 'composer-input';
 const COMPOSER_SUBMIT = 'composer-submit';
-const INFERENCE_MODEL = 'claude-sonnet-5';
+const INFERENCE_MODEL = 'claude-sonnet-5-5';
 const NEXT_DEV_LAUNCHER_STYLE = 'nextjs-portal { display: none !important; }';
 const RESPONSE_ID = '11111111-2222-3333-4444-555555555555';
 const VIEWPORT_WIDTHS = [375, 768, 1_280] as const;

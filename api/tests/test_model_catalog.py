@@ -1,3 +1,6 @@
+import hashlib
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -14,22 +17,31 @@ from app.llms.model_catalog import (
 )
 from app.llms.model_catalog_policy import MODEL_CATALOG
 from app.llms.model_catalog_types import OllamaCatalogModel
-from app.llms.models import CHAT_MODELS
+from app.llms.models import (
+    ANTHROPIC_NO_SAMPLING_MODELS,
+    CHAT_MODELS,
+    OPENAI_NO_SAMPLING_MODELS,
+)
+
+SNAPSHOT_PATH = Path(__file__).parents[1] / "app" / "llms" / "models_snapshot.json"
+PROVENANCE_PATH = (
+    Path(__file__).parents[1] / "app" / "llms" / "models_snapshot_provenance.json"
+)
 
 EXPECTED_IDS = [
     "gpt-6-astra",
-    "gpt-5.6-sol",
+    "gpt-6.1-sol",
     "gpt-5.6-terra",
-    "gpt-5.6-luna",
+    "gpt-6-luna",
     "gpt-5.4-mini",
     "gpt-5.4-nano",
     "gemini-3.8-flash",
     "gemini-3.1-pro-preview",
-    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
     "claude-fable-5-1",
-    "claude-opus-4-8",
-    "claude-sonnet-5",
-    "claude-haiku-4-5",
+    "claude-opus-5-5",
+    "claude-sonnet-5-5",
+    "claude-haiku-5-5",
     "openrouter:deepseek/deepseek-v4.1-flash",
     "openrouter:deepseek/deepseek-v4-pro-0813",
     "openrouter:z-ai/glm-5.3",
@@ -37,9 +49,15 @@ EXPECTED_IDS = [
     "openrouter:qwen/qwen3.8-max-0902",
     "openrouter:qwen/qwen3.8-27b",
     "openrouter:minimax/minimax-m3",
-    "openrouter:x-ai/grok-4.6",
-    "openrouter:tencent/hy3",
+    "openrouter:x-ai/grok-4.7",
 ]
+
+
+def test_snapshot_provenance_hash_matches_exact_snapshot_bytes() -> None:
+    snapshot_bytes = SNAPSHOT_PATH.read_bytes()
+    provenance = json.loads(PROVENANCE_PATH.read_text(encoding="utf-8"))
+
+    assert provenance["snapshot_sha256"] == hashlib.sha256(snapshot_bytes).hexdigest()
 
 
 class FakeClock:
@@ -94,7 +112,6 @@ def test_static_catalog_has_exact_order_and_providers_without_tiers() -> None:
         "openrouter",
         "openrouter",
         "openrouter",
-        "openrouter",
     ]
     assert all(not hasattr(entry, "tier") for entry in MODEL_CATALOG)
 
@@ -102,19 +119,18 @@ def test_static_catalog_has_exact_order_and_providers_without_tiers() -> None:
 def test_picker_catalog_is_unique_curated_runtime_subset() -> None:
     runtime_ids = {model.value for model in CHAT_MODELS}
     catalog_ids = set(EXPECTED_IDS)
-    hidden_ids = {
-        "gpt-5.4",
-        "gpt-5.5",
-        "gemini-3.5-flash",
-        "openrouter:deepseek/deepseek-v4-flash",
-        "openrouter:deepseek/deepseek-v4-flash-0731",
-        "openrouter:qwen/qwen3.8-max",
+    assert catalog_ids == runtime_ids
+    assert len(EXPECTED_IDS) == len(catalog_ids)
+
+
+def test_unsupported_provider_sampling_is_not_advertised() -> None:
+    policies = {entry.model: entry.execution for entry in MODEL_CATALOG}
+    models_without_sampling = {
+        *ANTHROPIC_NO_SAMPLING_MODELS,
+        *OPENAI_NO_SAMPLING_MODELS,
     }
 
-    assert catalog_ids <= runtime_ids
-    assert len(EXPECTED_IDS) == len(catalog_ids)
-    assert catalog_ids.isdisjoint(hidden_ids)
-    assert hidden_ids <= runtime_ids
+    assert all(not policies[model].sampling for model in models_without_sampling)
 
 
 def test_catalog_can_append_dynamic_ollama_models_with_loaded_status() -> None:

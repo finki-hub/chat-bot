@@ -5,11 +5,12 @@ import type { ModelCatalog } from '@/lib/api-types';
 import { installMockChatState } from './helpers/chat-state';
 import { mockModels } from './helpers/models';
 
-const LONG_MODEL_NAME = 'Claude Sonnet 5 With A Deliberately Long Mobile Label';
+const LONG_MODEL_NAME =
+  'Claude Sonnet 5.5 With A Deliberately Long Mobile Label';
 const LONG_MODEL_CATALOG = {
   models: [
     {
-      id: 'claude-sonnet-5',
+      id: 'claude-sonnet-5-5',
       name: LONG_MODEL_NAME,
       provider: 'anthropic',
     },
