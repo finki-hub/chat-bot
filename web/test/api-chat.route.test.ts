@@ -104,7 +104,7 @@ describe('POST /api/chat', () => {
       }),
       headers: {
         'content-type': JSON_CONTENT_TYPE,
-        'x-opencode-session': 'browser-supplied-session-must-not-win',
+        'X-Conversation-Id': 'browser-supplied-id-must-not-win',
       },
       method: 'POST',
     });
@@ -140,8 +140,8 @@ describe('POST /api/chat', () => {
     expect(init.headers).toStrictEqual({
       'content-type': JSON_CONTENT_TYPE,
       'x-api-key': 'test-key',
+      'X-Conversation-Id': CONVERSATION_ID,
       'X-Distinct-Id': 'browser-distinct-id',
-      'x-opencode-session': CONVERSATION_ID,
       'X-PostHog-Session-Id': 'session-test-id',
       'X-Response-Id': RESPONSE_ID,
     });
@@ -200,6 +200,51 @@ describe('POST /api/chat', () => {
       { content: 'Stored answer', role: 'assistant' },
       { content: 'Current question', role: 'user' },
     ]);
+  });
+
+  it('uses each resolved conversation UUID for the generic upstream header', async () => {
+    const alternateConversationId = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d24';
+    routeMocks.stateClient.loadConversation.mockResolvedValueOnce({
+      conversation: {
+        active_replacement_message_id: null,
+        active_response_id: null,
+        active_status: null,
+        active_stream_id: null,
+        id: alternateConversationId,
+        model: MODEL,
+        title: 'Another conversation',
+        user_id: USER_ID,
+      },
+      messages: [],
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(okStreamResponse(DONE_FRAME));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const request = new Request('http://localhost/api/chat', {
+      body: JSON.stringify({
+        id: alternateConversationId,
+        messages: [
+          {
+            id: 'u1',
+            parts: [{ text: 'Other question', type: 'text' }],
+            role: 'user',
+          },
+        ],
+        model: MODEL,
+      }),
+      headers: { 'content-type': JSON_CONTENT_TYPE },
+      method: 'POST',
+    });
+    const response = await (await importPost())(request);
+    await response.text();
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+
+    expect(new Headers(init.headers).get('x-conversation-id')).toBe(
+      alternateConversationId,
+    );
   });
 
   it('creates a resumable stream with the Python response id and does not forward the browser signal', async () => {
@@ -407,7 +452,7 @@ describe('POST /api/chat', () => {
     expect(upstreamBody.match(/Stored question/gu)).toHaveLength(1);
     expect(upstreamBody).not.toContain('Здраво');
     expect(upstreamBody).not.toContain('Стар одговор');
-    expect(upstreamHeaders.get('x-opencode-session')).toBe(CONVERSATION_ID);
+    expect(upstreamHeaders.get('x-conversation-id')).toBe(CONVERSATION_ID);
 
     await vi.waitFor(() => {
       expect(

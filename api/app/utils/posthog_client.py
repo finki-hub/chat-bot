@@ -110,7 +110,8 @@ ChatPreparationReason = Literal[
     "free_tier_unavailable",
     "preparation_failed",
     "cancelled",
-    "session_id_required",
+    "invalid_conversation_id",
+    "missing_conversation_id",
 ]
 
 
@@ -129,7 +130,8 @@ def capture_chat_pre_stream_outcome(
         not in {
             ("denied", "credential_required"),
             ("denied", "free_tier_unavailable"),
-            ("denied", "session_id_required"),
+            ("denied", "invalid_conversation_id"),
+            ("denied", "missing_conversation_id"),
             ("error", "preparation_failed"),
             ("client_disconnect", "cancelled"),
         }

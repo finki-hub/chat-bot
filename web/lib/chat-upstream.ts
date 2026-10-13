@@ -28,11 +28,11 @@ export const requestUpstreamChatStream = async ({
     headers: {
       'content-type': 'application/json',
       'x-api-key': CHAT_API_KEY,
+      'X-Conversation-Id': conversationId,
       'X-Distinct-Id':
         posthogDistinctId !== undefined && posthogDistinctId.length > 0
           ? posthogDistinctId
           : userId,
-      'x-opencode-session': conversationId,
       ...(posthogSessionId !== undefined &&
         posthogSessionId.length > 0 && {
           'X-PostHog-Session-Id': posthogSessionId,
