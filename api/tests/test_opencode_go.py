@@ -1,9 +1,11 @@
 import asyncio
 import json
+from collections.abc import AsyncGenerator
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock
 from uuid import UUID
 
@@ -12,10 +14,11 @@ import httpx
 import httpx2
 import pytest
 from anthropic import Anthropic
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
+from langchain_openai import ChatOpenAI
 from openai import OpenAI
 from pydantic import ValidationError
 
@@ -24,6 +27,7 @@ from app.api import chat_title
 from app.api.chat_state import _ensure_allowed_base_url, _normalize_default_base_url
 from app.api.provider_credentials import resolve_provider_credentials
 from app.data.chat_credentials import upsert_chat_credential
+from app.data.connection import Database
 from app.llms import opencode_go, query_transform, streams
 from app.llms.agents import StreamObservation, _chunk_reasoning
 from app.llms.model_access import (
@@ -45,7 +49,7 @@ from app.llms.provider_credentials import (
 )
 from app.llms.query_modes import QueryTransformMode
 from app.llms.retrieval_result import RetrievedContext
-from app.schemas.chat import ChatSchema
+from app.schemas.chat import ChatSchema, ConversationTurn
 from app.schemas.chat_credentials import ChatCredentialSecret, ChatCredentialUpsert
 from app.schemas.chat_title import ChatTitleSchema
 from app.utils.settings import Settings
@@ -216,7 +220,8 @@ def test_unknown_go_models_are_not_ollama(unknown):
     assert not is_ollama_model_tag(unknown)
     with pytest.raises(ValidationError):
         ChatSchema(
-            messages=[{"role": "user", "content": "test"}], inference_model=unknown
+            messages=[ConversationTurn(role="user", content="test")],
+            inference_model=unknown,
         )
     with pytest.raises(ValueError, match="Unsupported"):
         provider_for_model(unknown)
@@ -314,6 +319,7 @@ def test_go_custom_credential_base_still_requires_exact_allowlist():
     )
     with pytest.raises(HTTPException):
         _ensure_allowed_base_url(payload, Settings(BYOK_ALLOWED_BASE_URLS=""))
+    assert payload.base_url is not None
     _ensure_allowed_base_url(payload, Settings(BYOK_ALLOWED_BASE_URLS=payload.base_url))
     llm = make_llm(
         Model.OPENCODE_GO_CLAUDE_HAIKU_5_5,
@@ -347,7 +353,9 @@ def test_go_saved_credentials_are_isolated_and_revoked_by_allowlist():
             providers=frozenset({"opencode-go", "openai"}),
             settings=settings,
         )
+        assert result is not None
         assert result.opencode_go is None
+        assert result.openai is not None
         assert result.openai.api_key == "openai-user-key"
         await upsert_chat_credential(
             db,
@@ -362,15 +370,17 @@ def test_go_saved_credentials_are_isolated_and_revoked_by_allowlist():
         result = await resolve_provider_credentials(
             db, user_id=USER_ID, providers=frozenset({"opencode-go"}), settings=settings
         )
+        assert result is not None
         assert result.available_providers() == {"opencode-go"}
+        assert result.opencode_go is not None
         assert result.opencode_go.base_url is None
         assert result.opencode_go.api_key == GO_KEY
-        db.credentials[(USER_ID, "opencode-go")]["base_url"] = (
-            "https://unapproved.example/v1"
-        )
+        go_credential = db.credentials[(USER_ID, "opencode-go")]
+        go_credential["base_url"] = "https://unapproved.example/v1"
         result = await resolve_provider_credentials(
             db, user_id=USER_ID, providers=frozenset({"opencode-go"}), settings=settings
         )
+        assert result is not None
         assert result.opencode_go is None
         assert result.rejected_providers == {"opencode-go"}
 
@@ -407,7 +417,7 @@ def test_go_query_and_title_auxiliary_calls_retain_session(monkeypatch):
             ChatTitleSchema(
                 user_id=USER_ID,
                 provider_model=Model.OPENCODE_GO_KIMI_K3,
-                messages=[{"role": "user", "content": "test"}],
+                messages=[ConversationTurn(role="user", content="test")],
             ),
             FakeChatDatabase(),
             Settings(),
@@ -635,6 +645,7 @@ def test_go_migration_is_additive_and_preserves_all_providers():
 
 
 def _stream_fixture(path, upstream):
+    events: list[dict[str, object]]
     if path.endswith("/responses"):
         events = [
             {
@@ -820,11 +831,17 @@ def test_go_chat_request_session_reaches_main_and_retrieval(session, monkeypatch
     payload = ChatSchema(
         user_id=USER_ID,
         inference_model=Model.OPENCODE_GO_GPT_6_LUNA,
-        messages=[{"role": "user", "content": "test"}],
+        messages=[ConversationTurn(role="user", content="test")],
     )
-    request = SimpleNamespace(
-        headers={} if session is None else {"x-conversation-id": session},
-        app=SimpleNamespace(state=SimpleNamespace(settings=Settings())),
+    request_headers = (
+        [] if session is None else [(b"x-conversation-id", session.encode())]
+    )
+    request = Request(
+        {
+            "type": "http",
+            "headers": request_headers,
+            "app": SimpleNamespace(state=SimpleNamespace(settings=Settings())),
+        }
     )
 
     async def run():
@@ -832,7 +849,7 @@ def test_go_chat_request_session_reaches_main_and_retrieval(session, monkeypatch
             [
                 str(chunk)
                 async for chunk in chat_api._chat_response_stream(
-                    payload, request, FakeChatDatabase(), UUID(SESSION)
+                    payload, request, cast(Database, FakeChatDatabase()), UUID(SESSION)
                 )
             ]
         )
@@ -870,11 +887,14 @@ def test_go_missing_user_key_is_a_safe_credential_denial(monkeypatch):
     payload = ChatSchema(
         user_id=USER_ID,
         inference_model=Model.OPENCODE_GO_GPT_6_LUNA,
-        messages=[{"role": "user", "content": "test"}],
+        messages=[ConversationTurn(role="user", content="test")],
     )
-    request = SimpleNamespace(
-        headers={"x-conversation-id": SESSION},
-        app=SimpleNamespace(state=SimpleNamespace(settings=Settings())),
+    request = Request(
+        {
+            "type": "http",
+            "headers": [(b"x-conversation-id", SESSION.encode())],
+            "app": SimpleNamespace(state=SimpleNamespace(settings=Settings())),
+        }
     )
 
     async def run():
@@ -882,7 +902,7 @@ def test_go_missing_user_key_is_a_safe_credential_denial(monkeypatch):
             [
                 str(chunk)
                 async for chunk in chat_api._chat_response_stream(
-                    payload, request, FakeChatDatabase(), UUID(SESSION)
+                    payload, request, cast(Database, FakeChatDatabase()), UUID(SESSION)
                 )
             ]
         )
@@ -933,12 +953,15 @@ def test_go_agent_stream_failure_is_private_and_close_is_preserved(
             conversation_id=SESSION,
             observation=observation,
         )
-        first = await anext(response.body_iterator)
+        iterator = cast(
+            AsyncGenerator[str | bytes | memoryview], response.body_iterator
+        )
+        first = str(await anext(iterator))
         assert "partial" in first
         if outcome == "cancel":
-            await response.body_iterator.aclose()
+            await iterator.aclose()
             return first
-        return first + "".join([str(chunk) async for chunk in response.body_iterator])
+        return first + "".join([str(chunk) async for chunk in iterator])
 
     text = anyio.run(run)
     assert closed == [True]
@@ -962,14 +985,14 @@ def test_go_title_without_session_falls_back_locally(monkeypatch):
         AsyncMock(return_value=LlmProviderCredentials(opencode_go=GO_CREDENTIAL)),
     )
     constructor = AsyncMock()
-    monkeypatch.setattr(opencode_go.ChatOpenAI, "model_validate", constructor)
+    monkeypatch.setattr(ChatOpenAI, "model_validate", constructor)
 
     async def run():
         result = await chat_title.generate_chat_title(
             ChatTitleSchema(
                 user_id=USER_ID,
                 provider_model=Model.OPENCODE_GO_GPT_6_LUNA,
-                messages=[{"role": "user", "content": "local fallback"}],
+                messages=[ConversationTurn(role="user", content="local fallback")],
             ),
             FakeChatDatabase(),
             Settings(),
@@ -1058,17 +1081,17 @@ def test_go_deepseek_auxiliary_wire_explicitly_disables_default_thinking(
             )
             assert result == "OK"
         else:
-            result = await chat_title.generate_chat_title(
+            title_result = await chat_title.generate_chat_title(
                 ChatTitleSchema(
                     user_id=USER_ID,
                     provider_model=model,
-                    messages=[{"role": "user", "content": "Reply with OK."}],
+                    messages=[ConversationTurn(role="user", content="Reply with OK.")],
                 ),
                 FakeChatDatabase(),
                 Settings(),
                 conversation_id=SESSION,
             )
-            assert result.title == "OK"
+            assert title_result.title == "OK"
 
     anyio.run(run)
     assert len(requests) == 1

@@ -126,6 +126,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
       'Google / Gemini',
       'Anthropic',
       'OpenRouter',
+      'OpenCode Go',
       'Ollama',
     ]);
 
