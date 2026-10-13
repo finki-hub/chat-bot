@@ -16,7 +16,7 @@ from app.schemas.chat_credentials import ChatCredentialSecret
 def test_sponsored_go_headers_are_request_scoped_and_not_added_to_byok() -> None:
     with ExitStack() as stack:
         clients: list[ChatOpenAI] = []
-        for session_id in (
+        for conversation_id in (
             "018f0f36-2b1d-7cc0-a50b-5f2d90c91d21",
             "018f0f36-2b1d-7cc0-a50b-5f2d90c91d22",
         ):
@@ -30,14 +30,14 @@ def test_sponsored_go_headers_are_request_scoped_and_not_added_to_byok() -> None
                     api_key="test-sponsored-key",
                     base_url="https://opencode.ai/inference/go/v1",
                 ),
-                sponsored_session_id=session_id,
+                conversation_id=conversation_id,
             )
             assert isinstance(llm, ChatOpenAI)
             clients.append(llm)
             stack.callback(llm.root_client.close)
             headers = llm.root_client.default_headers
             assert headers["User-Agent"] == "finki-hub/1.0"
-            assert headers["x-opencode-session"] == session_id
+            assert headers["x-opencode-session"] == conversation_id
 
         assert clients[0].root_client is not clients[1].root_client
 
@@ -57,7 +57,7 @@ def test_sponsored_go_headers_are_request_scoped_and_not_added_to_byok() -> None
 
 
 @pytest.mark.parametrize(
-    ("session_id", "expected_session"),
+    ("conversation_id", "expected_conversation_id"),
     [
         (
             "018f0f36-2b1d-7cc0-a50b-5f2d90c91d21",
@@ -71,8 +71,8 @@ def test_sponsored_go_headers_are_request_scoped_and_not_added_to_byok() -> None
 )
 def test_go_sdk_sends_headers_on_http_request(
     monkeypatch: pytest.MonkeyPatch,
-    session_id: str,
-    expected_session: str,
+    conversation_id: str,
+    expected_conversation_id: str,
 ) -> None:
     llm = get_openai_llm(
         Model.GPT_6_LUNA,
@@ -84,7 +84,7 @@ def test_go_sdk_sends_headers_on_http_request(
             api_key="test-sponsored-key",
             base_url="https://opencode.ai/inference/go/v1",
         ),
-        sponsored_session_id=session_id,
+        conversation_id=conversation_id,
     )
     requests: list[httpx2.Request] = []
 
@@ -113,7 +113,7 @@ def test_go_sdk_sends_headers_on_http_request(
     assert len(requests) == 1
     request = requests[0]
     assert request.headers["User-Agent"] == "finki-hub/1.0"
-    assert request.headers["x-opencode-session"] == expected_session
+    assert request.headers["x-opencode-session"] == expected_conversation_id
     assert request.url.host == "opencode.ai"
     assert b"x-opencode-session" not in request.content
 
@@ -157,7 +157,7 @@ def test_lookalike_endpoints_do_not_receive_go_headers(base_url: str) -> None:
             api_key="test-provider-key",
             base_url=base_url,
         ),
-        sponsored_session_id="018f0f36-2b1d-7cc0-a50b-5f2d90c91d21",
+        conversation_id="018f0f36-2b1d-7cc0-a50b-5f2d90c91d21",
     )
     try:
         assert "x-opencode-session" not in llm.root_client.default_headers
@@ -171,7 +171,7 @@ def test_go_headers_survive_agent_stream_and_setup_fallback(
     monkeypatch: pytest.MonkeyPatch,
     force_agent_fallback: bool,
 ) -> None:
-    session_id = "018f0f36-2b1d-7cc0-a50b-5f2d90c91d21"
+    conversation_id = "018f0f36-2b1d-7cc0-a50b-5f2d90c91d21"
     requests: list[httpx2.Request] = []
     sse = (
         b'event: response.created\ndata: {"type":"response.created",'
@@ -273,7 +273,7 @@ def test_go_headers_survive_agent_stream_and_setup_fallback(
                 api_key="test-sponsored-key",
                 base_url="https://opencode.ai/inference/go/v1",
             ),
-            sponsored_session_id=session_id,
+            conversation_id=conversation_id,
         )
 
         return [str(chunk) async for chunk in response.body_iterator]
@@ -283,6 +283,6 @@ def test_go_headers_survive_agent_stream_and_setup_fallback(
     assert requests
     assert all(request.headers["User-Agent"] == "finki-hub/1.0" for request in requests)
     assert all(
-        request.headers["x-opencode-session"] == session_id for request in requests
+        request.headers["x-opencode-session"] == conversation_id for request in requests
     )
     assert any("hello" in chunk for chunk in chunks), chunks

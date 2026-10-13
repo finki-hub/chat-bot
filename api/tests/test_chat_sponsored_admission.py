@@ -28,10 +28,17 @@ USER_ID = UUID("00000000-0000-4000-8000-000000000002")
 RESET = datetime(2026, 7, 19, tzinfo=UTC)
 
 
-def _request(current_settings, *, session_id: str | None = None):
+def _request(
+    current_settings,
+    *,
+    conversation_id: str | None = None,
+    legacy_vendor_session_id: str | None = None,
+):
     headers = {"X-Distinct-Id": "test-distinct-id"}
-    if session_id is not None:
-        headers["x-opencode-session"] = session_id
+    if conversation_id is not None:
+        headers["x-conversation-id"] = conversation_id
+    if legacy_vendor_session_id is not None:
+        headers["x-opencode-session"] = legacy_vendor_session_id
     return SimpleNamespace(
         app=SimpleNamespace(state=SimpleNamespace(settings=current_settings)),
         headers=headers,
@@ -87,8 +94,10 @@ async def _run_stream(
     body=_body,
     release_func=None,
     handle_func=None,
+    resolve_func=None,
     inference_model: Model = Model.GPT_6_LUNA,
-    session_id: str | None = None,
+    conversation_id: str | None = None,
+    legacy_vendor_session_id: str | None = None,
 ):
     released: list[tuple[UUID, UUID]] = []
     captured: list[tuple[str, dict[str, object]]] = []
@@ -113,7 +122,11 @@ async def _run_stream(
             effective_transform_mode=QueryTransformMode.REWRITE_HYDE,
         )
 
-    monkeypatch.setattr(chat_api, "resolve_provider_credentials", resolve_credentials)
+    monkeypatch.setattr(
+        chat_api,
+        "resolve_provider_credentials",
+        resolve_credentials if resolve_func is None else resolve_func,
+    )
     monkeypatch.setattr(chat_api, "admit_sponsored_request", admit)
     monkeypatch.setattr(
         chat_api,
@@ -141,7 +154,11 @@ async def _run_stream(
         str(chunk)
         async for chunk in chat_api._chat_response_stream(  # noqa: SLF001
             _payload(inference_model=inference_model),
-            _request(current_settings, session_id=session_id),
+            _request(
+                current_settings,
+                conversation_id=conversation_id,
+                legacy_vendor_session_id=legacy_vendor_session_id,
+            ),
             database,
             response_id,
         )
@@ -199,8 +216,8 @@ async def test_sponsored_request_admits_and_releases_exact_lease(
 
 
 @pytest.mark.anyio
-async def test_sponsored_go_threads_stable_session_before_admission(monkeypatch):
-    session_id = "018f0f36-2b1d-7cc0-a50b-5f2d90c91d21"
+async def test_sponsored_go_threads_conversation_id_before_admission(monkeypatch):
+    conversation_id = "018f0f36-2b1d-7cc0-a50b-5f2d90c91d21"
     handle_kwargs: list[dict[str, object]] = []
     admissions: list[dict[str, object]] = []
 
@@ -220,18 +237,27 @@ async def test_sponsored_go_threads_stable_session_before_admission(monkeypatch)
         user_credentials=credentials(openai=False),
         admit=admit,
         handle_func=handle,
-        session_id=session_id,
+        conversation_id=conversation_id,
     )
 
     assert len(admissions) == 1
-    assert handle_kwargs[0]["sponsored_session_id"] == session_id
+    assert handle_kwargs[0]["conversation_id"] == conversation_id
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("session_id", [None, "not-a-uuid"])
-async def test_invalid_sponsored_go_session_is_rejected_before_quota(
+@pytest.mark.parametrize(
+    ("conversation_id", "legacy_vendor_session_id", "expected_code"),
+    [
+        (None, None, "missing_conversation_id"),
+        (None, "018f0f36-2b1d-7cc0-a50b-5f2d90c91d21", "missing_conversation_id"),
+        ("not-a-uuid", None, "invalid_conversation_id"),
+    ],
+)
+async def test_invalid_sponsored_go_conversation_is_rejected_before_quota(
     monkeypatch,
-    session_id: str | None,
+    conversation_id: str | None,
+    legacy_vendor_session_id: str | None,
+    expected_code: str,
 ):
     admissions: list[dict[str, object]] = []
 
@@ -250,11 +276,43 @@ async def test_invalid_sponsored_go_session_is_rejected_before_quota(
         user_credentials=credentials(openai=False),
         admit=admit,
         handle_func=handle,
-        session_id=session_id,
+        resolve_func=(
+            None
+            if conversation_id is None
+            else lambda *args, **kwargs: pytest.fail(
+                "invalid conversation UUID must be rejected before credential resolution",
+            )
+        ),
+        conversation_id=conversation_id,
+        legacy_vendor_session_id=legacy_vendor_session_id,
     )
 
-    assert _json_events(chunks)[0]["code"] == "missing_session_id"
+    assert _json_events(chunks)[0]["code"] == expected_code
     assert admissions == []
+    assert released == []
+
+
+@pytest.mark.anyio
+async def test_malformed_generic_conversation_id_is_rejected_on_non_go_endpoints(
+    monkeypatch,
+):
+    async def admit(db, **kwargs):
+        raise AssertionError("malformed conversation UUID must not reach quota")
+
+    chunks, released, _, _ = await _run_stream(
+        monkeypatch,
+        current_settings=settings(
+            sponsored_model_base_url="https://provider.example/v1",
+        ),
+        user_credentials=credentials(openai=True),
+        admit=admit,
+        resolve_func=lambda *args, **kwargs: pytest.fail(
+            "malformed conversation UUID must be rejected before credentials",
+        ),
+        conversation_id="invalid-id",
+    )
+
+    assert _json_events(chunks)[0]["code"] == "invalid_conversation_id"
     assert released == []
 
 
@@ -267,7 +325,7 @@ async def test_invalid_sponsored_go_session_is_rejected_before_quota(
         "https://not-opencode.ai/inference/go/v1",
     ],
 )
-async def test_non_go_sponsored_endpoint_does_not_require_session_or_forward_header(
+async def test_non_go_sponsored_endpoint_does_not_require_or_forward_conversation_id(
     monkeypatch,
     base_url: str,
 ):
@@ -289,7 +347,7 @@ async def test_non_go_sponsored_endpoint_does_not_require_session_or_forward_hea
     )
 
     assert any('"text":"answer"' in chunk for chunk in chunks)
-    assert handle_kwargs[0]["sponsored_session_id"] is None
+    assert "conversation_id" not in handle_kwargs[0]
 
 
 @pytest.mark.anyio
@@ -377,12 +435,13 @@ async def test_byok_luna_bypasses_sponsored_admission(monkeypatch):
         user_credentials=credentials(openai=True),
         admit=admit,
         handle_func=handle,
+        conversation_id="018f0f36-2b1d-7cc0-a50b-5f2d90c91d21",
     )
 
     assert any('"text":"answer"' in chunk for chunk in chunks)
     assert released == []
     assert captured[-1][1]["mode"] == "byok"
-    assert handle_kwargs[0]["sponsored_session_id"] is None
+    assert handle_kwargs[0]["conversation_id"] == "018f0f36-2b1d-7cc0-a50b-5f2d90c91d21"
 
 
 @pytest.mark.anyio

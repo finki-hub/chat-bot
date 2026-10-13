@@ -656,6 +656,18 @@ async def _prepare_chat_response_stream(
     settings: Settings = request.app.state.settings
     sponsored_model_id = settings.SPONSORED_MODEL_ID
 
+    supplied_conversation_id = request.headers.get("x-conversation-id")
+    try:
+        conversation_id = (
+            str(UUID(supplied_conversation_id))
+            if (supplied_conversation_id is not None)
+            else None
+        )
+    except ValueError:
+        preparation.capture("denied", "invalid_conversation_id")
+        yield error_event("invalid_conversation_id", "InvalidConversationID")
+        return
+
     history_text = _history_for_retrieval(payload)
     credentials = await resolve_provider_credentials(
         db,
@@ -684,17 +696,14 @@ async def _prepare_chat_response_stream(
         settings,
         user_credential_rejected=user_credential_rejected,
     )
-    sponsored_session_id: str | None = None
-    if inference_resolution.sponsored and is_opencode_go_base_url(
-        settings.SPONSORED_MODEL_BASE_URL
+    if (
+        inference_resolution.sponsored
+        and is_opencode_go_base_url(settings.SPONSORED_MODEL_BASE_URL)
+        and conversation_id is None
     ):
-        supplied_session_id = request.headers.get("x-opencode-session")
-        try:
-            sponsored_session_id = str(UUID(supplied_session_id or ""))
-        except ValueError:
-            preparation.capture("denied", "session_id_required")
-            yield error_event("missing_session_id", "MissingSessionID")
-            return
+        preparation.capture("denied", "missing_conversation_id")
+        yield error_event("missing_conversation_id", "MissingConversationID")
+        return
 
     missing_credential = missing_mandatory_credential(
         credentials,
@@ -934,7 +943,11 @@ async def _prepare_chat_response_stream(
                     db=db,
                     inference_credential=inference_resolution.credential,
                     upstream_model=inference_resolution.upstream_model,
-                    sponsored_session_id=sponsored_session_id,
+                    **(
+                        {"conversation_id": conversation_id}
+                        if conversation_id is not None
+                        else {}
+                    ),
                     max_tokens=(
                         min(payload.max_tokens, inference_resolution.max_output_tokens)
                         if inference_resolution.max_output_tokens is not None
