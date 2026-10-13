@@ -122,6 +122,9 @@ def test_generation_telemetry_emits_content_free_retrieval_aggregates(
     timings.query_transform_fallback_reason = "partial_variants"
     timings.reranker_fallback_reason = "none"
     timings.reranker_invalid_result_count = 2
+    timings.local_faq_recovery_outcome = "matched"
+    timings.local_query_variant_added = True
+    timings.local_rerank_query_used = True
     private_query = "sakam privaten odgovor"
 
     properties = _capture_properties(monkeypatch, private_query, timings)
@@ -139,4 +142,7 @@ def test_generation_telemetry_emits_content_free_retrieval_aggregates(
     assert properties["query_transform_fallback_reason"] == "partial_variants"
     assert properties["reranker_fallback_reason"] == "none"
     assert properties["reranker_invalid_result_count"] == 2
+    assert properties["local_faq_recovery_outcome"] == "matched"
+    assert properties["local_query_variant_added"] is True
+    assert properties["local_rerank_query_used"] is True
     assert private_query not in repr(properties)

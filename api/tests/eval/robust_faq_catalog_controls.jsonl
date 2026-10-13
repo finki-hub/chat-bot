@@ -1,0 +1,6 @@
+# Synthetic catalog safety controls for pure-helper tests only; not live-corpus/GPU benchmark cases.
+# Catalog variants model ambiguity/missing anchors, not claims about actual FAQ rows.
+{"id":"catalog-001","query":"Каде е студентската служба?","titles":["Студентска служба","СТУДЕНТСКА СЛУЖБА"],"expected_recovery":false,"reason":"Distinct catalog titles collide after case normalization."}
+{"id":"catalog-002","query":"Kade e sluzba?","titles":["Студентска служба","Служба"],"expected_recovery":false,"reason":"Short alias and another exact entity cannot silently choose one target."}
+{"id":"catalog-003","query":"Каде е студентската служба?","titles":["Архива","Деканат","Компјутерски центар"],"expected_recovery":false,"reason":"An alias cannot manufacture a missing target title."}
+{"id":"catalog-004","query":"Kade e studentska sluzba na Praven fakultet?","titles":["Студентска служба","Деканат","Компјутерски центар"],"expected_recovery":false,"reason":"Unknown institution modifier cannot be discarded from a complete entity request."}

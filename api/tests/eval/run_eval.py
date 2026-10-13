@@ -47,11 +47,15 @@ from app.data.connection import Database
 from app.data.documents import get_closest_chunks
 from app.data.questions import get_closest_questions, get_matching_questions
 from app.llms.context import (
+    _build_candidates,
     _Candidate,
-    _chunk_candidate,
     _embed_variant,
-    _question_candidate,
     _select_with_source_priority,
+)
+from app.llms.faq_query_recovery_plan import (
+    FaqQueryRecoveryOutcome,
+    FaqQueryRecoveryPlan,
+    plan_faq_query_recovery,
 )
 from app.llms.models import MODEL_DISTANCE_THRESHOLDS, Model
 from app.llms.query_modes import QueryTransformMode
@@ -132,6 +136,10 @@ class Result:
     final: bool = False
     rank: int | None = None
     n_candidates: int = 0
+    candidate_hit: bool = False
+    local_faq_recovery_outcome: FaqQueryRecoveryOutcome = "skipped"
+    local_query_variant_added: bool = False
+    local_rerank_query_used: bool = False
     best_distance: float | None = None
     effective_transform_mode: QueryTransformMode | None = None
     effective_initial_k: int | None = None
@@ -272,6 +280,31 @@ class Aggregate:
         return "\n".join(lines)
 
 
+async def _search_pair(
+    db: Database,
+    embedding: list[float],
+    model: Model,
+    *,
+    limit: int,
+    threshold: float | None = None,
+) -> tuple[list[QuestionSchema], list[ChunkSchema]]:
+    """Keep ANN diagnostic thresholds while draining sibling reads on failure."""
+    faq_task = asyncio.create_task(
+        get_closest_questions(db, embedding, model, limit=limit, threshold=threshold),
+    )
+    chunk_task = asyncio.create_task(
+        get_closest_chunks(db, embedding, model, limit=limit, threshold=threshold),
+    )
+    try:
+        questions, chunks = await asyncio.gather(faq_task, chunk_task)
+    except BaseException:
+        faq_task.cancel()
+        chunk_task.cancel()
+        await asyncio.gather(faq_task, chunk_task, return_exceptions=True)
+        raise
+    return questions, chunks
+
+
 async def evaluate_one(
     db: Database,
     ex: Example,
@@ -290,7 +323,25 @@ async def evaluate_one(
         (variant.text, variant.is_document) for variant in variant_bundle.variants
     ]
     budget = retrieval_budget(variant_bundle.mode, initial_k)
-    ideal_probe_limit = max(ideal_limit, budget.per_query_k)
+    recovery_plan = FaqQueryRecoveryPlan(outcome="skipped")
+    if variant_bundle.mode == QueryTransformMode.RAW:
+        recovery_plan = await plan_faq_query_recovery(db, ex.query)
+    canonical_query = (
+        recovery_plan.recovery.canonical_query
+        if recovery_plan.recovery is not None
+        else None
+    )
+    local_variant_added = (
+        canonical_query is not None
+        and canonical_query.casefold().rstrip("?!. ").split()
+        != ex.query.casefold().rstrip("?!. ").split()
+    )
+    per_query_k = (
+        min(budget.per_query_k, 31)
+        if recovery_plan.outcome == "matched"
+        else budget.per_query_k
+    )
+    ideal_probe_limit = max(ideal_limit, per_query_k)
 
     embeddings = await asyncio.gather(
         *(
@@ -298,25 +349,50 @@ async def evaluate_one(
             for text, is_doc in variants
         ),
     )
+    mandatory_embedding_count = len(embeddings)
+    if local_variant_added and canonical_query is not None:
+        try:
+            canonical_embedding = await _embed_variant(
+                canonical_query,
+                embedding_model,
+                is_document=False,
+            )
+        except Exception:  # ruff: ignore[BLE001] -- same optional canonical-embedding degradation as production
+            local_variant_added = False
+        else:
+            embeddings.append(canonical_embedding)
+
+    # Mandatory searches retain their existing error semantics. Only the extra
+    # local canonical search is optional, as in production.
+    prod_lists = await asyncio.gather(
+        *(
+            _search_pair(db, emb, embedding_model, limit=per_query_k)
+            for emb in embeddings[:mandatory_embedding_count]
+        ),
+    )
+    if local_variant_added:
+        try:
+            canonical_results = await _search_pair(
+                db,
+                embeddings[-1],
+                embedding_model,
+                limit=per_query_k,
+            )
+        except Exception:  # ruff: ignore[BLE001] -- only optional canonical search degrades; cancellation propagates
+            local_variant_added = False
+            embeddings.pop()
+        else:
+            prod_lists.append(canonical_results)
 
     # --- ANN ideal (no threshold) ---
     ideal_lists = await asyncio.gather(
         *(
-            asyncio.gather(
-                get_closest_questions(
-                    db,
-                    emb,
-                    embedding_model,
-                    limit=ideal_probe_limit,
-                    threshold=NO_THRESHOLD,
-                ),
-                get_closest_chunks(
-                    db,
-                    emb,
-                    embedding_model,
-                    limit=ideal_probe_limit,
-                    threshold=NO_THRESHOLD,
-                ),
+            _search_pair(
+                db,
+                emb,
+                embedding_model,
+                limit=ideal_probe_limit,
+                threshold=NO_THRESHOLD,
             )
             for emb in embeddings
         ),
@@ -343,29 +419,10 @@ async def evaluate_one(
                         else min(best_distance, c.distance)
                     )
 
-    # --- ANN prod (real per-model threshold) + build rerank candidate pool ---
-    prod_lists = await asyncio.gather(
-        *(
-            asyncio.gather(
-                get_closest_questions(
-                    db,
-                    emb,
-                    embedding_model,
-                    limit=budget.per_query_k,
-                ),
-                get_closest_chunks(
-                    db,
-                    emb,
-                    embedding_model,
-                    limit=budget.per_query_k,
-                ),
-            )
-            for emb in embeddings
-        ),
-    )
+    # --- Build the production rerank candidate pool ---
     lexical_lists: list[list[QuestionSchema]] = []
     lexical_queries = query_search_variants(ex.query)
-    if lexical_faq_expansion_allowed(
+    if recovery_plan.outcome != "matched" and lexical_faq_expansion_allowed(
         (
             question.distance
             for questions, _chunks in prod_lists
@@ -377,59 +434,44 @@ async def evaluate_one(
         try:
             lexical_lists = await asyncio.gather(
                 *(
-                    get_matching_questions(db, query, limit=budget.per_query_k)
+                    get_matching_questions(db, query, limit=per_query_k)
                     for query in lexical_queries
                 ),
             )
         except PostgresError:
             lexical_lists = []
 
-    seen: set[str] = set()
-    cand_keys: list[str] = []
-    candidates: list[_Candidate] = []
-    cand_rerank: list[str] = []
-    cand_nat: list[NaturalKey] = []
+    natural_by_key: dict[str, NaturalKey] = {}
     ann_prod = False
     for qs, cs in prod_lists:
         for q in qs:
-            cand = _question_candidate(q)
-            if cand.key in seen:
-                continue
-            seen.add(cand.key)
-            cand_keys.append(cand.key)
-            candidates.append(cand)
-            cand_rerank.append(cand.rerank_text)
-            cand_nat.append(question_key(q))
+            natural_by_key[f"Q:{q.id}"] = question_key(q)
             if question_key(q) == want:
                 ann_prod = True
         for ch in cs:
-            cand = _chunk_candidate(ch)
-            if cand.key in seen:
-                continue
-            seen.add(cand.key)
-            cand_keys.append(cand.key)
-            candidates.append(cand)
-            cand_rerank.append(cand.rerank_text)
-            cand_nat.append(chunk_key(ch))
+            natural_by_key[f"C:{ch.id}"] = chunk_key(ch)
             if chunk_key(ch) == want:
                 ann_prod = True
 
     for questions in lexical_lists:
         for question in questions:
-            candidate = _question_candidate(question)
-            if candidate.key in seen:
-                continue
-            seen.add(candidate.key)
-            cand_keys.append(candidate.key)
-            candidates.append(candidate)
-            cand_rerank.append(candidate.rerank_text)
-            cand_nat.append(question_key(question))
+            natural_by_key[f"Q:{question.id}"] = question_key(question)
+    direct_faq = recovery_plan.question if recovery_plan.outcome == "matched" else None
+    if direct_faq is not None:
+        natural_by_key[f"Q:{direct_faq.id}"] = question_key(direct_faq)
+    candidates = _build_candidates(prod_lists, lexical_lists, direct_faq)
+    cand_keys = [candidate.key for candidate in candidates]
+    cand_rerank = [candidate.rerank_text for candidate in candidates]
+    cand_nat = [natural_by_key[key] for key in cand_keys]
 
     final_hit = False
     rank: int | None = None
     if cand_rerank:
         response = await _post_rerank(
-            {"query": variant_bundle.rerank_query, "documents": cand_rerank},
+            {
+                "query": canonical_query or variant_bundle.rerank_query,
+                "documents": cand_rerank,
+            },
         )
         ranked = response.json()["reranked_documents"]
         kept_candidates: list[_Candidate] = []
@@ -460,10 +502,15 @@ async def evaluate_one(
         final=final_hit,
         rank=rank,
         n_candidates=len(cand_keys),
+        candidate_hit=bool(cand_keys) if ex.is_abstain else want in cand_nat,
+        local_faq_recovery_outcome=recovery_plan.outcome,
+        local_query_variant_added=local_variant_added,
+        local_rerank_query_used=recovery_plan.recovery is not None
+        and bool(cand_rerank),
         best_distance=round(best_distance, 4) if best_distance is not None else None,
         effective_transform_mode=variant_bundle.mode,
         effective_initial_k=budget.initial_k,
-        effective_per_query_k=budget.per_query_k,
+        effective_per_query_k=per_query_k,
     )
 
 
@@ -579,6 +626,21 @@ async def main_async(ns: argparse.Namespace) -> int:
                     "ann_prod": r.ann_prod,
                     "final": r.final,
                     "rank": r.rank,
+                    "n_candidates": r.n_candidates
+                    if r.execution_status == "completed"
+                    else None,
+                    "candidate_hit": r.candidate_hit
+                    if r.execution_status == "completed"
+                    else None,
+                    "local_faq_recovery_outcome": r.local_faq_recovery_outcome
+                    if r.execution_status == "completed"
+                    else None,
+                    "local_query_variant_added": r.local_query_variant_added
+                    if r.execution_status == "completed"
+                    else None,
+                    "local_rerank_query_used": r.local_rerank_query_used
+                    if r.execution_status == "completed"
+                    else None,
                     "best_distance": r.best_distance,
                     "effective_transform_mode": (
                         r.effective_transform_mode.value

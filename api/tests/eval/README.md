@@ -24,6 +24,22 @@ Results are broken down by `source` (faq/chunk) and `difficulty` (easy/hard), an
 final-recall miss is printed with a tag (`CEILING-DROP` / `KBUDGET-DROP` / `ANN-MISS` /
 `RERANK-MISS`) so failures are diagnosable, not just counted.
 
+Raw-mode evaluation also uses the production `plan_faq_query_recovery()` and
+candidate builder. A resolved public FAQ can enter through exact-title recovery
+even when dense recall is false. Its actual canonical query is used for optional
+dense expansion and reranking; only the optional canonical search degrades on
+failure, while mandatory-search failures remain execution errors. Successful local
+recovery caps per-query candidates at31, including custom larger initial budgets.
+ANN metrics remain dense-only (including successful canonical expansion), not
+complete hybrid/direct-source recall. New JSON fields `n_candidates`,
+`candidate_hit`, `local_faq_recovery_outcome`, `local_query_variant_added` and
+`local_rerank_query_used` expose that distinction; they are null on execution errors.
+No canonical query text or new private question text is added to legacy JSON.
+
+For the separate focused public38-case production-path replay and negative
+recovery controls, see [robust_faq_README.md](robust_faq_README.md). Its schema and
+retrieval-only release gate are distinct from this legacy harness and the thesis.
+
 ## Dataset — `golden.jsonl`
 
 One JSON object per line. Ground truth is anchored on **stable natural keys** (not row

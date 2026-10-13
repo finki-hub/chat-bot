@@ -12,6 +12,10 @@ from app.data.connection import Database
 from app.data.documents import get_chunks_window, get_closest_chunks
 from app.data.questions import get_closest_questions, get_matching_questions
 from app.llms.embeddings import generate_embeddings
+from app.llms.faq_query_recovery_plan import (
+    FaqQueryRecoveryPlan,
+    plan_faq_query_recovery,
+)
 from app.llms.models import ChatModel, Model
 from app.llms.prompts import CONTEXTUALIZE_SYSTEM_PROMPT
 from app.llms.provider_credentials import (
@@ -46,6 +50,7 @@ from app.utils.timing import (
     RetrievalCandidateMetrics,
     RetrievalPath,
     RetrievalSelectionMetrics,
+    record_local_faq_recovery,
     record_query_transform_reason,
     record_reranker_scores,
     record_retrieval_candidates,
@@ -104,10 +109,21 @@ async def _search_both(
     embedding_model: Model,
     limit: int,
 ) -> tuple[list[QuestionSchema], list[ChunkSchema]]:
-    questions, chunks = await asyncio.gather(
+    question_task = asyncio.create_task(
         get_closest_questions(db, embedding, embedding_model, limit=limit),
+    )
+    chunk_task = asyncio.create_task(
         get_closest_chunks(db, embedding, embedding_model, limit=limit),
     )
+    tasks = (question_task, chunk_task)
+    try:
+        questions, chunks = await asyncio.gather(*tasks)
+    except BaseException:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
     return questions, chunks
 
 
@@ -245,6 +261,7 @@ def _chunk_candidate(c: ChunkSchema) -> _Candidate:
 def _build_candidates(
     search_results: list[tuple[list[QuestionSchema], list[ChunkSchema]]],
     lexical_results: list[list[QuestionSchema]],
+    direct_faq: QuestionSchema | None = None,
 ) -> list[_Candidate]:
     merged: dict[str, _Candidate] = {}
     for questions, chunks in search_results:
@@ -261,6 +278,13 @@ def _build_candidates(
                 merged[candidate.key] = candidate
             elif existing.retrieval_path == "dense":
                 merged[candidate.key] = replace(existing, retrieval_path="hybrid")
+    if direct_faq is not None:
+        candidate = _question_candidate(direct_faq, "lexical")
+        existing = merged.get(candidate.key)
+        if existing is None:
+            merged[candidate.key] = candidate
+        elif existing.retrieval_path == "dense":
+            merged[candidate.key] = replace(existing, retrieval_path="hybrid")
     return list(merged.values())
 
 
@@ -427,7 +451,38 @@ async def get_retrieved_context_with_sources(
         [(variant.kind, len(variant.text)) for variant in variant_bundle.variants],
     )
 
+    local_recovery_plan = FaqQueryRecoveryPlan(outcome="skipped")
+    if variant_bundle.mode == QueryTransformMode.RAW:
+        try:
+            with timed("retrieval.local_faq_recovery"):
+                local_recovery_plan = await plan_faq_query_recovery(db, search_query)
+        except asyncio.CancelledError:
+            original_embedding_task.cancel()
+            await asyncio.gather(original_embedding_task, return_exceptions=True)
+            raise
+    local_canonical_query = (
+        local_recovery_plan.recovery.canonical_query
+        if local_recovery_plan.recovery is not None
+        else None
+    )
+    local_query_variant_added = (
+        local_canonical_query is not None
+        and local_canonical_query.casefold().rstrip("?!. ").split()
+        != search_query.casefold().rstrip("?!. ").split()
+    )
+    local_rerank_query_used = False
+    record_local_faq_recovery(
+        outcome=local_recovery_plan.outcome,
+        query_variant_added=False,
+        rerank_query_used=False,
+    )
+
     budget = retrieval_budget(variant_bundle.mode, initial_k)
+    per_query_k = (
+        min(budget.per_query_k, 31)
+        if local_recovery_plan.outcome == "matched"
+        else budget.per_query_k
+    )
 
     _stage("retrieve")
 
@@ -446,19 +501,71 @@ async def get_retrieved_context_with_sources(
                     for variant in variant_bundle.variants
                 ),
             )
+            if local_query_variant_added and local_canonical_query is not None:
+                try:
+                    canonical_embedding = await _embed_variant(
+                        local_canonical_query,
+                        embedding_model,
+                        is_document=False,
+                        credentials=credentials,
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # ruff: ignore[BLE001] -- optional variant degrades to raw retrieval
+                    local_query_variant_added = False
+                    logger.warning(
+                        "Local FAQ query embedding unavailable error_type=%s",
+                        type(exc).__name__,
+                    )
+                else:
+                    embeddings.append(canonical_embedding)
 
         with timed("retrieval.vector_search"):
-            search_results = await asyncio.gather(
+            # Recovery is intentionally bounded at 2 queries x 2 sources x 31
+            # candidates, plus one exact FAQ row: at most 125 pre-dedup inputs.
+            async def search_canonical_optional(
+                embedding: list[float],
+            ) -> tuple[list[QuestionSchema], list[ChunkSchema]]:
+                try:
+                    return await _search_both(
+                        db,
+                        embedding,
+                        embedding_model,
+                        per_query_k,
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # ruff: ignore[BLE001] -- canonical search is optional
+                    logger.warning(
+                        "Local FAQ canonical search unavailable error_type=%s",
+                        type(exc).__name__,
+                    )
+                    return [], []
+
+            canonical_search_added = local_query_variant_added and len(
+                embeddings
+            ) > len(variant_bundle.variants)
+            search_results: list[
+                tuple[list[QuestionSchema], list[ChunkSchema]]
+            ] = await asyncio.gather(
                 *(
-                    _search_both(db, embedding, embedding_model, budget.per_query_k)
-                    for embedding in embeddings
+                    search_canonical_optional(embedding)
+                    if canonical_search_added and index == len(embeddings) - 1
+                    else _search_both(db, embedding, embedding_model, per_query_k)
+                    for index, embedding in enumerate(embeddings)
                 ),
+            )
+            local_query_variant_added = canonical_search_added
+            record_local_faq_recovery(
+                outcome=local_recovery_plan.outcome,
+                query_variant_added=local_query_variant_added,
+                rerank_query_used=False,
             )
 
         lexical_results: list[list[QuestionSchema]] = []
         lexical_queries = query_search_variants(search_query)
         lexical_search_outcome: LexicalSearchOutcome = "skipped"
-        if lexical_faq_expansion_allowed(
+        if local_recovery_plan.outcome != "matched" and lexical_faq_expansion_allowed(
             (
                 question.distance
                 for questions, _ in search_results
@@ -474,7 +581,7 @@ async def get_retrieved_context_with_sources(
                             get_matching_questions(
                                 db,
                                 lexical_query,
-                                limit=budget.per_query_k,
+                                limit=per_query_k,
                             )
                             for lexical_query in lexical_queries
                         ),
@@ -492,6 +599,9 @@ async def get_retrieved_context_with_sources(
         candidates = _build_candidates(
             search_results,
             lexical_results,
+            local_recovery_plan.question
+            if local_recovery_plan.outcome == "matched"
+            else None,
         )
         dense_faq_candidate_count = sum(
             candidate.source == "faq"
@@ -555,8 +665,21 @@ async def get_retrieved_context_with_sources(
         logger.info("Sending %d candidates to re-ranker...", len(rerank_texts))
 
         with timed("retrieval.rerank"):
+            local_rerank_query_used = local_recovery_plan.recovery is not None
+            record_local_faq_recovery(
+                outcome=local_recovery_plan.outcome,
+                query_variant_added=local_query_variant_added,
+                rerank_query_used=local_rerank_query_used,
+            )
             response = await _post_rerank(
-                {"query": variant_bundle.rerank_query, "documents": rerank_texts},
+                {
+                    "query": (
+                        local_canonical_query
+                        if local_rerank_query_used and local_canonical_query is not None
+                        else variant_bundle.rerank_query
+                    ),
+                    "documents": rerank_texts,
+                },
             )
         ranked, invalid_result_count = _valid_rerank_results(
             response.json(),

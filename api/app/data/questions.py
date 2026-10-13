@@ -53,9 +53,17 @@ async def get_questions_query(db: Database) -> list[QuestionSchema]:
     ]
 
 
-async def get_question_names_query(db: Database) -> list[str]:
-    query = "SELECT name FROM question ORDER BY name ASC"
-    result = await db.fetch(query)
+async def get_question_names_query(
+    db: Database,
+    *,
+    limit: int | None = None,
+) -> list[str]:
+    if limit is None:
+        query = "SELECT name FROM question ORDER BY name ASC"
+        result = await db.fetch(query)
+    else:
+        query = "SELECT name FROM question ORDER BY name ASC LIMIT $1"
+        result = await db.fetch(query, limit)
 
     return [str(row["name"]) for row in result]
 

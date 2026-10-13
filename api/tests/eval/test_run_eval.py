@@ -86,6 +86,11 @@ def test_main_async_json_preserves_legacy_config_and_reports_effective_budget(
     assert payload["results"][0]["effective_initial_k"] == 30
     assert payload["results"][0]["effective_per_query_k"] == 31
     assert payload["results"][0]["cohort"] == "romanized_macedonian"
+    assert payload["results"][0]["n_candidates"] == 0
+    assert payload["results"][0]["candidate_hit"] is False
+    assert payload["results"][0]["local_faq_recovery_outcome"] == "skipped"
+    assert payload["results"][0]["local_query_variant_added"] is False
+    assert payload["results"][0]["local_rerank_query_used"] is False
 
 
 def test_aggregate_report_breaks_down_named_cohorts() -> None:
