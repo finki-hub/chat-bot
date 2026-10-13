@@ -7,12 +7,14 @@ from app.llms.models import (
     GOOGLE_QUERY_TRANSFORM_MODELS,
     OLLAMA_QUERY_TRANSFORM_MODELS,
     OPENAI_QUERY_TRANSFORM_MODELS,
+    OPENCODE_GO_QUERY_TRANSFORM_MODELS,
     OPENROUTER_QUERY_TRANSFORM_MODELS,
     ChatModel,
     Model,
 )
 from app.llms.ollama import transform_query_with_ollama
 from app.llms.openai import transform_query_with_openai
+from app.llms.opencode_go import transform_query_with_opencode_go
 from app.llms.openrouter import transform_query_with_openrouter
 from app.llms.prompts import DEFAULT_QUERY_TRANSFORM_SYSTEM_PROMPT
 from app.llms.provider_credentials import LlmProviderCredentials
@@ -37,6 +39,8 @@ async def transform_query(
     )
 
     if not isinstance(model, Model):
+        if model.startswith("opencode-go:"):
+            raise ValueError("Unsupported OpenCode Go model")
         return await transform_query_with_ollama(
             query,
             model,
@@ -48,6 +52,19 @@ async def transform_query(
         )
 
     match model:
+        case model if model in OPENCODE_GO_QUERY_TRANSFORM_MODELS:
+            return await transform_query_with_opencode_go(
+                query,
+                model,
+                system_prompt=system_prompt,
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_tokens,
+                credential=None if credentials is None else credentials.opencode_go,
+                conversation_id=None
+                if credentials is None
+                else credentials.conversation_id,
+            )
         case model if model in OPENAI_QUERY_TRANSFORM_MODELS:
             return await transform_query_with_openai(
                 query,

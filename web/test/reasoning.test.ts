@@ -23,6 +23,15 @@ describe('isReasoningCapableModel', () => {
       'openrouter:moonshotai/kimi-k3',
       'openrouter:qwen/qwen3.8-max-0902',
       'openrouter:x-ai/grok-4.7',
+      'opencode-go:gpt-6-luna',
+      'opencode-go:grok-4.7',
+      'opencode-go:claude-haiku-5-5',
+      'opencode-go:minimax-m3',
+      'opencode-go:qwen3.8-max',
+      'opencode-go:glm-5.3',
+      'opencode-go:kimi-k3',
+      'opencode-go:deepseek-v4.1-flash',
+      'opencode-go:deepseek-v4-pro',
       'qwen3:30b-a3b-thinking-2507-q4_K_M',
       'qwen3:14b-q4_K_M',
     ];
@@ -36,6 +45,8 @@ describe('isReasoningCapableModel', () => {
     const incapable = [
       'qwen3:30b-a3b-instruct-2507-q4_K_M',
       'gpt-7-unknown',
+      'opencode-go:unvalidated-model',
+      'opencode-go:gpt-6-luna-custom',
       'BAAI/bge-m3',
     ];
 
@@ -51,6 +62,9 @@ describe('mandatory reasoning policy', () => {
     'openrouter:z-ai/glm-5.3',
     'openrouter:qwen/qwen3.8-max-0902',
     'openrouter:x-ai/grok-4.7',
+    'opencode-go:grok-4.7',
+    'opencode-go:glm-5.3',
+    'opencode-go:kimi-k3',
   ];
 
   it('identifies only models whose provider cannot disable reasoning', () => {

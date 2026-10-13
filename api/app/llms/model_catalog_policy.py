@@ -7,6 +7,7 @@ from app.llms.models import (
     CHAT_MODEL_ORDER,
     CHAT_MODELS,
     OPENAI_NO_SAMPLING_MODELS,
+    OPENCODE_GO_NO_SAMPLING_MODELS,
     REASONING_CAPABLE_MODELS,
     Model,
 )
@@ -32,7 +33,11 @@ def _policy(
         execution=ExecutionPolicy(
             reasoning=model in REASONING_CAPABLE_MODELS,
             sampling=model
-            not in (ANTHROPIC_NO_SAMPLING_MODELS | OPENAI_NO_SAMPLING_MODELS),
+            not in (
+                ANTHROPIC_NO_SAMPLING_MODELS
+                | OPENAI_NO_SAMPLING_MODELS
+                | OPENCODE_GO_NO_SAMPLING_MODELS
+            ),
             tool_call=provider != "ollama",
             structured_output=provider != "ollama",
         ),
@@ -81,6 +86,17 @@ MODEL_CATALOG: Final[tuple[CatalogPolicy, ...]] = (
     _policy(Model.OPENROUTER_QWEN3_8_27B, "openrouter", "Qwen3.8 27B"),
     _policy(Model.OPENROUTER_MINIMAX_M3, "openrouter", "MiniMax M3"),
     _policy(Model.OPENROUTER_GROK_4_7, "openrouter", "Grok 4.7"),
+    _policy(Model.OPENCODE_GO_GPT_6_LUNA, "opencode-go", "GPT-6 Luna"),
+    _policy(Model.OPENCODE_GO_GROK_4_7, "opencode-go", "Grok 4.7"),
+    _policy(Model.OPENCODE_GO_CLAUDE_HAIKU_5_5, "opencode-go", "Claude Haiku 5.5"),
+    _policy(Model.OPENCODE_GO_MINIMAX_M3, "opencode-go", "MiniMax M3"),
+    _policy(Model.OPENCODE_GO_QWEN3_8_MAX, "opencode-go", "Qwen3.8 Max"),
+    _policy(Model.OPENCODE_GO_GLM_5_3, "opencode-go", "GLM-5.3"),
+    _policy(Model.OPENCODE_GO_KIMI_K3, "opencode-go", "Kimi K3"),
+    _policy(
+        Model.OPENCODE_GO_DEEPSEEK_V4_1_FLASH, "opencode-go", "DeepSeek V4.1 Flash"
+    ),
+    _policy(Model.OPENCODE_GO_DEEPSEEK_V4_PRO, "opencode-go", "DeepSeek V4 Pro"),
 )
 
 _CATALOG_MODELS = tuple(policy.model for policy in MODEL_CATALOG)

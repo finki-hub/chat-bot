@@ -12,7 +12,10 @@ from app.llms.provider_credentials import (
     ProviderName,
     provider_for_model,
 )
-from app.schemas.chat_credentials import ChatCredentialSecret
+from app.schemas.chat_credentials import (
+    ChatCredentialSecret,
+    normalize_opencode_go_base_url,
+)
 from app.utils.settings import Settings
 
 CredentialStage = Literal["inference", "embeddings"]
@@ -22,6 +25,7 @@ _PROVIDERS: tuple[ProviderName, ...] = (
     "anthropic",
     "ollama",
     "openrouter",
+    "opencode-go",
 )
 
 
@@ -71,12 +75,14 @@ async def resolve_provider_credentials(
         providers,
         settings,
     )
+    opencode_go = await _get_secret(db, user_id, "opencode-go", providers, settings)
     return LlmProviderCredentials(
         openai=openai,
         google=google,
         anthropic=anthropic,
         ollama=ollama,
         openrouter=openrouter,
+        opencode_go=opencode_go,
         rejected_providers=frozenset(
             provider
             for provider, credential in (
@@ -85,6 +91,7 @@ async def resolve_provider_credentials(
                 ("anthropic", anthropic),
                 ("ollama", ollama),
                 ("openrouter", openrouter),
+                ("opencode-go", opencode_go),
             )
             if provider in providers
             and provider in stored_providers
@@ -114,6 +121,8 @@ async def _stored_providers(
                 providers.add("ollama")
             case "openrouter":
                 providers.add("openrouter")
+            case "opencode-go":
+                providers.add("opencode-go")
             case _:
                 continue
     return providers
@@ -134,6 +143,10 @@ async def _get_secret(
         provider=provider,
         settings=settings,
     )
+    if credential is not None and provider == "opencode-go":
+        credential = credential.model_copy(
+            update={"base_url": normalize_opencode_go_base_url(credential.base_url)},
+        )
     if credential is None or credential.base_url is None:
         return credential
     if settings.is_byok_base_url_allowed(credential.base_url):

@@ -135,8 +135,8 @@ def _metadata_for_policy(
     if provider.id != policy.provider:
         return None
     remote_model_id = (
-        policy.model.value.removeprefix("openrouter:")
-        if policy.provider == "openrouter"
+        policy.model.value.removeprefix(f"{policy.provider}:")
+        if policy.provider in {"openrouter", "opencode-go"}
         else policy.model.value
     )
     raw_model = provider.models.get(remote_model_id)

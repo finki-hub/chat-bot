@@ -22,6 +22,7 @@ const PROVIDERS = [
   'ollama',
   'openai',
   'openrouter',
+  'opencode-go',
 ] as const;
 const PROVIDER_SET: ReadonlySet<string> = new Set(PROVIDERS);
 

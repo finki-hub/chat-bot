@@ -55,6 +55,15 @@ EXPECTED_CHAT_IDS = (
     "openrouter:qwen/qwen3.8-27b",
     "openrouter:minimax/minimax-m3",
     "openrouter:x-ai/grok-4.7",
+    "opencode-go:gpt-6-luna",
+    "opencode-go:grok-4.7",
+    "opencode-go:claude-haiku-5-5",
+    "opencode-go:minimax-m3",
+    "opencode-go:qwen3.8-max",
+    "opencode-go:glm-5.3",
+    "opencode-go:kimi-k3",
+    "opencode-go:deepseek-v4.1-flash",
+    "opencode-go:deepseek-v4-pro",
 )
 
 

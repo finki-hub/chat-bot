@@ -126,6 +126,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
       'Google / Gemini',
       'Anthropic',
       'OpenRouter',
+      'OpenCode Go',
       'Ollama',
     ]);
 
@@ -156,6 +157,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
       'Google / Gemini',
       'Anthropic',
       'OpenRouter',
+      'OpenCode Go',
       'Ollama',
     ]);
     await expect(page.getByTestId('model-tier-label')).toHaveCount(0);

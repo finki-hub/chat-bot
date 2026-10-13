@@ -178,6 +178,7 @@ export const POST = async (req: Request): Promise<Response> => {
   try {
     const userId = await getAuthenticatedChatUserId();
     const { payload } = result;
+    const conversationId = req.headers.get('x-conversation-id');
 
     let upstream: Response;
 
@@ -187,6 +188,9 @@ export const POST = async (req: Request): Promise<Response> => {
         headers: {
           'content-type': 'application/json',
           'x-api-key': CHAT_API_KEY,
+          ...(conversationId !== null && {
+            'x-conversation-id': conversationId,
+          }),
         },
         method: 'POST',
         signal: req.signal,

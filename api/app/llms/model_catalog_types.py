@@ -4,7 +4,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.sponsored_access import ModelAvailability, SponsoredQuotaSnapshot
 
-CatalogProvider = Literal["openai", "google", "anthropic", "ollama", "openrouter"]
+CatalogProvider = Literal[
+    "openai", "google", "anthropic", "ollama", "openrouter", "opencode-go"
+]
 CatalogSource = Literal["live", "stale", "snapshot"]
 
 

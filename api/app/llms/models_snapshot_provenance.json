@@ -2,7 +2,13 @@
   "source": "https://models.dev/api.json",
   "refreshed_at": "2026-10-11T10:18:03Z",
   "sha256": "0f6e03cfb79703b466f51fd591484d58103c0f8125650502de2511ba391424cc",
-  "snapshot_sha256": "33682802cbcb1a5badc588ffe270ea4c2b934d49cb9ea00cbe78e346fba9339a",
+  "snapshot_sha256": "5177aa97bf9ae5575a8ae7c32652d4526a869d81aa9401599690e6de87e2c398",
+  "opencode_go_metadata": {
+    "source": "https://models.dev/api.json (opencode-go provider)",
+    "verified_at": "2026-10-13",
+    "endpoint_and_pricing_source": "https://opencode.ai/v2/docs/console/go",
+    "note": "Nine additive Go entries only. Prices are standard/off-peak estimates, not subscription billing or long-context/peak rates. Existing provider metadata is unchanged."
+  },
   "remote_coverage": {
     "complete": false,
     "missing": [

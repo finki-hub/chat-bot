@@ -36,6 +36,7 @@ from app.schemas.chat_credentials import (
     ChatCredentialProvider,
     ChatCredentialPublic,
     ChatCredentialUpsert,
+    normalize_opencode_go_base_url,
 )
 from app.schemas.chat_persistence import (
     ChatConversation,
@@ -80,6 +81,10 @@ def _not_found() -> HTTPException:
 
 
 def _normalize_default_base_url(payload: ChatCredentialUpsert) -> ChatCredentialUpsert:
+    if payload.provider == "opencode-go":
+        return payload.model_copy(
+            update={"base_url": normalize_opencode_go_base_url(payload.base_url)},
+        )
     if (
         payload.provider == "ollama"
         and payload.base_url is not None

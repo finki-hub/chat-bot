@@ -53,6 +53,17 @@ describe('parseCredentials', () => {
 
     expect(parseCredentials([credential])).toStrictEqual([credential]);
   });
+
+  it('keeps complete OpenCode Go credential records', () => {
+    const credential = {
+      [BASE_URL_FIELD]: null,
+      [HAS_API_KEY_FIELD]: true,
+      provider: 'opencode-go',
+      [USER_ID_FIELD]: '00000000-0000-4000-8000-000000000001',
+    };
+
+    expect(parseCredentials([credential])).toStrictEqual([credential]);
+  });
 });
 
 describe('credential provider configuration', () => {
@@ -66,6 +77,7 @@ describe('credential provider configuration', () => {
       google: 'https://aistudio.google.com/api-keys',
       ollama: 'https://ollama.com/settings/keys',
       openai: 'https://platform.openai.com/api-keys',
+      'opencode-go': 'https://opencode.ai/console',
       openrouter: 'https://openrouter.ai/settings/keys',
     });
   });

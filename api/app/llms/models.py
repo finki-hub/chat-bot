@@ -33,6 +33,16 @@ class Model(StrEnum):
     OPENROUTER_MINIMAX_M3 = "openrouter:minimax/minimax-m3"
     OPENROUTER_GROK_4_7 = "openrouter:x-ai/grok-4.7"
 
+    OPENCODE_GO_GPT_6_LUNA = "opencode-go:gpt-6-luna"
+    OPENCODE_GO_GROK_4_7 = "opencode-go:grok-4.7"
+    OPENCODE_GO_CLAUDE_HAIKU_5_5 = "opencode-go:claude-haiku-5-5"
+    OPENCODE_GO_MINIMAX_M3 = "opencode-go:minimax-m3"
+    OPENCODE_GO_QWEN3_8_MAX = "opencode-go:qwen3.8-max"
+    OPENCODE_GO_GLM_5_3 = "opencode-go:glm-5.3"
+    OPENCODE_GO_KIMI_K3 = "opencode-go:kimi-k3"
+    OPENCODE_GO_DEEPSEEK_V4_1_FLASH = "opencode-go:deepseek-v4.1-flash"
+    OPENCODE_GO_DEEPSEEK_V4_PRO = "opencode-go:deepseek-v4-pro"
+
     QWEN3_30B_THINKING = "qwen3:30b-a3b-thinking-2507-q4_K_M"
     QWEN3_30B_INSTRUCT = "qwen3:30b-a3b-instruct-2507-q4_K_M"
     QWEN3_14B = "qwen3:14b-q4_K_M"
@@ -81,6 +91,15 @@ CHAT_MODEL_ORDER: Final[tuple[Model, ...]] = (
     Model.OPENROUTER_QWEN3_8_27B,
     Model.OPENROUTER_MINIMAX_M3,
     Model.OPENROUTER_GROK_4_7,
+    Model.OPENCODE_GO_GPT_6_LUNA,
+    Model.OPENCODE_GO_GROK_4_7,
+    Model.OPENCODE_GO_CLAUDE_HAIKU_5_5,
+    Model.OPENCODE_GO_MINIMAX_M3,
+    Model.OPENCODE_GO_QWEN3_8_MAX,
+    Model.OPENCODE_GO_GLM_5_3,
+    Model.OPENCODE_GO_KIMI_K3,
+    Model.OPENCODE_GO_DEEPSEEK_V4_1_FLASH,
+    Model.OPENCODE_GO_DEEPSEEK_V4_PRO,
 )
 CHAT_MODELS: Final[frozenset[Model]] = frozenset(CHAT_MODEL_ORDER)
 type ChatModel = Model | str
@@ -135,12 +154,30 @@ OPENROUTER_MANDATORY_REASONING_MODELS: Final[frozenset[Model]] = frozenset(
     },
 )
 OLLAMA_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset()
+OPENCODE_GO_QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
+    model for model in CHAT_MODEL_ORDER if model.value.startswith("opencode-go:")
+)
+OPENCODE_GO_NO_SAMPLING_MODELS: Final[frozenset[Model]] = frozenset(
+    {
+        Model.OPENCODE_GO_GPT_6_LUNA,
+        Model.OPENCODE_GO_CLAUDE_HAIKU_5_5,
+        Model.OPENCODE_GO_KIMI_K3,
+    }
+)
+OPENCODE_GO_MANDATORY_REASONING_MODELS: Final[frozenset[Model]] = frozenset(
+    {
+        Model.OPENCODE_GO_GROK_4_7,
+        Model.OPENCODE_GO_GLM_5_3,
+        Model.OPENCODE_GO_KIMI_K3,
+    },
+)
 QUERY_TRANSFORM_MODELS: Final[frozenset[Model]] = frozenset(
     {
         *OPENAI_QUERY_TRANSFORM_MODELS,
         *GOOGLE_QUERY_TRANSFORM_MODELS,
         *ANTHROPIC_QUERY_TRANSFORM_MODELS,
         *OPENROUTER_QUERY_TRANSFORM_MODELS,
+        *OPENCODE_GO_QUERY_TRANSFORM_MODELS,
         *OLLAMA_QUERY_TRANSFORM_MODELS,
     },
 )
@@ -161,6 +198,7 @@ REASONING_CAPABLE_MODELS: Final[frozenset[Model]] = frozenset(
         Model.CLAUDE_SONNET_5_5,
         Model.CLAUDE_HAIKU_5_5,
         *OPENROUTER_QUERY_TRANSFORM_MODELS,
+        *OPENCODE_GO_QUERY_TRANSFORM_MODELS,
     },
 )
 OPENAI_NO_SAMPLING_MODELS: Final[frozenset[Model]] = frozenset(
@@ -233,7 +271,7 @@ def is_bge_m3_lifecycle_model(model: Model) -> bool:
 
 def is_ollama_model_tag(value: str) -> bool:
     return (
-        not value.startswith("openrouter:")
+        not value.startswith(("openrouter:", "opencode-go:"))
         and _OLLAMA_MODEL_TAG_PATTERN.fullmatch(value) is not None
     )
 

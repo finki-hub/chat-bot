@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator, AsyncIterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
@@ -100,6 +100,7 @@ _CREDENTIAL_PROVIDER_LABELS = {
     "anthropic": "Anthropic",
     "ollama": "Ollama",
     "openrouter": "OpenRouter",
+    "opencode-go": "OpenCode Go",
 }
 
 
@@ -669,6 +670,13 @@ async def _prepare_chat_response_stream(
         return
 
     history_text = _history_for_retrieval(payload)
+    if conversation_id is None and "opencode-go" in credential_providers_for_models(
+        payload.inference_model,
+        payload.query_transform_model,
+    ):
+        preparation.capture("denied", "missing_conversation_id")
+        yield error_event("missing_conversation_id", "MissingConversationID")
+        return
     credentials = await resolve_provider_credentials(
         db,
         user_id=payload.user_id,
@@ -679,6 +687,8 @@ async def _prepare_chat_response_stream(
         ),
         settings=settings,
     )
+    if credentials is not None and conversation_id is not None:
+        credentials = replace(credentials, conversation_id=conversation_id)
     inference_provider = provider_for_model(payload.inference_model)
     user_inference_credential = (
         None
@@ -1087,7 +1097,7 @@ async def list_models(
         db,
         user_id=user_id,
         providers=frozenset(
-            {"openai", "google", "anthropic", "ollama", "openrouter"},
+            {"openai", "google", "anthropic", "ollama", "openrouter", "opencode-go"},
         ),
         settings=settings,
     )

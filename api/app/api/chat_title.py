@@ -1,7 +1,9 @@
+from dataclasses import replace
 from html import escape
 from typing import Final
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.api.provider_credentials import (
     credential_providers_for_models,
@@ -68,6 +70,8 @@ async def generate_chat_title(
     payload: ChatTitleSchema,
     db: ChatCredentialDatabase | None = None,
     settings: Settings | None = None,
+    *,
+    conversation_id: str | None = None,
 ) -> ChatTitleResponse:
     candidate_models: tuple[ChatModel, ...]
     if payload.query_transform_model is not None:
@@ -78,7 +82,7 @@ async def generate_chat_title(
         provider = provider_for_model(payload.provider_model)
         candidate_models = (
             (payload.provider_model,)
-            if provider == "openrouter"
+            if provider in {"openrouter", "opencode-go"}
             else tuple(
                 model
                 for model in _TITLE_MODELS_BY_COST
@@ -100,6 +104,8 @@ async def generate_chat_title(
             providers=credential_providers_for_models(*candidate_models),
             settings=settings,
         )
+    if credentials is not None and conversation_id is not None:
+        credentials = replace(credentials, conversation_id=conversation_id)
     selected_model = next(
         (
             model
@@ -142,4 +148,17 @@ async def chat_title(
     request: Request,
     db: ChatCredentialDatabase = db_dep,
 ) -> ChatTitleResponse:
-    return await generate_chat_title(payload, db, request.app.state.settings)
+    supplied_id = request.headers.get("x-conversation-id")
+    try:
+        conversation_id = None if supplied_id is None else str(UUID(supplied_id))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Invalid conversation ID",
+        ) from exc
+    return await generate_chat_title(
+        payload,
+        db,
+        request.app.state.settings,
+        **({"conversation_id": conversation_id} if conversation_id is not None else {}),
+    )

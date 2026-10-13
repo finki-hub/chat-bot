@@ -135,6 +135,7 @@ export const messages = {
   'settings.provider.google': 'Google / Gemini',
   'settings.provider.ollama': 'Ollama',
   'settings.provider.openai': 'OpenAI',
+  'settings.provider.opencodeGo': 'OpenCode Go',
   'settings.provider.openrouter': 'OpenRouter',
   'settings.replaceCredential':
     'Внеси нов клуч само ако сакаш да\u{00A0}го\u{00A0}замениш\u{00A0}зачуваниот.',

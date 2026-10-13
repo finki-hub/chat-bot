@@ -23,7 +23,7 @@ def _remote_payload(
             policy.provider,
             {"id": policy.provider, "name": policy.provider, "models": {}},
         )
-        model_id = policy.model.value.removeprefix("openrouter:")
+        model_id = policy.model.value.removeprefix(f"{policy.provider}:")
         model: dict[str, object] = {"id": model_id, "name": policy.display_name}
         model.update(overrides.get(policy.model.value, {}))
         models = provider["models"]

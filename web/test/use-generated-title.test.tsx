@@ -8,6 +8,7 @@ import type { SaveChatConversationInput } from '@/lib/transport';
 import { useGeneratedTitle } from '@/lib/use-generated-title';
 
 type GenerateChatTitle = (input: {
+  readonly conversationId: string;
   readonly messages: readonly MyUIMessage[];
   readonly providerModel?: string;
 }) => Promise<null | string>;
@@ -25,8 +26,10 @@ const MODEL_ID = 'claude-sonnet-5-5';
 const OLD_TITLE = 'Old title';
 
 vi.mock('@/lib/chat-title', () => ({
-  generateChatTitle: (input: { readonly messages: readonly MyUIMessage[] }) =>
-    generateChatTitle(input),
+  generateChatTitle: (input: {
+    readonly conversationId: string;
+    readonly messages: readonly MyUIMessage[];
+  }) => generateChatTitle(input),
 }));
 
 vi.mock('@/lib/transport', () => ({
@@ -71,6 +74,7 @@ test('requests a generated title without coupling it to the active chat model', 
   });
 
   expect(generateChatTitle).toHaveBeenCalledWith({
+    conversationId: CONVERSATION_ID,
     messages,
     providerModel: MODEL_ID,
   });
