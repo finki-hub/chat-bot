@@ -41,7 +41,6 @@ def _request(current_settings, *, session_id: str | None = None):
 def _payload(
     user_id: UUID | None = USER_ID,
     inference_model: Model = Model.GPT_6_LUNA,
-    session_id: str | None = None,
 ):
     query_transform_model = (
         Model.GEMINI_3_8_FLASH
