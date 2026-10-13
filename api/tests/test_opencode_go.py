@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
 import anyio
@@ -236,6 +236,12 @@ def test_go_reasoning_uses_protocol_specific_supported_shapes(model):
         if model == Model.OPENCODE_GO_CLAUDE_HAIKU_5_5:
             assert payload["thinking"] == {"type": "adaptive", "display": "summarized"}
             assert payload["output_config"]["effort"] == "medium"
+        elif model == Model.OPENCODE_GO_MINIMAX_M3:
+            assert payload["thinking"] == {"type": "adaptive"}
+            # SDK versions may route sampling through extra_body internally;
+            # the emitted-wire tests below verify the actual top-level body.
+            assert llm.top_p == 0.8
+            assert llm.temperature == 0.2
         else:
             assert payload["thinking"] == {"type": "enabled", "budget_tokens": 4096}
             assert "temperature" not in payload
@@ -1100,3 +1106,216 @@ def test_go_deepseek_auxiliary_wire_explicitly_disables_default_thinking(
     assert wire["max_completion_tokens"] == (128 if auxiliary == "query" else 32)
     assert requests[0].headers["x-opencode-session"] == SESSION
     assert requests[0].headers["user-agent"] == "finki-hub/1.0"
+
+
+def _messages_sdk_wire_payload(model, max_tokens, *, reasoning, top_p=0.95):
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        return httpx2.Response(
+            200,
+            json={
+                "id": "msg_test",
+                "type": "message",
+                "role": "assistant",
+                "model": model.value.removeprefix("opencode-go:"),
+                "content": [{"type": "text", "text": "OK"}],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            },
+        )
+
+    llm = opencode_go.get_opencode_go_llm(
+        model,
+        0.2,
+        top_p,
+        max_tokens,
+        reasoning=reasoning,
+        credential=GO_CREDENTIAL,
+        conversation_id=SESSION,
+    )
+    assert isinstance(llm, ChatAnthropic)
+    assert llm.model_kwargs == {}
+    llm.streaming = False
+    with httpx2.Client(transport=httpx2.MockTransport(handle)) as http_client:
+        llm.__dict__["_client"] = Anthropic(
+            **llm._client_params, http_client=http_client
+        )
+        assert llm.invoke([HumanMessage(content="test")]).text == "OK"
+    assert len(requests) == 1
+    assert str(requests[0].url) == "https://opencode.ai/inference/go/v1/messages"
+    assert requests[0].headers["x-opencode-session"] == SESSION
+    assert requests[0].headers["user-agent"] == "finki-hub/1.0"
+    payload = json.loads(requests[0].content)
+    assert payload["model"] == model.value.removeprefix("opencode-go:")
+    assert payload["max_tokens"] == max_tokens
+    assert "reasoning" not in payload
+    assert "reasoning_effort" not in payload
+    return payload
+
+
+@pytest.mark.parametrize("max_tokens", [128, 1024, 1025])
+@pytest.mark.parametrize("top_p", [0.1, 0.95])
+@pytest.mark.parametrize("reasoning", [False, True])
+def test_go_minimax_sdk_wire_adaptive_thinking_and_sampling(
+    max_tokens, top_p, reasoning
+):
+    model = Model.OPENCODE_GO_MINIMAX_M3
+    payload = ChatSchema(
+        inference_model=model,
+        reasoning=reasoning,
+        max_tokens=max_tokens,
+        messages=[ConversationTurn(role="user", content="test")],
+        top_p=top_p,
+    )
+    assert payload.reasoning is reasoning
+    wire = _messages_sdk_wire_payload(
+        model, max_tokens, reasoning=reasoning, top_p=payload.top_p
+    )
+    assert wire["thinking"] == {"type": "adaptive" if reasoning else "disabled"}
+    assert wire["top_p"] == top_p
+    assert wire["temperature"] == 0.2
+    assert "output_config" not in wire
+
+
+@pytest.mark.parametrize("max_tokens", [128, 1024])
+def test_go_qwen_incompatible_reasoning_budget_rejected_before_sdk(
+    max_tokens, monkeypatch
+):
+    model = Model.OPENCODE_GO_QWEN3_8_MAX
+    constructor = Mock()
+    monkeypatch.setattr(ChatAnthropic, "model_validate", constructor)
+    with pytest.raises(ValidationError, match="requires max_tokens greater than 1024"):
+        ChatSchema(
+            inference_model=model,
+            reasoning=True,
+            max_tokens=max_tokens,
+            messages=[ConversationTurn(role="user", content="test")],
+        )
+    with pytest.raises(ValueError, match="requires max_tokens greater than 1024"):
+        opencode_go.get_opencode_go_llm(
+            model,
+            0.2,
+            0.95,
+            max_tokens,
+            reasoning=True,
+            credential=GO_CREDENTIAL,
+            conversation_id=SESSION,
+        )
+    constructor.assert_not_called()
+
+
+def test_go_qwen_valid_reasoning_budget_sdk_wire_is_unchanged():
+    model = Model.OPENCODE_GO_QWEN3_8_MAX
+    payload = ChatSchema(
+        inference_model=model,
+        reasoning=True,
+        max_tokens=1025,
+        messages=[ConversationTurn(role="user", content="test")],
+    )
+    wire = _messages_sdk_wire_payload(
+        model, payload.max_tokens, reasoning=payload.reasoning
+    )
+    assert wire["thinking"] == {"type": "enabled", "budget_tokens": 1024}
+    assert "temperature" not in wire
+    assert "top_p" not in wire
+    assert "output_config" not in wire
+
+
+@pytest.mark.parametrize("max_tokens", [128, 1024, 1025])
+@pytest.mark.parametrize(
+    "model", [Model.OPENCODE_GO_QWEN3_8_MAX, Model.OPENCODE_GO_CLAUDE_HAIKU_5_5]
+)
+def test_go_other_messages_off_small_budgets_keep_model_specific_knobs(
+    model, max_tokens
+):
+    payload = ChatSchema(
+        inference_model=model,
+        reasoning=False,
+        max_tokens=max_tokens,
+        messages=[ConversationTurn(role="user", content="test")],
+    )
+    wire = _messages_sdk_wire_payload(
+        model, payload.max_tokens, reasoning=payload.reasoning, top_p=0.1
+    )
+    assert wire["thinking"] == {"type": "disabled"}
+    assert "top_p" not in wire
+    if model == Model.OPENCODE_GO_CLAUDE_HAIKU_5_5:
+        assert "temperature" not in wire
+        assert wire["output_config"]["effort"] == "medium"
+    else:
+        assert wire["temperature"] == 0.2
+        assert "output_config" not in wire
+
+
+@pytest.mark.parametrize("max_tokens", [128, 1024, 1025])
+def test_go_haiku_adaptive_small_budgets_unchanged(max_tokens):
+    wire = _messages_sdk_wire_payload(
+        Model.OPENCODE_GO_CLAUDE_HAIKU_5_5, max_tokens, reasoning=True
+    )
+    assert wire["thinking"] == {"type": "adaptive", "display": "summarized"}
+    assert wire["output_config"]["effort"] == "medium"
+    assert "temperature" not in wire
+    assert "top_p" not in wire
+
+
+@pytest.mark.parametrize(
+    "model", [Model.OPENCODE_GO_MINIMAX_M3, Model.OPENCODE_GO_QWEN3_8_MAX]
+)
+@pytest.mark.parametrize("auxiliary", ["query", "title"])
+def test_go_messages_auxiliary_low_budget_off_sdk_wire(model, auxiliary, monkeypatch):
+    requests = []
+
+    async def send(client, request, **kwargs):
+        requests.append(request)
+        return httpx2.Response(
+            200,
+            request=request,
+            content=_stream_fixture(
+                request.url.path, model.value.removeprefix("opencode-go:")
+            ),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    monkeypatch.setattr(httpx2.AsyncClient, "send", send)
+    credentials = LlmProviderCredentials(
+        opencode_go=GO_CREDENTIAL, conversation_id=SESSION
+    )
+    monkeypatch.setattr(
+        chat_title, "resolve_provider_credentials", AsyncMock(return_value=credentials)
+    )
+
+    async def run():
+        if auxiliary == "query":
+            result = await query_transform.transform_query(
+                "test",
+                model,
+                temperature=0,
+                top_p=0.1,
+                max_tokens=128,
+                credentials=credentials,
+            )
+            assert result == "answer"
+        else:
+            title_result = await chat_title.generate_chat_title(
+                ChatTitleSchema(
+                    user_id=USER_ID,
+                    provider_model=model,
+                    messages=[ConversationTurn(role="user", content="test")],
+                ),
+                FakeChatDatabase(),
+                Settings(),
+                conversation_id=SESSION,
+            )
+            assert title_result.title == "answer"
+
+    anyio.run(run)
+    assert len(requests) == 1
+    wire = json.loads(requests[0].content)
+    assert wire["thinking"] == {"type": "disabled"}
+    assert wire["max_tokens"] == (128 if auxiliary == "query" else 32)
+    if model == Model.OPENCODE_GO_MINIMAX_M3:
+        assert wire["top_p"] == (0.1 if auxiliary == "query" else 1.0)
+    else:
+        assert "top_p" not in wire

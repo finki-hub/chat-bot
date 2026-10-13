@@ -26,6 +26,16 @@ off setting explicitly sends `reasoning_effort: none` (omission would enable
 default high thinking). An explicit off request for Grok 4.7, GLM-5.3 or Kimi K3
 maps to low effort, not disabled thinking. Messages models explicitly
 disable thinking and GPT-6 Luna uses `reasoning.effort: none` when off.
+MiniMax M3 sends `thinking.type: adaptive` when reasoning is requested and
+`disabled` when off, forwarding its supported `top_p` and `temperature` on both
+paths. Adaptive thinking accepts small positive output budgets without silently
+switching off; thinking counts toward `max_tokens`, so an exhausted budget may
+return no answer text. Qwen3.8 Max retains enabled thinking with a bounded budget
+of `min(4096, max_tokens - 1)` and requires `max_tokens > 1024` when reasoning is
+requested. Both chat-schema validation and the direct client factory reject
+incompatible Qwen reasoning budgets rather than downgrading the request.
+Haiku adaptive thinking is unchanged; off-mode query/title calls still accept
+small budgets and do not receive unsupported generic Messages sampling knobs.
 Apply additive migration `0012_allow_opencode_go_chat_credentials.sql`.
 Sponsored access, default models, retrieval, and embeddings are unchanged.
 
@@ -42,10 +52,19 @@ closed cleanly, and a two-request tool round returned preserved reasoning with a
 nonempty final answer. This smoke test does not establish every model/tool flow
 or verify hidden reasoning from absence of a visible trace.
 
+Follow-up MiniMax live validation on 2026-10-14 used a small combinatorics prompt:
+adaptive/on (`max_tokens=2048`, `top_p=0.95`) returned visible thinking and an
+answer; disabled/off (`max_tokens=128`, `top_p=0.1`) returned an answer without
+a thinking block. Both SDK-emitted requests asserted the configured sampling
+values. This verifies request forwarding and observed thinking behavior, not
+the statistical effect of changing `top_p`.
+
 Thinking contracts: [DeepSeek](https://api-docs.deepseek.com/api/create-chat-completion),
 [Grok](https://docs.x.ai/developers/model-capabilities/text/reasoning),
 [GLM](https://docs.z.ai/guides/capabilities/thinking-mode), and
 [Kimi K3](https://platform.kimi.ai/docs/guide/kimi-k3-quickstart).
+MiniMax's model-specific Messages contract:
+<https://platform.minimax.io/docs/api-reference/text-anthropic-api>.
 
 ## Retrieval fields
 

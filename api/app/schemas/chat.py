@@ -151,6 +151,18 @@ class ChatSchema(BaseModel):
             self.query_transform_model = self.inference_model
         return self
 
+    @model_validator(mode="after")
+    def _qwen_reasoning_budget_must_fit(self) -> Self:
+        if (
+            self.inference_model == Model.OPENCODE_GO_QWEN3_8_MAX
+            and self.reasoning
+            and self.max_tokens <= 1024
+        ):
+            raise ValueError(
+                "OpenCode Go Qwen reasoning requires max_tokens greater than 1024"
+            )
+        return self
+
     @field_validator("messages")
     @classmethod
     def _must_end_with_user(

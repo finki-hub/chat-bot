@@ -146,6 +146,10 @@ def get_opencode_go_llm(
         raise ValueError("Unsupported OpenCode Go model")
     if not conversation_id:
         raise ValueError("OpenCode Go requires a conversation ID")
+    if model == Model.OPENCODE_GO_QWEN3_8_MAX and reasoning and max_tokens <= 1024:
+        raise ValueError(
+            "OpenCode Go Qwen reasoning requires max_tokens greater than 1024"
+        )
     headers = {"User-Agent": "finki-hub/1.0", "x-opencode-session": conversation_id}
     base_url = (credential.base_url or OPENCODE_GO_DEFAULT_BASE_URL).rstrip("/")
     # Store one OpenAI-compatible base. Anthropic appends /v1/messages itself.
@@ -164,8 +168,8 @@ def get_opencode_go_llm(
     else:
         options["temperature"] = None
     if model in _MESSAGES_MODELS:
-        # Haiku's native policy is adaptive; Qwen and MiniMax expose the standard
-        # Messages thinking toggle. Never send OpenRouter's reasoning envelope.
+        # Messages compatibility does not imply identical model-specific knobs.
+        # Never send OpenRouter's reasoning envelope.
         if model == Model.OPENCODE_GO_CLAUDE_HAIKU_5_5:
             options["thinking"] = (
                 {"type": "adaptive", "display": "summarized"}
@@ -173,7 +177,13 @@ def get_opencode_go_llm(
                 else {"type": "disabled"}
             )
             options["effort"] = "medium"
-        elif reasoning and max_tokens > 1024:
+        elif model == Model.OPENCODE_GO_MINIMAX_M3:
+            # https://platform.minimax.io/docs/api-reference/text-anthropic-api
+            # M3 uses adaptive (not enabled/budget_tokens) and supports both
+            # temperature and top_p, including when thinking is requested.
+            options["thinking"] = {"type": "adaptive" if reasoning else "disabled"}
+            options["top_p"] = top_p
+        elif reasoning:
             options["thinking"] = {
                 "type": "enabled",
                 "budget_tokens": min(4096, max_tokens - 1),
