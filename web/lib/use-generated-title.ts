@@ -36,6 +36,7 @@ export const useGeneratedTitle = ({
       setGeneratingTitleId(id);
       try {
         const title = await generateChatTitle({
+          conversationId: id,
           messages: titleMessages,
           providerModel: modelRef.current,
         });

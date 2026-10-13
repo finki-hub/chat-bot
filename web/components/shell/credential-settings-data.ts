@@ -41,6 +41,11 @@ export const PROVIDERS = [
     labelKey: 'settings.provider.openrouter',
     provider: 'openrouter',
   },
+  {
+    keyUrl: 'https://opencode.ai/console',
+    labelKey: 'settings.provider.opencodeGo',
+    provider: 'opencode-go',
+  },
 ] as const satisfies readonly ProviderConfig[];
 
 export const EMPTY_FORMS = {
@@ -48,6 +53,7 @@ export const EMPTY_FORMS = {
   google: { apiKey: '', baseUrl: '' },
   ollama: { apiKey: '', baseUrl: '' },
   openai: { apiKey: '', baseUrl: '' },
+  'opencode-go': { apiKey: '', baseUrl: '' },
   openrouter: { apiKey: '', baseUrl: '' },
 } satisfies Record<ChatCredentialProvider, ProviderForm>;
 

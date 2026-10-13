@@ -58,7 +58,7 @@ def test_models_endpoint_overlays_user_and_sponsored_capacity(
         settings: Settings,
     ) -> LlmProviderCredentials:
         assert providers == frozenset(
-            {"openai", "google", "anthropic", "ollama", "openrouter"},
+            {"openai", "google", "anthropic", "ollama", "openrouter", "opencode-go"},
         )
         assert settings.SPONSORED_MODEL_ENABLED
         return LlmProviderCredentials(
@@ -135,7 +135,7 @@ def test_models_endpoint_marks_openrouter_models_byok_with_saved_key(
         settings: Settings,
     ) -> LlmProviderCredentials:
         assert providers == frozenset(
-            {"openai", "google", "anthropic", "ollama", "openrouter"},
+            {"openai", "google", "anthropic", "ollama", "openrouter", "opencode-go"},
         )
         return credentials(openai=False, openrouter=True)
 

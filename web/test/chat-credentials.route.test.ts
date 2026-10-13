@@ -87,6 +87,7 @@ vi.mock('@/lib/chat-state-client', () => {
 });
 
 const USER_ID = '00000000-0000-4000-8000-000000000001';
+const OPENCODE_GO_PROVIDER = 'opencode-go';
 
 const jsonRequest = (body: unknown): Request =>
   new Request('https://localhost/api/chat/credentials', {
@@ -221,6 +222,31 @@ describe('/api/chat/credentials', () => {
     });
   });
 
+  it('upserts an OpenCode Go key for the authenticated user', async () => {
+    const credential: ChatCredentialPublic = {
+      base_url: null,
+      has_api_key: true,
+      provider: OPENCODE_GO_PROVIDER,
+      user_id: USER_ID,
+    };
+    stateClientMock.upsertCredential.mockResolvedValueOnce(credential);
+    const { PUT } = await import('@/app/api/chat/credentials/route');
+
+    const response = await PUT(
+      jsonRequest({
+        api_key: 'opencode-go-user-key',
+        provider: OPENCODE_GO_PROVIDER,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(stateClientMock.upsertCredential).toHaveBeenCalledWith({
+      apiKey: 'opencode-go-user-key',
+      provider: OPENCODE_GO_PROVIDER,
+      userId: USER_ID,
+    });
+  });
+
   it('returns a JSON error without authentication or state access for an invalid credential payload', async () => {
     getAuthenticatedChatUserIdMock.mockClear();
     stateClientMock.upsertCredential.mockClear();
@@ -288,6 +314,22 @@ describe('/api/chat/credentials', () => {
     expect(response.status).toBe(204);
     expect(stateClientMock.deleteCredential).toHaveBeenCalledWith({
       provider: 'openrouter',
+      userId: USER_ID,
+    });
+  });
+
+  it('deletes OpenCode Go credentials for the authenticated chat user', async () => {
+    stateClientMock.deleteCredential.mockResolvedValueOnce(undefined);
+    const { DELETE } =
+      await import('@/app/api/chat/credentials/[provider]/route');
+
+    const response = await DELETE(new Request('https://localhost'), {
+      params: Promise.resolve({ provider: OPENCODE_GO_PROVIDER }),
+    });
+
+    expect(response.status).toBe(204);
+    expect(stateClientMock.deleteCredential).toHaveBeenCalledWith({
+      provider: OPENCODE_GO_PROVIDER,
       userId: USER_ID,
     });
   });

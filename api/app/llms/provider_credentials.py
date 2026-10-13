@@ -6,13 +6,16 @@ from app.llms.models import (
     GOOGLE_QUERY_TRANSFORM_MODELS,
     OLLAMA_QUERY_TRANSFORM_MODELS,
     OPENAI_QUERY_TRANSFORM_MODELS,
+    OPENCODE_GO_QUERY_TRANSFORM_MODELS,
     OPENROUTER_QUERY_TRANSFORM_MODELS,
     ChatModel,
     Model,
 )
 from app.schemas.chat_credentials import ChatCredentialSecret
 
-ProviderName = Literal["openai", "google", "anthropic", "ollama", "openrouter"]
+ProviderName = Literal[
+    "openai", "google", "anthropic", "ollama", "openrouter", "opencode-go"
+]
 
 
 class ProviderCredentialRequiredError(RuntimeError):
@@ -32,6 +35,8 @@ def require_provider_credential(
 
 def provider_for_model(model: ChatModel) -> ProviderName | None:
     if not isinstance(model, Model):
+        if model.startswith("opencode-go:"):
+            raise ValueError("Unsupported OpenCode Go model")
         return "ollama"
     if model in OPENAI_QUERY_TRANSFORM_MODELS or model == Model.TEXT_EMBEDDING_3_LARGE:
         return "openai"
@@ -41,6 +46,8 @@ def provider_for_model(model: ChatModel) -> ProviderName | None:
         return "anthropic"
     if model in OPENROUTER_QUERY_TRANSFORM_MODELS:
         return "openrouter"
+    if model in OPENCODE_GO_QUERY_TRANSFORM_MODELS:
+        return "opencode-go"
     if model in OLLAMA_QUERY_TRANSFORM_MODELS or model == Model.BGE_M3:
         return "ollama"
     return None
@@ -53,6 +60,8 @@ class LlmProviderCredentials:
     anthropic: ChatCredentialSecret | None = None
     ollama: ChatCredentialSecret | None = None
     openrouter: ChatCredentialSecret | None = None
+    opencode_go: ChatCredentialSecret | None = None
+    conversation_id: str | None = None
     rejected_providers: frozenset[ProviderName] = frozenset()
 
     def available_providers(self) -> frozenset[ProviderName]:
@@ -62,6 +71,7 @@ class LlmProviderCredentials:
             "anthropic",
             "ollama",
             "openrouter",
+            "opencode-go",
         )
         return frozenset(
             provider
@@ -81,6 +91,8 @@ class LlmProviderCredentials:
                 return self.ollama
             case "openrouter":
                 return self.openrouter
+            case "opencode-go":
+                return self.opencode_go
             case unreachable:
                 assert_never(unreachable)
         raise AssertionError(f"Unhandled provider: {provider}")

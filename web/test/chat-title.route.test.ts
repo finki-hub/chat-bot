@@ -14,6 +14,7 @@ const { getAuthenticatedChatUserIdMock } = vi.hoisted(() => ({
 
 const API_USER_ID = 'api-user-1';
 const CLAUDE_MODEL = 'claude-sonnet-5-5';
+const CONVERSATION_ID = '00000000-0000-4000-8000-000000000123';
 
 vi.mock('@/lib/env', () => ({
   API_BASE_URL: 'https://api:8880',
@@ -34,10 +35,15 @@ vi.mock('@/lib/authenticated-chat-user', () => {
   };
 });
 
-const jsonRequest = (body: unknown): Request =>
+const jsonRequest = (body: unknown, conversationId?: string): Request =>
   new Request('https://localhost/api/chat/title', {
     body: JSON.stringify(body),
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      ...(conversationId !== undefined && {
+        'x-conversation-id': conversationId,
+      }),
+    },
     method: 'POST',
   });
 
@@ -78,7 +84,7 @@ describe('POST /api/chat/title', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await postTitle(jsonRequest(payload));
+    const res = await postTitle(jsonRequest(payload, CONVERSATION_ID));
 
     expect(fetchMock).toHaveBeenCalledOnce();
 
@@ -90,6 +96,9 @@ describe('POST /api/chat/title', () => {
       'application/json',
     );
     expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');
+    expect(new Headers(init.headers).get('x-conversation-id')).toBe(
+      CONVERSATION_ID,
+    );
     expect(JSON.parse(init.body as string)).toStrictEqual({
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
       // eslint-disable-next-line camelcase -- snake_case mirrors the Python API wire contract

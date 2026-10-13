@@ -11,8 +11,19 @@ ChatCredentialProvider = Literal[
     "anthropic",
     "ollama",
     "openrouter",
+    "opencode-go",
 ]
 OLLAMA_DEFAULT_BASE_URL: Final = "https://ollama.com"
+OPENCODE_GO_DEFAULT_BASE_URL: Final = "https://opencode.ai/inference/go/v1"
+
+
+def normalize_opencode_go_base_url(value: str | None) -> str | None:
+    if value is not None and value.rstrip("/") in {
+        OPENCODE_GO_DEFAULT_BASE_URL,
+        OPENCODE_GO_DEFAULT_BASE_URL.removesuffix("/v1"),
+    }:
+        return None
+    return value
 
 
 class ChatCredentialUpsert(BaseModel):

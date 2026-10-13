@@ -21,6 +21,7 @@ from app.llms.models import (
     ANTHROPIC_NO_SAMPLING_MODELS,
     CHAT_MODELS,
     OPENAI_NO_SAMPLING_MODELS,
+    OPENCODE_GO_NO_SAMPLING_MODELS,
 )
 
 SNAPSHOT_PATH = Path(__file__).parents[1] / "app" / "llms" / "models_snapshot.json"
@@ -50,6 +51,15 @@ EXPECTED_IDS = [
     "openrouter:qwen/qwen3.8-27b",
     "openrouter:minimax/minimax-m3",
     "openrouter:x-ai/grok-4.7",
+    "opencode-go:gpt-6-luna",
+    "opencode-go:grok-4.7",
+    "opencode-go:claude-haiku-5-5",
+    "opencode-go:minimax-m3",
+    "opencode-go:qwen3.8-max",
+    "opencode-go:glm-5.3",
+    "opencode-go:kimi-k3",
+    "opencode-go:deepseek-v4.1-flash",
+    "opencode-go:deepseek-v4-pro",
 ]
 
 
@@ -112,6 +122,7 @@ def test_static_catalog_has_exact_order_and_providers_without_tiers() -> None:
         "openrouter",
         "openrouter",
         "openrouter",
+        *["opencode-go"] * 9,
     ]
     assert all(not hasattr(entry, "tier") for entry in MODEL_CATALOG)
 
@@ -128,6 +139,7 @@ def test_unsupported_provider_sampling_is_not_advertised() -> None:
     models_without_sampling = {
         *ANTHROPIC_NO_SAMPLING_MODELS,
         *OPENAI_NO_SAMPLING_MODELS,
+        *OPENCODE_GO_NO_SAMPLING_MODELS,
     }
 
     assert all(not policies[model].sampling for model in models_without_sampling)

@@ -59,6 +59,15 @@ const EXPECTED_CURATED_IDS = [
   'openrouter:qwen/qwen3.8-27b',
   'openrouter:minimax/minimax-m3',
   'openrouter:x-ai/grok-4.7',
+  'opencode-go:gpt-6-luna',
+  'opencode-go:grok-4.7',
+  'opencode-go:claude-haiku-5-5',
+  'opencode-go:minimax-m3',
+  'opencode-go:qwen3.8-max',
+  'opencode-go:glm-5.3',
+  'opencode-go:kimi-k3',
+  'opencode-go:deepseek-v4.1-flash',
+  'opencode-go:deepseek-v4-pro',
   'qwen3:30b-a3b-thinking-2507-q4_K_M',
   'qwen3:30b-a3b-instruct-2507-q4_K_M',
   'qwen3:14b-q4_K_M',
@@ -110,7 +119,7 @@ describe('parseModelCatalog', () => {
     expect(Object.keys(CURATED_MODEL_DESCRIPTORS)).toStrictEqual(
       EXPECTED_CURATED_IDS,
     );
-    expect(Object.keys(CURATED_MODEL_DESCRIPTORS)).toHaveLength(24);
+    expect(Object.keys(CURATED_MODEL_DESCRIPTORS)).toHaveLength(33);
     expect(Object.keys(CURATED_MODEL_DESCRIPTORS).slice(-3)).toStrictEqual([
       'qwen3:30b-a3b-thinking-2507-q4_K_M',
       'qwen3:30b-a3b-instruct-2507-q4_K_M',
@@ -240,6 +249,19 @@ describe('parseModelCatalog', () => {
     expect(parseModelCatalog([unknown]).models).toStrictEqual([
       descriptor(unknown, 'acme'),
     ]);
+  });
+
+  it('keeps OpenCode Go wire IDs grouped as OpenCode Go, not Ollama', () => {
+    expect(
+      parseModelCatalog(['opencode-go:deepseek-v4.1-flash']).models,
+    ).toStrictEqual([
+      {
+        id: 'opencode-go:deepseek-v4.1-flash',
+        name: 'DeepSeek V4.1 Flash',
+        provider: 'opencode-go',
+      },
+    ]);
+    expect(providerLabel('opencode-go')).toBe('OpenCode Go');
   });
 
   it('preserves all backend-provided ids from mixed legacy catalogs', () => {
@@ -434,6 +456,15 @@ describe('model access predicates', () => {
     expect(isModelAvailable(legacy, openAiCredentials)).toBe(true);
     expect(isModelAvailable(legacy, noCredentials)).toBe(false);
     expect(isSponsoredModel(legacy)).toBe(false);
+  });
+
+  it('requires an OpenCode Go key for curated models and never treats them as sponsored', () => {
+    const model = descriptor('opencode-go:gpt-6-luna', 'opencode-go');
+
+    expect(isModelAvailable(model, noCredentials)).toBe(false);
+
+    expect(isModelAvailable(model, new Set(['opencode-go']))).toBe(true);
+    expect(isSponsoredModel(model)).toBe(false);
   });
 
   it.each(['sponsored', 'both'] as const)(

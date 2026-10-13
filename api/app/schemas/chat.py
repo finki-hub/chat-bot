@@ -143,7 +143,10 @@ class ChatSchema(BaseModel):
         if (
             "query_transform_model" not in self.model_fields_set
             and isinstance(self.inference_model, Model)
-            and self.inference_model in OPENROUTER_QUERY_TRANSFORM_MODELS
+            and (
+                self.inference_model in OPENROUTER_QUERY_TRANSFORM_MODELS
+                or self.inference_model.value.startswith("opencode-go:")
+            )
         ):
             self.query_transform_model = self.inference_model
         return self

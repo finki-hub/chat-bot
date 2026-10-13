@@ -10,12 +10,14 @@ import type {
 import { t, type TKey } from '@/lib/i18n';
 
 /* eslint-disable camelcase -- catalog fields mirror the Python wire contract. */
+/* eslint-disable sonarjs/no-duplicate-string -- provider wire id is repeated across catalog entries. */
 
 const PROVIDER_LABEL_KEYS: Record<CatalogProvider, TKey> = {
   anthropic: 'settings.provider.anthropic',
   google: 'settings.provider.google',
   ollama: 'settings.provider.ollama',
   openai: 'settings.provider.openai',
+  'opencode-go': 'settings.provider.opencodeGo',
   openrouter: 'settings.provider.openrouter',
 };
 
@@ -24,6 +26,7 @@ const CATALOG_PROVIDERS = [
   'google',
   'ollama',
   'openai',
+  'opencode-go',
   'openrouter',
 ] as const;
 const API_CATALOG_SOURCES = ['live', 'snapshot', 'stale'] as const;
@@ -64,6 +67,15 @@ const CURATED_MODEL_DATA = [
   ['openrouter:qwen/qwen3.8-27b', 'Qwen3.8 27B', 'openrouter'],
   ['openrouter:minimax/minimax-m3', 'MiniMax M3', 'openrouter'],
   ['openrouter:x-ai/grok-4.7', 'Grok 4.7', 'openrouter'],
+  ['opencode-go:gpt-6-luna', 'GPT-6 Luna', 'opencode-go'],
+  ['opencode-go:grok-4.7', 'Grok 4.7', 'opencode-go'],
+  ['opencode-go:claude-haiku-5-5', 'Claude Haiku 5.5', 'opencode-go'],
+  ['opencode-go:minimax-m3', 'MiniMax M3', 'opencode-go'],
+  ['opencode-go:qwen3.8-max', 'Qwen3.8 Max', 'opencode-go'],
+  ['opencode-go:glm-5.3', 'GLM-5.3', 'opencode-go'],
+  ['opencode-go:kimi-k3', 'Kimi K3', 'opencode-go'],
+  ['opencode-go:deepseek-v4.1-flash', 'DeepSeek V4.1 Flash', 'opencode-go'],
+  ['opencode-go:deepseek-v4-pro', 'DeepSeek V4 Pro', 'opencode-go'],
   ['qwen3:30b-a3b-thinking-2507-q4_K_M', 'Qwen3 30B Thinking', 'ollama'],
   ['qwen3:30b-a3b-instruct-2507-q4_K_M', 'Qwen3 30B Instruct', 'ollama'],
   ['qwen3:14b-q4_K_M', 'Qwen3 14B', 'ollama'],
@@ -79,6 +91,7 @@ export const CURATED_MODEL_DESCRIPTORS: Readonly<
 );
 
 const PROVIDER_PREFIXES: ReadonlyArray<readonly [string, CatalogProvider]> = [
+  ['opencode-go:', 'opencode-go'],
   ['openrouter:', 'openrouter'],
   ['gpt', 'openai'],
   ['text-embedding', 'openai'],
@@ -283,3 +296,4 @@ export const providerLabel = (provider: string): string =>
   isCatalogProvider(provider) ? t(PROVIDER_LABEL_KEYS[provider]) : provider;
 
 /* eslint-enable camelcase -- end wire-contract fields. */
+/* eslint-enable sonarjs/no-duplicate-string -- provider wire id repetition applies only to this catalog. */

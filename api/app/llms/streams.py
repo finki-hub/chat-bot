@@ -8,6 +8,8 @@ from app.llms.anthropic import stream_anthropic_agent_response
 from app.llms.google import stream_google_agent_response
 from app.llms.models import (
     ANTHROPIC_MANDATORY_REASONING_MODELS,
+    OPENCODE_GO_MANDATORY_REASONING_MODELS,
+    OPENCODE_GO_QUERY_TRANSFORM_MODELS,
     REASONING_CAPABLE_MODELS,
     ChatModel,
     Model,
@@ -15,6 +17,7 @@ from app.llms.models import (
 )
 from app.llms.ollama import stream_ollama_agent_response
 from app.llms.openai import stream_openai_agent_response
+from app.llms.opencode_go import stream_opencode_go_agent_response
 from app.llms.openrouter import stream_openrouter_agent_response
 from app.schemas.chat import ChatInterface
 from app.schemas.chat_credentials import ChatCredentialSecret
@@ -55,13 +58,19 @@ async def stream_response_with_agent(
     reasoning = (
         isinstance(model, Model)
         and model in REASONING_CAPABLE_MODELS
-        and (reasoning or model in ANTHROPIC_MANDATORY_REASONING_MODELS)
+        and (
+            reasoning
+            or model in ANTHROPIC_MANDATORY_REASONING_MODELS
+            or model in OPENCODE_GO_MANDATORY_REASONING_MODELS
+        )
     )
 
     if observation is not None:
         observation.model = model_id(model)
 
     if not isinstance(model, Model):
+        if model.startswith("opencode-go:"):
+            raise ValueError("Unsupported OpenCode Go model")
         _tag_provider(observation, "ollama")
         return await stream_ollama_agent_response(
             user_prompt,
@@ -77,6 +86,21 @@ async def stream_response_with_agent(
         )
 
     match model:
+        case model if model in OPENCODE_GO_QUERY_TRANSFORM_MODELS:
+            _tag_provider(observation, "opencode-go")
+            return await stream_opencode_go_agent_response(
+                user_prompt,
+                model,
+                system_prompt=system_prompt,
+                history=history,
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_tokens,
+                reasoning=reasoning,
+                observation=observation,
+                credential=credential,
+                conversation_id=conversation_id,
+            )
         case Model.QWEN3_30B_THINKING | Model.QWEN3_30B_INSTRUCT | Model.QWEN3_14B:
             _tag_provider(observation, "ollama")
             return await stream_ollama_agent_response(
