@@ -20,8 +20,13 @@ from app.llms.provider_credentials import ProviderName, provider_for_model
 _API_KEY_DEFAULT: Final[str] = "your_api_key_here"
 _MCP_API_KEY_DEFAULT: Final[str] = "SystemPass"
 _CREDENTIAL_ENCRYPTION_KEY_DEFAULT: Final[str] = "your_byok_encryption_key_here"
+OPENCODE_GO_BASE_URL: Final[str] = "https://opencode.ai/inference/go/v1"
 McpTransport = Literal["streamable_http", "sse"]
 NonBlankString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
+def is_opencode_go_base_url(base_url: str | None) -> bool:
+    return base_url == OPENCODE_GO_BASE_URL
 
 
 def _is_insecure_secret(value: str, default: str) -> bool:
@@ -170,6 +175,12 @@ class Settings(BaseSettings):
             raise ValueError(msg) from None
         if model not in CURATED_CHAT_MODELS:
             msg = "SPONSORED_MODEL_ID must be a fixed catalog chat model"
+            raise ValueError(msg)
+        if (
+            is_opencode_go_base_url(self.SPONSORED_MODEL_BASE_URL)
+            and self.SPONSORED_MODEL_PROVIDER != "openai"
+        ):
+            msg = "SPONSORED_MODEL_PROVIDER must be openai for the OpenCode Go endpoint"
             raise ValueError(msg)
         if not self.SPONSORED_MODEL_ENABLED:
             return self

@@ -31,6 +31,7 @@ async def handle_chat(
     db: Database | None = None,
     inference_credential: ChatCredentialSecret | None = None,
     upstream_model: str | None = None,
+    sponsored_session_id: str | None = None,
     max_tokens: int | None = None,
 ) -> StreamingResponse:
     """
@@ -72,4 +73,5 @@ async def handle_chat(
             interface=payload.interface,
             credential=inference_credential,
             upstream_model=upstream_model,
+            sponsored_session_id=sponsored_session_id,
         )

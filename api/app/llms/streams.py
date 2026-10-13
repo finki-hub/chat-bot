@@ -41,6 +41,7 @@ async def stream_response_with_agent(
     interface: ChatInterface,
     credential: ChatCredentialSecret | None = None,
     upstream_model: str | None = None,
+    sponsored_session_id: str | None = None,
 ) -> StreamingResponse:
     logger.info(
         "Streaming response with agent for user prompt length: '%d' "
@@ -112,6 +113,11 @@ async def stream_response_with_agent(
                 observation=observation,
                 credential=credential,
                 upstream_model=upstream_model,
+                **(
+                    {"sponsored_session_id": sponsored_session_id}
+                    if sponsored_session_id is not None
+                    else {}
+                ),
             )
 
         case (

@@ -5,6 +5,7 @@ import type { ChatRequestBody } from '@/lib/api-types';
 import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
 
 type UpstreamChatRequest = {
+  readonly conversationId: string;
   readonly payload: ChatRequestBody & { readonly user_id: string };
   readonly posthogDistinctId: string | undefined;
   readonly posthogSessionId: string | undefined;
@@ -14,6 +15,7 @@ type UpstreamChatRequest = {
 };
 
 export const requestUpstreamChatStream = async ({
+  conversationId,
   payload,
   posthogDistinctId,
   posthogSessionId,
@@ -30,6 +32,7 @@ export const requestUpstreamChatStream = async ({
         posthogDistinctId !== undefined && posthogDistinctId.length > 0
           ? posthogDistinctId
           : userId,
+      'x-opencode-session': conversationId,
       ...(posthogSessionId !== undefined &&
         posthogSessionId.length > 0 && {
           'X-PostHog-Session-Id': posthogSessionId,

@@ -28,10 +28,13 @@ USER_ID = UUID("00000000-0000-4000-8000-000000000002")
 RESET = datetime(2026, 7, 19, tzinfo=UTC)
 
 
-def _request(current_settings):
+def _request(current_settings, *, session_id: str | None = None):
+    headers = {"X-Distinct-Id": "test-distinct-id"}
+    if session_id is not None:
+        headers["x-opencode-session"] = session_id
     return SimpleNamespace(
         app=SimpleNamespace(state=SimpleNamespace(settings=current_settings)),
-        headers={"X-Distinct-Id": "test-distinct-id"},
+        headers=headers,
     )
 
 
@@ -85,6 +88,7 @@ async def _run_stream(
     release_func=None,
     handle_func=None,
     inference_model: Model = Model.GPT_6_LUNA,
+    session_id: str | None = None,
 ):
     released: list[tuple[UUID, UUID]] = []
     captured: list[tuple[str, dict[str, object]]] = []
@@ -137,7 +141,7 @@ async def _run_stream(
         str(chunk)
         async for chunk in chat_api._chat_response_stream(  # noqa: SLF001
             _payload(inference_model=inference_model),
-            _request(current_settings),
+            _request(current_settings, session_id=session_id),
             database,
             response_id,
         )
@@ -192,6 +196,100 @@ async def test_sponsored_request_admits_and_releases_exact_lease(
         "test-distinct-id",
     }
     assert captured[-1][1]["input_tokens"] == 0
+
+
+@pytest.mark.anyio
+async def test_sponsored_go_threads_stable_session_before_admission(monkeypatch):
+    session_id = "018f0f36-2b1d-7cc0-a50b-5f2d90c91d21"
+    handle_kwargs: list[dict[str, object]] = []
+    admissions: list[dict[str, object]] = []
+
+    async def admit(db, **kwargs):
+        admissions.append(kwargs)
+        return _admission(kwargs["request_id"])
+
+    async def handle(*args, **kwargs):
+        handle_kwargs.append(kwargs)
+        return StreamingResponse(_body(), media_type="text/event-stream")
+
+    await _run_stream(
+        monkeypatch,
+        current_settings=settings(
+            sponsored_model_base_url="https://opencode.ai/inference/go/v1",
+        ),
+        user_credentials=credentials(openai=False),
+        admit=admit,
+        handle_func=handle,
+        session_id=session_id,
+    )
+
+    assert len(admissions) == 1
+    assert handle_kwargs[0]["sponsored_session_id"] == session_id
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("session_id", [None, "not-a-uuid"])
+async def test_invalid_sponsored_go_session_is_rejected_before_quota(
+    monkeypatch,
+    session_id: str | None,
+):
+    admissions: list[dict[str, object]] = []
+
+    async def admit(db, **kwargs):
+        admissions.append(kwargs)
+        raise AssertionError("invalid session must not consume quota")
+
+    async def handle(*args, **kwargs):
+        raise AssertionError("invalid session must not start inference")
+
+    chunks, released, _, _ = await _run_stream(
+        monkeypatch,
+        current_settings=settings(
+            sponsored_model_base_url="https://opencode.ai/inference/go/v1",
+        ),
+        user_credentials=credentials(openai=False),
+        admit=admit,
+        handle_func=handle,
+        session_id=session_id,
+    )
+
+    assert _json_events(chunks)[0]["code"] == "missing_session_id"
+    assert admissions == []
+    assert released == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "https://opencode.ai/inference/other/v1",
+        "https://opencode.ai.evil.example/inference/go/v1",
+        "https://not-opencode.ai/inference/go/v1",
+    ],
+)
+async def test_non_go_sponsored_endpoint_does_not_require_session_or_forward_header(
+    monkeypatch,
+    base_url: str,
+):
+    handle_kwargs: list[dict[str, object]] = []
+
+    async def admit(db, **kwargs):
+        return _admission(kwargs["request_id"])
+
+    async def handle(*args, **kwargs):
+        handle_kwargs.append(kwargs)
+        return StreamingResponse(_body(), media_type="text/event-stream")
+
+    chunks, _, _, _ = await _run_stream(
+        monkeypatch,
+        current_settings=settings(sponsored_model_base_url=base_url),
+        user_credentials=credentials(openai=False),
+        admit=admit,
+        handle_func=handle,
+    )
+
+    assert any('"text":"answer"' in chunk for chunk in chunks)
+    assert handle_kwargs[0]["sponsored_session_id"] is None
 
 
 @pytest.mark.anyio
@@ -262,19 +360,29 @@ async def test_disabled_sponsored_tier_is_unavailable_before_provider(monkeypatc
 
 @pytest.mark.anyio
 async def test_byok_luna_bypasses_sponsored_admission(monkeypatch):
+    handle_kwargs: list[dict[str, object]] = []
+
     async def admit(db, **kwargs):
         raise AssertionError("BYOK Luna must not consume sponsored quota")
 
+    async def handle(*args, **kwargs):
+        handle_kwargs.append(kwargs)
+        return StreamingResponse(_body(), media_type="text/event-stream")
+
     chunks, released, captured, _ = await _run_stream(
         monkeypatch,
-        current_settings=settings(),
+        current_settings=settings(
+            sponsored_model_base_url="https://opencode.ai/inference/go/v1",
+        ),
         user_credentials=credentials(openai=True),
         admit=admit,
+        handle_func=handle,
     )
 
     assert any('"text":"answer"' in chunk for chunk in chunks)
     assert released == []
     assert captured[-1][1]["mode"] == "byok"
+    assert handle_kwargs[0]["sponsored_session_id"] is None
 
 
 @pytest.mark.anyio

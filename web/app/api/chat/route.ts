@@ -308,6 +308,7 @@ export const POST = async (req: Request): Promise<Response> => {
     let upstream: Response;
     try {
       upstream = await requestUpstreamChatStream({
+        conversationId: loadedConversation.conversation.id,
         payload: upstreamPayload,
         posthogDistinctId: clientBody.posthogDistinctId,
         posthogSessionId: clientBody.posthogSessionId,
