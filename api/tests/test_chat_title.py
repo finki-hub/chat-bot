@@ -77,7 +77,7 @@ def test_chat_title_uses_selected_model_and_normalizes_quotes(monkeypatch):
 
     assert response.title == "Испитна сесија"
     assert seen["model"] == Model.QWEN3_14B
-    assert seen["max_tokens"] == 32
+    assert seen["max_tokens"] == query_transform.QUERY_TRANSFORM_MAX_TOKENS
     assert seen["system_prompt"] == title_system_prompt
     assert "Кога е јунската сесија?" in str(seen["query"])
     credentials = seen["credentials"]
