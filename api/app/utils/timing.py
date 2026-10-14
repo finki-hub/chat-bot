@@ -18,6 +18,7 @@ type QueryTransformFallbackReason = Literal[
 type RerankerFallbackReason = Literal[
     "not_run", "none", "score_floor", "empty_or_invalid_response", "error"
 ]
+type LocalFaqRecoveryOutcome = Literal["skipped", "no_match", "matched", "error"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +78,9 @@ class RequestTimings:
         self.query_transform_fallback_reason: QueryTransformFallbackReason = "not_run"
         self.reranker_fallback_reason: RerankerFallbackReason = "not_run"
         self.reranker_invalid_result_count = 0
+        self.local_faq_recovery_outcome: LocalFaqRecoveryOutcome = "skipped"
+        self.local_query_variant_added = False
+        self.local_rerank_query_used = False
         self.response_id: str | None = None
         self.distinct_id: str | None = None
 
@@ -115,6 +119,9 @@ class RequestTimings:
             "reranker_fallback": self.reranker_fallback,
             "reranker_fallback_reason": self.reranker_fallback_reason,
             "reranker_invalid_result_count": self.reranker_invalid_result_count,
+            "local_faq_recovery_outcome": self.local_faq_recovery_outcome,
+            "local_query_variant_added": self.local_query_variant_added,
+            "local_rerank_query_used": self.local_rerank_query_used,
         }
 
 
@@ -186,6 +193,19 @@ def record_query_transform_reason(reason: QueryTransformFallbackReason) -> None:
     timings = _current.get()
     if timings is not None:
         timings.query_transform_fallback_reason = reason
+
+
+def record_local_faq_recovery(
+    *,
+    outcome: LocalFaqRecoveryOutcome,
+    query_variant_added: bool,
+    rerank_query_used: bool,
+) -> None:
+    timings = _current.get()
+    if timings is not None:
+        timings.local_faq_recovery_outcome = outcome
+        timings.local_query_variant_added = query_variant_added
+        timings.local_rerank_query_used = rerank_query_used
 
 
 def record_response_id(response_id: str) -> None:
