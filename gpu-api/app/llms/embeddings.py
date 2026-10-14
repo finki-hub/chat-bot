@@ -1,8 +1,8 @@
 import logging
-from asyncio import to_thread
 from typing import overload
 
 from app.llms.bge_m3 import get_bge_m3_embeddings
+from app.llms.inference import Lane, run_in_lane
 from app.llms.models import Model
 
 logger = logging.getLogger(__name__)
@@ -49,4 +49,4 @@ async def generate_embeddings(
     def _call() -> list[float] | list[list[float]]:
         return embedder(texts)
 
-    return await to_thread(_call)
+    return await run_in_lane(Lane.EMBED, _call)

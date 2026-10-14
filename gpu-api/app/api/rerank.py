@@ -1,10 +1,10 @@
-import asyncio
 import json
 import logging
 from time import perf_counter
 
 from fastapi import APIRouter, Request, status
 
+from app.llms.inference import Lane, run_in_lane
 from app.llms.reranker import rerank_documents
 from app.schemas.rerank import RankedDocument, RerankRequestSchema, RerankResponseSchema
 from app.utils.analytics import capture_chat_inference
@@ -51,7 +51,8 @@ async def handle_rerank(
         return RerankResponseSchema(reranked_documents=[])
 
     start = perf_counter()
-    scored_list = await asyncio.to_thread(
+    scored_list = await run_in_lane(
+        Lane.RERANK,
         rerank_documents,
         payload.query,
         payload.documents,
