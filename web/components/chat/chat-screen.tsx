@@ -138,6 +138,9 @@ export const ChatScreen = () => {
       modelList.filter((entry) => isModelAvailable(entry, availableProviders)),
     [availableProviders, modelList],
   );
+  const selectedModelAvailable = availableModels.some(
+    (entry) => entry.id === model,
+  );
 
   useEffect(() => {
     if (modelsLoading || modelsError || availableModels.length === 0) {
@@ -235,7 +238,10 @@ export const ChatScreen = () => {
             conversationId={activeId}
             messages={messages}
             onManageCredentials={openCredentialSettings}
-            onPickSuggestion={unavailable ? undefined : submitMessage}
+            onPickSuggestion={
+              // Suggestions bypass the composer's send gate, so hide them until the selected model is usable.
+              unavailable || !selectedModelAvailable ? undefined : submitMessage
+            }
             onRetry={unavailable ? undefined : retry}
             renderActions={renderActions}
             retryPending={

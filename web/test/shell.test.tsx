@@ -428,6 +428,41 @@ const respondTo = (
     : Promise.resolve(jsonOk({}));
 };
 
+const SPONSORED = 'gpt-6-luna';
+const SUGGESTION =
+  'Колку кредити ми требаат за да се запишам во наредна година?';
+
+const mockKeylessCatalog = (sponsoredAvailability: string) => {
+  vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init) => {
+    const url = urlOf(input);
+    if (url.endsWith('/api/models')) {
+      return Promise.resolve(
+        jsonOk({
+          models: [
+            {
+              availability: 'unavailable',
+              id: CLAUDE,
+              name: 'Claude Sonnet 5.5',
+              provider: 'anthropic',
+            },
+            {
+              availability: sponsoredAvailability,
+              id: SPONSORED,
+              name: 'GPT-6 Luna',
+              provider: 'openai',
+            },
+          ],
+          source: 'live',
+          version: 1,
+        }),
+      );
+    }
+    return url.endsWith('/api/chat/credentials')
+      ? Promise.resolve(jsonOk([]))
+      : respondTo(url, methodOf(input, init));
+  });
+};
+
 const renderChatPage = (): ReturnType<typeof rtlRender> => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retryDelay: 0 } },
@@ -896,5 +931,36 @@ describe('ChatPage persistence', () => {
     await waitFor(() => {
       expect(useUiStore.getState().model).toBe('claude-sonnet-5-5');
     });
+  });
+
+  it('falls back to the sponsored model and allows suggestions', async () => {
+    mockKeylessCatalog('sponsored');
+
+    renderChatPage();
+
+    await waitFor(() => {
+      expect(useUiStore.getState().model).toBe(SPONSORED);
+    });
+
+    await expect(
+      screen.findByRole('button', { name: SUGGESTION }),
+    ).resolves.toBeInTheDocument();
+  });
+
+  it('hides suggestions when the selected model needs a missing key', async () => {
+    mockKeylessCatalog('unavailable');
+
+    renderChatPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('composer-model')).toHaveTextContent(
+        'Claude Sonnet 5.5',
+      );
+    });
+
+    expect(useUiStore.getState().model).toBe(CLAUDE);
+    expect(
+      screen.queryByRole('button', { name: SUGGESTION }),
+    ).not.toBeInTheDocument();
   });
 });
