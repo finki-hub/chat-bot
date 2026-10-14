@@ -26,6 +26,9 @@ from app.schemas.chat_credentials import ChatCredentialSecret
 
 logger = logging.getLogger(__name__)
 
+# Explicit, so a user key never inherits the deployment's ANTHROPIC_BASE_URL gateway.
+ANTHROPIC_DEFAULT_BASE_URL = "https://api.anthropic.com"
+
 # Active Claude models use summarized adaptive thinking when reasoning is enabled.
 _ADAPTIVE_THINKING_MODELS: frozenset[Model] = ANTHROPIC_NO_SAMPLING_MODELS
 
@@ -78,7 +81,7 @@ def get_anthropic_llm(
     client_kwargs: dict[str, object] = {
         "model": model.value if upstream_model is None else upstream_model,
         "api_key": SecretStr(credential.api_key),
-        "base_url": credential.base_url or None,
+        "base_url": credential.base_url or ANTHROPIC_DEFAULT_BASE_URL,
         "temperature": temperature_arg,
         "max_tokens": effective_max,
         "thinking": thinking,

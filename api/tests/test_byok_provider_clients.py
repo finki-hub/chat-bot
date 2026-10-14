@@ -29,7 +29,7 @@ def test_openai_byok_client_does_not_inherit_deployment_base_url(monkeypatch) ->
         credential=ChatCredentialSecret(provider="openai", api_key="sk-user-key"),
     )
 
-    assert captured_base_urls == [None]
+    assert captured_base_urls == [openai.OPENAI_DEFAULT_BASE_URL]
 
 
 def test_gpt_6_astra_uses_chat_completions_effort_without_temperature(
@@ -305,7 +305,7 @@ def test_anthropic_byok_client_does_not_inherit_deployment_base_url(
         credential=ChatCredentialSecret(provider="anthropic", api_key="user-key"),
     )
 
-    assert captured_base_urls == [None]
+    assert captured_base_urls == [anthropic.ANTHROPIC_DEFAULT_BASE_URL]
 
 
 def test_claude_haiku_omits_sampling_parameters(monkeypatch) -> None:
@@ -819,3 +819,31 @@ def test_byok_embedding_client_requires_user_credential(
         factory(model)
 
     assert error.value.provider == provider
+
+
+def test_byok_clients_ignore_deployment_gateway_env(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://gateway.example/openai/v1")
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://gateway.example/anthropic")
+
+    openai_llm = openai.get_openai_llm(
+        Model.GPT_5_4_MINI,
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=128,
+        credential=ChatCredentialSecret(provider="openai", api_key="sk-user-key"),
+    )
+    openai_embedder = openai.get_openai_embedder(
+        Model.TEXT_EMBEDDING_3_LARGE,
+        credential=ChatCredentialSecret(provider="openai", api_key="sk-user-key"),
+    )
+    anthropic_llm = anthropic.get_anthropic_llm(
+        Model.CLAUDE_HAIKU_5_5,
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=128,
+        credential=ChatCredentialSecret(provider="anthropic", api_key="user-key"),
+    )
+
+    assert str(openai_llm.root_client.base_url) == "https://api.openai.com/v1/"
+    assert openai_embedder.openai_api_base == "https://api.openai.com/v1"
+    assert anthropic_llm.anthropic_api_url == "https://api.anthropic.com"

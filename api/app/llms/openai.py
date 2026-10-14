@@ -29,6 +29,9 @@ from app.utils.settings import is_opencode_go_base_url
 
 logger = logging.getLogger(__name__)
 
+# Explicit, so a user key never inherits the deployment's OPENAI_BASE_URL gateway.
+OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
 
 def get_openai_embedder(
     model: Model,
@@ -39,7 +42,7 @@ def get_openai_embedder(
     return OpenAIEmbeddings(  # type: ignore[call-arg]
         model=model.value,
         api_key=SecretStr(credential.api_key),
-        base_url=credential.base_url or None,
+        base_url=credential.base_url or OPENAI_DEFAULT_BASE_URL,
     )
 
 
@@ -90,7 +93,7 @@ def get_openai_llm(
     return ChatOpenAI(  # type: ignore[call-arg]
         model=model.value if upstream_model is None else upstream_model,
         api_key=SecretStr(credential.api_key),
-        base_url=credential.base_url or None,
+        base_url=credential.base_url or OPENAI_DEFAULT_BASE_URL,
         # GPT-6 and GPT-5 reasoning models reject or ignore sampling controls;
         # omit them explicitly rather than relying on provider-specific SDK cleanup.
         temperature=(None if model in OPENAI_NO_SAMPLING_MODELS else temperature),
