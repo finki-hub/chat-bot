@@ -7,7 +7,7 @@ import {
   type StateStorage,
 } from 'zustand/middleware';
 
-export const DEFAULT_MODEL = 'claude-sonnet-5-5';
+export const DEFAULT_MODEL = 'gpt-6-luna';
 
 const STORAGE_KEY = 'finkiHub.ui';
 const STORAGE_VERSION = 1;
@@ -36,7 +36,7 @@ const LEGACY_MODEL_MIGRATIONS = new Map([
     'openrouter:deepseek/deepseek-v4.1-flash',
   ],
   ['openrouter:qwen/qwen3.8-max', 'openrouter:qwen/qwen3.8-max-0902'],
-  ['openrouter:tencent/hy3', DEFAULT_MODEL],
+  ['openrouter:tencent/hy3', 'claude-sonnet-5-5'],
   ['openrouter:x-ai/grok-4.6', 'openrouter:x-ai/grok-4.7'],
 ]);
 

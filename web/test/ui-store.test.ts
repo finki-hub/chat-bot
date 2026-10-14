@@ -23,7 +23,7 @@ const LEGACY_MAPPINGS = [
   ['claude-haiku-4-5', 'claude-haiku-5-5'],
   ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'],
   ['openrouter:x-ai/grok-4.6', 'openrouter:x-ai/grok-4.7'],
-  ['openrouter:tencent/hy3', DEFAULT_MODEL],
+  ['openrouter:tencent/hy3', 'claude-sonnet-5-5'],
 ] as const;
 
 const storeValue = (): { state: Record<string, unknown>; version: number } =>
@@ -92,6 +92,21 @@ describe('versioned persisted model selection', () => {
       state: { model: 'unknown-model-id' },
       version: 1,
     });
+  });
+
+  it('defaults to the sponsored model', () => {
+    expect(DEFAULT_MODEL).toBe('gpt-6-luna');
+  });
+
+  it('keeps a persisted keyed model selection over the default', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ state: { model: 'claude-sonnet-5-5' }, version: 1 }),
+    );
+
+    await useUiStore.persist.rehydrate();
+
+    expect(useUiStore.getState().model).toBe('claude-sonnet-5-5');
   });
 
   it('does not rerun migration for version 1 persisted data', async () => {

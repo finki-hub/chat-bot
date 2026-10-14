@@ -117,7 +117,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     // Stale recovery: the trigger shows a valid catalog model (the recovered
     // default), not the placeholder it would show for the removed id.
     const trigger = page.getByTestId('composer-model');
-    await expect(trigger).toContainText('Claude Sonnet 5.5');
+    await expect(trigger).toContainText(LUNA_NAME);
 
     await trigger.click();
 
@@ -188,6 +188,18 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
       });
     });
     await installMockChatState(page, { streamUrl: 'http://127.0.0.1:9/chat' });
+    await page.addInitScript(
+      ({ key, model }: { key: string; model: string }) => {
+        localStorage.setItem(
+          key,
+          JSON.stringify({
+            state: { activeConversationId: null, model, reasoning: false },
+            version: 1,
+          }),
+        );
+      },
+      { key: STORAGE_KEY, model: 'claude-sonnet-5-5' },
+    );
 
     await page.goto('/');
     await hideDevelopmentOverlay(page);
@@ -458,7 +470,7 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     });
 
     await page.goto('/');
-    await expect(page.getByTestId('composer-model')).toContainText('Модел');
+    await expect(page.getByTestId('composer-model')).toContainText(LUNA_NAME);
     await page.getByTestId('composer-model').click();
     const unavailable = page.getByRole('option', { name: LUNA_OPTION_PATTERN });
     await expect(unavailable).toHaveAttribute('aria-disabled', 'true');
