@@ -578,8 +578,9 @@ async def get_retrieved_context_with_sources(
                     embeddings.append(canonical_embedding)
 
         with timed("retrieval.vector_search"):
-            # Recovery is intentionally bounded at 2 queries x 2 sources x 31
-            # candidates, plus one exact FAQ row: at most 125 pre-dedup inputs.
+            # Recovery is intentionally bounded at 3 queries (raw, optional
+            # transliteration, canonical) x 2 sources x 31 candidates, plus one exact
+            # FAQ row: at most 187 pre-dedup inputs.
             async def search_canonical_optional(
                 embedding: list[float],
             ) -> tuple[list[QuestionSchema], list[ChunkSchema]]:
