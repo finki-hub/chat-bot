@@ -13,6 +13,7 @@ type QueryTransformFallbackReason = Literal[
     "credential_missing",
     "no_usable_variants",
     "partial_variants",
+    "unchanged_variants",
     "none",
 ]
 type RerankerFallbackReason = Literal[
