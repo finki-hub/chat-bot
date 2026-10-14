@@ -89,8 +89,8 @@ fixture. See [runner guidance](robust_faq_README.md) for limits and validity gat
 Evidence: `verification-report.md`, comparisons, observations and postflight/execution/import/model manifests.
 Old-runner results are preliminary; spellings are not independent and diagnostic holdouts were visible.
 
-Local checks: **1,005 passed, 60 skipped, 3 known Windows Docker/sh
-failures**; Ruff and mypy clean. CI remains pending after PR creation.
+Historical local checks: **1,005 passed, 60 skipped, 3 known Windows Docker/sh
+failures**; Ruff and mypy clean. CI was pending when this report was first written.
 
 | Frozen input | SHA-256 |
 |---|---|
@@ -98,3 +98,14 @@ failures**; Ruff and mypy clean. CI remains pending after PR creation.
 | Runner | `af72b2eb083f690a2f45a72490c9c7c4888e0272d147a44227083532a90c8866` |
 | Comparator | `e9eda9e4a591e93a16b98bb202a5122a893e826ac33ef7c3af12193ae766b0ba` |
 | Candidate application source-manifest digest | `db22f78050fa960c21c7aa12dbd205711031a5897122dc054d16cf3b6d73e9bc` |
+
+### Post-review provenance addendum
+
+The 92 measured executions, results and frozen hashes above describe the implementation
+recorded at `7e6dadb1934178cfc04fcc5bcd6e7818ff71ad02`, not the post-review revision.
+Subsequent retrieval-task cleanup and legacy matched-RAW budget validation fixes were
+validated offline with [cleanup regression tests](../test_faq_query_recovery_context.py)
+and [runner/comparison integration tests](test_compare_eval_faq_recovery.py).
+No new live DB/GPU study was performed for these fixes. The historical application
+source-manifest digest is not a fingerprint of the latest `context.py`; the measured
+results and hashes are retained unchanged. CI for the post-review commit remains pending.

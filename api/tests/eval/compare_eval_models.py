@@ -10,6 +10,7 @@ from . import resolve_eval_json_path
 
 AnchorType = Literal["Q", "C", "none"]
 TransformMode = Literal["raw", "rewrite", "hyde", "rewrite_hyde"]
+LocalFaqRecoveryOutcome = Literal["skipped", "no_match", "matched", "error"]
 JsonValue = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 
 
@@ -36,6 +37,7 @@ class EvalCase:
     rank: int | None
     requested_config: EffectiveRetrievalConfig
     effective_config: EffectiveRetrievalConfig | None
+    local_faq_recovery_outcome: LocalFaqRecoveryOutcome | None = None
 
     @property
     def is_abstain(self) -> bool:
@@ -47,7 +49,18 @@ class EvalCase:
 
     @property
     def used_requested_config(self) -> bool:
-        return self.effective_config == self.requested_config
+        expected = self.requested_config
+        if self.local_faq_recovery_outcome == "matched":
+            # A matched RAW plan declares a bounded per-case treatment, not an
+            # unexpected budget fallback. Mode and initial budget must still agree.
+            if expected.transform_mode != "raw":
+                return False
+            expected = EffectiveRetrievalConfig(
+                transform_mode="raw",
+                initial_k=expected.initial_k,
+                per_query_k=min(expected.per_query_k, 31),
+            )
+        return self.effective_config == expected
 
     @property
     def failure_reason(self) -> str:
@@ -155,6 +168,27 @@ def _effective_config(
     )
 
 
+def _local_faq_recovery_outcome(
+    value: JsonValue,
+    path: str,
+) -> LocalFaqRecoveryOutcome | None:
+    match value:
+        case None:
+            return None
+        case "skipped":
+            return "skipped"
+        case "no_match":
+            return "no_match"
+        case "matched":
+            return "matched"
+        case "error":
+            return "error"
+        case _:
+            raise EvalJsonError(
+                f"{path}: expected skipped, no_match, matched, error or null"
+            )
+
+
 def _case(
     value: JsonValue,
     path: str,
@@ -178,6 +212,10 @@ def _case(
         rank=_optional_int(row.get("rank"), f"{path}.rank"),
         requested_config=requested_config,
         effective_config=_effective_config(row, path, requested_config),
+        local_faq_recovery_outcome=_local_faq_recovery_outcome(
+            row.get("local_faq_recovery_outcome"),
+            f"{path}.local_faq_recovery_outcome",
+        ),
     )
 
 

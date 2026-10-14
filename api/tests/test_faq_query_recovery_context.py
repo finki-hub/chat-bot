@@ -453,6 +453,117 @@ def test_main_embedding_failure_records_match_without_claiming_rerank_use(
     assert timings.local_rerank_query_used is False
 
 
+@pytest.mark.parametrize("failed_source", ["faq", "chunk"])
+@pytest.mark.parametrize(
+    "stop_reason", ["raw_failure", "external_cancellation", "canonical_cancellation"]
+)
+def test_vector_search_failure_and_cancellation_drain_all_search_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+    failed_source: str,
+    stop_reason: str,
+) -> None:
+    faq = _question()
+    raw_query = "Каде е службата?"
+    names = AsyncMock(return_value=[faq.name])
+    exact = AsyncMock(return_value=faq)
+    rerank = AsyncMock(side_effect=AssertionError("stopped retrieval must not rerank"))
+    parents: list[asyncio.Task[object]] = []
+    children: dict[tuple[str, str], asyncio.Task[object]] = {}
+    cleaned: set[tuple[str, str]] = set()
+    all_started = asyncio.Event()
+    raw_error = TimeoutError("mandatory raw search timed out")
+
+    async def embed(text, *args, **kwargs):
+        return [1.0] if text == raw_query else [2.0]
+
+    async def search(db, embedding, model, limit):
+        task = asyncio.current_task()
+        assert task is not None
+        parents.append(task)
+        return await _search_both(db, embedding, model, limit)
+
+    async def database_search(source, embedding):
+        variant = "raw" if embedding == [1.0] else "canonical"
+        key = (variant, source)
+        task = asyncio.current_task()
+        assert task is not None
+        children[key] = task
+        if len(children) == 4:
+            all_started.set()
+        try:
+            await all_started.wait()
+            if source == failed_source:
+                if stop_reason == "raw_failure" and variant == "raw":
+                    raise raw_error
+                if stop_reason == "canonical_cancellation" and variant == "canonical":
+                    raise asyncio.CancelledError
+            await asyncio.Event().wait()
+        finally:
+            cleaned.add(key)
+        return []
+
+    async def questions(_db, embedding, _model, *, limit):
+        return await database_search("faq", embedding)
+
+    async def chunks(_db, embedding, _model, *, limit):
+        return await database_search("chunk", embedding)
+
+    monkeypatch.setattr(plan_module, "get_question_names_query", names)
+    monkeypatch.setattr(plan_module, "get_question_by_name_query", exact)
+    monkeypatch.setattr(context_module, "_embed_variant", embed)
+    monkeypatch.setattr(context_module, "_search_both", search)
+    monkeypatch.setattr(context_module, "get_closest_questions", questions)
+    monkeypatch.setattr(context_module, "get_closest_chunks", chunks)
+    monkeypatch.setattr(context_module, "_post_rerank", rerank)
+
+    async def run():
+        with anyio.fail_after(5):
+            retrieval_task = asyncio.create_task(
+                get_retrieved_context_with_sources(
+                    Database("postgresql://unused"),
+                    raw_query,
+                    Model.BGE_M3_LOCAL,
+                    Model.GPT_5_4_MINI,
+                    query_transform_mode=QueryTransformMode.RAW,
+                ),
+            )
+            try:
+                await all_started.wait()
+                if stop_reason == "external_cancellation":
+                    retrieval_task.cancel()
+                if stop_reason == "raw_failure":
+                    with pytest.raises(RetrievalError) as exc_info:
+                        await retrieval_task
+                    assert exc_info.value.__cause__ is raw_error
+                else:
+                    with pytest.raises(asyncio.CancelledError):
+                        await retrieval_task
+
+                # Assert before runner shutdown can clean up any leaked tasks.
+                assert retrieval_task.done()
+                assert len(parents) == 2
+                assert len(children) == 4
+                assert all(task.done() for task in parents)
+                assert all(task.done() for task in children.values())
+                assert cleaned == set(children)
+            finally:
+                # Keep a failing regression run isolated as well.
+                tasks = [retrieval_task, *parents, *children.values()]
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+    _, timings = _run_with_timings(run)
+
+    names.assert_awaited_once()
+    exact.assert_awaited_once()
+    rerank.assert_not_awaited()
+    assert timings.local_faq_recovery_outcome == "matched"
+    assert timings.local_query_variant_added is False
+    assert timings.local_rerank_query_used is False
+
+
 def test_optional_canonical_search_cancellation_propagates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

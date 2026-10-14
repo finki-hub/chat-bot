@@ -545,16 +545,24 @@ async def get_retrieved_context_with_sources(
             canonical_search_added = local_query_variant_added and len(
                 embeddings
             ) > len(variant_bundle.variants)
-            search_results: list[
-                tuple[list[QuestionSchema], list[ChunkSchema]]
-            ] = await asyncio.gather(
-                *(
+            search_tasks = [
+                asyncio.create_task(
                     search_canonical_optional(embedding)
                     if canonical_search_added and index == len(embeddings) - 1
                     else _search_both(db, embedding, embedding_model, per_query_k)
-                    for index, embedding in enumerate(embeddings)
-                ),
-            )
+                )
+                for index, embedding in enumerate(embeddings)
+            ]
+            try:
+                search_results: list[
+                    tuple[list[QuestionSchema], list[ChunkSchema]]
+                ] = await asyncio.gather(*search_tasks)
+            except BaseException:
+                for task in search_tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*search_tasks, return_exceptions=True)
+                raise
             local_query_variant_added = canonical_search_added
             record_local_faq_recovery(
                 outcome=local_recovery_plan.outcome,

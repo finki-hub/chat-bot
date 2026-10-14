@@ -135,7 +135,12 @@ unchanged misses. It exits non-zero when new regressions exceed `--max-regressio
 thresholds, reranking, query transformation, chunking, or corpus ingestion.
 Cases whose effective query-transform mode or retrieval budget differs from that run's
 requested configuration are reported as incomparable and make the comparison invalid
-instead of being counted as retrieval regressions. Intentional comparisons between two
+instead of being counted as retrieval regressions. The only declared per-case budget
+exception is `local_faq_recovery_outcome: "matched"` in requested and effective RAW:
+the expected per-query budget is `min(nominal_per_query_k, 31)`, with the same initial
+budget. Unmarked caps, other budget changes and transform-mode fallbacks remain
+incomparable; recovery outcomes are retained and unknown values are rejected.
+Intentional comparisons between two
 different requested modes remain valid when each run actually used its requested mode.
 Explicit `execution_status: "error"` in either artifact makes comparison invalid
 (exit **2**) regardless of effective configuration or regression budget. Older
