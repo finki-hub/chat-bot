@@ -66,6 +66,7 @@ def get_anthropic_llm(
     `between_tools` when reasoning is off; Haiku 5.5 disables thinking at medium effort;
     Fable 5.1 and Opus 5.5 always keep reasoning on.
     """
+    reasoning_requested = reasoning
     reasoning = reasoning or model in ANTHROPIC_MANDATORY_REASONING_MODELS
     thinking, effective_max = (None, max_tokens)
     if reasoning:
@@ -87,9 +88,10 @@ def get_anthropic_llm(
         "thinking": thinking,
     }
     # The installed client translates the effort alias to Anthropic's
-    # output_config.effort.
+    # output_config.effort. At medium effort adaptive thinking usually skips
+    # thinking, so an explicit reasoning request raises it to high.
     if model in ANTHROPIC_NO_SAMPLING_MODELS:
-        client_kwargs["effort"] = "medium"
+        client_kwargs["effort"] = "high" if reasoning_requested else "medium"
     # LangChain's generated Pydantic signature omits documented constructor aliases.
     return ChatAnthropic(**client_kwargs)  # type: ignore[arg-type]
 
