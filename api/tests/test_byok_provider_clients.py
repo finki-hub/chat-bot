@@ -1,3 +1,4 @@
+import anyio
 import pytest
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
@@ -847,3 +848,62 @@ def test_byok_clients_ignore_deployment_gateway_env(monkeypatch) -> None:
     assert str(openai_llm.root_client.base_url) == "https://api.openai.com/v1/"
     assert openai_embedder.openai_api_base == "https://api.openai.com/v1"
     assert anthropic_llm.anthropic_api_url == "https://api.anthropic.com"
+
+
+@pytest.mark.parametrize(
+    ("model", "expected_reasoning"),
+    [(Model.GPT_6_LUNA, {"effort": "none"}), (Model.GPT_5_4_MINI, None)],
+)
+def test_openai_query_transform_disables_supported_default_reasoning(
+    monkeypatch,
+    model: Model,
+    expected_reasoning: dict[str, str] | None,
+) -> None:
+    captured: list[dict[str, object]] = []
+
+    class _Reply:
+        content = "rewritten"
+
+    class OpenAICapturingClient:
+        def __init__(self, **kwargs):
+            captured.append(kwargs)
+
+        async def ainvoke(self, messages):
+            return _Reply()
+
+    monkeypatch.setattr(openai, "ChatOpenAI", OpenAICapturingClient)
+
+    result = anyio.run(
+        lambda: openai.transform_query_with_openai(
+            "query",
+            model,
+            system_prompt="system",
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=128,
+            credential=ChatCredentialSecret(provider="openai", api_key="sk-user-key"),
+        ),
+    )
+
+    assert result == "rewritten"
+    assert captured[0].get("reasoning") == expected_reasoning
+
+
+def test_openai_chat_keeps_default_reasoning_when_off(monkeypatch) -> None:
+    captured: list[dict[str, object]] = []
+
+    class OpenAICapturingClient:
+        def __init__(self, **kwargs):
+            captured.append(kwargs)
+
+    monkeypatch.setattr(openai, "ChatOpenAI", OpenAICapturingClient)
+
+    openai.get_openai_llm(
+        Model.GPT_6_LUNA,
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=128,
+        credential=ChatCredentialSecret(provider="openai", api_key="sk-user-key"),
+    )
+
+    assert "reasoning" not in captured[0]

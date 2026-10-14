@@ -32,6 +32,10 @@ logger = logging.getLogger(__name__)
 # Explicit, so a user key never inherits the deployment's OPENAI_BASE_URL gateway.
 OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
+# Models whose Responses API accepts `effort: none`; omitting reasoning keeps the
+# model default (medium), which adds seconds to short auxiliary calls.
+_REASONING_NONE_MODELS: frozenset[Model] = frozenset({Model.GPT_6_LUNA})
+
 
 def get_openai_embedder(
     model: Model,
@@ -56,6 +60,7 @@ def get_openai_llm(
     credential: ChatCredentialSecret | None = None,
     upstream_model: str | None = None,
     conversation_id: str | None = None,
+    disable_reasoning: bool = False,
 ) -> ChatOpenAI:
     """
     Return a user-scoped ChatOpenAI instance for the specified model and parameters.
@@ -80,6 +85,8 @@ def get_openai_llm(
             client_kwargs["reasoning_effort"] = "medium"
     elif reasoning:
         client_kwargs["reasoning"] = {"effort": "medium", "summary": "auto"}
+    elif disable_reasoning and model in _REASONING_NONE_MODELS:
+        client_kwargs["reasoning"] = {"effort": "none"}
     if forwards_top_p:
         client_kwargs["top_p"] = top_p
 
@@ -299,6 +306,7 @@ async def transform_query_with_openai(
             max_tokens,
             credential=credential,
             conversation_id=conversation_id,
+            disable_reasoning=True,
         )
 
         messages = [
