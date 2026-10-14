@@ -40,6 +40,28 @@ async def plan_faq_query_recovery(
         )
         if len(titles) > _FAQ_TITLE_CATALOG_CAP:
             return FaqQueryRecoveryPlan(outcome="skipped")
+        return await plan_faq_query_recovery_from_titles(db, query, titles)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # ruff: ignore[BLE001] -- local recovery is optional
+        logger.warning(
+            "Local FAQ query recovery unavailable error_type=%s",
+            type(exc).__name__,
+        )
+        return FaqQueryRecoveryPlan(outcome="error")
+
+
+async def plan_faq_query_recovery_from_titles(
+    db: Database,
+    query: str,
+    titles: list[str] | tuple[str, ...],
+) -> FaqQueryRecoveryPlan:
+    """Resolve against a previously loaded, complete FAQ title catalog."""
+    if len(titles) > _FAQ_TITLE_CATALOG_CAP:
+        return FaqQueryRecoveryPlan(outcome="skipped")
+    if not is_faq_query_recovery_eligible(query):
+        return FaqQueryRecoveryPlan(outcome="skipped")
+    try:
         recovery = resolve_faq_query(query, titles)
         if recovery is None:
             return FaqQueryRecoveryPlan(outcome="no_match")

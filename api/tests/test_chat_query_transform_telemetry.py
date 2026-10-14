@@ -125,6 +125,10 @@ def test_generation_telemetry_emits_content_free_retrieval_aggregates(
     timings.local_faq_recovery_outcome = "matched"
     timings.local_query_variant_added = True
     timings.local_rerank_query_used = True
+    timings.faq_evidence_constraint_applied = True
+    timings.faq_evidence_constraint_reason = "institution_scope"
+    timings.faq_evidence_excluded_candidate_count = 4
+    timings.faq_evidence_constrained_abstained = True
     private_query = "sakam privaten odgovor"
 
     properties = _capture_properties(monkeypatch, private_query, timings)
@@ -145,4 +149,8 @@ def test_generation_telemetry_emits_content_free_retrieval_aggregates(
     assert properties["local_faq_recovery_outcome"] == "matched"
     assert properties["local_query_variant_added"] is True
     assert properties["local_rerank_query_used"] is True
+    assert properties["faq_evidence_constraint_applied"] is True
+    assert properties["faq_evidence_constraint_reason"] == "institution_scope"
+    assert properties["faq_evidence_excluded_candidate_count"] == 4
+    assert properties["faq_evidence_constrained_abstained"] is True
     assert private_query not in repr(properties)

@@ -135,7 +135,7 @@ def candidate_record(candidate) -> dict:
 def summarize(rows: list[dict]) -> dict:
     completed = [row for row in rows if row["execution_status"] == "completed"]
     groups = {}
-    for expectation in sorted(EXPECTATIONS):
+    for expectation in sorted(EXPECTATIONS | {row["expectation"] for row in rows}):
         selected = [row for row in completed if row["expectation"] == expectation]
         groups[expectation] = {
             "n": len(selected),
@@ -183,9 +183,13 @@ async def observe_case(
     db,
     mode,
     case_timeout: float = 90,
+    scope_catalog: dict | None = None,
 ) -> dict:
     """Passively capture actual candidate construction and GPU reranking inputs."""
     candidates: list = []
+    pre_candidates: list = []
+    filter_calls = 0
+    scope_filter = getattr(context, "apply_faq_constraints_to_candidates", None)
     embedding_queries: list[str] = []
     rerank_queries: list[str] = []
     rerank_scores: list[dict] = []
@@ -203,6 +207,17 @@ async def observe_case(
         if len(result) > MAX_CANDIDATES:
             raise ReplaySafetyError("Candidate budget exceeded")
         candidates[:] = result
+        pre_candidates[:] = result
+        return result
+
+    def capture_filter(pool, constraints):
+        assert scope_filter is not None
+        nonlocal filter_calls
+        filter_calls += 1
+        if filter_calls != 1 or list(pool) != pre_candidates:
+            raise ReplaySafetyError("Production scope filter capture interface changed")
+        result = scope_filter(pool, constraints)
+        candidates[:] = result
         return result
 
     async def capture_embed(text, *args, **kwargs):
@@ -213,6 +228,8 @@ async def observe_case(
         return await embed(text, *args, **kwargs)
 
     async def capture_rerank(payload):
+        if payload["documents"] != [candidate.rerank_text for candidate in candidates]:
+            raise ReplaySafetyError("Rerank input is not the actual post-filter pool")
         counters["rerank_calls"] += 1
         if counters["rerank_calls"] > 1 or len(payload["documents"]) > MAX_CANDIDATES:
             raise ReplaySafetyError("Rerank call/candidate budget exceeded")
@@ -238,6 +255,12 @@ async def observe_case(
             )
             stack.enter_context(patch.object(context, "_embed_variant", capture_embed))
             stack.enter_context(patch.object(context, "_post_rerank", capture_rerank))
+            if scope_filter is not None:
+                stack.enter_context(
+                    patch.object(
+                        context, "apply_faq_constraints_to_candidates", capture_filter
+                    )
+                )
             async with asyncio.timeout(case_timeout):
                 result = await context.get_retrieved_context_with_sources(
                     db,
@@ -281,6 +304,8 @@ async def observe_case(
             or any(q != case["query"] for q in embedding_queries + rerank_queries)
         )
         recovery_record = timings.fallback_record()
+        if recovery_record.get("faq_evidence_constraint_reason") == "catalog_error":
+            raise ValueError("Scope catalog execution failure")
         activated = (
             recovery_record["local_faq_recovery_outcome"] == "matched"
             if "local_faq_recovery_outcome" in recovery_record
@@ -356,6 +381,40 @@ async def observe_case(
             else value
             for key, value in local.items()
         }
+        from tests.eval.faq_evidence_scope_checks import capture_scope_result
+
+        active = recovery_record.get("faq_evidence_constraint_applied")
+        if scope_filter is not None and not isinstance(active, bool):
+            raise ReplaySafetyError("Missing actual constraint diagnostics")
+        if bool(active) != bool(filter_calls):
+            raise ReplaySafetyError("Constraint diagnostics/filter call mismatch")
+        if scope_filter is not None and recovery_record.get(
+            "faq_evidence_excluded_candidate_count"
+        ) != len(pre_candidates) - len(candidates):
+            raise ReplaySafetyError("Constraint exclusion count mismatch")
+        row["scope_observation"] = capture_scope_result(
+            before=pre_candidates,
+            after=candidates,
+            selected_ids=list(timings.retrieval_ids),
+            sources=list(result.sources),
+            context_text=result.text,
+            hook_available=scope_filter is not None,
+            diagnostics={
+                "active": active,
+                "strict_abstention": active,
+                "reason": recovery_record.get("faq_evidence_constraint_reason"),
+                "excluded_candidate_count": recovery_record.get(
+                    "faq_evidence_excluded_candidate_count"
+                ),
+                "constrained_abstained": recovery_record.get(
+                    "faq_evidence_constrained_abstained"
+                ),
+            }
+            if scope_filter is not None
+            else {},
+            case=case,
+            catalog=scope_catalog or {"facts": {}},
+        )
     except (Exception, ReplaySafetyError) as exc:  # noqa: BLE001 -- retain isolated case failures without exception messages
         row.update(
             execution_status="error",
@@ -490,6 +549,20 @@ def source_manifest(context) -> dict:
     }
 
 
+def evaluation_source_manifest() -> dict:
+    root = Path(__file__).parent
+    return {
+        name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+        for name in (
+            "robust_faq_replay.py",
+            "robust_faq_compare.py",
+            "faq_evidence_scope_cases.py",
+            "faq_evidence_scope_checks.py",
+            "faq_evidence_scope_compare.py",
+        )
+    }
+
+
 async def run(ns: argparse.Namespace) -> dict:
     # Settings reads process environment, not a credential file. No startup hooks.
     for key, value in {
@@ -514,7 +587,18 @@ async def run(ns: argparse.Namespace) -> dict:
     from app.llms.query_modes import QueryTransformMode
     from app.utils import http_client, timing
 
-    cases = load_cases(Path(ns.fixture))
+    scope_catalog = None
+    if getattr(ns, "scope_catalog", None):
+        from tests.eval.faq_evidence_scope_cases import (
+            load_fact_catalog,
+            load_scope_cases,
+            preflight_scope_cases,
+        )
+
+        scope_catalog = load_fact_catalog(Path(ns.scope_catalog))
+        cases = load_scope_cases(Path(ns.fixture), scope_catalog)
+    else:
+        cases = load_cases(Path(ns.fixture))
     expected = json.loads(Path(ns.corpus_manifest).read_text(encoding="utf-8-sig"))
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
@@ -580,14 +664,24 @@ async def run(ns: argparse.Namespace) -> dict:
             raise ReplaySafetyError("Read-only enforcement unavailable")
         wanted = sorted(
             {case["expected_title"] for case in cases if case.get("expected_title")}
+            | (set(scope_catalog["sources"]) if scope_catalog else set())
         )
         before, bodies = await db.corpus(wanted)
         check_manifest(expected, before)
-        checked = preflight(cases, before, bodies)
+        if scope_catalog:
+            checked = preflight_scope_cases(cases, scope_catalog, before, bodies)
+            checked["anchors"] = {
+                case["id"]: checked["resolved_titles"].get(case.get("expected_title"))
+                for case in cases
+                if case.get("expected_title")
+            }
+        else:
+            checked = preflight(cases, before, bodies)
         artifact["preflight"] = checked
         if not checked["valid"]:
             raise ReplaySafetyError("Fixture corpus preflight failed")
         sources = source_manifest(context)
+        eval_sources = evaluation_source_manifest()
         artifact["manifest"] = {
             "fixture_sha256": hashlib.sha256(Path(ns.fixture).read_bytes()).hexdigest(),
             "gpu_manifest_sha256": hashlib.sha256(
@@ -595,6 +689,7 @@ async def run(ns: argparse.Namespace) -> dict:
             ).hexdigest(),
             "corpus": before,
             "source_sha256": sources,
+            "evaluation_source_sha256": eval_sources,
             "embedding_model": Model.BGE_M3_LOCAL.value,
             "bge_spec": BGE_M3_EMBEDDING_SPEC_VERSION,
             "embedding_dimensions": 1024,
@@ -612,6 +707,10 @@ async def run(ns: argparse.Namespace) -> dict:
             "transport": "actual production retrieval; GPU-only HTTP; sequential; no generation",
             "fingerprint_note": "FAQ rows match supplied manifest; full-row hashed fingerprints are runner-specific and include vectors/revisions. Short read-only transactions do not share one snapshot across GPU calls; before/after drift invalidates run.",
         }
+        if scope_catalog:
+            artifact["manifest"]["scope_catalog_sha256"] = hashlib.sha256(
+                Path(ns.scope_catalog).read_bytes()
+            ).hexdigest()
         with (
             patch.object(httpx.AsyncClient, "send", guarded_send),
             patch.object(httpx.Client, "send", forbidden_sync),
@@ -625,6 +724,7 @@ async def run(ns: argparse.Namespace) -> dict:
                     anchor=checked["anchors"].get(case["id"]),
                     db=db,
                     mode=modes[ns.mode],
+                    scope_catalog=scope_catalog,
                 )
                 artifact["results"].append(row)
                 Path(ns.output).write_text(
@@ -634,7 +734,11 @@ async def run(ns: argparse.Namespace) -> dict:
                 if row.get("error_type") == "ReplaySafetyError":
                     break
         after, _bodies = await db.corpus(wanted)
-        if before != after or sources != source_manifest(context):
+        if (
+            before != after
+            or sources != source_manifest(context)
+            or eval_sources != evaluation_source_manifest()
+        ):
             raise ReplaySafetyError("Corpus/source changed during replay")
         artifact["summary"] = summarize(artifact["results"])
         artifact["summary"]["selected_cases"] = len(cases)
@@ -663,6 +767,10 @@ async def run(ns: argparse.Namespace) -> dict:
 def parser() -> argparse.ArgumentParser:
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("--fixture", default=str(DEFAULT_FIXTURE))
+    cli.add_argument(
+        "--scope-catalog",
+        help="Public scope catalog; enables separate scope fixture schema and strict preflight",
+    )
     cli.add_argument("--corpus-manifest", required=True)
     cli.add_argument("--revision-label", required=True)
     cli.add_argument(

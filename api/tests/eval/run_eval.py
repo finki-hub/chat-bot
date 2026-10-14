@@ -51,6 +51,11 @@ from app.llms.context import (
     _Candidate,
     _embed_variant,
     _select_with_source_priority,
+    _valid_rerank_results,
+)
+from app.llms.faq_evidence_constraints import (
+    apply_faq_constraints_to_candidates,
+    plan_faq_evidence_constraints,
 )
 from app.llms.faq_query_recovery_plan import (
     FaqQueryRecoveryOutcome,
@@ -137,6 +142,10 @@ class Result:
     rank: int | None = None
     n_candidates: int = 0
     candidate_hit: bool = False
+    faq_evidence_constraint_applied: bool = False
+    faq_evidence_constraint_reason: str = "none"
+    faq_evidence_excluded_candidate_count: int = 0
+    faq_evidence_constrained_abstained: bool = False
     local_faq_recovery_outcome: FaqQueryRecoveryOutcome = "skipped"
     local_query_variant_added: bool = False
     local_rerank_query_used: bool = False
@@ -317,6 +326,10 @@ async def evaluate_one(
     transform_mode: QueryTransformMode,
 ) -> Result:
     want = anchor_key(ex.anchor)
+    evidence_plan = await plan_faq_evidence_constraints(db, ex.query)
+    if evidence_plan.outcome == "error":
+        raise ValueError("FAQ evidence constraint catalog failure")
+    constraints = evidence_plan.constraints
 
     variant_bundle = await build_query_variants(ex.query, qt_model, transform_mode)
     variants = [
@@ -460,6 +473,9 @@ async def evaluate_one(
     if direct_faq is not None:
         natural_by_key[f"Q:{direct_faq.id}"] = question_key(direct_faq)
     candidates = _build_candidates(prod_lists, lexical_lists, direct_faq)
+    pre_constraint_count = len(candidates)
+    if constraints is not None:
+        candidates = apply_faq_constraints_to_candidates(candidates, constraints)
     cand_keys = [candidate.key for candidate in candidates]
     cand_rerank = [candidate.rerank_text for candidate in candidates]
     cand_nat = [natural_by_key[key] for key in cand_keys]
@@ -467,25 +483,29 @@ async def evaluate_one(
     final_hit = False
     rank: int | None = None
     if cand_rerank:
-        response = await _post_rerank(
-            {
-                "query": canonical_query or variant_bundle.rerank_query,
-                "documents": cand_rerank,
-            },
-        )
-        ranked = response.json()["reranked_documents"]
+        try:
+            response = await _post_rerank(
+                {
+                    "query": canonical_query or variant_bundle.rerank_query,
+                    "documents": cand_rerank,
+                },
+            )
+            ranked, _invalid_count = _valid_rerank_results(
+                response.json(), len(candidates)
+            )
+        except Exception:  # noqa: BLE001 -- constrained production path abstains on reranker failure
+            if constraints is None:
+                raise
+            ranked = []
         kept_candidates: list[_Candidate] = []
-        for item in ranked:
-            idx = item["index"]
-            if not 0 <= idx < len(cand_nat):
-                continue
-            if item["score"] < settings.RERANKER_MIN_SCORE:
+        for idx, score in ranked:
+            if score < settings.RERANKER_MIN_SCORE:
                 continue
             kept_candidates.append(candidates[idx])
         if (
-            not kept_candidates and ranked
+            not kept_candidates and ranked and constraints is None
         ):  # production keeps the single best if all below floor
-            best_idx = ranked[0]["index"]
+            best_idx = ranked[0][0]
             if 0 <= best_idx < len(cand_nat):
                 kept_candidates = [candidates[best_idx]]
         natural_key_by_candidate = dict(zip(cand_keys, cand_nat, strict=True))
@@ -502,6 +522,12 @@ async def evaluate_one(
         final=final_hit,
         rank=rank,
         n_candidates=len(cand_keys),
+        faq_evidence_constraint_applied=constraints is not None,
+        faq_evidence_constraint_reason=constraints.reason if constraints else "none",
+        faq_evidence_excluded_candidate_count=pre_constraint_count - len(candidates),
+        faq_evidence_constrained_abstained=constraints is not None
+        and rank is None
+        and (not cand_rerank or not topk),
         candidate_hit=bool(cand_keys) if ex.is_abstain else want in cand_nat,
         local_faq_recovery_outcome=recovery_plan.outcome,
         local_query_variant_added=local_variant_added,
@@ -642,6 +668,18 @@ async def main_async(ns: argparse.Namespace) -> int:
                     if r.execution_status == "completed"
                     else None,
                     "best_distance": r.best_distance,
+                    "faq_evidence_constraint_applied": r.faq_evidence_constraint_applied
+                    if r.execution_status == "completed"
+                    else None,
+                    "faq_evidence_constraint_reason": r.faq_evidence_constraint_reason
+                    if r.execution_status == "completed"
+                    else None,
+                    "faq_evidence_excluded_candidate_count": r.faq_evidence_excluded_candidate_count
+                    if r.execution_status == "completed"
+                    else None,
+                    "faq_evidence_constrained_abstained": r.faq_evidence_constrained_abstained
+                    if r.execution_status == "completed"
+                    else None,
                     "effective_transform_mode": (
                         r.effective_transform_mode.value
                         if r.effective_transform_mode is not None

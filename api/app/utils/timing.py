@@ -19,6 +19,12 @@ type RerankerFallbackReason = Literal[
     "not_run", "none", "score_floor", "empty_or_invalid_response", "error"
 ]
 type LocalFaqRecoveryOutcome = Literal["skipped", "no_match", "matched", "error"]
+type FaqEvidenceConstraintReason = Literal[
+    "none",
+    "institution_scope",
+    "entity_exclusion",
+    "catalog_error",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +87,10 @@ class RequestTimings:
         self.local_faq_recovery_outcome: LocalFaqRecoveryOutcome = "skipped"
         self.local_query_variant_added = False
         self.local_rerank_query_used = False
+        self.faq_evidence_constraint_applied = False
+        self.faq_evidence_constraint_reason: FaqEvidenceConstraintReason = "none"
+        self.faq_evidence_excluded_candidate_count = 0
+        self.faq_evidence_constrained_abstained = False
         self.response_id: str | None = None
         self.distinct_id: str | None = None
 
@@ -122,6 +132,14 @@ class RequestTimings:
             "local_faq_recovery_outcome": self.local_faq_recovery_outcome,
             "local_query_variant_added": self.local_query_variant_added,
             "local_rerank_query_used": self.local_rerank_query_used,
+            "faq_evidence_constraint_applied": self.faq_evidence_constraint_applied,
+            "faq_evidence_constraint_reason": self.faq_evidence_constraint_reason,
+            "faq_evidence_excluded_candidate_count": (
+                self.faq_evidence_excluded_candidate_count
+            ),
+            "faq_evidence_constrained_abstained": (
+                self.faq_evidence_constrained_abstained
+            ),
         }
 
 
@@ -206,6 +224,25 @@ def record_local_faq_recovery(
         timings.local_faq_recovery_outcome = outcome
         timings.local_query_variant_added = query_variant_added
         timings.local_rerank_query_used = rerank_query_used
+
+
+def record_faq_evidence_constraint(
+    *,
+    applied: bool,
+    reason: FaqEvidenceConstraintReason,
+    excluded_candidate_count: int | None = None,
+    constrained_abstained: bool = False,
+) -> None:
+    timings = _current.get()
+    if timings is not None:
+        timings.faq_evidence_constraint_applied = applied
+        timings.faq_evidence_constraint_reason = reason
+        if excluded_candidate_count is not None:
+            timings.faq_evidence_excluded_candidate_count = min(
+                max(excluded_candidate_count, 0),
+                1000,
+            )
+        timings.faq_evidence_constrained_abstained = constrained_abstained
 
 
 def record_response_id(response_id: str) -> None:
