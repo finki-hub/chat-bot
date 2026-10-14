@@ -2,7 +2,7 @@
   "source": "https://models.dev/api.json",
   "refreshed_at": "2026-10-11T10:18:03Z",
   "sha256": "0f6e03cfb79703b466f51fd591484d58103c0f8125650502de2511ba391424cc",
-  "snapshot_sha256": "a30a1592afaa62ca2fc512bc13589dad5d711a2d934144a273ce805dd3de45e8",
+  "snapshot_sha256": "65819378c943fedb6e96a2e3a5610f8863a82b22c0c7959be714d2d474a11165",
   "opencode_go_metadata": {
     "source": "https://models.dev/api.json (opencode-go provider)",
     "verified_at": "2026-10-13",
@@ -23,8 +23,8 @@
   },
   "manual_metadata": {
     "source": "OpenCode registry evidence",
-    "vendor_verified": false,
-    "note": "Replacement-model prices below are registry evidence, not vendor verification. Models.dev did not provide metadata for these replacement IDs in the recorded fetch.",
+    "vendor_verified": "per-model",
+    "note": "Replacement-model metadata recorded manually because models.dev did not provide it. Each entry's source states whether its price is vendor-verified or registry evidence.",
     "models": {
       "gpt-6.1-sol": {
         "source": "https://developers.openai.com/api/docs/pricing (standard tier, <=272K input), verified 2026-10-14",
@@ -64,7 +64,8 @@
         "pricing_usd_per_1m": {
           "input": 0.3,
           "output": 2.5
-        }
+        },
+        "source": "OpenCode registry evidence (not vendor-verified)"
       },
       "claude-opus-5-5": {
         "fields": [
@@ -76,7 +77,8 @@
         "pricing_usd_per_1m": {
           "input": 4.0,
           "output": 20.0
-        }
+        },
+        "source": "Anthropic first-party API pricing, verified 2026-10-14"
       },
       "claude-sonnet-5-5": {
         "fields": [
@@ -88,7 +90,8 @@
         "pricing_usd_per_1m": {
           "input": 2.0,
           "output": 10.0
-        }
+        },
+        "source": "Anthropic first-party API pricing, verified 2026-10-14"
       },
       "claude-haiku-5-5": {
         "fields": [
@@ -121,6 +124,18 @@
         ],
         "pricing": null,
         "limits": null
+      },
+      "gpt-5.6-terra": {
+        "source": "https://developers.openai.com/api/docs/pricing (standard tier, <=272K input), verified 2026-10-14",
+        "fields": [
+          "pricing.input",
+          "pricing.output"
+        ],
+        "pricing_usd_per_1m": {
+          "input": 2.0,
+          "output": 12.0
+        },
+        "note": "Runtime estimate in pricing.py corrected from 2.50/15.00; snapshot pricing already matched."
       }
     }
   },

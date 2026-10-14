@@ -234,8 +234,7 @@ async def stream_anthropic_agent_response(
                 agent,
                 messages,
                 observation,
-                emit_reasoning=reasoning
-                or model in ANTHROPIC_MANDATORY_REASONING_MODELS,
+                emit_reasoning=reasoning,
             ),
             media_type="text/event-stream",
         )

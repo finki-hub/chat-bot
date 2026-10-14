@@ -191,6 +191,27 @@ def test_remote_metadata_only_enriches_allowlisted_display_fields() -> None:
     assert "remote-only" not in {model.id for model in response.models}
 
 
+def test_displayed_temperature_follows_execution_sampling_policy() -> None:
+    async def fetch() -> bytes:
+        await anyio.lowlevel.checkpoint()
+        return (
+            b'{"openai":{"id":"openai","name":"OpenAI","models":{'
+            b'"gpt-5.4-mini":{"id":"gpt-5.4-mini","name":"Remote mini",'
+            b'"temperature":true}}}}'
+        )
+
+    response = anyio.run(
+        ModelCatalogService(fetch_metadata=fetch, clock=FakeClock()).get_catalog,
+    )
+
+    for model in response.models:
+        if model.capabilities is not None:
+            assert model.capabilities.temperature is model.execution.sampling
+    mini = next(model for model in response.models if model.id == "gpt-5.4-mini")
+    assert mini.capabilities is not None
+    assert mini.capabilities.temperature is False
+
+
 def test_partial_remote_metadata_preserves_snapshot_fields() -> None:
     async def fetch_snapshot() -> bytes:
         await anyio.lowlevel.checkpoint()

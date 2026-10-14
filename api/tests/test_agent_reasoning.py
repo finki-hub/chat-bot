@@ -3,7 +3,7 @@ from typing import cast
 import pytest
 from langchain_core.messages import AIMessageChunk
 
-from app.llms import agents, anthropic
+from app.llms import agents, anthropic, streams
 from app.llms.agents import _chunk_reasoning
 from app.llms.models import Model
 from app.schemas.chat_credentials import ChatCredentialSecret
@@ -67,7 +67,6 @@ async def test_agent_stream_emits_thinking_only_when_requested(
         (Model.CLAUDE_SONNET_5_5, False, False),
         (Model.CLAUDE_SONNET_5_5, True, True),
         (Model.CLAUDE_HAIKU_5_5, False, False),
-        (Model.CLAUDE_OPUS_5_5, False, True),
     ],
 )
 async def test_anthropic_agent_hides_thinking_when_reasoning_is_off(
@@ -105,3 +104,39 @@ async def test_anthropic_agent_hides_thinking_when_reasoning_is_off(
     )
 
     assert seen == {"emit_reasoning": expected}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        (Model.CLAUDE_OPUS_5_5, True),
+        (Model.CLAUDE_FABLE_5_1, True),
+        (Model.CLAUDE_SONNET_5_5, False),
+    ],
+)
+async def test_stream_router_forces_reasoning_for_mandatory_anthropic_models(
+    monkeypatch,
+    model: Model,
+    expected: bool,
+) -> None:
+    seen: dict[str, bool] = {}
+
+    async def fake_stream(*args, reasoning: bool = False, **kwargs):
+        seen["reasoning"] = reasoning
+
+    monkeypatch.setattr(streams, "stream_anthropic_agent_response", fake_stream)
+
+    await streams.stream_response_with_agent(
+        "question",
+        model,
+        system_prompt="system",
+        history=[],
+        temperature=0.2,
+        top_p=1.0,
+        max_tokens=1024,
+        reasoning=False,
+        interface="web",
+    )
+
+    assert seen == {"reasoning": expected}
