@@ -336,7 +336,11 @@ async def evaluate_one(
     variants = [
         (variant.text, variant.is_document) for variant in variant_bundle.variants
     ]
-    budget = retrieval_budget(variant_bundle.mode, initial_k)
+    budget = retrieval_budget(
+        variant_bundle.mode,
+        initial_k,
+        extra_variants=variant_bundle.transliteration_variant_count,
+    )
     recovery_plan = FaqQueryRecoveryPlan(outcome="skipped")
     if variant_bundle.mode == QueryTransformMode.RAW:
         recovery_plan = await plan_faq_query_recovery(db, ex.query)

@@ -146,7 +146,7 @@ def _embedding_for_variant(
     match kind:
         case "raw":
             return original_embedding_task
-        case "rewrite" | "hyde":
+        case "rewrite" | "hyde" | "transliteration":
             return _embed_variant(
                 text,
                 embedding_model,
@@ -530,7 +530,11 @@ async def get_retrieved_context_with_sources(
         rerank_query_used=False,
     )
 
-    budget = retrieval_budget(variant_bundle.mode, initial_k)
+    budget = retrieval_budget(
+        variant_bundle.mode,
+        initial_k,
+        extra_variants=variant_bundle.transliteration_variant_count,
+    )
     per_query_k = (
         min(budget.per_query_k, 31)
         if local_recovery_plan.outcome == "matched"

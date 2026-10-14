@@ -7,10 +7,11 @@ from app.llms.models import ChatModel
 from app.llms.prompts import HYDE_SYSTEM_PROMPT
 from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.query_modes import QueryTransformMode
+from app.llms.query_normalization import romanized_macedonian_variant
 from app.llms.query_transform import QUERY_TRANSFORM_MAX_TOKENS, transform_query
 from app.utils.timing import QueryTransformFallbackReason, timed
 
-QueryVariantKind = Literal["raw", "rewrite", "hyde"]
+QueryVariantKind = Literal["raw", "rewrite", "hyde", "transliteration"]
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,10 @@ class QueryVariantBundle:
         if self.mode == QueryTransformMode.RAW:
             return "no_usable_variants"
         return "partial_variants"
+
+    @property
+    def transliteration_variant_count(self) -> int:
+        return sum(variant.kind == "transliteration" for variant in self.variants)
 
     @property
     def mode(self) -> QueryTransformMode:
@@ -100,6 +105,37 @@ def query_variant_count(mode: QueryTransformMode) -> int:
 
 
 async def build_query_variants(
+    search_query: str,
+    query_transform_model: ChatModel,
+    mode: QueryTransformMode,
+    credentials: LlmProviderCredentials | None = None,
+) -> QueryVariantBundle:
+    bundle = await _build_transform_variants(
+        search_query,
+        query_transform_model,
+        mode,
+        credentials,
+    )
+    transliterated = romanized_macedonian_variant(search_query)
+    if transliterated is None:
+        return bundle
+    # Romanized queries embed far from the Cyrillic corpus, so dense retrieval must
+    # not depend on an LLM transform being available to bridge the script gap.
+    *transforms, raw = bundle.variants
+    has_rewrite = any(variant.kind == "rewrite" for variant in transforms)
+    return QueryVariantBundle(
+        variants=(
+            *transforms,
+            QueryVariant(
+                kind="transliteration", text=transliterated, is_document=False
+            ),
+            raw,
+        ),
+        rerank_query=bundle.rerank_query if has_rewrite else transliterated,
+    )
+
+
+async def _build_transform_variants(
     search_query: str,
     query_transform_model: ChatModel,
     mode: QueryTransformMode,

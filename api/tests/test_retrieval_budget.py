@@ -39,6 +39,13 @@ def test_retrieval_budget_expands_two_variant_modes_when_requested_budget_is_def
     assert hyde.per_query_k == 21
 
 
+def test_retrieval_budget_splits_initial_k_across_extra_variants():
+    budget = retrieval_budget(QueryTransformMode.RAW, 30, extra_variants=1)
+
+    assert budget.initial_k == 30
+    assert budget.per_query_k == 16
+
+
 def test_retrieval_budget_raises_explicit_error_when_mode_budget_is_missing(
     monkeypatch,
 ):
