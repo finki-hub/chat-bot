@@ -75,13 +75,21 @@ def _descriptor(
     policy: CatalogPolicy,
     metadata: DisplayMetadata,
 ) -> ModelDescriptor:
+    # Registry metadata may claim temperature support that the execution policy omits.
+    capabilities = (
+        None
+        if metadata.capabilities is None
+        else metadata.capabilities.model_copy(
+            update={"temperature": policy.execution.sampling},
+        )
+    )
     return ModelDescriptor(
         id=policy.model.value,
         provider=policy.provider,
         name=metadata.name,
         description=metadata.description,
         execution=policy.execution,
-        capabilities=metadata.capabilities,
+        capabilities=capabilities,
         modalities=metadata.modalities,
         limits=metadata.limits,
         pricing=metadata.pricing,

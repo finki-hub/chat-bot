@@ -227,8 +227,15 @@ async def stream_anthropic_agent_response(
 
         messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
+        # Sonnet 5.5's `between_tools` mode returns progress notes as thinking blocks;
+        # keep them out of the stream when the user turned reasoning off.
         return StreamingResponse(
-            create_agent_token_generator(agent, messages, observation),
+            create_agent_token_generator(
+                agent,
+                messages,
+                observation,
+                emit_reasoning=reasoning,
+            ),
             media_type="text/event-stream",
         )
 

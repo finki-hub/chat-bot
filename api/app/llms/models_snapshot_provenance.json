@@ -2,7 +2,7 @@
   "source": "https://models.dev/api.json",
   "refreshed_at": "2026-10-11T10:18:03Z",
   "sha256": "0f6e03cfb79703b466f51fd591484d58103c0f8125650502de2511ba391424cc",
-  "snapshot_sha256": "5177aa97bf9ae5575a8ae7c32652d4526a869d81aa9401599690e6de87e2c398",
+  "snapshot_sha256": "65819378c943fedb6e96a2e3a5610f8863a82b22c0c7959be714d2d474a11165",
   "opencode_go_metadata": {
     "source": "https://models.dev/api.json (opencode-go provider)",
     "verified_at": "2026-10-13",
@@ -23,25 +23,35 @@
   },
   "manual_metadata": {
     "source": "OpenCode registry evidence",
-    "vendor_verified": false,
-    "note": "Replacement-model prices below are registry evidence, not vendor verification. Models.dev did not provide metadata for these replacement IDs in the recorded fetch.",
+    "vendor_verified": "per-model",
+    "note": "Replacement-model metadata recorded manually because models.dev did not provide it. Each entry's source states whether its price is vendor-verified or registry evidence.",
     "models": {
       "gpt-6.1-sol": {
-        "source": "requested model mapping; no current registry metadata available",
+        "source": "https://developers.openai.com/api/docs/pricing (standard tier, <=272K input), verified 2026-10-14",
         "fields": [
           "id",
-          "name"
+          "name",
+          "pricing.input",
+          "pricing.output"
         ],
-        "pricing": null,
+        "pricing_usd_per_1m": {
+          "input": 2.0,
+          "output": 10.0
+        },
         "limits": null
       },
       "gpt-6-luna": {
-        "source": "requested model mapping; no current registry metadata available",
+        "source": "https://developers.openai.com/api/docs/pricing (standard tier, <=272K input), verified 2026-10-14",
         "fields": [
           "id",
-          "name"
+          "name",
+          "pricing.input",
+          "pricing.output"
         ],
-        "pricing": null,
+        "pricing_usd_per_1m": {
+          "input": 0.1,
+          "output": 0.5
+        },
         "limits": null
       },
       "gemini-3.5-flash-lite": {
@@ -54,7 +64,8 @@
         "pricing_usd_per_1m": {
           "input": 0.3,
           "output": 2.5
-        }
+        },
+        "source": "OpenCode registry evidence (not vendor-verified)"
       },
       "claude-opus-5-5": {
         "fields": [
@@ -66,7 +77,8 @@
         "pricing_usd_per_1m": {
           "input": 4.0,
           "output": 20.0
-        }
+        },
+        "source": "Anthropic first-party API pricing, verified 2026-10-14"
       },
       "claude-sonnet-5-5": {
         "fields": [
@@ -78,15 +90,20 @@
         "pricing_usd_per_1m": {
           "input": 2.0,
           "output": 10.0
-        }
+        },
+        "source": "Anthropic first-party API pricing, verified 2026-10-14"
       },
       "claude-haiku-5-5": {
         "fields": [
           "id",
           "name",
-          "pricing.high_context_tier"
+          "pricing.input",
+          "pricing.output"
         ],
-        "pricing_usd_per_1m": null,
+        "pricing_usd_per_1m": {
+          "input": 0.1,
+          "output": 0.5
+        },
         "base_tier_registry_pricing_usd_per_1m": {
           "input": 0.1,
           "output": 0.5
@@ -95,7 +112,9 @@
         "high_context_pricing_usd_per_1m": {
           "input": 0.5,
           "output": 2.5
-        }
+        },
+        "source": "Anthropic first-party API pricing (base tier, <=100K input), verified 2026-10-14",
+        "note": "Snapshot and runtime estimates use the base tier; prompts above 100K input tokens bill at the high-context tier."
       },
       "openrouter:x-ai/grok-4.7": {
         "source": "requested model mapping; no current registry metadata available",
@@ -105,6 +124,18 @@
         ],
         "pricing": null,
         "limits": null
+      },
+      "gpt-5.6-terra": {
+        "source": "https://developers.openai.com/api/docs/pricing (standard tier, <=272K input), verified 2026-10-14",
+        "fields": [
+          "pricing.input",
+          "pricing.output"
+        ],
+        "pricing_usd_per_1m": {
+          "input": 2.0,
+          "output": 12.0
+        },
+        "note": "Runtime estimate in pricing.py corrected from 2.50/15.00; snapshot pricing already matched."
       }
     }
   },
