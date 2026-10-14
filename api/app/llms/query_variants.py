@@ -132,6 +132,7 @@ async def build_query_variants(
             raw,
         ),
         rerank_query=bundle.rerank_query if has_rewrite else transliterated,
+        unchanged_kinds=bundle.unchanged_kinds,
     )
 
 

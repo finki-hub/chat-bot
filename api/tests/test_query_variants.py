@@ -4,6 +4,7 @@ from anyio.lowlevel import checkpoint
 
 from app.llms import query_variants
 from app.llms.models import Model
+from app.llms.prompts import HYDE_SYSTEM_PROMPT
 from app.llms.query_modes import QueryTransformMode
 
 
@@ -159,3 +160,34 @@ def test_english_query_adds_no_transliteration_variant() -> None:
     assert tuple(variant.kind for variant in result.variants) == ("raw",)
     assert result.transliteration_variant_count == 0
     assert result.rerank_query == "Web programming"
+
+
+def test_romanized_query_keeps_unchanged_rewrite_classification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    search_query = "kade e studentska sluzba"
+
+    async def transform(*args, **kwargs):
+        await checkpoint()
+        if kwargs.get("system_prompt") == HYDE_SYSTEM_PROMPT:
+            return "Студентската служба се наоѓа во зградата на ФИНКИ."
+        return search_query
+
+    monkeypatch.setattr(query_variants, "transform_query", transform)
+
+    result = anyio.run(
+        query_variants.build_query_variants,
+        search_query,
+        Model.GPT_5_4_MINI,
+        QueryTransformMode.REWRITE_HYDE,
+    )
+
+    assert [variant.kind for variant in result.variants] == [
+        "hyde",
+        "transliteration",
+        "raw",
+    ]
+    assert result.unchanged_kinds == frozenset({"rewrite"})
+    assert (
+        result.fallback_reason(QueryTransformMode.REWRITE_HYDE) == "unchanged_variants"
+    )
