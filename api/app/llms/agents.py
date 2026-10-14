@@ -397,6 +397,8 @@ async def create_agent_token_generator[ResponseT](
     ],
     messages: list[BaseMessage],
     observation: StreamObservation | None = None,
+    *,
+    emit_reasoning: bool = True,
 ) -> AsyncGenerator[str]:
     """Stream an agent run as SSE, mapping `astream_events` onto the protocol: each
     `on_tool_start` becomes a `status`, and a `reset` precedes the answer so any
@@ -467,7 +469,7 @@ async def create_agent_token_generator[ResponseT](
                 if not isinstance(chunk, AIMessageChunk):
                     continue
 
-                reasoning = _chunk_reasoning(chunk)
+                reasoning = _chunk_reasoning(chunk) if emit_reasoning else ""
                 if reasoning:
                     yield thinking_event(reasoning)
 

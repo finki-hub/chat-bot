@@ -11,7 +11,9 @@ from app.llms.models import ChatModel, Model
 # (input_usd_per_1m, output_usd_per_1m) for hosted models with published standard rates.
 HOSTED_PRICING: dict[Model, tuple[float, float]] = {
     Model.GPT_6_ASTRA: (10.00, 50.00),
-    Model.GPT_5_6_TERRA: (2.50, 15.00),
+    Model.GPT_6_1_SOL: (2.00, 10.00),
+    Model.GPT_5_6_TERRA: (2.00, 12.00),
+    Model.GPT_6_LUNA: (0.10, 0.50),
     Model.GPT_5_4_MINI: (0.75, 4.50),
     Model.GPT_5_4_NANO: (0.20, 1.25),
     Model.GEMINI_3_8_FLASH: (0.75, 3.75),
@@ -20,6 +22,7 @@ HOSTED_PRICING: dict[Model, tuple[float, float]] = {
     Model.CLAUDE_FABLE_5_1: (10.00, 50.00),
     Model.CLAUDE_OPUS_5_5: (4.00, 20.00),
     Model.CLAUDE_SONNET_5_5: (2.00, 10.00),
+    Model.CLAUDE_HAIKU_5_5: (0.10, 0.50),
     Model.OPENROUTER_DEEPSEEK_V4_1_FLASH: (0.15, 0.60),
     Model.OPENROUTER_QWEN3_8_MAX_0902: (2.00, 6.00),
 }

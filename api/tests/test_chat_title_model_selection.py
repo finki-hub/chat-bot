@@ -85,7 +85,7 @@ def test_chat_title_uses_cheapest_priced_model_for_active_provider(monkeypatch):
     response = anyio.run(run_title)
 
     assert response.title == "Испитен рок"
-    assert selected_models == [Model.CLAUDE_SONNET_5_5]
+    assert selected_models == [Model.CLAUDE_HAIKU_5_5]
 
 
 def test_chat_title_uses_dynamic_ollama_provider_model_directly(monkeypatch):
