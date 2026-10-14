@@ -278,6 +278,7 @@ async def transform_query_with_openai(
     top_p: float,
     max_tokens: int,
     credential: ChatCredentialSecret | None = None,
+    conversation_id: str | None = None,
 ) -> str:
     """
     Transform a query using the specified OpenAI model and system prompt.
@@ -297,6 +298,7 @@ async def transform_query_with_openai(
             top_p,
             max_tokens,
             credential=credential,
+            conversation_id=conversation_id,
         )
 
         messages = [

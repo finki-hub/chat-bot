@@ -18,9 +18,11 @@ from app.data.sponsored_usage import (
     SponsoredUsageAdmission,
 )
 from app.llms.models import Model
+from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.query_modes import QueryTransformMode
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
+from app.schemas.chat_credentials import ChatCredentialSecret
 from app.utils import posthog_client
 from tests.chat_models_access_support import credentials, settings, usage_snapshot
 
@@ -213,6 +215,34 @@ async def test_sponsored_request_admits_and_releases_exact_lease(
         "test-distinct-id",
     }
     assert captured[-1][1]["input_tokens"] == 0
+
+
+@pytest.mark.anyio
+async def test_sponsored_request_transforms_queries_with_sponsored_model(monkeypatch):
+    retrieval_kwargs: list[dict[str, object]] = []
+
+    async def admit(db, **kwargs):
+        return _admission(kwargs["request_id"])
+
+    async def retrieve(*args, **kwargs):
+        retrieval_kwargs.append(kwargs)
+        return RetrievedContext(
+            text="context",
+            effective_transform_mode=QueryTransformMode.REWRITE_HYDE,
+        )
+
+    await _run_stream(
+        monkeypatch,
+        current_settings=settings(),
+        user_credentials=credentials(openai=False),
+        admit=admit,
+        retrieve=retrieve,
+    )
+
+    assert retrieval_kwargs[0]["query_transform_model"] == Model.GPT_6_LUNA
+    assert retrieval_kwargs[0]["credentials"] == LlmProviderCredentials(
+        openai=ChatCredentialSecret(provider="openai", api_key="sponsored-secret"),
+    )
 
 
 @pytest.mark.anyio

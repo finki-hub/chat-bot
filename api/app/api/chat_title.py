@@ -14,7 +14,7 @@ from app.data.db import get_db
 from app.llms.models import ChatModel, Model
 from app.llms.pricing import HOSTED_PRICING
 from app.llms.provider_credentials import has_provider_credential, provider_for_model
-from app.llms.query_transform import transform_query
+from app.llms.query_transform import QUERY_TRANSFORM_MAX_TOKENS, transform_query
 from app.schemas.chat_title import ChatTitleResponse, ChatTitleSchema
 from app.utils.auth import verify_api_key
 from app.utils.settings import Settings
@@ -125,7 +125,7 @@ async def generate_chat_title(
         system_prompt=_TITLE_SYSTEM_PROMPT,
         temperature=0.2,
         top_p=1.0,
-        max_tokens=32,
+        max_tokens=QUERY_TRANSFORM_MAX_TOKENS,
         credentials=credentials,
     )
     if raw_title == prompt:

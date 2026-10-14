@@ -7,7 +7,7 @@ from app.llms.models import ChatModel
 from app.llms.prompts import HYDE_SYSTEM_PROMPT
 from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.query_modes import QueryTransformMode
-from app.llms.query_transform import transform_query
+from app.llms.query_transform import QUERY_TRANSFORM_MAX_TOKENS, transform_query
 from app.utils.timing import QueryTransformFallbackReason, timed
 
 QueryVariantKind = Literal["raw", "rewrite", "hyde"]
@@ -167,7 +167,7 @@ async def _rewrite_query(
                 query_transform_model,
                 temperature=0.0,
                 top_p=1.0,
-                max_tokens=128,
+                max_tokens=QUERY_TRANSFORM_MAX_TOKENS,
                 credentials=credentials,
             )
     # ruff: ignore[BLE001] -- rewrite generation is optional retrieval enrichment
@@ -194,7 +194,7 @@ async def _hyde_passage(
                 system_prompt=HYDE_SYSTEM_PROMPT,
                 temperature=0.2,
                 top_p=1.0,
-                max_tokens=200,
+                max_tokens=QUERY_TRANSFORM_MAX_TOKENS,
                 credentials=credentials,
             )
     # ruff: ignore[BLE001] -- HyDE generation is optional retrieval enrichment

@@ -18,7 +18,10 @@ from app.api.provider_credentials import (
     missing_mandatory_credential,
     resolve_provider_credentials,
 )
-from app.api.sponsored_access import resolve_sponsored_inference
+from app.api.sponsored_access import (
+    resolve_sponsored_inference,
+    sponsored_query_transform,
+)
 from app.data.connection import Database
 from app.data.db import get_db
 from app.data.sponsored_usage import (
@@ -706,6 +709,20 @@ async def _prepare_chat_response_stream(
         settings,
         user_credential_rejected=user_credential_rejected,
     )
+    retrieval_transform_model, retrieval_credentials = sponsored_query_transform(
+        payload.query_transform_model,
+        credentials,
+        inference_resolution,
+        payload.inference_model,
+    )
+    if (
+        retrieval_credentials is not None
+        and conversation_id is not None
+        and retrieval_credentials.conversation_id is None
+    ):
+        retrieval_credentials = replace(
+            retrieval_credentials, conversation_id=conversation_id
+        )
     if (
         inference_resolution.sponsored
         and is_opencode_go_base_url(settings.SPONSORED_MODEL_BASE_URL)
@@ -871,11 +888,11 @@ async def _prepare_chat_response_stream(
                     db=db,
                     query=payload.query,
                     embedding_model=payload.embeddings_model,
-                    query_transform_model=payload.query_transform_model,
+                    query_transform_model=retrieval_transform_model,
                     query_transform_mode=payload.query_transform_mode,
                     history_text=history_text,
                     on_stage=on_stage,
-                    credentials=credentials,
+                    credentials=retrieval_credentials,
                 )
             finally:
                 stage_queue.put_nowait(None)

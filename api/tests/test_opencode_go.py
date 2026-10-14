@@ -1103,7 +1103,9 @@ def test_go_deepseek_auxiliary_wire_explicitly_disables_default_thinking(
     assert len(requests) == 1
     wire = json.loads(requests[0].content)
     assert wire["reasoning_effort"] == "none"
-    assert wire["max_completion_tokens"] == (128 if auxiliary == "query" else 32)
+    assert wire["max_completion_tokens"] == (
+        128 if auxiliary == "query" else query_transform.QUERY_TRANSFORM_MAX_TOKENS
+    )
     assert requests[0].headers["x-opencode-session"] == SESSION
     assert requests[0].headers["user-agent"] == "finki-hub/1.0"
 
@@ -1314,7 +1316,9 @@ def test_go_messages_auxiliary_low_budget_off_sdk_wire(model, auxiliary, monkeyp
     assert len(requests) == 1
     wire = json.loads(requests[0].content)
     assert wire["thinking"] == {"type": "disabled"}
-    assert wire["max_tokens"] == (128 if auxiliary == "query" else 32)
+    assert wire["max_tokens"] == (
+        128 if auxiliary == "query" else query_transform.QUERY_TRANSFORM_MAX_TOKENS
+    )
     if model == Model.OPENCODE_GO_MINIMAX_M3:
         assert wire["top_p"] == (0.1 if auxiliary == "query" else 1.0)
     else:
