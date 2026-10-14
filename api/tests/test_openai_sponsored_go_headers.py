@@ -8,8 +8,10 @@ from langchain_core.messages import AIMessageChunk, HumanMessage
 from langchain_openai import ChatOpenAI
 
 from app.llms import openai as openai_module
+from app.llms import query_transform
 from app.llms.models import Model
 from app.llms.openai import get_openai_llm
+from app.llms.provider_credentials import LlmProviderCredentials
 from app.schemas.chat_credentials import ChatCredentialSecret
 
 
@@ -286,3 +288,44 @@ def test_go_headers_survive_agent_stream_and_setup_fallback(
         request.headers["x-opencode-session"] == conversation_id for request in requests
     )
     assert any("hello" in chunk for chunk in chunks), chunks
+
+
+def test_query_transform_forwards_conversation_to_sponsored_go_client(
+    monkeypatch,
+) -> None:
+    seen: list[str | None] = []
+
+    class _Reply:
+        content = "rewritten"
+
+    class _Llm:
+        async def ainvoke(self, messages):
+            return _Reply()
+
+    def fake_get_openai_llm(*args, conversation_id=None, **kwargs):
+        seen.append(conversation_id)
+        return _Llm()
+
+    monkeypatch.setattr(openai_module, "get_openai_llm", fake_get_openai_llm)
+    credentials = LlmProviderCredentials(
+        openai=ChatCredentialSecret(
+            provider="openai",
+            api_key="test-sponsored-key",
+            base_url="https://opencode.ai/inference/go/v1",
+        ),
+        conversation_id="018f0f36-2b1d-7cc0-a50b-5f2d90c91d21",
+    )
+
+    result = anyio.run(
+        lambda: query_transform.transform_query(
+            "query",
+            Model.GPT_6_LUNA,
+            temperature=0.0,
+            top_p=1.0,
+            max_tokens=128,
+            credentials=credentials,
+        ),
+    )
+
+    assert result == "rewritten"
+    assert seen == ["018f0f36-2b1d-7cc0-a50b-5f2d90c91d21"]

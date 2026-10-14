@@ -242,6 +242,7 @@ def test_query_transform_logs_metadata_without_raw_query(monkeypatch, caplog):
         top_p: float,
         max_tokens: int,
         credential: ChatCredentialSecret | None = None,
+        conversation_id: str | None = None,
     ) -> str:
         return "Испитен рок"
 

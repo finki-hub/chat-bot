@@ -78,6 +78,11 @@ async def transform_query(
                 top_p=top_p,
                 max_tokens=max_tokens,
                 credential=None if credentials is None else credentials.openai,
+                # The sponsored OpenAI-compatible credential may target OpenCode Go,
+                # which needs the conversation session header.
+                conversation_id=None
+                if credentials is None
+                else credentials.conversation_id,
             )
 
         case model if model in GOOGLE_QUERY_TRANSFORM_MODELS:
