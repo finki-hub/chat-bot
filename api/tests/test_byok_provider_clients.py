@@ -370,7 +370,7 @@ def test_claude_sonnet_5_5_uses_between_tools_without_reasoning(monkeypatch) -> 
             Model.CLAUDE_HAIKU_5_5,
             True,
             {"type": "adaptive", "display": "summarized"},
-            "medium",
+            "high",
         ),
         (
             Model.CLAUDE_SONNET_5_5,
@@ -382,7 +382,7 @@ def test_claude_sonnet_5_5_uses_between_tools_without_reasoning(monkeypatch) -> 
             Model.CLAUDE_SONNET_5_5,
             True,
             {"type": "adaptive", "display": "summarized"},
-            "medium",
+            "high",
         ),
         (
             Model.CLAUDE_OPUS_5_5,
@@ -394,7 +394,7 @@ def test_claude_sonnet_5_5_uses_between_tools_without_reasoning(monkeypatch) -> 
             Model.CLAUDE_OPUS_5_5,
             True,
             {"type": "adaptive", "display": "summarized"},
-            "medium",
+            "high",
         ),
     ],
 )
