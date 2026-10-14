@@ -474,8 +474,10 @@ async def evaluate_one(
         natural_by_key[f"Q:{direct_faq.id}"] = question_key(direct_faq)
     candidates = _build_candidates(prod_lists, lexical_lists, direct_faq)
     pre_constraint_count = len(candidates)
+    constrained_abstained = False
     if constraints is not None:
         candidates = apply_faq_constraints_to_candidates(candidates, constraints)
+        constrained_abstained = pre_constraint_count > 0 and not candidates
     cand_keys = [candidate.key for candidate in candidates]
     cand_rerank = [candidate.rerank_text for candidate in candidates]
     cand_nat = [natural_by_key[key] for key in cand_keys]
@@ -508,6 +510,8 @@ async def evaluate_one(
             best_idx = ranked[0][0]
             if 0 <= best_idx < len(cand_nat):
                 kept_candidates = [candidates[best_idx]]
+        if constraints is not None and not kept_candidates:
+            constrained_abstained = True
         natural_key_by_candidate = dict(zip(cand_keys, cand_nat, strict=True))
         topk = [
             natural_key_by_candidate[candidate.key]
@@ -525,9 +529,7 @@ async def evaluate_one(
         faq_evidence_constraint_applied=constraints is not None,
         faq_evidence_constraint_reason=constraints.reason if constraints else "none",
         faq_evidence_excluded_candidate_count=pre_constraint_count - len(candidates),
-        faq_evidence_constrained_abstained=constraints is not None
-        and rank is None
-        and (not cand_rerank or not topk),
+        faq_evidence_constrained_abstained=constrained_abstained,
         candidate_hit=bool(cand_keys) if ex.is_abstain else want in cand_nat,
         local_faq_recovery_outcome=recovery_plan.outcome,
         local_query_variant_added=local_variant_added,

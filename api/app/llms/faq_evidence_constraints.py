@@ -128,6 +128,7 @@ class FaqConstraints:
     kind: FaqEvidenceConstraintKind
     reason: Literal["institution_scope", "entity_exclusion"]
     office_titles: tuple[str, ...]
+    # Exclusions may also carry the institution scope of their remaining request.
     institution_is_finki: bool | None = None
     excluded_title: str | None = None
     target_title: str | None = None
@@ -268,7 +269,12 @@ def _exclusion_constraint(
         return None
 
     request_clause = request_clauses[0].strip().strip("?!.;,: ")
-    recognized_request = _is_reviewed_definition(request_clause)
+    institution_scope = _institution_constraint(
+        request_clause, _OFFICE_TITLES, _OFFICE_TITLES
+    )
+    recognized_request = (
+        _is_reviewed_definition(request_clause) or institution_scope is not None
+    )
     if not recognized_request:
         recognized_request = bool(
             faq_query_entity_forms(
@@ -283,8 +289,13 @@ def _exclusion_constraint(
     excluded_title = match_faq_entity(excluded_phrase, titles)
     if excluded_title is None or excluded_title not in office_titles:
         return None
+    canonical_excluded_title = match_faq_entity(excluded_title, _OFFICE_TITLES)
+    if canonical_excluded_title is None:
+        return None
     direct_fact_sources: list[str] = []
-    for source_title in _DIRECT_FACT_SOURCES_BY_EXCLUDED_TITLE.get(excluded_title, ()):
+    for source_title in _DIRECT_FACT_SOURCES_BY_EXCLUDED_TITLE.get(
+        canonical_excluded_title, ()
+    ):
         source_status, resolved_source = match_faq_entity_with_status(
             source_title, titles
         )
@@ -292,12 +303,30 @@ def _exclusion_constraint(
             return None
         if resolved_source is not None and resolved_source not in direct_fact_sources:
             direct_fact_sources.append(resolved_source)
+
+    # Reuse the same institution parser for the request left beside the exclusion.
+    # A live catalog must not silently drop a scope recognized with reviewed titles.
+    if institution_scope is not None:
+        if (
+            institution_scope.institution_is_finki is False
+            and _office_titles(titles)[1]
+        ):
+            return None
+        institution_scope = _institution_constraint(
+            request_clause, titles, office_titles
+        )
+        if institution_scope is None:
+            return None
     return FaqConstraints(
         kind="exclusion",
         reason="entity_exclusion",
         office_titles=office_titles,
         excluded_title=excluded_title,
         direct_fact_source_titles=tuple(direct_fact_sources),
+        institution_is_finki=(
+            institution_scope.institution_is_finki if institution_scope else None
+        ),
+        target_title=institution_scope.target_title if institution_scope else None,
     )
 
 
@@ -312,25 +341,7 @@ def _institution_contact_constraint(
         max_query_tokens=_MAX_TOKENS,
     )
     for _intent, institution, contact_kind in forms:
-        institution_key = _folded(institution)
-        if contact_kind != "email" or not institution:
-            continue
-        if len(institution_key) > 10 or any(
-            not token.isalpha() for token in institution_key
-        ):
-            continue
-        if _has_finki_prefix_with_extra(institution_key):
-            continue
-        if any(token in _INSTITUTION_MODIFIER_TOKENS for token in institution_key):
-            continue
-        if (
-            any(token in _INSTITUTION_CONNECTORS for token in institution_key)
-            and institution_key not in _FINKI_NAMES
-        ):
-            continue
-        if any(token in _INSTITUTION_SUBJECT_BLOCKERS for token in institution_key):
-            continue
-        if not _is_reviewed_institution_subject(institution_key):
+        if contact_kind != "email" or not _is_supported_institution(institution):
             continue
         target_title = match_faq_entity("Контакт и локација", catalog)
         if target_title is None or target_title not in office_titles:
@@ -369,6 +380,22 @@ def _is_reviewed_institution_subject(institution: tuple[str, ...]) -> bool:
     ) and all(token not in _INSTITUTION_CONNECTORS for token in institution)
 
 
+def _is_supported_institution(institution: tuple[str, ...]) -> bool:
+    institution_key = _folded(institution)
+    return (
+        1 <= len(institution_key) <= 10
+        and all(token.isalpha() for token in institution_key)
+        and not _has_finki_prefix_with_extra(institution_key)
+        and not any(token in _INSTITUTION_MODIFIER_TOKENS for token in institution_key)
+        and (
+            institution_key in _FINKI_NAMES
+            or not any(token in _INSTITUTION_CONNECTORS for token in institution_key)
+        )
+        and not any(token in _INSTITUTION_SUBJECT_BLOCKERS for token in institution_key)
+        and _is_reviewed_institution_subject(institution_key)
+    )
+
+
 def parse_explicit_faq_constraints(
     query: str,
     titles: list[str] | tuple[str, ...] | None = None,
@@ -391,6 +418,14 @@ def parse_explicit_faq_constraints(
     if office_titles_ambiguous:
         return None
 
+    return _institution_constraint(query, catalog, office_titles)
+
+
+def _institution_constraint(
+    query: str,
+    catalog: tuple[str, ...],
+    office_titles: tuple[str, ...],
+) -> FaqConstraints | None:
     institution_contact = _institution_contact_constraint(query, catalog, office_titles)
     if institution_contact is not None:
         return institution_contact
@@ -409,19 +444,7 @@ def parse_explicit_faq_constraints(
                 continue
             entity = entity_tokens[:separator_index]
             institution = entity_tokens[separator_index + 1 :]
-            if not institution or len(institution) > 10:
-                continue
-            if any(not token.isalpha() for token in entity + institution):
-                continue
-            institution_key = _folded(institution)
-            if _has_finki_prefix_with_extra(institution_key):
-                continue
-            if any(token in _INSTITUTION_MODIFIER_TOKENS for token in institution_key):
-                continue
-            if (
-                any(token in _INSTITUTION_CONNECTORS for token in institution_key)
-                and institution_key not in _FINKI_NAMES
-            ):
+            if not _is_supported_institution(institution):
                 continue
             target_title = match_faq_entity(entity, catalog)
             if target_title is None or target_title not in office_titles:
@@ -447,22 +470,20 @@ def apply_faq_constraints_to_candidates[T: _FaqCandidate](
     filtered: list[T] = []
     for candidate in candidates:
         title = candidate.retrieval_source.title
-        if (
-            candidate.source != "faq"
-            or (
-                constraints.kind == "institution"
-                and title not in constraints.office_titles
-            )
-            or (
-                constraints.kind == "exclusion"
-                and title
-                not in (
-                    constraints.excluded_title,
-                    *constraints.direct_fact_source_titles,
-                )
-            )
-        ):
+        if candidate.source != "faq":
             filtered.append(candidate)
+            continue
+        if (
+            constraints.kind == "institution"
+            or constraints.institution_is_finki is False
+        ) and title in constraints.office_titles:
+            continue
+        if constraints.kind == "exclusion" and title in (
+            constraints.excluded_title,
+            *constraints.direct_fact_source_titles,
+        ):
+            continue
+        filtered.append(candidate)
     return filtered
 
 

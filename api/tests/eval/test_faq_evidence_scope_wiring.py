@@ -240,3 +240,291 @@ def test_added_offline_modifier_and_quoted_marker_controls_do_not_change_frozen_
     query,
 ):
     assert parse_explicit_faq_constraints(query) is None
+
+
+@pytest.mark.parametrize("mode", list(QueryTransformMode))
+@pytest.mark.parametrize(
+    ("stage", "abstained"),
+    [
+        ("empty_retrieval", False),
+        ("filtered_all", True),
+        ("below_floor", True),
+        ("invalid", True),
+        ("failure", True),
+        ("empty_response", True),
+        ("other_target", False),
+        ("top_k_zero", False),
+    ],
+)
+def test_actual_production_and_legacy_abstention_denial_stage_parity(
+    monkeypatch,
+    mode,
+    stage,
+    abstained,
+):
+    query = "Kade e studentska sluzba na Praven fakultet?"
+    plan = _plan(query)
+    assert plan.constraints is not None
+    remaining = _faq("Признавање кредити")
+    questions = (
+        []
+        if stage == "empty_retrieval"
+        else [_faq("Студентска служба")]
+        if stage == "filtered_all"
+        else [remaining]
+    )
+    variants = [QueryVariant(kind="raw", text=query, is_document=False)]
+    if mode in {QueryTransformMode.REWRITE, QueryTransformMode.REWRITE_HYDE}:
+        variants.append(
+            QueryVariant(kind="rewrite", text="rewritten", is_document=False)
+        )
+    if mode in {QueryTransformMode.HYDE, QueryTransformMode.REWRITE_HYDE}:
+        variants.append(QueryVariant(kind="hyde", text="hypothesis", is_document=True))
+    bundle = QueryVariantBundle(variants=tuple(variants), rerank_query=query)
+    top_k = 0 if stage == "top_k_zero" else 10
+    for module in (context, run_eval):
+        monkeypatch.setattr(
+            module, "plan_faq_evidence_constraints", AsyncMock(return_value=plan)
+        )
+        monkeypatch.setattr(
+            module,
+            "plan_faq_query_recovery",
+            AsyncMock(return_value=FaqQueryRecoveryPlan(outcome="skipped")),
+        )
+        monkeypatch.setattr(
+            module, "build_query_variants", AsyncMock(return_value=bundle)
+        )
+        monkeypatch.setattr(module, "_embed_variant", AsyncMock(return_value=[1.0]))
+        monkeypatch.setattr(
+            module, "get_matching_questions", AsyncMock(return_value=[])
+        )
+    # Exercise every effective mode without enabling an actual provider transform.
+    monkeypatch.setattr(context, "has_provider_credential", lambda *_args: True)
+    monkeypatch.setattr(context, "_contextualize_query", AsyncMock(return_value=query))
+    monkeypatch.setattr(
+        context, "_search_both", AsyncMock(return_value=(questions, []))
+    )
+    monkeypatch.setattr(
+        run_eval, "get_closest_questions", AsyncMock(return_value=questions)
+    )
+    monkeypatch.setattr(run_eval, "get_closest_chunks", AsyncMock(return_value=[]))
+    reranks = []
+    for module in (context, run_eval):
+        if stage == "failure":
+            rerank = AsyncMock(side_effect=ValueError("offline failure"))
+        else:
+            ranked = (
+                []
+                if stage == "empty_response"
+                else [
+                    {
+                        "index": 999 if stage == "invalid" else 0,
+                        "score": 0.05 if stage == "below_floor" else 0.9,
+                    }
+                ]
+            )
+            rerank = AsyncMock(
+                return_value=SimpleNamespace(
+                    json=lambda ranked=ranked: {"reranked_documents": ranked}
+                )
+            )
+        reranks.append(rerank)
+        monkeypatch.setattr(module, "_post_rerank", rerank)
+
+    async def render(_db, final, _model):
+        return "\n".join(candidate.context_text for candidate in final)
+
+    monkeypatch.setattr(context, "_expand_and_render", render)
+    db = Database("postgresql://unused")
+
+    async def run():
+        observed, token = timing.start_request_timings()
+        try:
+            production = await context.get_retrieved_context_with_sources(
+                db,
+                query,
+                Model.BGE_M3_LOCAL,
+                Model.GPT_5_4_MINI,
+                query_transform_mode=mode,
+                top_k=top_k,
+                credentials=None,
+            )
+            diagnostics = observed.fallback_record()
+        finally:
+            timing.reset_request_timings(token)
+        legacy = await run_eval.evaluate_one(
+            db,
+            run_eval.Example(
+                id="offline",
+                query=query,
+                anchor={
+                    "type": "Q",
+                    "name": "Пракса" if stage == "other_target" else remaining.name,
+                },
+            ),
+            embedding_model=Model.BGE_M3_LOCAL,
+            qt_model=Model.GPT_5_4_MINI,
+            initial_k=30,
+            top_k=top_k,
+            ideal_limit=30,
+            transform_mode=mode,
+        )
+        return production, diagnostics, legacy
+
+    production, diagnostics, legacy = anyio.run(run)
+    assert (
+        production.effective_transform_mode == legacy.effective_transform_mode == mode
+    )
+    assert (
+        diagnostics["faq_evidence_constraint_applied"]
+        is legacy.faq_evidence_constraint_applied
+        is True
+    )
+    assert diagnostics["faq_evidence_constrained_abstained"] is abstained
+    assert legacy.faq_evidence_constrained_abstained is abstained
+    assert (
+        diagnostics["faq_evidence_excluded_candidate_count"]
+        == legacy.faq_evidence_excluded_candidate_count
+        == (1 if stage == "filtered_all" else 0)
+    )
+    assert legacy.n_candidates == (
+        0 if stage in {"empty_retrieval", "filtered_all"} else 1
+    )
+    assert legacy.final is False
+    assert bool(production.text) is (stage == "other_target")
+    for rerank in reranks:
+        if stage in {"empty_retrieval", "filtered_all"}:
+            rerank.assert_not_awaited()
+        else:
+            rerank.assert_awaited_once()
+
+
+@pytest.mark.parametrize("rerank_result", ["below_floor", "failure"])
+def test_ordinary_legacy_rerank_handling_is_not_changed(monkeypatch, rerank_result):
+    query = "ordinary request"
+    faq = _faq("Признавање кредити")
+    bundle = QueryVariantBundle(
+        variants=(QueryVariant(kind="raw", text=query, is_document=False),),
+        rerank_query=query,
+    )
+    monkeypatch.setattr(
+        run_eval,
+        "plan_faq_evidence_constraints",
+        AsyncMock(return_value=FaqEvidenceConstraintPlan(outcome="none")),
+    )
+    monkeypatch.setattr(
+        run_eval,
+        "plan_faq_query_recovery",
+        AsyncMock(return_value=FaqQueryRecoveryPlan(outcome="skipped")),
+    )
+    monkeypatch.setattr(
+        run_eval, "build_query_variants", AsyncMock(return_value=bundle)
+    )
+    monkeypatch.setattr(run_eval, "_embed_variant", AsyncMock(return_value=[1.0]))
+    monkeypatch.setattr(
+        run_eval, "get_closest_questions", AsyncMock(return_value=[faq])
+    )
+    monkeypatch.setattr(run_eval, "get_closest_chunks", AsyncMock(return_value=[]))
+    monkeypatch.setattr(run_eval, "get_matching_questions", AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        run_eval,
+        "_post_rerank",
+        AsyncMock(side_effect=ValueError("offline failure"))
+        if rerank_result == "failure"
+        else AsyncMock(
+            return_value=SimpleNamespace(
+                json=lambda: {"reranked_documents": [{"index": 0, "score": 0.05}]}
+            )
+        ),
+    )
+
+    async def run():
+        return await run_eval.evaluate_one(
+            Database("postgresql://unused"),
+            run_eval.Example(
+                id="ordinary", query=query, anchor={"type": "Q", "name": faq.name}
+            ),
+            embedding_model=Model.BGE_M3_LOCAL,
+            qt_model=Model.GPT_5_4_MINI,
+            initial_k=30,
+            top_k=10,
+            ideal_limit=30,
+            transform_mode=QueryTransformMode.RAW,
+        )
+
+    if rerank_result == "failure":
+        with pytest.raises(ValueError, match="offline failure"):
+            anyio.run(run)
+    else:
+        result = anyio.run(run)
+        assert result.final is True  # Existing unconstrained keep-best fallback.
+        assert result.faq_evidence_constraint_applied is False
+        assert result.faq_evidence_constrained_abstained is False
+
+
+def test_catalog_failure_remains_production_abstention_and_legacy_execution_error(
+    monkeypatch,
+):
+    query = "Kade e studentska sluzba na Praven fakultet?"
+    bundle = QueryVariantBundle(
+        variants=(QueryVariant(kind="raw", text=query, is_document=False),),
+        rerank_query=query,
+    )
+    legacy_build = AsyncMock(return_value=bundle)
+    legacy_embed = AsyncMock(return_value=[1.0])
+    for module in (context, run_eval):
+        monkeypatch.setattr(
+            module,
+            "plan_faq_evidence_constraints",
+            AsyncMock(return_value=FaqEvidenceConstraintPlan(outcome="error")),
+        )
+        monkeypatch.setattr(
+            module,
+            "build_query_variants",
+            legacy_build if module is run_eval else AsyncMock(return_value=bundle),
+        )
+        monkeypatch.setattr(
+            module,
+            "_embed_variant",
+            legacy_embed if module is run_eval else AsyncMock(return_value=[1.0]),
+        )
+    db = Database("postgresql://unused")
+
+    async def run():
+        with pytest.raises(ValueError, match="constraint catalog failure"):
+            await run_eval.evaluate_one(
+                db,
+                run_eval.Example(
+                    id="catalog-error", query=query, anchor={"type": "none"}
+                ),
+                embedding_model=Model.BGE_M3_LOCAL,
+                qt_model=Model.GPT_5_4_MINI,
+                initial_k=30,
+                top_k=10,
+                ideal_limit=30,
+                transform_mode=QueryTransformMode.RAW,
+            )
+        legacy_build.assert_not_awaited()
+        legacy_embed.assert_not_awaited()
+        observed, token = timing.start_request_timings()
+        try:
+            production = await context.get_retrieved_context_with_sources(
+                db,
+                query,
+                Model.BGE_M3_LOCAL,
+                Model.GPT_5_4_MINI,
+                query_transform_mode=QueryTransformMode.RAW,
+                credentials=None,
+            )
+            assert production.text == ""
+            assert (
+                observed.fallback_record()["faq_evidence_constrained_abstained"] is True
+            )
+            assert (
+                observed.fallback_record()["faq_evidence_constraint_reason"]
+                == "catalog_error"
+            )
+        finally:
+            timing.reset_request_timings(token)
+
+    anyio.run(run)

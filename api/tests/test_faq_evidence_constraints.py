@@ -24,6 +24,7 @@ from app.llms.faq_query_recovery import (
 from app.llms.models import Model
 from app.llms.query_modes import QueryTransformMode
 from app.llms.query_variants import QueryVariant, QueryVariantBundle
+from app.schemas.documents import ChunkSchema
 from app.schemas.questions import QuestionSchema
 from app.utils.timing import (
     record_faq_evidence_constraint,
@@ -624,8 +625,8 @@ def test_parser_uses_reviewed_title_set_when_catalog_is_not_supplied() -> None:
         (
             "Не прашувам за студентската служба, каде е деканатот на ФИНКИ?",
             "exclusion",
-            None,
-            None,
+            "Деканат",
+            True,
             "Студентска служба",
         ),
         (
@@ -996,3 +997,454 @@ def test_planner_propagates_cancellation(monkeypatch: pytest.MonkeyPatch) -> Non
             Database("postgresql://unused"),
             "Каде е службата на Правен факултет?",
         )
+
+
+@pytest.mark.parametrize("mode", list(QueryTransformMode))
+@pytest.mark.parametrize("exclusion_first", [False, True])
+@pytest.mark.parametrize("institution", ["Правен факултет", "ФИНКИ"])
+@pytest.mark.parametrize("office", ["Деканатот", "Архивата"])
+def test_compound_scope_and_exclusion_are_both_enforced_before_rerank(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: QueryTransformMode,
+    exclusion_first: bool,
+    institution: str,
+    office: str,
+) -> None:
+    request = f"Каде е {office} на {institution}?"
+    exclusion = "Не прашувам за студентската служба."
+    query = f"{exclusion} {request}" if exclusion_first else f"{request} {exclusion}"
+    names = AsyncMock(return_value=list(_OFFICES))
+    monkeypatch.setattr(constraints_module, "get_question_names_query", names)
+    candidates = [
+        _faq("Студентска служба", content="070 302 440, Студентска служба."),
+        _faq("Деканат"),
+        _faq("Архива", content="Архивата е во Деканатот."),
+        _faq("Контакт и локација", content="070 302 440, Студентска служба."),
+        _faq("Уписи"),
+    ]
+    chunk = ChunkSchema(
+        id=uuid4(),
+        document_id=uuid4(),
+        document_name="procedures",
+        document_title="Документ за постапки",
+        chunk_index=0,
+        content="Документ за постапки за упис.",
+        distance=0.2,
+    )
+    payloads: list[dict[str, object]] = []
+
+    class Response:
+        def json(self):
+            documents = payloads[-1]["documents"]
+            assert isinstance(documents, list)
+            return {
+                "reranked_documents": [
+                    {"index": index, "score": 0.95} for index in range(len(documents))
+                ],
+            }
+
+    async def rerank(payload):
+        payloads.append(payload)
+        return Response()
+
+    planned_queries = _install_pipeline_mocks(
+        monkeypatch, mode=mode, candidates=candidates, rerank=rerank
+    )
+    monkeypatch.setattr(
+        context_module, "_search_both", AsyncMock(return_value=(candidates, [chunk]))
+    )
+    monkeypatch.setattr(context_module, "get_chunks_window", AsyncMock(return_value=[]))
+    # Rewrites and history may remove both clauses; only the latest query sets policy.
+    monkeypatch.setattr(
+        context_module,
+        "_contextualize_query",
+        AsyncMock(return_value="Каде е службата?"),
+    )
+    exact = AsyncMock(return_value=candidates[0])
+    monkeypatch.setattr(recovery_plan_module, "get_question_by_name_query", exact)
+
+    async def run():
+        return await context_module.get_retrieved_context_with_sources(
+            Database("postgresql://unused"),
+            query,
+            Model.BGE_M3_LOCAL,
+            Model.GPT_5_4_MINI,
+            query_transform_mode=mode,
+            history_text="previous office conversation",
+        )
+
+    timings, token = start_request_timings()
+    try:
+        result = anyio.run(run)
+    finally:
+        reset_request_timings(token)
+
+    expected_faqs = (
+        ["Деканат", "Архива", "Уписи"] if institution == "ФИНКИ" else ["Уписи"]
+    )
+    assert planned_queries == [query]
+    assert len(payloads) == 1
+    documents = payloads[0]["documents"]
+    assert isinstance(documents, list)
+    assert [text.split("\n")[0] for text in documents] == [
+        *(f"Наслов: {title}" for title in expected_faqs),
+        "Наслов: Документ за постапки",
+    ]
+    assert [source.title for source in result.sources] == [
+        *expected_faqs,
+        chunk.document_title,
+    ]
+    assert "070 302 440" not in result.text
+    assert chunk.content in result.text
+    assert timings.faq_evidence_constraint_reason == "entity_exclusion"
+    assert timings.faq_evidence_excluded_candidate_count == (
+        2 if institution == "ФИНКИ" else 4
+    )
+    if mode == QueryTransformMode.RAW:
+        exact.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    ("canonical", "stored_title"),
+    [
+        ("Студентска служба", "Студентска служба"),
+        ("Студентска служба", "студентска служба"),
+        ("Студентска служба", "Studentska sluzba"),
+        ("Студентска служба", "Studentska sluzhba"),
+        ("Деканат", "Деканат"),
+        ("Деканат", "деканат"),
+        ("Деканат", "Dekanat"),
+    ],
+)
+def test_normalized_exclusion_withholds_actual_catalog_fact_carriers(
+    monkeypatch: pytest.MonkeyPatch, canonical: str, stored_title: str
+) -> None:
+    carrier_title = "kontakt i lokacija"
+    catalog = [
+        stored_title
+        if title == canonical
+        else carrier_title
+        if title == "Контакт и локација"
+        else title
+        for title in _OFFICES
+    ]
+    query = f"Каде е архивата? Не прашувам за {canonical}."
+    constraints = parse_explicit_faq_constraints(query, catalog)
+    assert constraints is not None
+    assert constraints.excluded_title == stored_title
+    assert constraints.direct_fact_source_titles == (carrier_title,)
+    monkeypatch.setattr(
+        constraints_module, "get_question_names_query", AsyncMock(return_value=catalog)
+    )
+    candidates = [
+        _faq(stored_title),
+        _faq(
+            carrier_title, content="070 302 440, Студентска служба; 02 370 377, Декан."
+        ),
+        _faq("Архива", content="Архивата е во Деканатот."),
+    ]
+    payloads: list[dict[str, object]] = []
+
+    class Response:
+        def json(self):
+            return {"reranked_documents": [{"index": 0, "score": 0.95}]}
+
+    async def rerank(payload):
+        payloads.append(payload)
+        return Response()
+
+    _install_pipeline_mocks(
+        monkeypatch,
+        mode=QueryTransformMode.REWRITE,
+        candidates=candidates,
+        rerank=rerank,
+    )
+
+    async def run():
+        return await context_module.get_retrieved_context_with_sources(
+            Database("postgresql://unused"),
+            query,
+            Model.BGE_M3_LOCAL,
+            Model.GPT_5_4_MINI,
+            query_transform_mode=QueryTransformMode.REWRITE,
+        )
+
+    timings, token = start_request_timings()
+    try:
+        result = anyio.run(run)
+    finally:
+        reset_request_timings(token)
+    assert len(payloads) == 1
+    assert payloads[0]["documents"] == [
+        f"Наслов: Архива\nСодржина: {candidates[2].content}"
+    ]
+    assert [source.title for source in result.sources] == ["Архива"]
+    assert "070 302 440" not in result.text
+    assert "02 370 377" not in result.text
+    assert candidates[2].content in result.text
+    assert timings.faq_evidence_excluded_candidate_count == 2
+
+
+@pytest.mark.parametrize(
+    ("query", "title"),
+    [
+        ("Каде е Деканатот на мапата?", "Деканат"),
+        (
+            "Кое е работното време на студентската служба на празници?",
+            "Студентска служба",
+        ),
+        ("Каде е студентската служба на втори кат?", "Студентска служба"),
+        ("Кога работи Архива на крајот на семестарот?", "Архива"),
+        ("Кој е телефонот на Деканатот на професорот од Правен факултет?", "Деканат"),
+    ],
+)
+def test_noninstitution_complements_preserve_ordinary_pipeline(
+    monkeypatch: pytest.MonkeyPatch, query: str, title: str
+) -> None:
+    assert parse_explicit_faq_constraints(query) is None
+    assert parse_explicit_faq_constraints(query, _OFFICES) is None
+    names = AsyncMock(
+        side_effect=AssertionError("ordinary query must not load scope catalog")
+    )
+    monkeypatch.setattr(constraints_module, "get_question_names_query", names)
+    faq = _faq(title)
+    payloads: list[dict[str, object]] = []
+
+    class Response:
+        def json(self):
+            return {"reranked_documents": [{"index": 0, "score": 0.95}]}
+
+    async def rerank(payload):
+        payloads.append(payload)
+        return Response()
+
+    _install_pipeline_mocks(
+        monkeypatch, mode=QueryTransformMode.REWRITE, candidates=[faq], rerank=rerank
+    )
+
+    async def run():
+        return await context_module.get_retrieved_context_with_sources(
+            Database("postgresql://unused"),
+            query,
+            Model.BGE_M3_LOCAL,
+            Model.GPT_5_4_MINI,
+            query_transform_mode=QueryTransformMode.REWRITE,
+        )
+
+    timings, token = start_request_timings()
+    try:
+        result = anyio.run(run)
+    finally:
+        reset_request_timings(token)
+    names.assert_not_awaited()
+    assert len(payloads) == 1
+    assert payloads[0]["documents"] == [f"Наслов: {title}\nСодржина: {faq.content}"]
+    assert [source.title for source in result.sources] == [title]
+    assert faq.content in result.text
+    assert timings.faq_evidence_constraint_applied is False
+
+
+@pytest.mark.parametrize("exclusion_first", [False, True])
+@pytest.mark.parametrize(
+    "catalog",
+    [
+        [title for title in _OFFICES if title != "Деканат"],
+        [*_OFFICES, "studentska sluzba"],
+        [*_OFFICES, "Kontakt i lokacija"],
+        [*_OFFICES, "Kompjuterski centar"],
+        [f"FAQ {index}" for index in range(513)],
+    ],
+)
+def test_compound_live_catalog_cannot_drop_either_recognized_constraint(
+    monkeypatch: pytest.MonkeyPatch, exclusion_first: bool, catalog: list[str]
+) -> None:
+    request = "Каде е Деканатот на Правен факултет?"
+    exclusion = "Не прашувам за студентската служба."
+    query = f"{exclusion} {request}" if exclusion_first else f"{request} {exclusion}"
+    preliminary = parse_explicit_faq_constraints(query)
+    assert preliminary is not None
+    assert preliminary.kind == "exclusion"
+    assert preliminary.institution_is_finki is False
+    assert preliminary.target_title == "Деканат"
+    assert preliminary.excluded_title == "Студентска служба"
+    monkeypatch.setattr(
+        constraints_module, "get_question_names_query", AsyncMock(return_value=catalog)
+    )
+    rerank = AsyncMock(side_effect=AssertionError("invalid catalog must fail closed"))
+    _install_pipeline_mocks(
+        monkeypatch,
+        mode=QueryTransformMode.REWRITE,
+        candidates=[_faq(title) for title in _OFFICES],
+        rerank=rerank,
+    )
+
+    async def run():
+        return await context_module.get_retrieved_context_with_sources(
+            Database("postgresql://unused"),
+            query,
+            Model.BGE_M3_LOCAL,
+            Model.GPT_5_4_MINI,
+            query_transform_mode=QueryTransformMode.REWRITE,
+        )
+
+    timings, token = start_request_timings()
+    try:
+        result = anyio.run(run)
+    finally:
+        reset_request_timings(token)
+    assert result.text == ""
+    assert result.sources == ()
+    assert timings.faq_evidence_constraint_reason == "catalog_error"
+    assert timings.faq_evidence_constrained_abstained is True
+    rerank.assert_not_awaited()
+
+
+def test_plain_exclusion_does_not_depend_on_unrelated_real_catalog_collision() -> None:
+    constraints = parse_explicit_faq_constraints(
+        "Каде е архивата? Не прашувам за студентската служба.",
+        [*_OFFICES, "Kompjuterski centar"],
+    )
+    assert constraints is not None
+    assert constraints.kind == "exclusion"
+    assert constraints.institution_is_finki is None
+    assert constraints.excluded_title == "Студентска служба"
+    assert constraints.direct_fact_source_titles == ("Контакт и локација",)
+
+
+@pytest.mark.parametrize(
+    ("query", "target", "is_finki"),
+    [
+        (
+            "Каде е Деканатот на Правен факултет? Не прашувам за „студентската служба“.",
+            "Деканат",
+            False,
+        ),
+        (
+            'Не прашувам за "студентската служба". Каде е Деканатот на ФИНКИ?',
+            "Деканат",
+            True,
+        ),
+        (
+            "Која е контакт е-поштата на Медицински факултет? Не прашувам за студентската служба.",
+            "Контакт и локација",
+            False,
+        ),
+        (
+            "Не прашувам за студентската служба. Која е контакт е-поштата на ФИНКИ?",
+            "Контакт и локација",
+            True,
+        ),
+    ],
+)
+def test_compound_parser_reuses_shared_institution_forms_and_quote_rules(
+    query: str, target: str, is_finki: bool
+) -> None:
+    constraints = parse_explicit_faq_constraints(query, _OFFICES)
+    assert constraints is not None
+    assert constraints.kind == "exclusion"
+    assert constraints.institution_is_finki is is_finki
+    assert constraints.target_title == target
+    assert constraints.excluded_title == "Студентска служба"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        '"Не прашувам за студентската служба." Каде е Деканатот на Правен факултет?',
+        "„Не прашувам за студентската служба.“ Каде е Деканатот на Правен факултет?",
+        "Каде е Деканатот на Оксфорд?",
+    ],
+)
+def test_unreviewed_quoted_markers_and_unmarked_institution_names_are_ordinary(
+    query: str,
+) -> None:
+    assert parse_explicit_faq_constraints(query, _OFFICES) is None
+
+
+@pytest.mark.parametrize("institution", ["ФИНКИ", "Правен факултет"])
+@pytest.mark.parametrize(
+    "catalog_change",
+    [
+        None,
+        "Kompjuterski centar",
+        "Dekanat",
+        "Studentska sluzba",
+        "Kontakt i lokacija",
+        "missing_target",
+    ],
+)
+def test_compound_catalog_collisions_only_block_affected_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    institution: str,
+    catalog_change: str | None,
+) -> None:
+    query = f"Каде е деканатот на {institution}? Не прашувам за студентската служба."
+    catalog = list(_OFFICES)
+    if catalog_change == "missing_target":
+        catalog.remove("Деканат")
+    elif catalog_change is not None:
+        catalog.append(catalog_change)
+    monkeypatch.setattr(
+        constraints_module, "get_question_names_query", AsyncMock(return_value=catalog)
+    )
+    candidates = [
+        _faq("Студентска служба", content="070 302 440, Студентска служба."),
+        _faq("Деканат"),
+        _faq("Контакт и локација", content="070 302 440, Студентска служба."),
+    ]
+    payloads: list[dict[str, object]] = []
+
+    class Response:
+        def json(self):
+            return {"reranked_documents": [{"index": 0, "score": 0.95}]}
+
+    async def rerank(payload):
+        payloads.append(payload)
+        return Response()
+
+    _install_pipeline_mocks(
+        monkeypatch,
+        mode=QueryTransformMode.REWRITE,
+        candidates=candidates,
+        rerank=rerank,
+    )
+
+    async def run():
+        return await context_module.get_retrieved_context_with_sources(
+            Database("postgresql://unused"),
+            query,
+            Model.BGE_M3_LOCAL,
+            Model.GPT_5_4_MINI,
+            query_transform_mode=QueryTransformMode.REWRITE,
+        )
+
+    timings, token = start_request_timings()
+    try:
+        result = anyio.run(run)
+    finally:
+        reset_request_timings(token)
+    catalog_error = catalog_change not in {None, "Kompjuterski centar"} or (
+        institution != "ФИНКИ" and catalog_change == "Kompjuterski centar"
+    )
+    if catalog_error:
+        assert result.text == ""
+        assert result.sources == ()
+        assert payloads == []
+        assert timings.faq_evidence_constraint_reason == "catalog_error"
+        assert timings.faq_evidence_constrained_abstained is True
+    elif institution == "ФИНКИ":
+        assert [source.title for source in result.sources] == ["Деканат"]
+        assert candidates[1].content in result.text
+        assert "070 302 440" not in result.text
+        assert len(payloads) == 1
+        assert payloads[0]["documents"] == [
+            f"Наслов: Деканат\nСодржина: {candidates[1].content}"
+        ]
+        assert timings.faq_evidence_constraint_reason == "entity_exclusion"
+        assert timings.faq_evidence_excluded_candidate_count == 2
+    else:
+        assert result.text == ""
+        assert result.sources == ()
+        assert payloads == []
+        assert timings.faq_evidence_constraint_reason == "entity_exclusion"
+        assert timings.faq_evidence_excluded_candidate_count == 3

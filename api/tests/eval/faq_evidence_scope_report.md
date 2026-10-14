@@ -107,3 +107,21 @@ The combined API suite recorded **1,273 passed, 60 skipped and 3 known Windows
 environment failures** (missing Docker Compose support and `/bin/sh`). API Ruff,
 format checking and mypy passed. This is offline integration validation, not a new
 GPU study; the frozen benchmark inputs and results above remain unchanged.
+
+## Post-review evidence boundary
+
+The three production-constraint fixes and legacy abstention-parity fix following
+review of `6f474d47559e3772846ddc945596d6bd85f4fd5b` are separate from this frozen
+152-execution study. Their regression tests provide offline evidence; the historical
+cases do not establish the newly fixed behavior. See the
+[production regression tests](../test_faq_evidence_constraints.py) and
+[production/legacy parity tests](test_faq_evidence_scope_wiring.py).
+The frozen candidate source-map digest `20733649…` is not the latest post-review
+application fingerprint. All measured results, fixture/catalog hashes and frozen
+identities above remain unchanged; no new live DB/GPU study was performed for these
+fixes. Final combined post-review checks passed **540 retrieval/evaluation tests**,
+API Ruff/format and mypy. Independent final review passed 98 focused tests and all
+38 frozen parser/filter controls, with no remaining blocker. The preceding full API
+run recorded **1,370 passed, 60 skipped and the same 3 known Windows environment
+failures**; the final collision adjustment was covered by the focused final-state
+checks rather than another full-suite run.

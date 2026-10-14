@@ -178,6 +178,13 @@ private raw queries are not exported. This legacy harness has no conversation
 history, does not observe independent link enrichment, and is not the default
 release benchmark. Optional pre-existing canonical search behavior is unchanged.
 
+The legacy `faq_evidence_constrained_abstained` diagnostic follows actual denial
+stages, not the expected anchor's hit/rank: it is true when filtering empties a
+previously nonempty pool or constrained reranking leaves no eligible candidates.
+An initially empty retrieval, a missed target with other accepted evidence, or a
+zero selection budget alone does not count as constraint-induced abstention.
+Catalog failures remain execution errors in this benchmark harness.
+
 Parent-reported independent post-rebase checks: **436 passed**, API Ruff clean,
 API formatting clean across **274 files**, and mypy clean across **269 files**.
 This final lane step changed only documentation and ignored local manifests, so
