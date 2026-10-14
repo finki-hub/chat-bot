@@ -98,3 +98,12 @@ execution needs current preflight; do not overwrite this evidence or thesis data
 | Wired runner | `427b4ab83aba1740b2a90bb323570b55270952f0d68c5da7c7438cd1e60a8b5d` |
 | Scope comparator | `64cfee73c101ae1c014d5771b08040ec1dc1d774c0375edd35ef0f339df1db06` |
 | Original P1 fixture | `1ffcb8b32ca97f327bb1d483ddb088f20ed3da2afce0cf7334961aec8152e1b5` |
+
+## Publication validation after rebase
+
+The follow-up was rebased onto merged main `e347d858`. All 21 follow-up files were
+byte-identical across the rebase; main's existing BYOK changes remain intact.
+The combined API suite recorded **1,273 passed, 60 skipped and 3 known Windows
+environment failures** (missing Docker Compose support and `/bin/sh`). API Ruff,
+format checking and mypy passed. This is offline integration validation, not a new
+GPU study; the frozen benchmark inputs and results above remain unchanged.
