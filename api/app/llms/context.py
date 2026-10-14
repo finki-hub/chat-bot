@@ -12,9 +12,15 @@ from app.data.connection import Database
 from app.data.documents import get_chunks_window, get_closest_chunks
 from app.data.questions import get_closest_questions, get_matching_questions
 from app.llms.embeddings import generate_embeddings
+from app.llms.faq_evidence_constraints import (
+    apply_faq_constraints_to_candidates,
+    faq_constraints_filter_evidence,
+    plan_faq_evidence_constraints,
+)
 from app.llms.faq_query_recovery_plan import (
     FaqQueryRecoveryPlan,
     plan_faq_query_recovery,
+    plan_faq_query_recovery_from_titles,
 )
 from app.llms.models import ChatModel, Model
 from app.llms.prompts import CONTEXTUALIZE_SYSTEM_PROMPT
@@ -50,6 +56,7 @@ from app.utils.timing import (
     RetrievalCandidateMetrics,
     RetrievalPath,
     RetrievalSelectionMetrics,
+    record_faq_evidence_constraint,
     record_local_faq_recovery,
     record_query_transform_reason,
     record_reranker_scores,
@@ -451,11 +458,56 @@ async def get_retrieved_context_with_sources(
         [(variant.kind, len(variant.text)) for variant in variant_bundle.variants],
     )
 
+    try:
+        with timed("retrieval.faq_evidence_constraints"):
+            evidence_plan = await plan_faq_evidence_constraints(db, query)
+    except asyncio.CancelledError:
+        original_embedding_task.cancel()
+        await asyncio.gather(original_embedding_task, return_exceptions=True)
+        raise
+
+    active_faq_constraints = evidence_plan.constraints
+    # Only constraints that can remove evidence disable the forced fallbacks; a FINKI
+    # scope keeps every candidate, so it retrieves exactly like an unqualified query.
+    strict_faq_constraints = (
+        active_faq_constraints
+        if active_faq_constraints is not None
+        and faq_constraints_filter_evidence(active_faq_constraints)
+        else None
+    )
+    if evidence_plan.outcome == "error":
+        original_embedding_task.cancel()
+        await asyncio.gather(original_embedding_task, return_exceptions=True)
+        record_faq_evidence_constraint(
+            applied=True,
+            reason="catalog_error",
+            constrained_abstained=True,
+        )
+        return RetrievedContext(
+            text="",
+            effective_transform_mode=variant_bundle.mode,
+        )
+    if active_faq_constraints is not None:
+        record_faq_evidence_constraint(
+            applied=True,
+            reason=active_faq_constraints.reason,
+        )
+
     local_recovery_plan = FaqQueryRecoveryPlan(outcome="skipped")
     if variant_bundle.mode == QueryTransformMode.RAW:
         try:
             with timed("retrieval.local_faq_recovery"):
-                local_recovery_plan = await plan_faq_query_recovery(db, search_query)
+                if evidence_plan.catalog_titles is not None:
+                    local_recovery_plan = await plan_faq_query_recovery_from_titles(
+                        db,
+                        search_query,
+                        evidence_plan.catalog_titles,
+                    )
+                else:
+                    local_recovery_plan = await plan_faq_query_recovery(
+                        db,
+                        search_query,
+                    )
         except asyncio.CancelledError:
             original_embedding_task.cancel()
             await asyncio.gather(original_embedding_task, return_exceptions=True)
@@ -611,6 +663,21 @@ async def get_retrieved_context_with_sources(
             if local_recovery_plan.outcome == "matched"
             else None,
         )
+        candidates_before_constraints = len(candidates)
+        if active_faq_constraints is not None:
+            candidates = apply_faq_constraints_to_candidates(
+                candidates,
+                active_faq_constraints,
+            )
+            excluded_candidates = candidates_before_constraints - len(candidates)
+            record_faq_evidence_constraint(
+                applied=True,
+                reason=active_faq_constraints.reason,
+                excluded_candidate_count=excluded_candidates,
+                constrained_abstained=(
+                    candidates_before_constraints > 0 and not candidates
+                ),
+            )
         dense_faq_candidate_count = sum(
             candidate.source == "faq"
             and candidate.retrieval_path in {"dense", "hybrid"}
@@ -666,6 +733,8 @@ async def get_retrieved_context_with_sources(
     dense_fallback = False
     reranker_fallback_reason: RerankerFallbackReason = "none"
     invalid_result_count = 0
+    final: list[_Candidate] = []
+    sources: tuple[RetrievalSource, ...] = ()
 
     _stage("rerank")
 
@@ -694,8 +763,15 @@ async def get_retrieved_context_with_sources(
             len(candidates),
         )
         if not ranked:
-            dense_fallback = True
             reranker_fallback_reason = "empty_or_invalid_response"
+            if strict_faq_constraints is None:
+                dense_fallback = True
+            else:
+                record_faq_evidence_constraint(
+                    applied=True,
+                    reason=strict_faq_constraints.reason,
+                    constrained_abstained=True,
+                )
 
         # The reranker returns each candidate's original index, so we map straight back
         # to the candidate list — no fragile text matching that could silently drop a
@@ -736,7 +812,7 @@ async def get_retrieved_context_with_sources(
                 [(key, source, round(score, 4)) for key, source, score in dropped],
             )
 
-        if not ranked_candidates and ranked:
+        if not ranked_candidates and ranked and strict_faq_constraints is None:
             # Everything was scored but nothing cleared the floor — rather than return
             # empty context, keep the single best-scored candidate (ranked is desc).
             best_idx = ranked[0][0]
@@ -749,6 +825,12 @@ async def get_retrieved_context_with_sources(
             ranked_candidates = [candidates[best_idx]]
             reranker_fallback = True
             reranker_fallback_reason = "score_floor"
+        elif not ranked_candidates and ranked and strict_faq_constraints is not None:
+            record_faq_evidence_constraint(
+                applied=True,
+                reason=strict_faq_constraints.reason,
+                constrained_abstained=True,
+            )
 
         final = _select_with_source_priority(ranked_candidates, top_k)
         sources = visible_sources(
@@ -768,8 +850,17 @@ async def get_retrieved_context_with_sources(
     # ruff: ignore[BLE001] -- reranking degrades to deterministic dense ordering
     except Exception as exc:
         reranker_fallback = True
-        dense_fallback = True
         reranker_fallback_reason = "error"
+        if strict_faq_constraints is None:
+            dense_fallback = True
+        else:
+            final = []
+            sources = ()
+            record_faq_evidence_constraint(
+                applied=True,
+                reason=strict_faq_constraints.reason,
+                constrained_abstained=True,
+            )
         logger.warning(
             "Reranking failed; using vector order error_type=%s",
             type(exc).__name__,

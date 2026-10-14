@@ -1,4 +1,5 @@
 # Eval run outputs are environment- and time-specific — keep them local, not in VC.
 # The golden set (golden.jsonl) is the committed fixture; result dumps are not.
 *.json
+!faq_evidence_scope_facts.json
 __pycache__/

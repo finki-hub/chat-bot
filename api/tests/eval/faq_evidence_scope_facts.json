@@ -1,0 +1,30 @@
+{
+  "schema_version": "public-office-evidence-v1",
+  "scope": "Curated exact public FAQ quotations for evaluation only; no runtime query classification or keyword filtering. Quote occurrence is not entailment or answer accuracy.",
+  "provenance": "Authoritative public title manifest 2026-10-13 and verified P1 corpus metadata; three current public entity bodies; public Archive snapshot rechecked against verified P1 standalone body hash. General Contact literal presence remains pending current-body preflight. Original manifest row hashes use a different recipe and are not asserted to be plain md5(content).",
+  "sources": {
+    "Студентска служба": {"body_md5": "912e1b376295a944a392405eca2e7e00", "review": "current public body verified"},
+    "Деканат": {"body_md5": "8e26204a41c29e66f055b1b6ef8d4031", "review": "current public body verified"},
+    "Архива": {"body_md5": "28a15b1929b3728a99e1cfa8afd673e1", "review": "public body matches verified P1 md5(content)"},
+    "Компјутерски центар": {"body_md5": "ed0e3703d95be752087905bbe3524c91", "review": "current public body verified; no physical location/hours facts"},
+    "Контакт и локација": {"body_md5": "35244932c4341a2ab32cce2de4f4d2c4", "review": "current title/hash verified; literal quote presence pending current-body preflight"}
+  },
+  "facts": {
+    "service_location": {"source_title": "Студентска служба", "attribute": "location", "quote": "Просторијата на Студентската служба се наоѓа во ТМФ, до кабинетот 117."},
+    "service_hours": {"source_title": "Студентска служба", "attribute": "hours", "quote": "Студентската служба е достапна секој работен ден, од **09:00 до 12:00 часот**."},
+    "service_email": {"source_title": "Студентска служба", "attribute": "email", "quote": "studentski@finki.ukim.mk"},
+    "service_phone": {"source_title": "Студентска служба", "attribute": "phone", "quote": "070 302 440"},
+    "dean_location": {"source_title": "Деканат", "attribute": "location", "quote": "Деканатот на ФИНКИ се наоѓа во административната зграда (спроти ТМФ), нагоре по скалите и до крај по ходникот."},
+    "dean_hours": {"source_title": "Деканат", "attribute": "hours", "quote": "Деканатот е отворен од 7:30 до 15:00 часот секој работен ден."},
+    "archive_location": {"source_title": "Архива", "attribute": "location", "quote": "Просторијата на Архивата се наоѓа во Деканатот, горе по скалите, од левата страна на ходникот."},
+    "archive_hours": {"source_title": "Архива", "attribute": "hours", "quote": "За издавање на уверенија, архивата работи од 10:00 до 12:00 часот."},
+    "archive_email": {"source_title": "Архива", "attribute": "email", "quote": "arhiva@finki.ukim.mk"},
+    "computer_contact": {"source_title": "Компјутерски центар", "attribute": "email", "quote": "886@finki.ukim.mk"},
+    "general_contact_email": {"source_title": "Контакт и локација", "attribute": "email", "quote": "contact@finki.ukim.mk", "review": "historical public quote; must pass current-body preflight before use"}
+  },
+  "groups": {
+    "local_office_contact": {"titles": ["Студентска служба", "Деканат", "Архива", "Компјутерски центар", "Контакт и локација"], "fact_keys": ["service_location", "service_hours", "service_email", "service_phone", "dean_location", "dean_hours", "archive_location", "archive_hours", "archive_email", "computer_contact", "general_contact_email"]},
+    "student_service": {"titles": ["Студентска служба"], "fact_keys": ["service_location", "service_hours", "service_email", "service_phone"]},
+    "dean": {"titles": ["Деканат"], "fact_keys": ["dean_location", "dean_hours"]}
+  }
+}

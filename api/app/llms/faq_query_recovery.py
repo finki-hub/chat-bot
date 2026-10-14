@@ -6,7 +6,9 @@ from typing import Literal
 FaqQueryIntent = Literal["location", "hours", "contact"]
 FaqQueryMatchKind = Literal["title", "alias"]
 FaqContactKind = Literal["email", "phone"]
+FaqEntityMatchStatus = Literal["matched", "missing", "ambiguous"]
 _QueryPosition = Literal["prefix", "suffix"]
+_QueryEntityKind = Literal["office", "institution"]
 
 _MAX_QUERY_LENGTH = 160
 _MAX_QUERY_TOKENS = 12
@@ -93,6 +95,7 @@ class _QueryForm:
     intent: FaqQueryIntent
     position: _QueryPosition = "prefix"
     contact_kind: FaqContactKind | None = None
+    entity_kind: _QueryEntityKind = "office"
 
 
 _QUERY_FORMS: tuple[_QueryForm, ...] = (
@@ -103,6 +106,7 @@ _QUERY_FORMS: tuple[_QueryForm, ...] = (
     _QueryForm(("работно", "време", "на"), "hours"),
     _QueryForm(("до", "колку", "работи"), "hours"),
     _QueryForm(("во", "колку", "часот", "работи"), "hours"),
+    _QueryForm(("кога", "работи"), "hours"),
     _QueryForm(
         ("која", "е", "е", "поштата", "на"),
         "contact",
@@ -122,6 +126,14 @@ _QUERY_FORMS: tuple[_QueryForm, ...] = (
     _QueryForm(("телефон", "на"), "contact", contact_kind="phone"),
     _QueryForm(("телефонски", "број", "на"), "contact", contact_kind="phone"),
     _QueryForm(("телефонски", "број", "за"), "contact", contact_kind="phone"),
+    _QueryForm(("кој", "е", "телефонот", "на"), "contact", contact_kind="phone"),
+    _QueryForm(("кој", "е", "мејлот", "на"), "contact", contact_kind="email"),
+    _QueryForm(
+        ("која", "е", "контакт", "е", "поштата", "на"),
+        "contact",
+        contact_kind="email",
+        entity_kind="institution",
+    ),
 )
 
 
@@ -159,8 +171,13 @@ def _tokens(text: str) -> tuple[str, ...]:
     return tuple(_TOKEN_RE.findall(text.casefold()))
 
 
-def _grammar_tokens(query: str) -> tuple[str, ...] | None:
-    if not query or len(query) > _MAX_QUERY_LENGTH:
+def _grammar_tokens(
+    query: str,
+    *,
+    max_query_length: int = _MAX_QUERY_LENGTH,
+    max_query_tokens: int = _MAX_QUERY_TOKENS,
+) -> tuple[str, ...] | None:
+    if not query or len(query) > max_query_length:
         return None
     trimmed = query.strip()
     grammar_text = trimmed[:-1] if trimmed.endswith(("?", "!", ".")) else trimmed
@@ -173,7 +190,7 @@ def _grammar_tokens(query: str) -> tuple[str, ...] | None:
     if any(char in grammar_text for char in "?!. ".strip()):
         return None
     tokens = _tokens(grammar_text)
-    if not 3 <= len(tokens) <= _MAX_QUERY_TOKENS:
+    if not 3 <= len(tokens) <= max_query_tokens:
         return None
     # Numeric/technical identifiers are not generalized into natural-language aliases.
     if any(any(char.isdigit() for char in token) for token in tokens):
@@ -204,14 +221,111 @@ def _form_entity(
 def is_faq_query_recovery_eligible(query: str) -> bool:
     tokens = _grammar_tokens(query)
     return tokens is not None and any(
-        _form_entity(tokens, form) for form in _QUERY_FORMS
+        form.entity_kind == "office" and _form_entity(tokens, form)
+        for form in _QUERY_FORMS
     )
+
+
+def faq_query_entity_forms(
+    query: str,
+    *,
+    max_query_length: int = _MAX_QUERY_LENGTH,
+    max_query_tokens: int = _MAX_QUERY_TOKENS,
+) -> tuple[tuple[FaqQueryIntent, tuple[str, ...], FaqContactKind | None], ...]:
+    """Parse complete reviewed query forms with caller-bounded input limits.
+
+    Defaults retain FAQ recovery's original conservative query bounds. Constraint callers
+    may set a larger outer limit while entity phrases remain capped in `match_faq_entity`.
+    """
+    tokens = _grammar_tokens(
+        query,
+        max_query_length=max_query_length,
+        max_query_tokens=max_query_tokens,
+    )
+    if tokens is None:
+        return ()
+    forms: set[tuple[FaqQueryIntent, tuple[str, ...], FaqContactKind | None]] = set()
+    for form in _QUERY_FORMS:
+        if form.entity_kind != "office":
+            continue
+        entity = _form_entity(tokens, form)
+        if entity is not None:
+            forms.add((form.intent, entity, form.contact_kind))
+    return tuple(forms)
+
+
+def faq_query_institution_forms(
+    query: str,
+    *,
+    max_query_length: int = _MAX_QUERY_LENGTH,
+    max_query_tokens: int = _MAX_QUERY_TOKENS,
+) -> tuple[tuple[FaqQueryIntent, tuple[str, ...], FaqContactKind | None], ...]:
+    """Parse the small set of reviewed questions whose named subject is an institution."""
+    tokens = _grammar_tokens(
+        query,
+        max_query_length=max_query_length,
+        max_query_tokens=max_query_tokens,
+    )
+    if tokens is None:
+        return ()
+    forms: set[tuple[FaqQueryIntent, tuple[str, ...], FaqContactKind | None]] = set()
+    for form in _QUERY_FORMS:
+        if form.entity_kind != "institution":
+            continue
+        entity = _form_entity(tokens, form)
+        if entity is not None:
+            forms.add((form.intent, entity, form.contact_kind))
+    return tuple(forms)
+
+
+def match_faq_entity(
+    entity: str | tuple[str, ...],
+    titles: list[str] | tuple[str, ...],
+) -> str | None:
+    """Resolve one complete reviewed entity phrase against a supplied FAQ catalog."""
+    status, title = match_faq_entity_with_status(entity, titles)
+    return title if status == "matched" else None
+
+
+def match_faq_entity_with_status(
+    entity: str | tuple[str, ...],
+    titles: list[str] | tuple[str, ...],
+) -> tuple[FaqEntityMatchStatus, str | None]:
+    """Resolve a reviewed phrase while distinguishing an absent title from collisions."""
+    entity_tokens = _tokens(entity) if isinstance(entity, str) else entity
+    if not entity_tokens or len(entity_tokens) > _MAX_QUERY_TOKENS:
+        return "missing", None
+    if any(not token.isalpha() for token in entity_tokens):
+        return "missing", None
+
+    titles_by_key: dict[tuple[str, ...], list[str]] = {}
+    for title in titles:
+        title_tokens = _tokens(title)
+        if title_tokens and len(title_tokens) <= _MAX_QUERY_TOKENS:
+            titles_by_key.setdefault(_phrase_key(title_tokens), []).append(title)
+    _exact_matches, matches = _title_match_candidates(entity_tokens, titles_by_key)
+    if not matches:
+        return "missing", None
+    if len(matches) != 1:
+        return "ambiguous", None
+    return "matched", next(iter(matches))
 
 
 def _title_match(
     entity_tokens: tuple[str, ...],
     titles_by_key: dict[tuple[str, ...], list[str]],
 ) -> tuple[str, FaqQueryMatchKind] | None:
+    exact_matches, candidates = _title_match_candidates(entity_tokens, titles_by_key)
+    if len(candidates) != 1:
+        return None
+    title = next(iter(candidates))
+    return title, "title" if title in exact_matches else "alias"
+
+
+def _title_match_candidates(
+    entity_tokens: tuple[str, ...],
+    titles_by_key: dict[tuple[str, ...], list[str]],
+) -> tuple[set[str], set[str]]:
     exact_matches = set(titles_by_key.get(_phrase_key(entity_tokens), ()))
     alias_targets: set[str] = set()
     entity_key = _phrase_key(entity_tokens)
@@ -220,11 +334,7 @@ def _title_match(
             continue
         alias_targets.update(titles_by_key.get(_phrase_key(target_tokens), ()))
 
-    candidates = exact_matches | alias_targets
-    if len(candidates) != 1:
-        return None
-    title = next(iter(candidates))
-    return title, "title" if title in exact_matches else "alias"
+    return exact_matches, exact_matches | alias_targets
 
 
 def _title_match_with_qualifier(
@@ -265,6 +375,8 @@ def resolve_faq_query(
         tuple[FaqQueryIntent, str, FaqQueryMatchKind, FaqContactKind | None, bool]
     ] = set()
     for form in _QUERY_FORMS:
+        if form.entity_kind != "office":
+            continue
         entity = _form_entity(query_tokens, form)
         if entity is None:
             continue
