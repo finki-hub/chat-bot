@@ -94,8 +94,9 @@ Comparison gates:
 - An allowed-other entity already present before filtering cannot be removed by
   an unrelated exclusion. Context/source checks respect actual confidence floors:
   no forced low-score answer or visible citation to meet a quota.
-- With active constraints, all remaining candidates below 0.1, reranker failure or
-  invalid response must not trigger keep-best or unscored dense fallback. Verify
+- With evidence-filtering constraints, all remaining candidates below 0.1, reranker
+  failure or invalid response must not trigger keep-best or unscored dense fallback.
+  A compatible FINKI scope filters nothing and keeps the ordinary fallbacks. Verify
   these branches offline with mocks, not intentional faults in live quality runs.
 - Ordinary controls must keep candidate/final/visible identities and context
   content unchanged, with no active restriction; source/fact accuracy is untested.
@@ -171,8 +172,9 @@ passed, 1 valid pair with release failures, 2 invalid evidence. Scope-only
 
 Legacy `run_eval.py` resolves constraints from original `ex.query` before variant
 construction in every mode, calls the same pure production filter before rerank,
-and uses the shared finite-score/index validator. Active constraints disable
-keep-best below-floor fallback and abstain on rerank failure/invalid response.
+and uses the shared finite-score/index validator. Evidence-filtering constraints
+disable keep-best below-floor fallback and abstain on rerank failure/invalid
+response; a compatible FINKI scope keeps the ordinary fallbacks.
 Only content-free reason/count/applied/abstained metadata is added to legacy JSON;
 private raw queries are not exported. This legacy harness has no conversation
 history, does not observe independent link enrichment, and is not the default

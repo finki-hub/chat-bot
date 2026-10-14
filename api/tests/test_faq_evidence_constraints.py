@@ -446,6 +446,61 @@ def test_constrained_queries_never_use_unscored_or_score_floor_fallback(
     assert timings.faq_evidence_excluded_candidate_count == 1
 
 
+@pytest.mark.parametrize("rerank_result", ["low", "invalid", "error"])
+def test_finki_scope_keeps_ordinary_fallbacks(
+    monkeypatch: pytest.MonkeyPatch,
+    rerank_result: str,
+) -> None:
+    query = "Каде е студентската служба на ФИНКИ?"
+    office = _faq(
+        "Студентска служба",
+        content="Студентската служба е во ТМФ.",
+    ).model_copy(update={"distance": 0.2})
+    monkeypatch.setattr(
+        constraints_module,
+        "get_question_names_query",
+        AsyncMock(return_value=list(_OFFICES)),
+    )
+
+    class Response:
+        def json(self):
+            if rerank_result == "low":
+                return {"reranked_documents": [{"index": 0, "score": 0.01}]}
+            return {"reranked_documents": []}
+
+    async def rerank(_payload):
+        if rerank_result == "error":
+            raise TimeoutError("reranker unavailable")
+        return Response()
+
+    _install_pipeline_mocks(
+        monkeypatch,
+        mode=QueryTransformMode.REWRITE,
+        candidates=[office],
+        rerank=rerank,
+    )
+
+    async def run():
+        return await context_module.get_retrieved_context_with_sources(
+            Database("postgresql://unused"),
+            query,
+            Model.BGE_M3_LOCAL,
+            Model.GPT_5_4_MINI,
+            query_transform_mode=QueryTransformMode.REWRITE,
+        )
+
+    timings, token = start_request_timings()
+    try:
+        result = anyio.run(run)
+    finally:
+        reset_request_timings(token)
+
+    assert office.content in result.text
+    assert timings.faq_evidence_constraint_reason == "institution_scope"
+    assert timings.faq_evidence_excluded_candidate_count == 0
+    assert timings.faq_evidence_constrained_abstained is False
+
+
 def test_constraint_catalog_error_fails_closed_and_cancels_owned_embedding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

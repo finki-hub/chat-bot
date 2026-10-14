@@ -55,6 +55,7 @@ from app.llms.context import (
 )
 from app.llms.faq_evidence_constraints import (
     apply_faq_constraints_to_candidates,
+    faq_constraints_filter_evidence,
     plan_faq_evidence_constraints,
 )
 from app.llms.faq_query_recovery_plan import (
@@ -475,6 +476,11 @@ async def evaluate_one(
     candidates = _build_candidates(prod_lists, lexical_lists, direct_faq)
     pre_constraint_count = len(candidates)
     constrained_abstained = False
+    strict_constraints = (
+        constraints
+        if constraints is not None and faq_constraints_filter_evidence(constraints)
+        else None
+    )
     if constraints is not None:
         candidates = apply_faq_constraints_to_candidates(candidates, constraints)
         constrained_abstained = pre_constraint_count > 0 and not candidates
@@ -496,7 +502,7 @@ async def evaluate_one(
                 response.json(), len(candidates)
             )
         except Exception:  # noqa: BLE001 -- constrained production path abstains on reranker failure
-            if constraints is None:
+            if strict_constraints is None:
                 raise
             ranked = []
         kept_candidates: list[_Candidate] = []
@@ -505,12 +511,12 @@ async def evaluate_one(
                 continue
             kept_candidates.append(candidates[idx])
         if (
-            not kept_candidates and ranked and constraints is None
+            not kept_candidates and ranked and strict_constraints is None
         ):  # production keeps the single best if all below floor
             best_idx = ranked[0][0]
             if 0 <= best_idx < len(cand_nat):
                 kept_candidates = [candidates[best_idx]]
-        if constraints is not None and not kept_candidates:
+        if strict_constraints is not None and not kept_candidates:
             constrained_abstained = True
         natural_key_by_candidate = dict(zip(cand_keys, cand_nat, strict=True))
         topk = [

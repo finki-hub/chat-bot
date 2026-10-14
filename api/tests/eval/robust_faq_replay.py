@@ -189,7 +189,9 @@ async def observe_case(
     candidates: list = []
     pre_candidates: list = []
     filter_calls = 0
+    observed_constraints: list = []
     scope_filter = getattr(context, "apply_faq_constraints_to_candidates", None)
+    filters_evidence = getattr(context, "faq_constraints_filter_evidence", None)
     embedding_queries: list[str] = []
     rerank_queries: list[str] = []
     rerank_scores: list[dict] = []
@@ -217,6 +219,7 @@ async def observe_case(
         if filter_calls != 1 or list(pool) != pre_candidates:
             raise ReplaySafetyError("Production scope filter capture interface changed")
         result = scope_filter(pool, constraints)
+        observed_constraints[:] = [constraints]
         candidates[:] = result
         return result
 
@@ -401,7 +404,12 @@ async def observe_case(
             hook_available=scope_filter is not None,
             diagnostics={
                 "active": active,
-                "strict_abstention": active,
+                "strict_abstention": bool(active)
+                and (
+                    filters_evidence is None
+                    or not observed_constraints
+                    or filters_evidence(observed_constraints[0])
+                ),
                 "reason": recovery_record.get("faq_evidence_constraint_reason"),
                 "excluded_candidate_count": recovery_record.get(
                     "faq_evidence_excluded_candidate_count"

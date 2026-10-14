@@ -14,6 +14,7 @@ from app.data.questions import get_closest_questions, get_matching_questions
 from app.llms.embeddings import generate_embeddings
 from app.llms.faq_evidence_constraints import (
     apply_faq_constraints_to_candidates,
+    faq_constraints_filter_evidence,
     plan_faq_evidence_constraints,
 )
 from app.llms.faq_query_recovery_plan import (
@@ -466,6 +467,14 @@ async def get_retrieved_context_with_sources(
         raise
 
     active_faq_constraints = evidence_plan.constraints
+    # Only constraints that can remove evidence disable the forced fallbacks; a FINKI
+    # scope keeps every candidate, so it retrieves exactly like an unqualified query.
+    strict_faq_constraints = (
+        active_faq_constraints
+        if active_faq_constraints is not None
+        and faq_constraints_filter_evidence(active_faq_constraints)
+        else None
+    )
     if evidence_plan.outcome == "error":
         original_embedding_task.cancel()
         await asyncio.gather(original_embedding_task, return_exceptions=True)
@@ -755,12 +764,12 @@ async def get_retrieved_context_with_sources(
         )
         if not ranked:
             reranker_fallback_reason = "empty_or_invalid_response"
-            if active_faq_constraints is None:
+            if strict_faq_constraints is None:
                 dense_fallback = True
             else:
                 record_faq_evidence_constraint(
                     applied=True,
-                    reason=active_faq_constraints.reason,
+                    reason=strict_faq_constraints.reason,
                     constrained_abstained=True,
                 )
 
@@ -803,7 +812,7 @@ async def get_retrieved_context_with_sources(
                 [(key, source, round(score, 4)) for key, source, score in dropped],
             )
 
-        if not ranked_candidates and ranked and active_faq_constraints is None:
+        if not ranked_candidates and ranked and strict_faq_constraints is None:
             # Everything was scored but nothing cleared the floor — rather than return
             # empty context, keep the single best-scored candidate (ranked is desc).
             best_idx = ranked[0][0]
@@ -816,10 +825,10 @@ async def get_retrieved_context_with_sources(
             ranked_candidates = [candidates[best_idx]]
             reranker_fallback = True
             reranker_fallback_reason = "score_floor"
-        elif not ranked_candidates and ranked and active_faq_constraints is not None:
+        elif not ranked_candidates and ranked and strict_faq_constraints is not None:
             record_faq_evidence_constraint(
                 applied=True,
-                reason=active_faq_constraints.reason,
+                reason=strict_faq_constraints.reason,
                 constrained_abstained=True,
             )
 
@@ -842,14 +851,14 @@ async def get_retrieved_context_with_sources(
     except Exception as exc:
         reranker_fallback = True
         reranker_fallback_reason = "error"
-        if active_faq_constraints is None:
+        if strict_faq_constraints is None:
             dense_fallback = True
         else:
             final = []
             sources = ()
             record_faq_evidence_constraint(
                 applied=True,
-                reason=active_faq_constraints.reason,
+                reason=strict_faq_constraints.reason,
                 constrained_abstained=True,
             )
         logger.warning(

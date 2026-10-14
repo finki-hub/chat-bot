@@ -459,12 +459,17 @@ def _institution_constraint(
     return None
 
 
+def faq_constraints_filter_evidence(constraints: FaqConstraints) -> bool:
+    """Whether the constraints can remove evidence; FINKI scope keeps every candidate."""
+    return not (constraints.kind == "institution" and constraints.institution_is_finki)
+
+
 def apply_faq_constraints_to_candidates[T: _FaqCandidate](
     candidates: Sequence[T],
     constraints: FaqConstraints,
 ) -> list[T]:
     """Filter only incompatible mapped FAQ evidence; preserve order and all documents."""
-    if constraints.kind == "institution" and constraints.institution_is_finki:
+    if not faq_constraints_filter_evidence(constraints):
         return list(candidates)
 
     filtered: list[T] = []
