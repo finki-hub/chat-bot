@@ -86,8 +86,9 @@ not a guarantee that every failed or cancelled request emits an event.
 | `not_run` | No completed variant-generation outcome was recorded (initial/error/cancellation default). |
 | `not_requested` | The requested variant mode was `raw`. This does not describe history contextualization. |
 | `credential_missing` | A transform was requested, but no matching user-provider credential was available; retrieval used raw mode. |
-| `no_usable_variants` | Transform calls completed or failed, but neither requested variant survived. Exceptions, blank output, and output unchanged from the search query all count as unusable. |
-| `partial_variants` | Only one of the requested rewrite and HyDE variants survived. |
+| `no_usable_variants` | Transform calls completed or failed, but no requested variant survived. Exceptions and blank output count as unusable; output unchanged from the search query counts as unusable unless every missing variant was unchanged. |
+| `partial_variants` | Only one of the requested rewrite and HyDE variants survived, and the other failed or was blank. |
+| `unchanged_variants` | Every requested variant that is missing returned the search query unchanged, so it was deduplicated against the raw query (common for rewrite after history contextualization). Provider adapters that swallow an error return the input unchanged too, so pair this with their `query transformation failed` warnings. |
 | `none` | All requested transformed variants survived. |
 
 Sponsored inference credentials are not injected into query transformation. A

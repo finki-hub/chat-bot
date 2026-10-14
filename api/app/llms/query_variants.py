@@ -26,15 +26,19 @@ class QueryVariant:
 class QueryVariantBundle:
     variants: tuple[QueryVariant, ...]
     rerank_query: str
+    unchanged_kinds: frozenset[QueryVariantKind] = frozenset()
 
     def fallback_reason(
         self, requested: QueryTransformMode
     ) -> QueryTransformFallbackReason:
-        """Classify retained variants, including failed, blank and unchanged output."""
+        """Classify retained variants; output identical to the query is not a failure."""
         if requested == QueryTransformMode.RAW:
             return "not_requested"
         if self.mode == requested:
             return "none"
+        missing = _requested_kinds(requested) - _requested_kinds(self.mode)
+        if missing <= self.unchanged_kinds:
+            return "unchanged_variants"
         if self.mode == QueryTransformMode.RAW:
             return "no_usable_variants"
         return "partial_variants"
@@ -52,6 +56,34 @@ class QueryVariantBundle:
             case True, True:
                 return QueryTransformMode.REWRITE_HYDE
         raise AssertionError("Unreachable query variant mode")
+
+
+def _requested_kinds(mode: QueryTransformMode) -> frozenset[QueryVariantKind]:
+    match mode:
+        case QueryTransformMode.RAW:
+            return frozenset()
+        case QueryTransformMode.REWRITE:
+            return frozenset({"rewrite"})
+        case QueryTransformMode.HYDE:
+            return frozenset({"hyde"})
+        case QueryTransformMode.REWRITE_HYDE:
+            return frozenset({"rewrite", "hyde"})
+        case unreachable:
+            assert_never(unreachable)
+    raise AssertionError(f"Unhandled query transform mode: {mode}")
+
+
+def _usable(search_query: str, output: str | None) -> str | None:
+    return output if output and output != search_query.strip() else None
+
+
+def _unchanged_kinds(
+    search_query: str,
+    outputs: dict[QueryVariantKind, str | None],
+) -> frozenset[QueryVariantKind]:
+    return frozenset(
+        kind for kind, output in outputs.items() if output == search_query.strip()
+    )
 
 
 def query_variant_count(mode: QueryTransformMode) -> int:
@@ -79,16 +111,20 @@ async def build_query_variants(
         case QueryTransformMode.RAW:
             return QueryVariantBundle(variants=(raw,), rerank_query=search_query)
         case QueryTransformMode.REWRITE:
-            rewritten = await _rewrite_query(
+            rewrite_output = await _rewrite_query(
                 search_query,
                 query_transform_model,
                 credentials,
             )
+            rewritten = _usable(search_query, rewrite_output)
             match rewritten:
                 case None:
                     return QueryVariantBundle(
                         variants=(raw,),
                         rerank_query=search_query,
+                        unchanged_kinds=_unchanged_kinds(
+                            search_query, {"rewrite": rewrite_output}
+                        ),
                     )
                 case str():
                     return QueryVariantBundle(
@@ -103,16 +139,20 @@ async def build_query_variants(
                         rerank_query=rewritten,
                     )
         case QueryTransformMode.HYDE:
-            hyde = await _hyde_passage(
+            hyde_output = await _hyde_passage(
                 search_query,
                 query_transform_model,
                 credentials,
             )
+            hyde = _usable(search_query, hyde_output)
             match hyde:
                 case None:
                     return QueryVariantBundle(
                         variants=(raw,),
                         rerank_query=search_query,
+                        unchanged_kinds=_unchanged_kinds(
+                            search_query, {"hyde": hyde_output}
+                        ),
                     )
                 case str():
                     return QueryVariantBundle(
@@ -123,10 +163,12 @@ async def build_query_variants(
                         rerank_query=search_query,
                     )
         case QueryTransformMode.REWRITE_HYDE:
-            rewritten, hyde = await asyncio.gather(
+            rewrite_output, hyde_output = await asyncio.gather(
                 _rewrite_query(search_query, query_transform_model, credentials),
                 _hyde_passage(search_query, query_transform_model, credentials),
             )
+            rewritten = _usable(search_query, rewrite_output)
+            hyde = _usable(search_query, hyde_output)
             variants = (
                 *(
                     (QueryVariant(kind="hyde", text=hyde, is_document=True),)
@@ -149,6 +191,10 @@ async def build_query_variants(
             return QueryVariantBundle(
                 variants=variants,
                 rerank_query=rewritten or search_query,
+                unchanged_kinds=_unchanged_kinds(
+                    search_query,
+                    {"rewrite": rewrite_output, "hyde": hyde_output},
+                ),
             )
         case unreachable:
             assert_never(unreachable)
@@ -177,8 +223,7 @@ async def _rewrite_query(
             type(exc).__name__,
         )
         return None
-    rewritten = rewritten.strip()
-    return rewritten if rewritten and rewritten != search_query.strip() else None
+    return rewritten.strip()
 
 
 async def _hyde_passage(
@@ -204,5 +249,4 @@ async def _hyde_passage(
             type(exc).__name__,
         )
         return None
-    hyde = hyde.strip()
-    return hyde if hyde and hyde != search_query.strip() else None
+    return hyde.strip()
