@@ -21,6 +21,10 @@ from app.llms.provider_credentials import LlmProviderCredentials
 
 logger = logging.getLogger(__name__)
 
+# Reasoning models spend output tokens on hidden reasoning before the short visible
+# result, so the cap is sized for reasoning rather than for the output itself.
+QUERY_TRANSFORM_MAX_TOKENS = 1024
+
 
 async def transform_query(
     query: str,

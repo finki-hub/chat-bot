@@ -30,7 +30,7 @@ from app.llms.provider_credentials import (
 )
 from app.llms.query_modes import QueryTransformMode
 from app.llms.query_normalization import query_search_variants
-from app.llms.query_transform import transform_query
+from app.llms.query_transform import QUERY_TRANSFORM_MAX_TOKENS, transform_query
 from app.llms.query_variants import (
     QueryVariantKind,
     build_query_variants,
@@ -938,7 +938,7 @@ async def _contextualize_query(
             system_prompt=CONTEXTUALIZE_SYSTEM_PROMPT,
             temperature=0.0,
             top_p=1.0,
-            max_tokens=128,
+            max_tokens=QUERY_TRANSFORM_MAX_TOKENS,
             credentials=credentials,
         )
     # ruff: ignore[BLE001] -- contextualization degrades to the original user query
