@@ -1,6 +1,12 @@
 from pydantic import SecretStr
 
-from app.api.sponsored_access import resolve_sponsored_inference
+from app.api.sponsored_access import (
+    SponsoredInferenceResolution,
+    resolve_sponsored_inference,
+    sponsored_query_transform,
+)
+from app.llms.models import Model
+from app.llms.provider_credentials import LlmProviderCredentials
 from app.schemas.chat_credentials import ChatCredentialSecret
 from app.utils.settings import Settings
 
@@ -110,3 +116,59 @@ def test_sponsored_resolution_uses_configured_provider_for_credential_secret() -
         api_key="sponsored-key",
     )
     assert resolved.sponsored is True
+
+
+_SPONSORED_KEY = ChatCredentialSecret(provider="openai", api_key="sponsored-key")
+
+
+def test_sponsored_query_transform_uses_sponsored_model_without_user_key() -> None:
+    google = ChatCredentialSecret(provider="google", api_key="user-google-key")
+
+    model, credentials = sponsored_query_transform(
+        Model.GPT_5_4_MINI,
+        LlmProviderCredentials(google=google, conversation_id="conversation"),
+        SponsoredInferenceResolution(credential=_SPONSORED_KEY, sponsored=True),
+        Model.GPT_6_LUNA,
+    )
+
+    assert model == Model.GPT_6_LUNA
+    assert credentials == LlmProviderCredentials(
+        openai=_SPONSORED_KEY,
+        google=google,
+        conversation_id="conversation",
+    )
+
+
+def test_sponsored_query_transform_keeps_requested_model_with_user_key() -> None:
+    user_credentials = LlmProviderCredentials(
+        openai=ChatCredentialSecret(provider="openai", api_key="user-key"),
+    )
+
+    assert sponsored_query_transform(
+        Model.GPT_5_4_MINI,
+        user_credentials,
+        SponsoredInferenceResolution(credential=_SPONSORED_KEY, sponsored=True),
+        Model.GPT_6_LUNA,
+    ) == (Model.GPT_5_4_MINI, user_credentials)
+
+
+def test_sponsored_query_transform_ignores_unsponsored_requests() -> None:
+    assert sponsored_query_transform(
+        Model.GPT_5_4_MINI,
+        None,
+        SponsoredInferenceResolution(credential=None, sponsored=False),
+        Model.GPT_6_LUNA,
+    ) == (Model.GPT_5_4_MINI, None)
+
+
+def test_sponsored_query_transform_skips_unknown_upstream_model() -> None:
+    assert sponsored_query_transform(
+        Model.GPT_5_4_MINI,
+        None,
+        SponsoredInferenceResolution(
+            credential=_SPONSORED_KEY,
+            sponsored=True,
+            upstream_model="upstream-luna",
+        ),
+        Model.GPT_6_LUNA,
+    ) == (Model.GPT_5_4_MINI, None)
