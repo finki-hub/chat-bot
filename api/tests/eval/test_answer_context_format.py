@@ -57,12 +57,15 @@ def test_grounded_context_blocks_match_production_formatters(case: AnswerCase):
             rendered = _chunk_candidate(chunk).context_text
         else:
             assert source_type == "FAQ", (case.id, source_type)
+            updated_at = datetime.fromisoformat(
+                fields.pop("Последна измена на FAQ"),
+            ).replace(tzinfo=UTC)
             question = QuestionSchema(
                 id=UUID(int=index + 1),
                 name=fields.pop("Наслов"),
                 content=content,
-                created_at=datetime(2026, 9, 14, tzinfo=UTC),
-                updated_at=datetime(2026, 9, 14, tzinfo=UTC),
+                created_at=updated_at,
+                updated_at=updated_at,
             )
             rendered = _question_candidate(question).context_text
 
