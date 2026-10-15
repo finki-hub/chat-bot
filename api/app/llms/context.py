@@ -186,7 +186,6 @@ def _question_candidate(
         for part in [
             "Тип на извор: FAQ",
             f"Наслов: {name}",
-            f"Последна измена на FAQ: {q.updated_at.date().isoformat()}",
             f"Содржина: {content}",
             note,
             sources,

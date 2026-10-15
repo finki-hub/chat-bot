@@ -29,16 +29,22 @@ def test_system_prompt_grounds_system_functions_and_preserves_tool_evidence():
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
 
 
-def test_system_prompt_prefers_current_faq_over_older_regulation():
+def test_system_prompt_prefers_faq_over_general_regulation():
     assert (
-        "FAQ ја опишува тековната практика на факултетот, а прописите и документите "
-        "ја даваат правната основа и може да се постари. Датумот на FAQ е во "
-        "„Последна измена на FAQ:“. Ако FAQ и постар пропис "
-        "или документ за истото прашање се разликуваат, одговори според FAQ, "
-        "а прописот спомни го само ако е корисно. Спротивност наведи само ако "
-        "самиот FAQ е несигурен или ако изворите се подеднакво тековни;"
+        "Ако FAQ и општа одредба од пропис или документ за истото прашање се "
+        "разликуваат, одговори според FAQ, а прописот спомни го само ако е корисно."
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
     assert "Не давај автоматска предност на FAQ" not in DEFAULT_AGENT_SYSTEM_PROMPT
+
+
+def test_system_prompt_keeps_specific_document_evidence_over_faq():
+    # The corpus-faq-document-conflict eval case requires a specific price row to
+    # beat a broader FAQ.
+    assert (
+        "Ако документот дава поконкретен податок за точниот случај (на пример посебна "
+        "цена, формат, постапка, циклус на студии или учебна година), тој има предност "
+        "пред поопштиот FAQ; наведи ја разликата."
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
 
 
 def test_system_prompt_keeps_assistant_note_internal():
