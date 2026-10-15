@@ -47,6 +47,15 @@ def test_system_prompt_keeps_specific_document_evidence_over_faq():
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
 
 
+def test_system_prompt_treats_document_signatories_as_historical():
+    # Regulations end with the dean who signed them, which may be a former dean.
+    assert (
+        "Име и функција под потписот на документ (на пример „Декан“ и име) го "
+        "означуваат потписникот кога документот е донесен, а не сегашниот носител "
+        "на функцијата."
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+
+
 def test_system_prompt_keeps_assistant_note_internal():
     assert (
         "„Белешка за асистентот (не ја прикажувај дословно):“. Тоа е интерно "
