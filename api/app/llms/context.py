@@ -146,7 +146,7 @@ def _embedding_for_variant(
     match kind:
         case "raw":
             return original_embedding_task
-        case "rewrite" | "hyde":
+        case "rewrite" | "hyde" | "transliteration":
             return _embed_variant(
                 text,
                 embedding_model,
@@ -530,7 +530,11 @@ async def get_retrieved_context_with_sources(
         rerank_query_used=False,
     )
 
-    budget = retrieval_budget(variant_bundle.mode, initial_k)
+    budget = retrieval_budget(
+        variant_bundle.mode,
+        initial_k,
+        extra_variants=variant_bundle.transliteration_variant_count,
+    )
     per_query_k = (
         min(budget.per_query_k, 31)
         if local_recovery_plan.outcome == "matched"
@@ -574,8 +578,9 @@ async def get_retrieved_context_with_sources(
                     embeddings.append(canonical_embedding)
 
         with timed("retrieval.vector_search"):
-            # Recovery is intentionally bounded at 2 queries x 2 sources x 31
-            # candidates, plus one exact FAQ row: at most 125 pre-dedup inputs.
+            # Recovery is intentionally bounded at 3 queries (raw, optional
+            # transliteration, canonical) x 2 sources x 31 candidates, plus one exact
+            # FAQ row: at most 187 pre-dedup inputs.
             async def search_canonical_optional(
                 embedding: list[float],
             ) -> tuple[list[QuestionSchema], list[ChunkSchema]]:

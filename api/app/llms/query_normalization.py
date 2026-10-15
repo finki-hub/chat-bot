@@ -80,3 +80,72 @@ def query_search_variants(query: str) -> tuple[str, ...]:
     normalized_query = normalize("NFC", query)
     transliterated = _WORD_RE.sub(_transliterate_token, normalized_query)
     return (query, transliterated) if transliterated != normalized_query else (query,)
+
+
+# Romanized Macedonian function words that are not English words, so English queries
+# (which transliterate just as readily) are not mistaken for Macedonian.
+_ROMANIZED_MACEDONIAN_MARKERS: Final = frozenset(
+    {
+        "e",
+        "na",
+        "da",
+        "se",
+        "za",
+        "od",
+        "po",
+        "vo",
+        "li",
+        "ili",
+        "ne",
+        "ke",
+        "kje",
+        "ima",
+        "nema",
+        "kade",
+        "koga",
+        "kako",
+        "zosto",
+        "zoshto",
+        "zasto",
+        "sto",
+        "shto",
+        "sho",
+        "koj",
+        "koja",
+        "koe",
+        "koi",
+        "kolku",
+        "dali",
+        "mozam",
+        "mozhe",
+        "moze",
+        "treba",
+        "sakam",
+        "kaj",
+        "ako",
+        "samo",
+        "sme",
+        "ste",
+        "gi",
+    }
+)
+_MACEDONIAN_LATIN_LETTERS: Final = frozenset("šžčǵḱ")
+_CYRILLIC_RE: Final = re.compile(r"[\u0400-\u04ff]")
+_WORD_EDGE_PUNCTUATION: Final = "?!.,;:\"'()"
+
+
+def romanized_macedonian_variant(query: str) -> str | None:
+    """Return the Cyrillic transliteration of a romanized Macedonian query, else None."""
+    normalized_query = normalize("NFC", query)
+    if _CYRILLIC_RE.search(normalized_query):
+        return None
+    has_marker = not _MACEDONIAN_LATIN_LETTERS.isdisjoint(
+        normalized_query.casefold()
+    ) or any(
+        token.strip(_WORD_EDGE_PUNCTUATION).casefold() in _ROMANIZED_MACEDONIAN_MARKERS
+        for token in normalized_query.split()
+    )
+    if not has_marker:
+        return None
+    transliterated = _WORD_RE.sub(_transliterate_token, normalized_query)
+    return transliterated if transliterated != normalized_query else None

@@ -357,10 +357,12 @@ def test_actual_production_swallowed_read_faults_invalidate_replay(monkeypatch, 
         if stage == "canonical_timeout"
         else PostgresError("SENSITIVE_EXCEPTION_MARKER")
     )
+    canonical_query: str | None = None
     if stage == "canonical_timeout":
         public_case["query"] = "Kade e sluzba"
         recovery = resolve_faq_query(public_case["query"], [faq.name])
         assert recovery is not None
+        canonical_query = recovery.canonical_query
         monkeypatch.setattr(
             context,
             "plan_faq_query_recovery",
@@ -397,7 +399,7 @@ def test_actual_production_swallowed_read_faults_invalidate_replay(monkeypatch, 
         monkeypatch.setattr(context, "get_chunks_window", window)
 
     async def embed(text, *_args, **_kwargs):
-        return [0.1] if text == public_case["query"] else [0.2]
+        return [0.2] if text == canonical_query else [0.1]
 
     async def search(_db, embedding, *_args, **_kwargs):
         if stage == "canonical_timeout" and embedding == [0.2]:

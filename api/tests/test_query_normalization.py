@@ -1,4 +1,9 @@
-from app.llms.query_normalization import query_search_variants
+import pytest
+
+from app.llms.query_normalization import (
+    query_search_variants,
+    romanized_macedonian_variant,
+)
 
 
 def test_cyrillic_query_keeps_only_original_variant() -> None:
@@ -81,3 +86,37 @@ def test_normalization_only_change_does_not_add_search_variant() -> None:
     variants = query_search_variants(query)
 
     assert variants == (query,)
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        ("Kade e sluzba", "Каде е слузба"),
+        ("Kade e služba", "Каде е служба"),
+        ("koga se zimskite kolokviumi", "кога се зимските колоквиуми"),
+        ("sho se uchi po MIS?", "шо се учи по MIS?"),
+        ("članarina", "чланарина"),
+    ],
+)
+def test_romanized_macedonian_variant_transliterates_macedonian(
+    query: str,
+    expected: str,
+) -> None:
+    assert romanized_macedonian_variant(query) == expected
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Web programming",
+        "machine learning exam schedule",
+        "Is e-commerce taught at FINKI?",
+        "Каде е службата?",
+        "Kade e службата?",
+        "sluzba",
+    ],
+)
+def test_romanized_macedonian_variant_skips_english_cyrillic_and_unmarked(
+    query: str,
+) -> None:
+    assert romanized_macedonian_variant(query) is None

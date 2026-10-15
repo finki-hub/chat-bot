@@ -29,7 +29,10 @@ class UnsupportedRetrievalBudgetModeError(RuntimeError):
 def retrieval_budget(
     mode: QueryTransformMode,
     requested_initial_k: int,
+    *,
+    extra_variants: int = 0,
 ) -> RetrievalBudget:
+    """Split the mode's candidate budget across its variants plus any extra ones."""
     try:
         min_initial_k = _MIN_INITIAL_K_BY_MODE[mode]
     except KeyError as exc:
@@ -38,5 +41,5 @@ def retrieval_budget(
     initial_k = max(requested_initial_k, min_initial_k)
     return RetrievalBudget(
         initial_k=initial_k,
-        per_query_k=initial_k // query_variant_count(mode) + 1,
+        per_query_k=initial_k // (query_variant_count(mode) + extra_variants) + 1,
     )
