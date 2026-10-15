@@ -643,7 +643,7 @@ def test_curated_defaults_and_embedding_policy() -> None:
     values = {model.value for model in ACTIVE_EMBEDDING_MODELS}
 
     assert DEFAULT_INFERENCE_MODEL.value == "claude-sonnet-5-5"
-    assert DEFAULT_QUERY_TRANSFORM_MODEL.value == "gpt-5.4-mini"
+    assert DEFAULT_QUERY_TRANSFORM_MODEL.value == "gpt-6-luna"
     assert DEFAULT_EMBEDDINGS_MODEL.value == "BAAI/bge-m3"
     assert values == {
         "BAAI/bge-m3",
