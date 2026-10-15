@@ -123,6 +123,27 @@ class RequestTimings:
             "spans": {name: round(ms, 1) for name, ms in self.spans.items()},
         }
 
+    def retrieval_record(self) -> dict[str, object]:
+        """Complete retrieval diagnostics, including non-citation selected context."""
+        return {
+            "retrieval_ids": list(self.retrieval_ids),
+            "candidate_count": self.candidate_count,
+            "top_distance": self.top_distance,
+            "transliteration_variant_added": self.transliteration_variant_added,
+            "lexical_search_outcome": self.lexical_search_outcome,
+            "dense_faq_candidate_count": self.dense_faq_candidate_count,
+            "dense_document_candidate_count": self.dense_document_candidate_count,
+            "lexical_faq_candidate_count": self.lexical_faq_candidate_count,
+            "final_faq_count": self.final_faq_count,
+            "final_document_count": self.final_document_count,
+            "lexical_only_final_count": self.lexical_only_final_count,
+            "retrieval_path": self.retrieval_path,
+            "reranker_score_max": self.reranker_score_max,
+            "reranker_score_min": self.reranker_score_min,
+            "chunks_above_threshold": self.reranker_above_threshold,
+            **self.fallback_record(),
+        }
+
     def fallback_record(self) -> dict[str, object]:
         """Content-free, bounded diagnostics shared by retrieval and generation events."""
         return {

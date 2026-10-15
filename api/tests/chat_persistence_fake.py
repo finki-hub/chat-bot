@@ -12,18 +12,49 @@ class FakeChatDatabase:
         self.messages: dict[object, dict[str, object]] = {}
         self.users: dict[tuple[object, object], dict[str, object]] = {}
         self.credentials: dict[tuple[object, object], dict[str, object]] = {}
+        self.tombstones: set[object] = set()
         self.now = datetime(2026, 7, 7, tzinfo=UTC)
 
     @asynccontextmanager
     async def transaction(self):
-        snapshot = deepcopy((self.conversations, self.messages, self.feedback))
+        snapshot = deepcopy(
+            (
+                self.conversations,
+                self.messages,
+                self.feedback,
+                self.users,
+                self.tombstones,
+            )
+        )
         try:
             yield self
         except BaseException:
-            self.conversations, self.messages, self.feedback = snapshot
+            (
+                self.conversations,
+                self.messages,
+                self.feedback,
+                self.users,
+                self.tombstones,
+            ) = snapshot
             raise
 
     async def fetchrow(self, query: str, *args: object) -> dict[str, object] | None:
+        if "SELECT * FROM chat_user WHERE id = $1 FOR NO KEY UPDATE" in query:
+            (user_id,) = args
+            account = next(
+                (user for user in self.users.values() if user["id"] == user_id), None
+            )
+            if account is not None:
+                return account
+            # Existing state fixtures predate explicit account seeding.
+            if any(row["user_id"] == user_id for row in self.conversations.values()):
+                return {
+                    "id": user_id,
+                    "provider": "google",
+                    "provider_subject": str(user_id),
+                    "history_generation": 0,
+                }
+            return None
         if "SELECT id FROM chat_conversation" in query and "FOR UPDATE" in query:
             conversation_id, user_id, active_stream_id = args
             conversation = self._owned_conversation(conversation_id, user_id)
@@ -386,6 +417,8 @@ class FakeChatDatabase:
         raise AssertionError(msg)
 
     async def fetch(self, query: str, *args: object) -> list[dict[str, object]]:
+        if "SELECT stored.id FROM feedback AS stored" in query:
+            return []
         if "FROM chat_message" in query and "id = $2 OR" in query:
             conversation_id, target_id, retained_ids = args
             assert isinstance(retained_ids, list)
@@ -481,6 +514,17 @@ class FakeChatDatabase:
         return cleared
 
     async def execute(self, query: str, *args: object) -> str:
+        if "UPDATE chat_user SET history_generation" in query:
+            for user in self.users.values():
+                if user["id"] == args[0]:
+                    generation = user.get("history_generation", 0)
+                    assert isinstance(generation, int)
+                    user["history_generation"] = generation + 1
+            return "UPDATE 1"
+        if "INSERT INTO chat_conversation_tombstone" in query:
+            assert isinstance(args[0], list)
+            self.tombstones.update(args[0])
+            return "INSERT 0 1"
         if "DELETE FROM chat_message" in query:
             conversation_id, retained_ids = args
             assert isinstance(retained_ids, list)
@@ -506,7 +550,7 @@ class FakeChatDatabase:
         if query == "SET TRANSACTION ISOLATION LEVEL READ COMMITTED":
             return "SET"
         if "DELETE FROM feedback" in query:
-            conversation_ids, user_id = args
+            conversation_ids, user_id, *authored = args
             assert isinstance(conversation_ids, list)
             response_ids = {
                 row["response_id"]
@@ -514,10 +558,36 @@ class FakeChatDatabase:
                 if row["conversation_id"] in conversation_ids
                 and row["response_id"] is not None
             }
+            discord_response_ids = set()
+            for row in self.messages.values():
+                metadata = row["metadata"]
+                if isinstance(metadata, str):
+                    metadata = json.loads(metadata)
+                if (
+                    row["conversation_id"] in conversation_ids
+                    and row["role"] == "assistant"
+                    and isinstance(metadata, dict)
+                    and metadata.get("interface") == "discord"
+                ):
+                    discord_response_ids.add(row["response_id"])
             deleted_conversation_feedback_keys = [
                 key
                 for key in self.feedback
-                if key[0] in response_ids and key[1:] == ("web", user_id)
+                if (
+                    (key[0] in response_ids and key[1:] == ("web", user_id))
+                    or (key[0] in discord_response_ids and key[1] == "discord")
+                    or (
+                        authored
+                        and authored[0]
+                        and (
+                            key[1:] == ("web", user_id)
+                            or (
+                                authored[1] == "discord"
+                                and key[1:] == ("discord", authored[2])
+                            )
+                        )
+                    )
+                )
             ]
             for key in deleted_conversation_feedback_keys:
                 del self.feedback[key]

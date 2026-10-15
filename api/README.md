@@ -1,5 +1,27 @@
 # API retrieval diagnostics
 
+## Discord conversation storage
+
+Discord requests with a `user_id` and an `X-Conversation-Id` are stored in
+`chat_conversation`/`chat_message` after the stream ends: the question, the answer,
+sources and diagnostics. Requests rejected before admission (credentials, quota)
+are not stored; accepted requests that fail or disconnect are stored with their
+outcome. Web conversations are still stored by the web app. Nothing expires.
+
+`DELETE /chat/state/users/{user_id}/history` deletes the user's conversations, the
+feedback they gave, and feedback others gave on their Discord answers, in one
+transaction. It also bumps `chat_user.history_generation` and records the deleted
+conversation IDs in `chat_conversation_tombstone` (IDs only), so an answer that was
+still streaming cannot write the history back.
+
+Discord feedback is accepted only for a stored Discord answer, and the question and
+answer text are taken from the database rather than from the request. Because
+storage finishes in the background, a 404 may carry `X-Feedback-Generation`; the
+client may retry briefly with that header unchanged. A 409 means the history was
+deleted meanwhile and must not be retried.
+
+On shutdown, pending writes get up to five seconds before they are cancelled.
+
 ## OpenCode Go BYOK
 
 Save a separate `opencode-go` credential through the existing chat-state credential

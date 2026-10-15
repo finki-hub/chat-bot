@@ -31,6 +31,7 @@ from app.data.chat_state import (
 from app.data.chat_users import upsert_chat_user
 from app.data.connection import Database
 from app.data.db import get_db
+from app.data.discord_conversations import delete_chat_history
 from app.schemas.chat_credentials import (
     OLLAMA_DEFAULT_BASE_URL,
     ChatCredentialProvider,
@@ -50,6 +51,7 @@ from app.schemas.chat_persistence import (
 from app.schemas.chat_state import (
     AssistantMessageReplacementRequest,
     AssistantMessageUpsertRequest,
+    ChatHistoryDeleteResponse,
     ClearStaleActiveStreamsRequest,
     ClearStaleActiveStreamsResponse,
     ConversationUpdateRequest,
@@ -179,6 +181,23 @@ async def delete_user_credential_state(
     db: ChatPersistenceDatabase = db_dep,
 ) -> None:
     await delete_chat_credential(db, user_id=user_id, provider=provider)
+
+
+@router.delete(
+    "/users/{user_id}/history",
+    status_code=status.HTTP_200_OK,
+    operation_id="deleteChatUserHistory",
+)
+async def delete_user_history_state(
+    user_id: UUID,
+    db: Database = db_dep,
+) -> ChatHistoryDeleteResponse:
+    """Delete every stored conversation and feedback of a user, on their request."""
+    deleted = await delete_chat_history(db, user_id=user_id)
+    return ChatHistoryDeleteResponse(
+        deleted_conversations=deleted.conversations,
+        deleted_feedback=deleted.feedback,
+    )
 
 
 @router.post(
