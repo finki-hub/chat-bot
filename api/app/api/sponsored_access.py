@@ -8,7 +8,7 @@ from app.llms.provider_credentials import (
     provider_for_model,
 )
 from app.schemas.chat_credentials import ChatCredentialSecret
-from app.utils.settings import Settings
+from app.utils.settings import Settings, is_opencode_go_base_url
 
 _SPONSORED_OUTPUT_TOKEN_HARD_CAP: Final = 8192
 
@@ -59,14 +59,29 @@ def sponsored_query_transform(
     credentials: LlmProviderCredentials | None,
     resolution: SponsoredInferenceResolution,
     inference_model: ChatModel,
+    settings: Settings,
+    *,
+    conversation_id: str | None,
 ) -> tuple[ChatModel, LlmProviderCredentials | None]:
-    """Run retrieval query transforms on the sponsored model when the user has no key for the requested one."""
+    """Run query transforms on the sponsored model when the user has no key for the requested one.
+
+    This applies to BYOK answers too, so a user without a key for the transform
+    model still gets rewritten queries. Transforms never draw on the sponsored quota.
+    """
+    if has_provider_credential(credentials, query_transform_model):
+        return query_transform_model, credentials
+    if not resolution.sponsored:
+        # Sponsored answers on the OpenCode Go endpoint require a session; match that.
+        if conversation_id is None and is_opencode_go_base_url(
+            settings.SPONSORED_MODEL_BASE_URL,
+        ):
+            return query_transform_model, credentials
+        resolution = resolve_sponsored_inference(
+            settings.SPONSORED_MODEL_ID, None, settings
+        )
+        inference_model = settings.SPONSORED_MODEL_ID
     credential = resolution.credential
-    if (
-        not resolution.sponsored
-        or credential is None
-        or has_provider_credential(credentials, query_transform_model)
-    ):
+    if not resolution.sponsored or credential is None:
         return query_transform_model, credentials
 
     # The transform path addresses the model by its own id, so a remapped upstream

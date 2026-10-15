@@ -9,6 +9,11 @@ from app.api.provider_credentials import (
     credential_providers_for_models,
     resolve_provider_credentials,
 )
+from app.api.sponsored_access import (
+    SponsoredInferenceResolution,
+    sponsored_query_transform,
+)
+from app.constants.defaults import DEFAULT_QUERY_TRANSFORM_MODEL
 from app.data.chat_credentials import ChatCredentialDatabase
 from app.data.db import get_db
 from app.llms.models import ChatModel, Model
@@ -114,6 +119,22 @@ async def generate_chat_title(
         ),
         None,
     )
+    if selected_model is None and settings is not None:
+        sponsored_model, sponsored_credentials = sponsored_query_transform(
+            candidate_models[0] if candidate_models else DEFAULT_QUERY_TRANSFORM_MODEL,
+            credentials,
+            SponsoredInferenceResolution(credential=None, sponsored=False),
+            settings.SPONSORED_MODEL_ID,
+            settings,
+            conversation_id=conversation_id,
+        )
+        if has_provider_credential(sponsored_credentials, sponsored_model):
+            selected_model = sponsored_model
+            credentials = (
+                sponsored_credentials
+                if conversation_id is None or sponsored_credentials is None
+                else replace(sponsored_credentials, conversation_id=conversation_id)
+            )
     if selected_model is None:
         return ChatTitleResponse(
             title=_normalize_title("", payload.first_user_text),

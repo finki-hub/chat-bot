@@ -49,7 +49,7 @@ from app.llms.model_access import (
 )
 from app.llms.model_catalog import model_catalog_service
 from app.llms.model_catalog_types import ModelCatalogResponse, OllamaCatalogModel
-from app.llms.models import model_id
+from app.llms.models import ChatModel, model_id
 from app.llms.ollama import fetch_ollama_catalog
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.llms.provider_credentials import provider_for_model
@@ -459,6 +459,7 @@ async def _instrument_stream(
     effective_transform_mode: QueryTransformMode,
     sponsored_mode: str | None = None,
     model_access_mode: Literal["sponsored", "byok", "ordinary"] = "ordinary",
+    query_transform_model: ChatModel | None = None,
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
     log one chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
@@ -536,7 +537,9 @@ async def _instrument_stream(
                     "response_id": str(response_id),
                     "inference_model": model_id(payload.inference_model),
                     "embeddings_model": payload.embeddings_model.value,
-                    "query_transform_model": model_id(payload.query_transform_model),
+                    "query_transform_model": model_id(
+                        query_transform_model or payload.query_transform_model,
+                    ),
                     "requested_query_transform_mode": payload.query_transform_mode.value,
                     "query_transform_mode": effective_transform_mode.value,
                     **timings.fallback_record(),
@@ -714,6 +717,8 @@ async def _prepare_chat_response_stream(
         credentials,
         inference_resolution,
         payload.inference_model,
+        settings,
+        conversation_id=conversation_id,
     )
     if (
         retrieval_credentials is not None
@@ -922,9 +927,7 @@ async def _prepare_chat_response_stream(
                     {
                         "response_id": str(response_id),
                         "embeddings_model": payload.embeddings_model.value,
-                        "query_transform_model": model_id(
-                            payload.query_transform_model,
-                        ),
+                        "query_transform_model": model_id(retrieval_transform_model),
                         "requested_query_transform_mode": payload.query_transform_mode.value,
                         "query_transform_mode": retrieved.effective_transform_mode.value,
                         **timings.fallback_record(),
@@ -1018,6 +1021,7 @@ async def _prepare_chat_response_stream(
             effective_transform_mode=retrieved.effective_transform_mode,
             sponsored_mode=sponsored_mode,
             model_access_mode=model_access_mode,
+            query_transform_model=retrieval_transform_model,
         )
 
         if retrieved.sources:

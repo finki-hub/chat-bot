@@ -91,8 +91,11 @@ not a guarantee that every failed or cancelled request emits an event.
 | `unchanged_variants` | Every requested variant that is missing returned the search query unchanged, so it was deduplicated against the raw query (common for rewrite after history contextualization). Provider adapters that swallow an error return the input unchanged too, so pair this with their `query transformation failed` warnings. |
 | `none` | All requested transformed variants survived. |
 
-Sponsored inference credentials are not injected into query transformation. A
-credential for a different provider does not make the selected transform available.
+Query transforms default to the sponsored model (`gpt-6-luna`). A user key for
+the transform model's provider is used when present; otherwise, when sponsorship
+is enabled, transforms and chat titles run on the sponsored credential, for BYOK
+answers too, without drawing on the sponsored daily quota. A credential for a
+different provider does not make the selected transform available.
 
 ## Reranker fields
 

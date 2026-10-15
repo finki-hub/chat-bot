@@ -119,6 +119,11 @@ def test_sponsored_resolution_uses_configured_provider_for_credential_secret() -
 
 
 _SPONSORED_KEY = ChatCredentialSecret(provider="openai", api_key="sponsored-key")
+_SPONSORED_SETTINGS = Settings(
+    SPONSORED_MODEL_ENABLED=True,
+    SPONSORED_MODEL_API_KEY=SecretStr("sponsored-key"),
+    SPONSORED_DAILY_GLOBAL_LIMIT=10,
+)
 
 
 def test_sponsored_query_transform_uses_sponsored_model_without_user_key() -> None:
@@ -129,6 +134,8 @@ def test_sponsored_query_transform_uses_sponsored_model_without_user_key() -> No
         LlmProviderCredentials(google=google, conversation_id="conversation"),
         SponsoredInferenceResolution(credential=_SPONSORED_KEY, sponsored=True),
         Model.GPT_6_LUNA,
+        _SPONSORED_SETTINGS,
+        conversation_id="conversation",
     )
 
     assert model == Model.GPT_6_LUNA
@@ -149,16 +156,61 @@ def test_sponsored_query_transform_keeps_requested_model_with_user_key() -> None
         user_credentials,
         SponsoredInferenceResolution(credential=_SPONSORED_KEY, sponsored=True),
         Model.GPT_6_LUNA,
+        _SPONSORED_SETTINGS,
+        conversation_id="conversation",
     ) == (Model.GPT_5_4_MINI, user_credentials)
 
 
-def test_sponsored_query_transform_ignores_unsponsored_requests() -> None:
+def test_sponsored_query_transform_serves_byok_answers_without_a_transform_key() -> (
+    None
+):
+    anthropic = ChatCredentialSecret(provider="anthropic", api_key="user-anthropic-key")
+
+    model, credentials = sponsored_query_transform(
+        Model.GPT_6_LUNA,
+        LlmProviderCredentials(anthropic=anthropic),
+        SponsoredInferenceResolution(credential=anthropic, sponsored=False),
+        Model.CLAUDE_SONNET_5_5,
+        _SPONSORED_SETTINGS,
+        conversation_id="conversation",
+    )
+
+    assert model == Model.GPT_6_LUNA
+    assert credentials == LlmProviderCredentials(
+        openai=ChatCredentialSecret(provider="openai", api_key="sponsored-key"),
+        anthropic=anthropic,
+    )
+
+
+def test_sponsored_query_transform_needs_a_session_for_the_opencode_go_endpoint() -> (
+    None
+):
+    settings = Settings(
+        SPONSORED_MODEL_ENABLED=True,
+        SPONSORED_MODEL_API_KEY=SecretStr("sponsored-key"),
+        SPONSORED_MODEL_BASE_URL="https://opencode.ai/inference/go/v1",
+        SPONSORED_DAILY_GLOBAL_LIMIT=10,
+    )
+
     assert sponsored_query_transform(
-        Model.GPT_5_4_MINI,
+        Model.GPT_6_LUNA,
+        None,
+        SponsoredInferenceResolution(credential=None, sponsored=False),
+        Model.CLAUDE_SONNET_5_5,
+        settings,
+        conversation_id=None,
+    ) == (Model.GPT_6_LUNA, None)
+
+
+def test_sponsored_query_transform_is_unchanged_when_sponsorship_is_disabled() -> None:
+    assert sponsored_query_transform(
+        Model.GPT_6_LUNA,
         None,
         SponsoredInferenceResolution(credential=None, sponsored=False),
         Model.GPT_6_LUNA,
-    ) == (Model.GPT_5_4_MINI, None)
+        Settings(SPONSORED_MODEL_ENABLED=False),
+        conversation_id="conversation",
+    ) == (Model.GPT_6_LUNA, None)
 
 
 def test_sponsored_query_transform_skips_unknown_upstream_model() -> None:
@@ -171,4 +223,6 @@ def test_sponsored_query_transform_skips_unknown_upstream_model() -> None:
             upstream_model="upstream-luna",
         ),
         Model.GPT_6_LUNA,
+        _SPONSORED_SETTINGS,
+        conversation_id="conversation",
     ) == (Model.GPT_5_4_MINI, None)
