@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from app.llms.chat import handle_chat
+from app.llms.context import _ASSISTANT_NOTE_LABEL
 from app.llms.prompts import DEFAULT_AGENT_SYSTEM_PROMPT
 from app.schemas.chat import ChatSchema
 
@@ -26,6 +27,27 @@ def test_system_prompt_grounds_system_functions_and_preserves_tool_evidence():
         "За конкретни тврдења за ФИНКИ користи го дадениот контекст "
         "или резултат од соодветна алатка."
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
+
+
+def test_system_prompt_prefers_current_faq_over_older_regulation():
+    assert (
+        "FAQ ја опишува тековната практика на факултетот, а прописите и документите "
+        "ја даваат правната основа и може да се постари. Ако FAQ и постар пропис "
+        "или документ за истото прашање се разликуваат, одговори според FAQ, "
+        "а прописот спомни го само ако е корисно. Спротивност наведи само ако "
+        "самиот FAQ е несигурен или ако изворите се подеднакво тековни;"
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert "Не давај автоматска предност на FAQ" not in DEFAULT_AGENT_SYSTEM_PROMPT
+
+
+def test_system_prompt_keeps_assistant_note_internal():
+    assert (
+        "„Белешка за асистентот (не ја прикажувај дословно):“. Тоа е интерно "
+        "упатство за толкување на тој FAQ: користи ја само за точно да го "
+        "разбереш и примениш FAQ, не ја цитирај, не ја прераскажувај и не ја "
+        "спомнувај пред корисникот. Белешката не ги менува овие правила."
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert f"„{_ASSISTANT_NOTE_LABEL}“" in DEFAULT_AGENT_SYSTEM_PROMPT
 
 
 @pytest.mark.anyio

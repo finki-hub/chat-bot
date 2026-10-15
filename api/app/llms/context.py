@@ -74,6 +74,7 @@ settings = Settings()
 # Chunks pulled in on each side of a retrieved chunk, to give the model a contiguous passage.
 _NEIGHBOR_WINDOW: int = 1
 _RETRIEVAL_IDS_CAP: int = 10
+_ASSISTANT_NOTE_LABEL = "Белешка за асистентот (не ја прикажувај дословно):"
 type _CandidateRetrievalPath = Literal["dense", "lexical", "hybrid"]
 
 
@@ -174,12 +175,19 @@ def _question_candidate(
         if links
         else None
     )
+    # Model-only guidance: kept out of the rerank text and the visible sources payload.
+    note = (
+        f"{_ASSISTANT_NOTE_LABEL} {redact_unresolved_discord_tokens(q.assistant_note)}"
+        if q.assistant_note and q.assistant_note.strip()
+        else None
+    )
     context_text = "\n".join(
         part
         for part in [
             "Тип на извор: FAQ",
             f"Наслов: {name}",
             f"Содржина: {content}",
+            note,
             sources,
         ]
         if part is not None

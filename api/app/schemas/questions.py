@@ -48,6 +48,11 @@ class QuestionSchema(BaseModel):
         examples=[{"google": "https://www.google.com"}],
         description="Optional map of link names to URLs associated",
     )
+    assistant_note: str | None = Field(
+        default=None,
+        examples=["The statute counts only regular sessions, so both limits match."],
+        description="Internal guidance for the assistant; never shown to students",
+    )
     created_at: datetime = Field(
         examples=["2025-06-05T14:48:00Z"],
         description="UTC timestamp when the question was created",
@@ -82,11 +87,21 @@ class CreateQuestionSchema(BaseModel):
         examples=[{"faq": "https://example.com/faq"}],
         description="Optional links to associate with the question",
     )
+    assistant_note: str | None = Field(
+        default=None,
+        examples=["The statute counts only regular sessions, so both limits match."],
+        description="Internal guidance for the assistant; never shown to students",
+    )
 
     @field_validator("name", "content")
     @classmethod
     def reject_unresolved_discord_tokens(cls, value: str) -> str:
         return _reject_unresolved_discord_token(value)
+
+    @field_validator("assistant_note")
+    @classmethod
+    def reject_unresolved_discord_tokens_in_note(cls, value: str | None) -> str | None:
+        return _reject_unresolved_discord_token(value) if value is not None else None
 
     @field_validator("links")
     @classmethod
@@ -118,8 +133,13 @@ class UpdateQuestionSchema(BaseModel):
         examples=[{"help": "https://example.com/help"}],
         description="Updated set of associated links",
     )
+    assistant_note: str | None = Field(
+        default=None,
+        examples=["The statute counts only regular sessions, so both limits match."],
+        description="Updated internal guidance for the assistant; null clears it",
+    )
 
-    @field_validator("name", "content")
+    @field_validator("name", "content", "assistant_note")
     @classmethod
     def reject_unresolved_discord_tokens(cls, value: str | None) -> str | None:
         return _reject_unresolved_discord_token(value) if value is not None else None
