@@ -169,3 +169,56 @@ def test_question_links_round_trip_through_real_postgres() -> None:
     assert updated_links == {
         "Discord server": "https://discord.gg/finki-studenti",
     }
+
+
+def test_question_assistant_note_round_trips_without_invalidating_embeddings() -> None:
+    async def run() -> tuple[str | None, str | None, object, object]:
+        # Given: a migrated disposable database with an FAQ carrying a note.
+        async with _temporary_database() as database_url:
+            database = Database(database_url, min_size=1, max_size=1)
+            await database.init()
+            try:
+                await database.run_migrations()
+                created = await create_question_query(
+                    database,
+                    CreateQuestionSchema.model_validate(
+                        {
+                            "name": "Exam attempts",
+                            "content": "A course can be taken four times.",
+                            "assistant_note": "Statute counts regular sessions.",
+                        },
+                    ),
+                )
+                assert created is not None
+                revision_before = await database.fetchval(
+                    "SELECT embedding_revision FROM question WHERE id = $1",
+                    created.id,
+                )
+
+                # When: only the note is cleared through the partial update path.
+                updated = await update_question_query(
+                    database,
+                    created.name,
+                    UpdateQuestionSchema.model_validate({"assistant_note": None}),
+                )
+                assert updated is not None
+                revision_after = await database.fetchval(
+                    "SELECT embedding_revision FROM question WHERE id = $1",
+                    created.id,
+                )
+
+                # Then: the note round-trips and the embedding revision is untouched.
+                return (
+                    created.assistant_note,
+                    updated.assistant_note,
+                    revision_before,
+                    revision_after,
+                )
+            finally:
+                await database.disconnect()
+
+    created_note, updated_note, revision_before, revision_after = anyio.run(run)
+
+    assert created_note == "Statute counts regular sessions."
+    assert updated_note is None
+    assert revision_after == revision_before

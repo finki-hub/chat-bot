@@ -24,7 +24,7 @@ from app.schemas.questions import (
 from app.utils.database import embedding_to_pgvector
 
 _QUESTION_ALLOWED_COLUMNS: frozenset[str] = frozenset(
-    {"name", "content", "user_id", "links"},
+    {"name", "content", "user_id", "links", "assistant_note"},
 )
 
 
@@ -35,22 +35,25 @@ def _serialize_links(links: dict[str, HttpUrl] | None) -> str:
     return json.dumps(serializable)
 
 
+def _question_from_row(row: Record) -> QuestionSchema:
+    return QuestionSchema(
+        id=row["id"],
+        name=row["name"],
+        content=row["content"],
+        user_id=row["user_id"],
+        links=json.loads(row["links"]) if row["links"] else {},
+        assistant_note=row.get("assistant_note"),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        distance=row.get("distance"),
+    )
+
+
 async def get_questions_query(db: Database) -> list[QuestionSchema]:
     query = "SELECT * FROM question ORDER BY name ASC"
     result = await db.fetch(query)
 
-    return [
-        QuestionSchema(
-            id=row["id"],
-            name=row["name"],
-            content=row["content"],
-            user_id=row["user_id"],
-            links=json.loads(row["links"]) if row["links"] else {},
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-        )
-        for row in result
-    ]
+    return [_question_from_row(row) for row in result]
 
 
 async def get_question_names_query(
@@ -75,15 +78,7 @@ async def get_question_by_name_query(db: Database, name: str) -> QuestionSchema 
     if not result:
         return None
 
-    return QuestionSchema(
-        id=result["id"],
-        name=result["name"],
-        content=result["content"],
-        user_id=result["user_id"],
-        links=json.loads(result["links"]) if result["links"] else {},
-        created_at=result["created_at"],
-        updated_at=result["updated_at"],
-    )
+    return _question_from_row(result)
 
 
 async def get_questions_without_embeddings_query(
@@ -95,18 +90,7 @@ async def get_questions_without_embeddings_query(
     query = f"SELECT * FROM question WHERE {predicate.sql} ORDER BY name ASC"  # noqa: S608
     result = await db.fetch(query, *predicate.parameters)
 
-    return [
-        QuestionSchema(
-            id=row["id"],
-            name=row["name"],
-            content=row["content"],
-            user_id=row["user_id"],
-            links=json.loads(row["links"]) if row["links"] else {},
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-        )
-        for row in result
-    ]
+    return [_question_from_row(row) for row in result]
 
 
 async def create_question_query(
@@ -114,8 +98,8 @@ async def create_question_query(
     question: CreateQuestionSchema,
 ) -> QuestionSchema | None:
     query = """
-    INSERT INTO question (name, content, user_id, links)
-    VALUES ($1, $2, $3, $4::jsonb)
+    INSERT INTO question (name, content, user_id, links, assistant_note)
+    VALUES ($1, $2, $3, $4::jsonb, $5)
     RETURNING *
     """
     result = await db.fetchrow(
@@ -124,20 +108,13 @@ async def create_question_query(
         question.content,
         question.user_id,
         _serialize_links(question.links),
+        question.assistant_note,
     )
 
     if not result:
         return None
 
-    return QuestionSchema(
-        id=result["id"],
-        name=result["name"],
-        content=result["content"],
-        user_id=result["user_id"],
-        links=json.loads(result["links"]) if result["links"] else {},
-        created_at=result["created_at"],
-        updated_at=result["updated_at"],
-    )
+    return _question_from_row(result)
 
 
 async def update_question_query(
@@ -174,15 +151,7 @@ async def update_question_query(
     if not result:
         return None
 
-    return QuestionSchema(
-        id=result["id"],
-        name=result["name"],
-        content=result["content"],
-        user_id=result["user_id"],
-        links=json.loads(result["links"]) if result["links"] else {},
-        created_at=result["created_at"],
-        updated_at=result["updated_at"],
-    )
+    return _question_from_row(result)
 
 
 async def delete_question_query(db: Database, name: str) -> None:
@@ -197,15 +166,7 @@ async def get_nth_question_query(db: Database, n: int) -> QuestionSchema | None:
     if result is None:
         return None
 
-    return QuestionSchema(
-        id=result["id"],
-        name=result["name"],
-        content=result["content"],
-        user_id=result["user_id"],
-        links=json.loads(result["links"]) if result["links"] else {},
-        created_at=result["created_at"],
-        updated_at=result["updated_at"],
-    )
+    return _question_from_row(result)
 
 
 async def get_matching_questions(
@@ -230,6 +191,7 @@ async def get_matching_questions(
             q.content,
             q.user_id,
             q.links,
+            q.assistant_note,
             q.created_at,
             q.updated_at,
             ts_rank_cd(
@@ -245,24 +207,13 @@ async def get_matching_questions(
         ) AS lexical_document
         WHERE lexical_document.value @@ lexical_query.value
     )
-    SELECT id, name, content, user_id, links, created_at, updated_at
+    SELECT id, name, content, user_id, links, assistant_note, created_at, updated_at
     FROM ranked
     ORDER BY lexical_score DESC, name ASC
     LIMIT $2
     """
     result = await db.fetch(sql, query, limit)
-    return [
-        QuestionSchema(
-            id=row["id"],
-            name=row["name"],
-            content=row["content"],
-            user_id=row["user_id"],
-            links=json.loads(row["links"]) if row["links"] else {},
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-        )
-        for row in result
-    ]
+    return [_question_from_row(row) for row in result]
 
 
 async def get_closest_questions(
@@ -289,6 +240,7 @@ async def get_closest_questions(
         content,
         user_id,
         links,
+        assistant_note,
         created_at,
         updated_at,
         {embedding.distance_operand} <=> {embedding.query_operand} AS distance
@@ -307,19 +259,7 @@ async def get_closest_questions(
         *predicate.parameters,
     )
 
-    return [
-        QuestionSchema(
-            id=row["id"],
-            name=row["name"],
-            content=row["content"],
-            user_id=row["user_id"],
-            links=json.loads(row["links"]) if row["links"] else {},
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-            distance=row.get("distance", None),
-        )
-        for row in result
-    ]
+    return [_question_from_row(row) for row in result]
 
 
 async def fetch_question_rows_for_fill(

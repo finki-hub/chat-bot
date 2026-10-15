@@ -519,3 +519,50 @@ def test_visible_sources_are_empty_for_unscored_vector_fallback():
         )
         == ()
     )
+
+
+def test_question_candidate_renders_assistant_note_only_in_model_context() -> None:
+    # Given: an FAQ with internal guidance for the assistant.
+    note = "Статутот ги брои само трите испитни сесии, па правилото е исто."
+    question = QuestionSchema(
+        id=uuid4(),
+        name="Број на полагања",
+        content="Предметот може да се полага најмногу четири пати.",
+        links={"Статут": HttpUrl("https://finki.ukim.mk/statut")},
+        assistant_note=note,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    # When: the FAQ becomes a retrieval candidate and a visible sources frame.
+    candidate = _question_candidate(question)
+    payload = candidate.retrieval_source.as_payload()
+    frame = sources_event([payload])
+    streamed = json.dumps(
+        json.loads(frame.split("data: ", 1)[1]),
+        ensure_ascii=False,
+    )
+
+    # Then: only the model context carries the labelled note, after the content.
+    assert (
+        "Содржина: Предметот може да се полага најмногу четири пати.\n"
+        f"Белешка за асистентот (не ја прикажувај дословно): {note}\n"
+        "Извори: Статут: https://finki.ukim.mk/statut"
+    ) in candidate.context_text
+    assert note not in candidate.rerank_text
+    assert note not in json.dumps(payload, ensure_ascii=False)
+    assert note not in streamed
+    assert "Белешка" not in streamed
+
+
+def test_question_candidate_omits_blank_assistant_note() -> None:
+    question = QuestionSchema(
+        id=uuid4(),
+        name="Упис",
+        content="Уписот се прави преку iKnow.",
+        assistant_note="   ",
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    assert "Белешка" not in _question_candidate(question).context_text
