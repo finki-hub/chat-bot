@@ -75,6 +75,11 @@ settings = Settings()
 _NEIGHBOR_WINDOW: int = 1
 _RETRIEVAL_IDS_CAP: int = 10
 _ASSISTANT_NOTE_LABEL = "Белешка за асистентот (не ја прикажувај дословно):"
+# Marks context kept only by the score-floor fallback; the system prompt explains it.
+_WEAK_MATCH_NOTICE = (
+    "Слаб извор: ниту еден пронајден извор не е јасно релевантен за прашањето, "
+    "па е задржан само најблискиот."
+)
 type _CandidateRetrievalPath = Literal["dense", "lexical", "hybrid"]
 
 
@@ -925,6 +930,8 @@ async def get_retrieved_context_with_sources(
 
     with timed("retrieval.expand"):
         text = await _expand_and_render(db, final, embedding_model)
+    if text and reranker_fallback_reason == "score_floor":
+        text = f"{_WEAK_MATCH_NOTICE}\n\n{text}"
     return RetrievedContext(
         text=text,
         effective_transform_mode=variant_bundle.mode,

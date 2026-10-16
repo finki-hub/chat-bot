@@ -489,7 +489,14 @@ def test_successful_rerank_preserves_cross_source_relevance_order(
 
     result, timings = _run_with_timings(run)
 
-    assert result.text.startswith("Тип на извор: Документ")
+    weak = score < context_module.settings.RERANKER_MIN_SCORE
+    # Only the score-floor fallback flags its single kept source as weak.
+    assert result.text.startswith(
+        f"{context_module._WEAK_MATCH_NOTICE}\n\nТип на извор: Документ"
+        if weak
+        else "Тип на извор: Документ"
+    )
+    assert (context_module._WEAK_MATCH_NOTICE in result.text) is weak
     assert chunk.content in result.text
     assert faq.content not in result.text
     assert timings.final_faq_count == 0
