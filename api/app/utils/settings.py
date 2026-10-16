@@ -104,7 +104,7 @@ class Settings(BaseSettings):
     TZ: str = "Europe/Skopje"
 
     GPU_API_URL: str = "http://gpu-api:8888"
-    DIPLOMAS_API_URL: str = "https://diplomski-api.finki-hub.com/diplomas"
+    DIPLOMAS_API_URL: str = "https://bachelors-api.finki-hub.com/diplomas"
     STAFF_API_URL: str = "https://assets.finki-hub.com/staff.json"
     STAFF_CACHE_TTL: int = 3600
     # Minimum cross-encoder score (sentence-transformers CrossEncoder.predict applies a
