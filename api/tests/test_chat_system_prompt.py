@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from app.llms.chat import handle_chat
-from app.llms.context import _ASSISTANT_NOTE_LABEL
+from app.llms.context import _ASSISTANT_NOTE_LABEL, _WEAK_MATCH_NOTICE
 from app.llms.prompts import DEFAULT_AGENT_SYSTEM_PROMPT
 from app.schemas.chat import ChatSchema
 
@@ -54,6 +54,14 @@ def test_system_prompt_treats_document_signatories_as_historical():
         "означуваат потписникот кога документот е донесен, а не сегашниот носител "
         "на функцијата."
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
+
+
+def test_system_prompt_explains_weak_match_notice():
+    assert (
+        "Ако контекстот започнува со „Слаб извор:“, единствениот пронајден извор "
+        "можеби не одговара на прашањето."
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert _WEAK_MATCH_NOTICE.startswith("Слаб извор:")
 
 
 def test_system_prompt_keeps_assistant_note_internal():
