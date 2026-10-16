@@ -2,6 +2,7 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import anyio
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -13,6 +14,7 @@ from app.api.chat_sharing import router as chat_sharing_router
 from app.api.chat_state import router as chat_state_router
 from app.api.chat_title import router as chat_title_router
 from app.api.diplomas import router as diplomas_router
+from app.api.discord_storage import DiscordWriteRegistry
 from app.api.documents import router as documents_router
 from app.api.embedding_administration import router as embedding_administration_router
 from app.api.feedback import router as feedback_router
@@ -56,6 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     App startup/shutdown: init DB and shared HTTP client.
     """
     current_settings: Settings = app.state.settings
+    app.state.discord_writes = DiscordWriteRegistry()
     _warn_on_insecure_defaults(current_settings)
 
     db = Database(
@@ -73,7 +76,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         finally:
             await close_http_client()
     finally:
-        await db.disconnect()
+        try:
+            with anyio.CancelScope(shield=True):
+                await app.state.discord_writes.drain()
+        finally:
+            await db.disconnect()
 
 
 def make_app(settings: Settings) -> FastAPI:
@@ -110,6 +117,7 @@ def make_app(settings: Settings) -> FastAPI:
         port=settings.PORT,
     )
     app.state.settings = settings
+    app.state.discord_writes = DiscordWriteRegistry()
 
     # Wildcard origin + credentials is browser-rejected and unsafe; enable credentials
     # only for an explicit allowlist.

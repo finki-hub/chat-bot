@@ -13,6 +13,12 @@ from fastapi import APIRouter, Depends, Header, Request, status
 from fastapi.responses import StreamingResponse
 from starlette.types import Send
 
+from app.api.discord_storage import (
+    DiscordStorage,
+    discord_context_metadata,
+    discord_storage,
+    schedule_discord_exchange,
+)
 from app.api.provider_credentials import (
     credential_providers_for_models,
     missing_mandatory_credential,
@@ -24,6 +30,7 @@ from app.api.sponsored_access import (
 )
 from app.data.connection import Database
 from app.data.db import get_db
+from app.data.discord_conversations import DiscordExchange
 from app.data.sponsored_usage import (
     SponsoredQuotaExceededError,
     SponsoredRequestInProgressError,
@@ -460,6 +467,7 @@ async def _instrument_stream(
     sponsored_mode: str | None = None,
     model_access_mode: Literal["sponsored", "byok", "ordinary"] = "ordinary",
     query_transform_model: ChatModel | None = None,
+    storage: DiscordStorage | None = None,
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
     log one chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
@@ -592,6 +600,54 @@ async def _instrument_stream(
                     "output_usd": round(costs[1], 6),
                     "total_usd": round(costs[2], 6),
                 }
+        if storage is not None:
+            schedule_discord_exchange(
+                storage,
+                DiscordExchange(
+                    conversation_id=storage.conversation_id,
+                    user_id=storage.user_id,
+                    response_id=response_id,
+                    model=model_id(payload.inference_model),
+                    question=payload.query,
+                    answer="".join(answer_parts),
+                    metadata={
+                        "interface": "discord",
+                        "responseId": str(response_id),
+                        "inferenceModel": model_id(payload.inference_model),
+                        "sources": [dict(source) for source in storage.sources],
+                        "diagnostics": {
+                            "outcome": outcome,
+                            "embeddingsModel": payload.embeddings_model.value,
+                            "queryTransformModel": model_id(
+                                query_transform_model or payload.query_transform_model,
+                            ),
+                            "requestedQueryTransformMode": (
+                                payload.query_transform_mode.value
+                            ),
+                            "queryTransformMode": effective_transform_mode.value,
+                            "retrievalHit": retrieval_hit,
+                            "historyTurns": len(payload.history),
+                            "fallbacks": timings.fallback_record(),
+                            "retrieval": {
+                                **timings.retrieval_record(),
+                                "reranker_min_score": settings.RERANKER_MIN_SCORE,
+                                "source_reranker_min_score": settings.SOURCE_RERANKER_MIN_SCORE,
+                            },
+                            "timing": record,
+                            "usage": effective_usage,
+                            "cost": meta_payload.get("cost"),
+                            "toolNames": sorted(observation.tool_names),
+                            "toolCallCount": observation.tool_call_count,
+                            "contextChars": observation.context_chars,
+                            "provider": observation.provider or None,
+                            "modelAccessMode": model_access_mode,
+                            "finishReason": observation.finish_reason or None,
+                        },
+                        "discord": discord_context_metadata(payload),
+                    },
+                    history_generation=storage.history_generation,
+                ),
+            )
     yield meta_event(meta_payload)
 
 
@@ -675,6 +731,12 @@ async def _prepare_chat_response_stream(
         yield error_event("invalid_conversation_id", "InvalidConversationID")
         return
 
+    storage = await discord_storage(
+        payload,
+        db,
+        conversation_id,
+        getattr(request.app.state, "discord_writes", None),
+    )
     history_text = _history_for_retrieval(payload)
     if conversation_id is None and "opencode-go" in credential_providers_for_models(
         payload.inference_model,
@@ -775,6 +837,10 @@ async def _prepare_chat_response_stream(
         "byok" if model_id(payload.inference_model) == sponsored_model_id else None
     )
     admitted_sponsored_user_id: UUID | None = None
+    accepted = False
+    storage_handed_off = False
+    early_outcome = "provider_error"
+    early_transform_mode = "not_run"
     try:
         preparation.phase = "admission"
         if inference_resolution.sponsored:
@@ -854,6 +920,7 @@ async def _prepare_chat_response_stream(
                 remaining_global_requests=admission.snapshot.remaining_global_requests,
             )
 
+        accepted = True
         preparation.phase = "context"
         session_id = safe_session_id(request.headers.get("X-PostHog-Session-Id"))
         record_distinct_id(distinct_id)
@@ -918,6 +985,9 @@ async def _prepare_chat_response_stream(
             if links_task.done():
                 links_task.result()
             retrieved = await retrieval_task
+            early_transform_mode = retrieved.effective_transform_mode.value
+            if storage is not None:
+                storage = replace(storage, sources=retrieved.sources_payload())
             links_context = await links_task
 
             if not retrieved.text:
@@ -1022,6 +1092,7 @@ async def _prepare_chat_response_stream(
             sponsored_mode=sponsored_mode,
             model_access_mode=model_access_mode,
             query_transform_model=retrieval_transform_model,
+            storage=storage,
         )
 
         if retrieved.sources:
@@ -1031,9 +1102,52 @@ async def _prepare_chat_response_stream(
         # subsequent terminal outcomes, including provider failure/disconnect.
         async with closing_stream(response.body_iterator) as stream:
             preparation.handled = True
+            storage_handed_off = True
             async for chunk in stream:
                 yield chunk
+    except asyncio.CancelledError, GeneratorExit:
+        early_outcome = "client_disconnect"
+        raise
     finally:
+        if accepted and storage is not None and not storage_handed_off:
+            timings.mark_total()
+            schedule_discord_exchange(
+                storage,
+                DiscordExchange(
+                    conversation_id=storage.conversation_id,
+                    user_id=storage.user_id,
+                    response_id=response_id,
+                    model=model_id(payload.inference_model),
+                    question=payload.query,
+                    answer="",
+                    history_generation=storage.history_generation,
+                    metadata={
+                        "interface": "discord",
+                        "responseId": str(response_id),
+                        "inferenceModel": model_id(payload.inference_model),
+                        "sources": [dict(source) for source in storage.sources],
+                        "discord": discord_context_metadata(payload),
+                        "diagnostics": {
+                            "outcome": early_outcome,
+                            "phase": preparation.phase,
+                            "embeddingsModel": payload.embeddings_model.value,
+                            "queryTransformModel": model_id(retrieval_transform_model),
+                            "requestedQueryTransformMode": payload.query_transform_mode.value,
+                            "queryTransformMode": early_transform_mode,
+                            "historyTurns": len(payload.history),
+                            "timing": timings.as_record(),
+                            "retrieval": {
+                                **timings.retrieval_record(),
+                                "reranker_min_score": settings.RERANKER_MIN_SCORE,
+                                "source_reranker_min_score": settings.SOURCE_RERANKER_MIN_SCORE,
+                            },
+                            "fallbacks": timings.fallback_record(),
+                            "usage": None,
+                            "cost": None,
+                        },
+                    },
+                ),
+            )
         if admitted_sponsored_user_id is not None:
             release_task = asyncio.create_task(
                 release_sponsored_request(

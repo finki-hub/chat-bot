@@ -21,6 +21,18 @@ from app.llms.query_modes import QueryTransformMode
 
 ChatInterface = Literal["discord", "web"]
 
+_DISCORD_SNOWFLAKE = r"^\d{1,20}$"
+
+
+class DiscordContext(BaseModel):
+    guild_id: str | None = Field(None, pattern=_DISCORD_SNOWFLAKE)
+    channel_id: str | None = Field(None, pattern=_DISCORD_SNOWFLAKE)
+    message_id: str | None = Field(
+        None,
+        pattern=_DISCORD_SNOWFLAKE,
+        description="The question's message or interaction id.",
+    )
+
 
 class ConversationTurn(BaseModel):
     role: Literal["user", "assistant"] = Field(
@@ -61,6 +73,13 @@ class ChatSchema(BaseModel):
         description=(
             "The client interface that will render the answer. Discord supports "
             "limited Markdown; web supports full Markdown, including tables."
+        ),
+    )
+    discord_context: DiscordContext | None = Field(
+        None,
+        description=(
+            "Where a Discord question was asked. Stored with the Discord conversation "
+            "for debugging."
         ),
     )
     embeddings_model: Model = Field(

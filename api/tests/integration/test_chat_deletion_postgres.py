@@ -12,7 +12,7 @@ from app.data.chat_conversation_delete import delete_conversation, delete_conver
 from app.data.chat_persistence import ChatMessageConflictError, upsert_message
 from app.data.chat_state import replace_assistant_message_and_prune_after
 from app.data.connection import Database
-from app.data.feedback import retract_web_feedback, upsert_feedback, upsert_web_feedback
+from app.data.feedback import retract_web_feedback, upsert_web_feedback
 from app.schemas.chat_persistence import ChatMessageRole, ChatMessageUpsert
 from app.schemas.feedback import FeedbackSchema
 
@@ -162,6 +162,19 @@ async def _database():
         await admin.close()
 
 
+async def _seed_legacy_feedback(database, payload):
+    await database.execute(
+        """
+        INSERT INTO feedback (response_id, client, user_id, feedback_type)
+        VALUES ($1, $2, $3, $4)
+        """,
+        payload.response_id,
+        payload.client,
+        payload.user_id,
+        payload.feedback_type,
+    )
+
+
 async def _seed(database, *, user_id=None):
     user_id = user_id or uuid4()
     conversation_id, response_id = uuid4(), uuid4()
@@ -208,7 +221,7 @@ async def _delete(database, user_id, conversation_id, *, bulk):
 
 
 @pytest.mark.parametrize("bulk", [False, True])
-def test_delete_removes_only_owned_linked_web_feedback(bulk):
+def test_web_delete_preserves_other_raters_and_discord_namespace(bulk):
     async def run():
         async with _database() as database:
             owner, conversation, feedback = await _seed(database)
@@ -219,13 +232,13 @@ def test_delete_removes_only_owned_linked_web_feedback(bulk):
                 assert stored is not None
                 assert stored.feedback.question_text == "synthetic question"
                 assert stored.feedback.answer_text == "synthetic answer"
-            # Legacy/external Discord responses have no chat-message FK, and
-            # even a coincident response id must not cross the client boundary.
+            # Seed historical copies explicitly: the public feedback API now
+            # requires surviving Discord state and will not accept these replays.
             discord = feedback.model_copy(update={"client": "discord"})
             external = discord.model_copy(update={"response_id": uuid4()})
             foreign = feedback.model_copy(update={"user_id": str(uuid4())})
             for payload in (discord, external, foreign):
-                assert await upsert_feedback(database, payload) is not None
+                await _seed_legacy_feedback(database, payload)
             assert await _delete(database, owner, conversation, bulk=bulk)
             expected = {
                 (p.response_id, p.client, p.user_id)
@@ -348,7 +361,7 @@ def test_replacement_prunes_feedback_preserves_boundaries_and_same_response_repl
                 ),
             ]
             for payload in preserved:
-                assert await upsert_feedback(database, payload) is not None
+                await _seed_legacy_feedback(database, payload)
             updated = await case.replace(database)
             assert updated is not None
             assert updated.response_id == case.message.response_id

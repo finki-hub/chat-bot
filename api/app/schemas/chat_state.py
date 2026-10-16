@@ -73,3 +73,8 @@ class ClearStaleActiveStreamsRequest(BaseModel):
 
 class ClearStaleActiveStreamsResponse(BaseModel):
     cleared_count: int = Field(ge=0)
+
+
+class ChatHistoryDeleteResponse(BaseModel):
+    deleted_conversations: int = Field(ge=0)
+    deleted_feedback: int = Field(ge=0)

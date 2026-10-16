@@ -37,11 +37,11 @@ class FeedbackSchema(BaseModel):
     )
     question_text: str | None = Field(
         default=None,
-        description="The user's question, as reported by the consumer (client-attested, not server-verified).",
+        description="Ignored on submission; derived from the surviving stored response.",
     )
     answer_text: str | None = Field(
         default=None,
-        description="The rated answer, as reported by the consumer (client-attested, not server-verified).",
+        description="Ignored on submission; derived from the surviving stored response.",
     )
     inference_model: str | None = Field(
         default=None,
