@@ -61,6 +61,13 @@ questions per source, then an independent adversarial reviewer kept only those g
 answerable from that exact source. `easy` = direct paraphrase; `hard` = synonyms /
 abbreviations / scenario phrasing with minimal lexical overlap (semantic stress test).
 
+## Buried-fact set — `buried_fact_golden.jsonl`
+
+48 questions, each about one specific fact inside one of the longest FAQs (Cyrillic,
+romanized and terse phrasings), anchored to that FAQ. It measures whether a fact deep in
+a multi-topic FAQ still reaches the context. Run it like the main set with
+`--golden /app/tests/eval/buried_fact_golden.jsonl`.
+
 ## Running it
 
 Run inside the api container (it has `DATABASE_URL`, GPU/OpenAI access, and the app code):
