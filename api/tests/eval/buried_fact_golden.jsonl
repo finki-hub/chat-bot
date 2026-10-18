@@ -18,13 +18,13 @@
 {"id": "buried-018", "query": "imate li sablon za diplomska rabota", "anchor": {"type": "Q", "name": "Постапка за дипломирање (долга верзија)"}, "category": "дипломска", "difficulty": "hard"}
 {"id": "buried-019", "query": "До кога треба да ја одбранам дипломската ако последно запишав летен семестар?", "anchor": {"type": "Q", "name": "Постапка за дипломирање (долга верзија)"}, "category": "дипломска", "difficulty": "hard"}
 {"id": "buried-020", "query": "Може ли да ги тргнам дополнителните предмети од уверението за дипломирање?", "anchor": {"type": "Q", "name": "Постапка за дипломирање (долга верзија)"}, "category": "дипломска", "difficulty": "hard"}
-{"id": "buried-021", "query": "Колку предмети може да запишам ако имам просек 8.5?", "anchor": {"type": "Q", "name": "Стратегија за најбрзо дипломирање"}, "category": "кредити", "difficulty": "hard"}
+{"id": "buried-021", "query": "Колку предмети може да запишам ако имам просек 8.5?", "anchor": {"type": "Q", "name": "Максимален / Минимален број на кредити и предмети во семестар"}, "category": "кредити", "difficulty": "hard"}
 {"id": "buried-022", "query": "kolku krediti najmnogu mozam da zemam vo edna godina", "anchor": {"type": "Q", "name": "Стратегија за најбрзо дипломирање"}, "category": "кредити", "difficulty": "hard"}
-{"id": "buried-023", "query": "Колку предмети од ниво L1 можам да запишам?", "anchor": {"type": "Q", "name": "Стратегија за најбрзо дипломирање"}, "category": "нивоа", "difficulty": "hard"}
+{"id": "buried-023", "query": "Колку предмети од ниво L1 можам да запишам?", "anchor": {"type": "Q", "name": "Правила за нивоа на предмети"}, "category": "нивоа", "difficulty": "hard"}
 {"id": "buried-024", "query": "Може ли да запишам предмет од друга акредитација?", "anchor": {"type": "Q", "name": "Стратегија за најбрзо дипломирање"}, "category": "акредитација", "difficulty": "hard"}
 {"id": "buried-025", "query": "Колку години најмногу можам да студирам на 4 годишни студии?", "anchor": {"type": "Q", "name": "Години на студии"}, "category": "студии", "difficulty": "hard"}
 {"id": "buried-026", "query": "moze li da se prefrlam od 4 na 3 godisni studii", "anchor": {"type": "Q", "name": "Години на студии"}, "category": "студии", "difficulty": "hard"}
-{"id": "buried-027", "query": "Што е 4+1 и 3+2 кај магистерските?", "anchor": {"type": "Q", "name": "Години на студии"}, "category": "магистерски", "difficulty": "hard"}
+{"id": "buried-027", "query": "Што е 4+1 и 3+2 кај магистерските?", "anchor": {"type": "Q", "name": "Магистерски студии"}, "category": "магистерски", "difficulty": "hard"}
 {"id": "buried-028", "query": "Дали на 2 годишни студии има дипломска?", "anchor": {"type": "Q", "name": "Години на студии"}, "category": "студии", "difficulty": "hard"}
 {"id": "buried-029", "query": "Колку повеќе плаќам ако запишам шести предмет на државна квота?", "anchor": {"type": "Q", "name": "Запишување 6ти (шести) предмет / над 35 кредити"}, "category": "кредити", "difficulty": "hard"}
 {"id": "buried-030", "query": "kolku pati moze da se podnese molba za 6 predmet vo semestar", "anchor": {"type": "Q", "name": "Запишување 6ти (шести) предмет / над 35 кредити"}, "category": "кредити", "difficulty": "hard"}
@@ -45,4 +45,4 @@
 {"id": "buried-045", "query": "Дали лаборантите плаќаат партиципација?", "anchor": {"type": "Q", "name": "Попусти и ослободување од партиципација"}, "category": "плаќање", "difficulty": "hard"}
 {"id": "buried-046", "query": "Што се случува ако ме фатат дека препишувам на испит?", "anchor": {"type": "Q", "name": "Дисциплински мерки"}, "category": "дисциплина", "difficulty": "hard"}
 {"id": "buried-047", "query": "Може ли да се купи дополнителен термин за полагање?", "anchor": {"type": "Q", "name": "Испитни сесии"}, "category": "испити", "difficulty": "hard"}
-{"id": "buried-048", "query": "Кој ја формира комисијата за четврто полагање?", "anchor": {"type": "Q", "name": "Испитни сесии"}, "category": "испити", "difficulty": "hard"}
+{"id": "buried-048", "query": "Кој ја формира комисијата за четврто полагање?", "anchor": {"type": "Q", "name": "Полагање пред комисија"}, "category": "испити", "difficulty": "hard"}
