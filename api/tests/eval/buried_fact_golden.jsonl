@@ -1,0 +1,48 @@
+{"id": "buried-001", "query": "Колку чини префрлање од 2018 на 2023 акредитација?", "anchor": {"type": "Q", "name": "Менување на акредитација од 2018 во 2023"}, "category": "акредитација", "difficulty": "hard"}
+{"id": "buried-002", "query": "dali HPC kreditite se gubat ako se prefrlam na novata akreditacija", "anchor": {"type": "Q", "name": "Менување на акредитација од 2018 во 2023"}, "category": "акредитација", "difficulty": "hard"}
+{"id": "buried-003", "query": "Кој предмет е новото име на Мрежна безбедност?", "anchor": {"type": "Q", "name": "Менување на акредитација од 2018 во 2023"}, "category": "акредитација", "difficulty": "hard"}
+{"id": "buried-004", "query": "vo koj semestar e naprednoto programiranje sega", "anchor": {"type": "Q", "name": "Менување на акредитација од 2018 во 2023"}, "category": "акредитација", "difficulty": "hard"}
+{"id": "buried-005", "query": "Дали е укинат предметот Пресметковна биологија?", "anchor": {"type": "Q", "name": "Менување на акредитација од 2018 во 2023"}, "category": "акредитација", "difficulty": "hard"}
+{"id": "buried-006", "query": "Кои нови задолжителни предмети добива КН ако се префрли на 2023?", "anchor": {"type": "Q", "name": "Менување на акредитација од 2018 во 2023"}, "category": "акредитација", "difficulty": "hard"}
+{"id": "buried-007", "query": "Дали работа во IT фирма може да се признае како пракса?", "anchor": {"type": "Q", "name": "Пракса"}, "category": "пракса", "difficulty": "hard"}
+{"id": "buried-008", "query": "moze li praksa vo firma od stranstvo", "anchor": {"type": "Q", "name": "Пракса"}, "category": "пракса", "difficulty": "hard"}
+{"id": "buried-009", "query": "Кои документи треба за хартиена пракса?", "anchor": {"type": "Q", "name": "Пракса"}, "category": "пракса", "difficulty": "hard"}
+{"id": "buried-010", "query": "Дали уште се издава барање за упатување на пракса од студентска служба?", "anchor": {"type": "Q", "name": "Пракса"}, "category": "пракса", "difficulty": "hard"}
+{"id": "buried-011", "query": "kolku vreme treba da se odobri praksa na portalot", "anchor": {"type": "Q", "name": "Пракса"}, "category": "пракса", "difficulty": "hard"}
+{"id": "buried-012", "query": "Колку изнесува Еразмус грантот месечно?", "anchor": {"type": "Q", "name": "Еразмус+ и студентска размена"}, "category": "еразмус", "difficulty": "hard"}
+{"id": "buried-013", "query": "koj e erasmus koordinator na finki", "anchor": {"type": "Q", "name": "Еразмус+ и студентска размена"}, "category": "еразмус", "difficulty": "hard"}
+{"id": "buried-014", "query": "Дали можам да одам на размена во Турција?", "anchor": {"type": "Q", "name": "Еразмус+ и студентска размена"}, "category": "еразмус", "difficulty": "hard"}
+{"id": "buried-015", "query": "Колку кредити ми носи предмет положен во странство?", "anchor": {"type": "Q", "name": "Еразмус+ и студентска размена"}, "category": "еразмус", "difficulty": "hard"}
+{"id": "buried-016", "query": "Kade se predava aplikacijata za erasmus", "anchor": {"type": "Q", "name": "Еразмус+ и студентска размена"}, "category": "еразмус", "difficulty": "hard"}
+{"id": "buried-017", "query": "Колку страни мора да има дипломската?", "anchor": {"type": "Q", "name": "Постапка за дипломирање (долга верзија)"}, "category": "дипломска", "difficulty": "hard"}
+{"id": "buried-018", "query": "imate li sablon za diplomska rabota", "anchor": {"type": "Q", "name": "Постапка за дипломирање (долга верзија)"}, "category": "дипломска", "difficulty": "hard"}
+{"id": "buried-019", "query": "До кога треба да ја одбранам дипломската ако последно запишав летен семестар?", "anchor": {"type": "Q", "name": "Постапка за дипломирање (долга верзија)"}, "category": "дипломска", "difficulty": "hard"}
+{"id": "buried-020", "query": "Може ли да ги тргнам дополнителните предмети од уверението за дипломирање?", "anchor": {"type": "Q", "name": "Постапка за дипломирање (долга верзија)"}, "category": "дипломска", "difficulty": "hard"}
+{"id": "buried-021", "query": "Колку предмети може да запишам ако имам просек 8.5?", "anchor": {"type": "Q", "name": "Максимален / Минимален број на кредити и предмети во семестар"}, "category": "кредити", "difficulty": "hard"}
+{"id": "buried-022", "query": "kolku krediti najmnogu mozam da zemam vo edna godina", "anchor": {"type": "Q", "name": "Стратегија за најбрзо дипломирање"}, "category": "кредити", "difficulty": "hard"}
+{"id": "buried-023", "query": "Колку предмети од ниво L1 можам да запишам?", "anchor": {"type": "Q", "name": "Правила за нивоа на предмети"}, "category": "нивоа", "difficulty": "hard"}
+{"id": "buried-024", "query": "Може ли да запишам предмет од друга акредитација?", "anchor": {"type": "Q", "name": "Стратегија за најбрзо дипломирање"}, "category": "акредитација", "difficulty": "hard"}
+{"id": "buried-025", "query": "Колку години најмногу можам да студирам на 4 годишни студии?", "anchor": {"type": "Q", "name": "Години на студии"}, "category": "студии", "difficulty": "hard"}
+{"id": "buried-026", "query": "moze li da se prefrlam od 4 na 3 godisni studii", "anchor": {"type": "Q", "name": "Години на студии"}, "category": "студии", "difficulty": "hard"}
+{"id": "buried-027", "query": "Што е 4+1 и 3+2 кај магистерските?", "anchor": {"type": "Q", "name": "Магистерски студии"}, "category": "магистерски", "difficulty": "hard"}
+{"id": "buried-028", "query": "Дали на 2 годишни студии има дипломска?", "anchor": {"type": "Q", "name": "Години на студии"}, "category": "студии", "difficulty": "hard"}
+{"id": "buried-029", "query": "Колку повеќе плаќам ако запишам шести предмет на државна квота?", "anchor": {"type": "Q", "name": "Запишување 6ти (шести) предмет / над 35 кредити"}, "category": "кредити", "difficulty": "hard"}
+{"id": "buried-030", "query": "kolku pati moze da se podnese molba za 6 predmet vo semestar", "anchor": {"type": "Q", "name": "Запишување 6ти (шести) предмет / над 35 кредити"}, "category": "кредити", "difficulty": "hard"}
+{"id": "buried-031", "query": "Што да правам ако ми ја одбиле молбата за шести предмет без причина?", "anchor": {"type": "Q", "name": "Запишување 6ти (шести) предмет / над 35 кредити"}, "category": "кредити", "difficulty": "hard"}
+{"id": "buried-032", "query": "Колку изнесува стипендијата од МОН месечно?", "anchor": {"type": "Q", "name": "Стипендии од МОН"}, "category": "стипендии", "difficulty": "hard"}
+{"id": "buried-033", "query": "kakov prosek treba za stipendija za informatika", "anchor": {"type": "Q", "name": "Стипендии од МОН"}, "category": "стипендии", "difficulty": "hard"}
+{"id": "buried-034", "query": "Можам ли да примам стипендија од МОН и од друга фирма истовремено?", "anchor": {"type": "Q", "name": "Стипендии од МОН"}, "category": "стипендии", "difficulty": "hard"}
+{"id": "buried-035", "query": "Кои документи треба за прв упис на семестар?", "anchor": {"type": "Q", "name": "Запишување на семестар"}, "category": "упис", "difficulty": "hard"}
+{"id": "buried-036", "query": "dali mora licno da odam za pecat vo indeks", "anchor": {"type": "Q", "name": "Запишување на семестар"}, "category": "упис", "difficulty": "hard"}
+{"id": "buried-037", "query": "Можам ли да конкурирам за два студентски дома?", "anchor": {"type": "Q", "name": "Студентски домови"}, "category": "домови", "difficulty": "hard"}
+{"id": "buried-038", "query": "Колку проценти од местата во домовите се за социјални категории?", "anchor": {"type": "Q", "name": "Студентски домови"}, "category": "домови", "difficulty": "hard"}
+{"id": "buried-039", "query": "Колку се плаќа за секој еквивалентиран предмет при промена на смер?", "anchor": {"type": "Q", "name": "Промена на студиска програма (смер)"}, "category": "смер", "difficulty": "hard"}
+{"id": "buried-040", "query": "dali kalkulus 1 i 2 mozat da se ekvivalentiraat vo eden predmet", "anchor": {"type": "Q", "name": "Промена на студиска програма (смер)"}, "category": "смер", "difficulty": "hard"}
+{"id": "buried-041", "query": "Колку години трае ССП?", "anchor": {"type": "Q", "name": "Студиски програми (Смерови)"}, "category": "смерови", "difficulty": "hard"}
+{"id": "buried-042", "query": "Дали има магистерски по биоинформатика?", "anchor": {"type": "Q", "name": "Студиски програми (Смерови)"}, "category": "магистерски", "difficulty": "hard"}
+{"id": "buried-043", "query": "Колку е провизијата кога плаќам преку iKnow?", "anchor": {"type": "Q", "name": "Уплата и трошоци при запишување на семестар"}, "category": "плаќање", "difficulty": "hard"}
+{"id": "buried-044", "query": "kolku cini kredit na privatna kvota", "anchor": {"type": "Q", "name": "Уплата и трошоци при запишување на семестар"}, "category": "плаќање", "difficulty": "hard"}
+{"id": "buried-045", "query": "Дали лаборантите плаќаат партиципација?", "anchor": {"type": "Q", "name": "Попусти и ослободување од партиципација"}, "category": "плаќање", "difficulty": "hard"}
+{"id": "buried-046", "query": "Што се случува ако ме фатат дека препишувам на испит?", "anchor": {"type": "Q", "name": "Дисциплински мерки"}, "category": "дисциплина", "difficulty": "hard"}
+{"id": "buried-047", "query": "Може ли да се купи дополнителен термин за полагање?", "anchor": {"type": "Q", "name": "Испитни сесии"}, "category": "испити", "difficulty": "hard"}
+{"id": "buried-048", "query": "Кој ја формира комисијата за четврто полагање?", "anchor": {"type": "Q", "name": "Полагање пред комисија"}, "category": "испити", "difficulty": "hard"}
