@@ -47,6 +47,18 @@ def test_system_prompt_keeps_specific_document_evidence_over_faq():
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
 
 
+def test_system_prompt_defaults_unstated_cycle_to_first_cycle():
+    # Questions without a cycle were answered from master's or doctoral sources.
+    assert (
+        "Ако ниту прашањето ниту тековниот разговор не го наведуваат циклусот на "
+        "студии, претпостави прв циклус (додипломски студии)."
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert (
+        "ако се пронајдени само такви извори, кажи дека во изворите нема податок "
+        "за прв циклус"
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+
+
 def test_system_prompt_treats_document_signatories_as_historical():
     # Regulations end with the dean who signed them, which may be a former dean.
     assert (
