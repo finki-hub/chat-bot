@@ -1,11 +1,11 @@
-import asyncio
-import contextvars
 import json
 import logging
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from enum import StrEnum
 from time import perf_counter
+
+from anyio import CapacityLimiter, to_thread
 
 logger = logging.getLogger(__name__)
 
@@ -15,15 +15,18 @@ class Lane(StrEnum):
     RERANK = "rerank"
 
 
-# One worker per model: concurrent forward passes on a single GPU add no throughput,
-# they only make every in-flight request finish late together and stack activation
-# memory. A FIFO lane per model keeps the GPU busy while letting earlier requests
-# finish first, and an embed never queues behind a rerank's CPU-side work.
-_executors: dict[Lane, ThreadPoolExecutor] = {
-    lane: ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"gpu-{lane}")
-    for lane in Lane
-}
-_pending: dict[Lane, int] = dict.fromkeys(Lane, 0)
+# One worker per model: concurrent forward passes of the same model add no throughput
+# on a single GPU, they only make every in-flight request finish late together. An
+# embed and a rerank may still overlap: a ~30 ms embed waiting behind a ~450 ms rerank
+# would cost more than sharing the GPU briefly.
+_limiters: dict[Lane, CapacityLimiter] = {lane: CapacityLimiter(1) for lane in Lane}
+
+
+@dataclass(frozen=True, slots=True)
+class LaneRun[T]:
+    value: T
+    queue_ms: float
+    run_ms: float
 
 
 async def run_in_lane[**P, T](
@@ -31,36 +34,42 @@ async def run_in_lane[**P, T](
     function: Callable[P, T],
     *args: P.args,
     **kwargs: P.kwargs,
-) -> T:
-    """Run blocking inference on the lane's single worker and log its queue wait."""
-    context = contextvars.copy_context()
+) -> LaneRun[T]:
+    """Run blocking inference on the lane's single worker, timing queue and run apart."""
+    limiter = _limiters[lane]
+    stats = limiter.statistics()
+    pending = stats.borrowed_tokens + stats.tasks_waiting
     submitted = perf_counter()
     started: float | None = None
+    finished: float | None = None
 
-    def _call() -> T:
-        nonlocal started
+    def call() -> T:
+        nonlocal started, finished
         started = perf_counter()
-        return context.run(function, *args, **kwargs)
+        try:
+            return function(*args, **kwargs)
+        finally:
+            finished = perf_counter()
 
-    pending_at_submit = _pending[lane]
-    _pending[lane] += 1
+    # Without abandon_on_cancel, a cancelled caller still waits for a running job, so
+    # the limiter and the timings below never pretend the GPU is free while it is busy.
     try:
-        return await asyncio.get_running_loop().run_in_executor(
-            _executors[lane],
-            _call,
-        )
+        value = await to_thread.run_sync(call, limiter=limiter)
     finally:
-        _pending[lane] -= 1
-        finished = perf_counter()
-        start = finished if started is None else started
+        start = started if started is not None else perf_counter()
+        end = finished if finished is not None else start
+        queue_ms = round((start - submitted) * 1000, 1)
+        run_ms = round((end - start) * 1000, 1)
         logger.info(
             "gpu.lane %s",
             json.dumps(
                 {
                     "lane": lane.value,
-                    "pending": pending_at_submit,
-                    "queue_ms": round((start - submitted) * 1000, 1),
-                    "run_ms": round((finished - start) * 1000, 1),
+                    "pending": pending,
+                    "queue_ms": queue_ms,
+                    "run_ms": run_ms,
+                    "ran": started is not None,
                 },
             ),
         )
+    return LaneRun(value=value, queue_ms=queue_ms, run_ms=run_ms)
