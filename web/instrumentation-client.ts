@@ -57,9 +57,6 @@ if (
       process.env['NEXT_PUBLIC_POSTHOG_HOST'] ?? 'https://eu.i.posthog.com',
     autocapture: false,
     before_send: (event) => {
-      if (event === null) {
-        return null;
-      }
       const currentUrl: unknown = event.properties['$current_url'];
       const pathname: unknown = event.properties['$pathname'];
       if (
