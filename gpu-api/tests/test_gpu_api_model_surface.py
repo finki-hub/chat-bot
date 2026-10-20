@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.llms import embeddings as embeddings_module
+from app.llms import reranker as reranker_module
 from app.llms.models import Model
 from app.main import make_app
 from app.utils.settings import Settings
@@ -98,3 +99,19 @@ def test_embedding_endpoint_rejects_e5(monkeypatch):
 
 def test_model_enum_exposes_bge_only():
     assert {model.value for model in Model} == {"BAAI/bge-m3"}
+
+
+def test_rerank_uses_small_batches_and_keeps_original_indices(monkeypatch):
+    calls: list[dict[str, object]] = []
+
+    class FakeCrossEncoder:
+        def predict(self, inputs, **kwargs):
+            calls.append(kwargs)
+            return [0.1, 0.9, 0.5][: len(inputs)]
+
+    monkeypatch.setattr(reranker_module, "_reranker_model", FakeCrossEncoder())
+
+    ranked = reranker_module.rerank_documents("query", ["a", "b", "c"])
+
+    assert calls == [{"batch_size": 8}]
+    assert ranked == [(0.9, 1), (0.5, 2), (0.1, 0)]
