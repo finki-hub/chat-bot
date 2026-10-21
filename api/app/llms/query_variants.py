@@ -122,7 +122,6 @@ async def build_query_variants(
     # Romanized queries embed far from the Cyrillic corpus, so dense retrieval must
     # not depend on an LLM transform being available to bridge the script gap.
     *transforms, raw = bundle.variants
-    has_rewrite = any(variant.kind == "rewrite" for variant in transforms)
     return QueryVariantBundle(
         variants=(
             *transforms,
@@ -131,7 +130,7 @@ async def build_query_variants(
             ),
             raw,
         ),
-        rerank_query=bundle.rerank_query if has_rewrite else transliterated,
+        rerank_query=transliterated,
         unchanged_kinds=bundle.unchanged_kinds,
     )
 
@@ -173,7 +172,7 @@ async def _build_transform_variants(
                             ),
                             raw,
                         ),
-                        rerank_query=rewritten,
+                        rerank_query=search_query,
                     )
         case QueryTransformMode.HYDE:
             hyde_output = await _hyde_passage(
@@ -227,7 +226,7 @@ async def _build_transform_variants(
             )
             return QueryVariantBundle(
                 variants=variants,
-                rerank_query=rewritten or search_query,
+                rerank_query=search_query,
                 unchanged_kinds=_unchanged_kinds(
                     search_query,
                     {"rewrite": rewrite_output, "hyde": hyde_output},
