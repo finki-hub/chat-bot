@@ -183,7 +183,7 @@ def test_read_queries_use_serialized_readonly_transactions():
     assert connection.fetch.await_args.kwargs["timeout"] == 10
 
 
-@pytest.mark.parametrize("score", [0.9, 0.0768])
+@pytest.mark.parametrize("score", [0.9, 0.0123])
 def test_observer_runs_actual_mocked_production_selection(monkeypatch, score):
     from app.llms import context  # noqa: PLC0415 -- actual production boundary test
     from app.llms.models import Model  # noqa: PLC0415

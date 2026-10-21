@@ -73,7 +73,7 @@ def test_lexical_faq_search_uses_weighted_or_query(
 @pytest.mark.parametrize(
     ("vector_score", "expected_final_faq_count", "expected_retrieval_path"),
     [
-        (0.05, 1, "lexical"),
+        (0.01, 1, "lexical"),
         (0.5, 2, "hybrid"),
     ],
 )

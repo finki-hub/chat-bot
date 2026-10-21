@@ -109,8 +109,12 @@ class Settings(BaseSettings):
     STAFF_CACHE_TTL: int = 3600
     # Minimum cross-encoder score (sentence-transformers CrossEncoder.predict applies a
     # sigmoid for num_labels=1 rerankers like bge-reranker-v2-m3, so scores are 0..1) a
-    # candidate must clear to enter the final context. Tune per reranker distribution.
-    RERANKER_MIN_SCORE: float = 0.1
+    # candidate must clear to enter the final context. Long, multi-topic questions (real
+    # student emails) score the right FAQ at 0.02-0.09 even when it ranks first, so 0.1
+    # emptied their context; 0.03 fixed 17 of 49 such answers and broke none of 21 controls.
+    RERANKER_MIN_SCORE: float = 0.03
+    # Thesis similarity reranks short proposal texts and was not re-tuned with the above.
+    DIPLOMA_RERANKER_MIN_SCORE: float = 0.1
     SOURCE_RERANKER_MIN_SCORE: float = 0.3
     MCP_HTTP_URLS: str = ""
     MCP_SSE_URLS: str = ""
