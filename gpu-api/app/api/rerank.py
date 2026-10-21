@@ -1,10 +1,9 @@
-import asyncio
 import json
 import logging
-from time import perf_counter
 
 from fastapi import APIRouter, Request, status
 
+from app.llms.inference import Lane, run_in_lane
 from app.llms.reranker import rerank_documents
 from app.schemas.rerank import RankedDocument, RerankRequestSchema, RerankResponseSchema
 from app.utils.analytics import capture_chat_inference
@@ -50,36 +49,37 @@ async def handle_rerank(
     if not payload.documents:
         return RerankResponseSchema(reranked_documents=[])
 
-    start = perf_counter()
-    scored_list = await asyncio.to_thread(
+    run = await run_in_lane(
+        Lane.RERANK,
         rerank_documents,
         payload.query,
         payload.documents,
     )
-    ms = round((perf_counter() - start) * 1000, 1)
     logger.info(
         "gpu.rerank %s",
         json.dumps(
             {
                 "docs": len(payload.documents),
-                "ms": ms,
+                "ms": run.run_ms,
+                "queue_ms": run.queue_ms,
             },
         ),
     )
     capture_chat_inference(
         request,
         stage="rerank",
-        ms=ms,
+        ms=run.run_ms,
         props={
             "docs": len(payload.documents),
             "query_chars": len(payload.query),
             "doc_chars": sum(len(doc) for doc in payload.documents),
+            "queue_ms": run.queue_ms,
         },
     )
 
     return RerankResponseSchema(
         reranked_documents=[
             RankedDocument(index=idx, document=payload.documents[idx], score=score)
-            for score, idx in scored_list
+            for score, idx in run.value
         ],
     )

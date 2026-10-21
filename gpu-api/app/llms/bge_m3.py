@@ -1,6 +1,5 @@
 import logging
 import threading
-from typing import overload
 
 import torch
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -12,14 +11,6 @@ logger = logging.getLogger(__name__)
 _bge_m3_embedder: HuggingFaceEmbeddings | None = None
 _bge_m3_init_thread: threading.Thread | None = None
 _bge_m3_lock = threading.Lock()
-
-
-@overload
-def get_bge_m3_embeddings(text: str) -> list[float]: ...
-
-
-@overload
-def get_bge_m3_embeddings(text: list[str]) -> list[list[float]]: ...
 
 
 def get_bge_m3_embeddings(text: str | list[str]) -> list[float] | list[list[float]]:

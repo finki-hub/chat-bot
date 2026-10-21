@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.llms import embeddings as embeddings_module
 from app.llms import reranker as reranker_module
+from app.llms.inference import LaneRun
 from app.llms.models import Model
 from app.main import make_app
 from app.utils.exceptions import ModelNotReadyError
@@ -161,7 +162,7 @@ def test_embeddings_logs_input_metadata_without_raw_text(caplog, monkeypatch):
         Model.BGE_M3,
     )
 
-    assert result == [0.1, 0.2]
+    assert result.value == [0.1, 0.2]
     assert "private embedding text" not in caplog.text
     assert "input_chars=" in caplog.text
     assert "model=" in caplog.text
@@ -172,7 +173,7 @@ def test_embeddings_route_returns_single_embedding_and_logs_metadata(
     monkeypatch,
 ):
     async def fake_generate_embeddings(_input, _model):
-        return [0.1, 0.2]
+        return LaneRun(value=[0.1, 0.2], queue_ms=12.5, run_ms=30.0)
 
     captured_props = []
 
@@ -201,6 +202,8 @@ def test_embeddings_route_returns_single_embedding_and_logs_metadata(
     assert response.status_code == 200
     assert response.json() == {"embeddings": [0.1, 0.2]}
     assert captured_props[0]["stage"] == "embed"
+    assert captured_props[0]["ms"] == 30.0
+    assert captured_props[0]["props"]["queue_ms"] == 12.5
     assert captured_props[0]["props"]["count"] == 1
     assert captured_props[0]["props"]["input_chars"] == len(
         "private embedding text",
@@ -211,7 +214,7 @@ def test_embeddings_route_returns_single_embedding_and_logs_metadata(
 
 def test_embeddings_route_returns_embedding_batch(monkeypatch):
     async def fake_generate_embeddings(_input, _model):
-        return [[0.1, 0.2], [0.3, 0.4]]
+        return LaneRun(value=[[0.1, 0.2], [0.3, 0.4]], queue_ms=0.0, run_ms=1.0)
 
     monkeypatch.setattr(
         "app.api.embeddings.generate_embeddings",
