@@ -39,12 +39,18 @@ def test_rewrite_hyde_omits_variants_unchanged_from_search_query(
 @pytest.mark.parametrize(
     ("rewrite_result", "hyde_result", "expected_kinds", "expected_rerank_query"),
     [
+        (
+            "rewritten query",
+            "Хипотетички пасус",
+            ("hyde", "rewrite", "raw"),
+            "query",
+        ),
         (RuntimeError("rewrite failed"), "Хипотетички пасус", ("hyde", "raw"), "query"),
         (
             "rewritten query",
             RuntimeError("hyde failed"),
             ("rewrite", "raw"),
-            "rewritten query",
+            "query",
         ),
         (
             RuntimeError("rewrite failed"),
@@ -108,7 +114,7 @@ def test_rewrite_hyde_propagates_cancellation(
         (
             QueryTransformMode.REWRITE,
             ("rewrite", "transliteration", "raw"),
-            "Каде се наоѓа Студентската служба?",
+            "Каде е слузба",
         ),
         (
             QueryTransformMode.HYDE,
