@@ -54,7 +54,7 @@ def _plan(query):
     "mode", [QueryTransformMode.RAW, QueryTransformMode.REWRITE_HYDE]
 )
 @pytest.mark.parametrize("hook_available", [True, False])
-@pytest.mark.parametrize("score", [0.9, 0.05])
+@pytest.mark.parametrize("score", [0.9, 0.01])
 def test_actual_observer_pool_is_filtered_before_rerank(
     monkeypatch, mode, hook_available, score
 ):
@@ -195,7 +195,7 @@ def test_legacy_shared_original_constraints_and_strict_abstention(
         rerank = AsyncMock(side_effect=ValueError("offline failure"))
     else:
         index = 999 if rerank_result == "invalid" else 0
-        score = 0.05 if rerank_result == "below_floor" else 0.9
+        score = 0.01 if rerank_result == "below_floor" else 0.9
         rerank = AsyncMock(
             return_value=SimpleNamespace(
                 json=lambda: {"reranked_documents": [{"index": index, "score": score}]}
@@ -319,7 +319,7 @@ def test_actual_production_and_legacy_abstention_denial_stage_parity(
                 else [
                     {
                         "index": 999 if stage == "invalid" else 0,
-                        "score": 0.05 if stage == "below_floor" else 0.9,
+                        "score": 0.01 if stage == "below_floor" else 0.9,
                     }
                 ]
             )
@@ -433,7 +433,7 @@ def test_ordinary_legacy_rerank_handling_is_not_changed(monkeypatch, rerank_resu
         if rerank_result == "failure"
         else AsyncMock(
             return_value=SimpleNamespace(
-                json=lambda: {"reranked_documents": [{"index": 0, "score": 0.05}]}
+                json=lambda: {"reranked_documents": [{"index": 0, "score": 0.01}]}
             )
         ),
     )

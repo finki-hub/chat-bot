@@ -82,7 +82,7 @@ async def retrieve_similar_diplomas(
                     len(candidates),
                 )
                 continue
-            if item["score"] < settings.RERANKER_MIN_SCORE:
+            if item["score"] < settings.DIPLOMA_RERANKER_MIN_SCORE:
                 continue
             selected.append(_to_retrieved(candidates[idx], item["score"]))
             if len(selected) >= top_k:
