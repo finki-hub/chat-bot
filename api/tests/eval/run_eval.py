@@ -36,13 +36,18 @@ import asyncio
 import json
 import re
 import sys
+import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Literal
 
 from asyncpg import PostgresError
 
+from app.api.sponsored_access import (
+    resolve_sponsored_inference,
+    sponsored_query_transform,
+)
 from app.data.connection import Database
 from app.data.documents import get_closest_chunks
 from app.data.questions import get_closest_questions, get_matching_questions
@@ -63,7 +68,8 @@ from app.llms.faq_query_recovery_plan import (
     FaqQueryRecoveryPlan,
     plan_faq_query_recovery,
 )
-from app.llms.models import MODEL_DISTANCE_THRESHOLDS, Model
+from app.llms.models import MODEL_DISTANCE_THRESHOLDS, Model, model_id
+from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.query_modes import QueryTransformMode
 from app.llms.query_normalization import query_search_variants
 from app.llms.query_variants import (
@@ -78,6 +84,29 @@ from app.utils.http_client import close_http_client, init_http_client
 from app.utils.settings import Settings
 
 settings = Settings()
+
+
+def resolve_transform_credentials(
+    qt_model: Model,
+) -> tuple[Model, LlmProviderCredentials | None]:
+    """Run query transforms on the sponsored model, as /chat does for users without a key."""
+    resolution = resolve_sponsored_inference(
+        settings.SPONSORED_MODEL_ID, None, settings
+    )
+    # The OpenCode Go sponsored endpoint only serves requests that carry a session.
+    conversation_id = f"eval-{uuid.uuid4()}"
+    model, credentials = sponsored_query_transform(
+        qt_model,
+        None,
+        resolution,
+        settings.SPONSORED_MODEL_ID,
+        settings,
+        conversation_id=conversation_id,
+    )
+    if credentials is not None and credentials.conversation_id is None:
+        credentials = replace(credentials, conversation_id=conversation_id)
+    return Model(model_id(model)), credentials
+
 
 # A ceiling high enough to disable the distance pre-filter (cosine distance maxes at 2.0).
 NO_THRESHOLD = 9.0
@@ -325,6 +354,7 @@ async def evaluate_one(
     top_k: int,
     ideal_limit: int,
     transform_mode: QueryTransformMode,
+    qt_credentials: LlmProviderCredentials | None = None,
 ) -> Result:
     want = anchor_key(ex.anchor)
     evidence_plan = await plan_faq_evidence_constraints(db, ex.query)
@@ -332,7 +362,12 @@ async def evaluate_one(
         raise ValueError("FAQ evidence constraint catalog failure")
     constraints = evidence_plan.constraints
 
-    variant_bundle = await build_query_variants(ex.query, qt_model, transform_mode)
+    variant_bundle = await build_query_variants(
+        ex.query,
+        qt_model,
+        transform_mode,
+        credentials=qt_credentials,
+    )
     variants = [
         (variant.text, variant.is_document) for variant in variant_bundle.variants
     ]
@@ -582,8 +617,10 @@ async def main_async(ns: argparse.Namespace) -> int:
     if ns.limit:
         examples = examples[: ns.limit]
     embedding_model = Model(ns.embedding_model)
-    qt_model = Model(ns.query_transform_model)
     transform_mode = QueryTransformMode.RAW if ns.no_transform else ns.transform_mode
+    qt_model, qt_credentials = resolve_transform_credentials(
+        Model(ns.query_transform_model),
+    )
 
     init_http_client()
     db = Database(dsn=settings.DATABASE_URL)
@@ -605,6 +642,7 @@ async def main_async(ns: argparse.Namespace) -> int:
                         top_k=ns.top_k,
                         ideal_limit=ns.ideal_limit,
                         transform_mode=transform_mode,
+                        qt_credentials=qt_credentials,
                     )
                 # ruff: ignore[BLE001] -- one failed case must not abort the evaluation run
                 except Exception as exc:
