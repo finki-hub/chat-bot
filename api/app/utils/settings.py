@@ -116,6 +116,11 @@ class Settings(BaseSettings):
     # Thesis similarity reranks short proposal texts and was not re-tuned with the above.
     DIPLOMA_RERANKER_MIN_SCORE: float = 0.1
     SOURCE_RERANKER_MIN_SCORE: float = 0.3
+    # "agent": no pre-retrieval, the agent searches with search_knowledge_base (blind A/B on
+    # 49 hard emails: 39 correct vs 25 for "pipeline", the pre-agent rewrite/HyDE retrieval
+    # kept for rollback). AGENT_MAX_SEARCHES caps searches per answer, parallel ones included.
+    CHAT_RETRIEVAL_MODE: Literal["agent", "pipeline"] = "agent"
+    AGENT_MAX_SEARCHES: int = 4
     MCP_HTTP_URLS: str = ""
     MCP_SSE_URLS: str = ""
     MCP_SERVERS: list[McpServerSettings] = Field(default_factory=list)

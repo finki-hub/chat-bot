@@ -6,12 +6,15 @@ from app.data.connection import Database
 from app.llms.agents import StreamObservation
 from app.llms.models import model_id
 from app.llms.prompts import (
+    AGENT_CONTEXT_TOOLS_PROMPT,
+    AGENT_SEARCH_TOOLS_PROMPT,
     DEFAULT_AGENT_SYSTEM_PROMPT,
     build_user_agent_prompt,
     markdown_instructions,
     to_history_messages,
 )
 from app.llms.recommendation_tools import build_recommendation_tools
+from app.llms.search_tools import build_search_tools
 from app.llms.streams import stream_response_with_agent
 from app.llms.tools import agent_request_tools
 from app.schemas.chat import ChatSchema
@@ -44,9 +47,11 @@ async def handle_chat(
         model_id(payload.inference_model),
     )
 
+    agent_search = settings.CHAT_RETRIEVAL_MODE == "agent"
     system_prompt = "\n\n".join(
         [
             DEFAULT_AGENT_SYSTEM_PROMPT,
+            AGENT_SEARCH_TOOLS_PROMPT if agent_search else AGENT_CONTEXT_TOOLS_PROMPT,
             markdown_instructions(payload.interface),
         ],
     )
@@ -59,6 +64,15 @@ async def handle_chat(
     )
 
     tools = build_recommendation_tools(db) if db is not None else []
+    if db is not None and agent_search:
+        tools.extend(
+            build_search_tools(
+                db,
+                payload.embeddings_model,
+                payload.query_transform_model,
+                max_searches=settings.AGENT_MAX_SEARCHES,
+            ),
+        )
     with agent_request_tools(tools):
         return await stream_response_with_agent(
             user_prompt,

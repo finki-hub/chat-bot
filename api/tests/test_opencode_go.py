@@ -846,7 +846,11 @@ def test_go_chat_request_session_reaches_main_and_retrieval(session, monkeypatch
         {
             "type": "http",
             "headers": request_headers,
-            "app": SimpleNamespace(state=SimpleNamespace(settings=Settings())),
+            "app": SimpleNamespace(
+                state=SimpleNamespace(
+                    settings=Settings(CHAT_RETRIEVAL_MODE="pipeline"),
+                ),
+            ),
         }
     )
 
@@ -899,7 +903,11 @@ def test_go_missing_user_key_is_a_safe_credential_denial(monkeypatch):
         {
             "type": "http",
             "headers": [(b"x-conversation-id", SESSION.encode())],
-            "app": SimpleNamespace(state=SimpleNamespace(settings=Settings())),
+            "app": SimpleNamespace(
+                state=SimpleNamespace(
+                    settings=Settings(CHAT_RETRIEVAL_MODE="pipeline"),
+                ),
+            ),
         }
     )
 

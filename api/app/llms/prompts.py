@@ -19,6 +19,8 @@ def _load_prompt(filename: str) -> str:
 
 
 DEFAULT_AGENT_SYSTEM_PROMPT = _load_prompt("agent_system.txt")
+AGENT_SEARCH_TOOLS_PROMPT = _load_prompt("agent_tools_search.txt")
+AGENT_CONTEXT_TOOLS_PROMPT = _load_prompt("agent_tools_context.txt")
 HYDE_SYSTEM_PROMPT = _load_prompt("hyde_system.txt")
 DEFAULT_QUERY_TRANSFORM_SYSTEM_PROMPT = _load_prompt("query_transform_system.txt")
 CONTEXTUALIZE_SYSTEM_PROMPT = _load_prompt("contextualize_system.txt")

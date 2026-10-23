@@ -98,6 +98,7 @@ _PRE_STREAM_ERROR_MSG = (
     "Се случи грешка при подготовка на одговорот. Обидете се повторно."
 )
 _SPONSORED_UNAVAILABLE_MSG = "Бесплатниот пристап моментално не е достапен."
+_AGENT_SEARCH_CONTEXT = "Изворите не се пребарани однапред; пребарај ги со алатката."
 _SPONSORED_QUOTA_MSG = (
     "Бесплатната квота е искористена. Обидете се повторно по ресетирањето."
 )
@@ -538,6 +539,7 @@ async def _instrument_stream(
         record = timings.as_record()
         if outcome == "completed" and not answered:
             outcome = "empty_answer"
+        retrieval_hit = retrieval_hit or observation.search_hit
         logger.info(
             "chat.timing %s",
             json.dumps(
@@ -614,7 +616,10 @@ async def _instrument_stream(
                         "interface": "discord",
                         "responseId": str(response_id),
                         "inferenceModel": model_id(payload.inference_model),
-                        "sources": [dict(source) for source in storage.sources],
+                        "sources": [
+                            dict(source)
+                            for source in (observation.sources or storage.sources)
+                        ],
                         "diagnostics": {
                             "outcome": outcome,
                             "embeddingsModel": payload.embeddings_model.value,
@@ -954,8 +959,15 @@ async def _prepare_chat_response_stream(
         def on_stage(stage: str) -> None:
             stage_queue.put_nowait(status_event(stage=stage))
 
+        agent_search = settings.CHAT_RETRIEVAL_MODE == "agent"
+
         async def run_retrieval() -> RetrievedContext:
             try:
+                if agent_search:
+                    return RetrievedContext(
+                        text="",
+                        effective_transform_mode=QueryTransformMode.RAW,
+                    )
                 return await get_retrieved_context_with_sources(
                     db=db,
                     query=payload.query,
@@ -990,7 +1002,11 @@ async def _prepare_chat_response_stream(
                 storage = replace(storage, sources=retrieved.sources_payload())
             links_context = await links_task
 
-            if not retrieved.text:
+            if agent_search:
+                context = _AGENT_SEARCH_CONTEXT
+                if links_context:
+                    context = f"{context}\n\n{links_context}"
+            elif not retrieved.text:
                 capture(
                     distinct_id,
                     "retrieval_miss",
