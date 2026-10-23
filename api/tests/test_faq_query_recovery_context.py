@@ -297,7 +297,7 @@ def test_optional_canonical_search_drains_failed_search_sibling(
         finally:
             cleaned.append(source)
 
-    async def get_questions(_db, embedding, _model, *, limit):
+    async def get_questions(_db, embedding, _model, *, limit, threshold):
         if embedding == [1.0]:
             return [faq]
         if failed_source == "faq":
@@ -305,7 +305,7 @@ def test_optional_canonical_search_drains_failed_search_sibling(
         await blocked("faq")
         return []
 
-    async def get_chunks(_db, embedding, _model, *, limit):
+    async def get_chunks(_db, embedding, _model, *, limit, threshold):
         if embedding == [1.0]:
             return []
         if failed_source == "chunk":
@@ -489,10 +489,10 @@ def test_vector_search_failure_and_cancellation_drain_all_search_tasks(
             cleaned.add(key)
         return []
 
-    async def questions(_db, embedding, _model, *, limit):
+    async def questions(_db, embedding, _model, *, limit, threshold):
         return await database_search("faq", embedding)
 
-    async def chunks(_db, embedding, _model, *, limit):
+    async def chunks(_db, embedding, _model, *, limit, threshold):
         return await database_search("chunk", embedding)
 
     monkeypatch.setattr(plan_module, "get_question_names_query", names)
@@ -735,3 +735,24 @@ def test_recovery_rejects_foreign_modifier(
     assert timings.local_faq_recovery_outcome == "no_match"
     assert timings.local_query_variant_added is False
     assert timings.local_rerank_query_used is False
+
+
+def test_knowledge_base_search_has_no_vector_distance_cutoff(monkeypatch) -> None:
+    thresholds: list[float | None] = []
+
+    async def capture(_db, _embedding, _model, *, limit, threshold):
+        thresholds.append(threshold)
+        return []
+
+    monkeypatch.setattr(context_module, "get_closest_questions", capture)
+    monkeypatch.setattr(context_module, "get_closest_chunks", capture)
+
+    anyio.run(
+        _search_both,
+        Database.__new__(Database),
+        [0.0],
+        Model.BGE_M3,
+        5,
+    )
+
+    assert thresholds == [2.0, 2.0]

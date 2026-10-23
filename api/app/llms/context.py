@@ -68,6 +68,10 @@ settings = Settings()
 # Chunks pulled in on each side of a retrieved chunk, to give the model a contiguous passage.
 _NEIGHBOR_WINDOW: int = 1
 _RETRIEVAL_IDS_CAP: int = 10
+# No vector-distance cutoff: the reranker floor decides relevance. The default 0.5
+# cutoff returned nothing for short keyword queries such as „документи Бараки“;
+# lifting it raised golden-set recall 53.5% -> 57.7% and buried facts 93.8% -> 97.9%.
+_SEARCH_DISTANCE_CUTOFF: float = 2.0
 _ASSISTANT_NOTE_LABEL = "Белешка за асистентот (не ја прикажувај дословно):"
 # Marks context kept only by the score-floor fallback; the system prompt explains it.
 _WEAK_MATCH_NOTICE = (
@@ -117,10 +121,22 @@ async def _search_both(
     limit: int,
 ) -> tuple[list[QuestionSchema], list[ChunkSchema]]:
     question_task = asyncio.create_task(
-        get_closest_questions(db, embedding, embedding_model, limit=limit),
+        get_closest_questions(
+            db,
+            embedding,
+            embedding_model,
+            limit=limit,
+            threshold=_SEARCH_DISTANCE_CUTOFF,
+        ),
     )
     chunk_task = asyncio.create_task(
-        get_closest_chunks(db, embedding, embedding_model, limit=limit),
+        get_closest_chunks(
+            db,
+            embedding,
+            embedding_model,
+            limit=limit,
+            threshold=_SEARCH_DISTANCE_CUTOFF,
+        ),
     )
     tasks = (question_task, chunk_task)
     try:
