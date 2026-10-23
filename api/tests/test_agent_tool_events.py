@@ -10,7 +10,11 @@ from app.llms import agents, search_tools
 from app.llms.agents import StreamObservation
 from app.llms.models import Model
 from app.llms.query_modes import QueryTransformMode
-from app.llms.retrieval_result import RetrievalSource, RetrievedContext
+from app.llms.retrieval_result import (
+    RetrievalSource,
+    RetrievalSourcePayload,
+    RetrievedContext,
+)
 from app.llms.search_tools import build_search_tools
 from tests.test_agent_error_log_privacy import TestAgentGraph
 
@@ -207,6 +211,7 @@ async def test_search_tool_returns_context_and_source_artifact(monkeypatch) -> N
         "sources": [{"id": "1", "kind": "faq", "title": "Префрлување"}],
         "summary": "Пронајдени извори: 1",
     }
+    assert retrieve.await_args is not None
     assert retrieve.await_args.kwargs["query"] == "префрлување"
     assert retrieve.await_args.kwargs["query_transform_mode"] == QueryTransformMode.RAW
 
@@ -242,8 +247,12 @@ async def test_search_tool_caps_searches_per_answer(monkeypatch) -> None:
 
 
 def test_interleaving_keeps_each_search_best_hits_within_cap() -> None:
-    first = [{"id": str(i), "kind": "chunk", "title": "A"} for i in range(10)]
-    second = [{"id": f"f{i}", "kind": "faq", "title": "B"} for i in range(10)]
+    first: list[RetrievalSourcePayload] = [
+        {"id": str(i), "kind": "chunk", "title": "A"} for i in range(10)
+    ]
+    second: list[RetrievalSourcePayload] = [
+        {"id": f"f{i}", "kind": "faq", "title": "B"} for i in range(10)
+    ]
 
     merged = agents._interleave_sources([first, second])  # noqa: SLF001
 

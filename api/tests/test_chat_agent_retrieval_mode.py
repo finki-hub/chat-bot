@@ -1,7 +1,9 @@
 from types import SimpleNamespace
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import Request
 from fastapi.responses import StreamingResponse
 
 from app.api import chat as chat_api
@@ -11,6 +13,7 @@ from app.schemas.chat import ChatSchema
 from tests.chat_models_access_support import credentials, settings
 
 USER_ID = UUID("00000000-0000-4000-8000-000000000002")
+LINKS = "Корисни линкови: Студентска служба"
 
 
 def _payload() -> ChatSchema:
@@ -37,7 +40,7 @@ async def test_agent_mode_skips_pre_retrieval_and_points_agent_to_search(
         raise AssertionError("agent mode must not pre-retrieve")
 
     async def links(*args, **kwargs):
-        return "Корисни линкови:\n- https://finki.ukim.mk"
+        return LINKS
 
     async def answer(payload, context, **kwargs):
         contexts.append(context)
@@ -57,11 +60,14 @@ async def test_agent_mode_skips_pre_retrieval_and_points_agent_to_search(
     monkeypatch.setattr(chat_api, "get_links_context", links)
     monkeypatch.setattr(chat_api, "handle_chat", answer)
     monkeypatch.setattr(chat_api, "capture", lambda *args, **kwargs: None)
-    request = SimpleNamespace(
-        app=SimpleNamespace(
-            state=SimpleNamespace(settings=settings(retrieval_mode="agent")),
+    request = cast(
+        "Request",
+        SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(settings=settings(retrieval_mode="agent")),
+            ),
+            headers={"X-Distinct-Id": "test-distinct-id"},
         ),
-        headers={"X-Distinct-Id": "test-distinct-id"},
     )
 
     rendered = "".join(
@@ -79,5 +85,4 @@ async def test_agent_mode_skips_pre_retrieval_and_points_agent_to_search(
     assert '"text": "ok"' in rendered
     assert "event: sources" not in rendered
     [context] = contexts
-    assert "пребарај ги со алатката" in context
-    assert "https://finki.ukim.mk" in context
+    assert context.endswith(f"\n\n{chat_api._AGENT_SEARCH_CONTEXT}\n\n{LINKS}")  # noqa: SLF001
