@@ -174,25 +174,37 @@ def _tool_artifact(output: object) -> dict[str, object]:
     return artifact if isinstance(artifact, dict) else {}
 
 
-def _merge_sources(
-    known: list[RetrievalSourcePayload],
-    new: object,
-) -> bool:
-    if not isinstance(new, list):
-        return False
-    seen: set[tuple[object, object]] = {
-        (source["kind"], source["id"]) for source in known
-    }
-    added = False
-    for source in new:
-        if not isinstance(source, dict):
-            continue
-        key = (source.get("kind"), source.get("id"))
-        if key not in seen:
-            seen.add(key)
-            known.append(cast("RetrievalSourcePayload", source))
-            added = True
-    return added
+# Each search returns up to 10 ranked sources; interleaving keeps every search's best
+# hits visible instead of letting the first search fill the list.
+_MAX_STREAM_SOURCES = 12
+
+
+def _interleave_sources(
+    per_search: list[list[RetrievalSourcePayload]],
+) -> list[RetrievalSourcePayload]:
+    merged: list[RetrievalSourcePayload] = []
+    seen: set[tuple[object, object]] = set()
+    for rank in range(max((len(found) for found in per_search), default=0)):
+        for found in per_search:
+            if rank >= len(found):
+                continue
+            source = found[rank]
+            key = (source["kind"], source["id"])
+            if key not in seen:
+                seen.add(key)
+                merged.append(source)
+    return merged[:_MAX_STREAM_SOURCES]
+
+
+def _search_sources(artifact: dict[str, object]) -> list[RetrievalSourcePayload]:
+    found = artifact.get("sources")
+    if not isinstance(found, list):
+        return []
+    return [
+        cast("RetrievalSourcePayload", source)
+        for source in found
+        if isinstance(source, dict) and "kind" in source and "id" in source
+    ]
 
 
 def capture_tool_called(
@@ -463,7 +475,7 @@ async def create_agent_token_generator[ResponseT](
     written around tool calls is kept, and search results extend a cumulative
     `sources` event."""
     streamed_text = False
-    sources = observation.sources if observation is not None else []
+    per_search: list[list[RetrievalSourcePayload]] = []
     usage = (
         observation.usage
         if observation is not None
@@ -531,8 +543,13 @@ async def create_agent_token_generator[ResponseT](
                                 else ("" if succeeded else _TOOL_FAILED_SUMMARY)
                             ),
                         )
-                        if _merge_sources(sources, artifact.get("sources")):
-                            yield sources_event(list(sources))
+                        found = _search_sources(artifact)
+                        if found:
+                            per_search.append(found)
+                            sources = _interleave_sources(per_search)
+                            if observation is not None:
+                                observation.sources = sources
+                            yield sources_event(sources)
                     continue
 
                 if kind == "on_chat_model_end":

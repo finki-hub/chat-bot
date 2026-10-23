@@ -239,3 +239,13 @@ async def test_search_tool_caps_searches_per_answer(monkeypatch) -> None:
     assert messages[0].artifact["summary"] == "Нема пронајдени извори"
     assert "лимитот" in messages[2].content
     assert "sources" not in messages[2].artifact
+
+
+def test_interleaving_keeps_each_search_best_hits_within_cap() -> None:
+    first = [{"id": str(i), "kind": "chunk", "title": "A"} for i in range(10)]
+    second = [{"id": f"f{i}", "kind": "faq", "title": "B"} for i in range(10)]
+
+    merged = agents._interleave_sources([first, second])  # noqa: SLF001
+
+    assert len(merged) == 12
+    assert [s["id"] for s in merged[:4]] == ["0", "f0", "1", "f1"]
