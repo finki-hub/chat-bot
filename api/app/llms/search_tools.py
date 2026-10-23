@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from langchain_core.tools import BaseTool, StructuredTool
@@ -5,23 +6,20 @@ from pydantic import BaseModel, Field
 
 from app.data.connection import Database
 from app.llms.context import get_retrieved_context_with_sources
-from app.llms.models import ChatModel, Model
-from app.llms.query_modes import QueryTransformMode
+from app.llms.link_context import get_relevant_links_context
+from app.llms.models import Model
+from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.retrieval_result import RetrievalSourcePayload
+from app.llms.tools import SEARCH_TOOL_NAME
 
 logger = logging.getLogger(__name__)
 
-SEARCH_TOOL_NAME = "search_knowledge_base"
 _SEARCH_TOOL_DESCRIPTION = (
     "Пребарај ја базата на знаења на ФИНКИ (FAQ и официјални документи: правилници, "
-    "конкурси, ценовници, упатства). Враќа најрелевантни извори за барањето. "
-    "Испрати кратко барање на македонски, со кирилица, со клучните поими."
+    "конкурси, ценовници, упатства) и корисните линкови. Враќа најрелевантни извори "
+    "за барањето. Испрати кратко барање на македонски, со кирилица, со клучните поими."
 )
 _NO_RESULTS = "Нема пронајдени извори за ова барање."
-_LIMIT_REACHED = (
-    "Достигнат е лимитот на пребарувања за овој одговор. "
-    "Одговори со веќе пронајдените извори."
-)
 
 
 class SearchKnowledgeBaseSchema(BaseModel):
@@ -43,38 +41,32 @@ def _search_summary(source_count: int, *, hit: bool) -> str:
 def build_search_tools(
     db: Database,
     embedding_model: Model,
-    transform_model: ChatModel,
-    *,
-    max_searches: int,
+    credentials: LlmProviderCredentials | None,
 ) -> list[BaseTool]:
-    searches = 0
-
     async def search_knowledge_base(
         query: str,
     ) -> tuple[str, dict[str, object]]:
-        nonlocal searches
-        # Parallel calls from one model turn all pass through here, so the cap counts
-        # them too; the prompt's limit alone was exceeded in testing.
-        if searches >= max_searches:
-            return _LIMIT_REACHED, {"summary": "Достигнат лимит на пребарувања"}
-        searches += 1
-        retrieved = await get_retrieved_context_with_sources(
-            db=db,
-            query=query,
-            embedding_model=embedding_model,
-            query_transform_model=transform_model,
-            query_transform_mode=QueryTransformMode.RAW,
+        retrieved, links = await asyncio.gather(
+            get_retrieved_context_with_sources(
+                db=db,
+                query=query,
+                embedding_model=embedding_model,
+                credentials=credentials,
+            ),
+            get_relevant_links_context(db, query),
         )
         sources: list[RetrievalSourcePayload] = retrieved.sources_payload()
         hit = bool(retrieved.text)
         logger.info(
-            "agent.search query_len=%d hit=%s sources=%d context_chars=%d",
+            "agent.search query_len=%d hit=%s sources=%d context_chars=%d links=%s",
             len(query),
             hit,
             len(sources),
             len(retrieved.text),
+            bool(links),
         )
-        return retrieved.text or _NO_RESULTS, {
+        content = "\n\n".join(part for part in (retrieved.text, links) if part)
+        return content or _NO_RESULTS, {
             "hit": hit,
             "sources": sources,
             "summary": _search_summary(len(sources), hit=hit),

@@ -101,10 +101,13 @@ def test_stream_schedules_question_answer_and_diagnostics(monkeypatch):
         db=_DB,
         conversation_id=UUID(_CONVERSATION),
         user_id=cast("UUID", payload.user_id),
-        sources=[{"id": "q1", "kind": "faq", "title": "Деканат"}],
         history_generation=0,
         registry=DiscordWriteRegistry(),
     )
+
+    observation = StreamObservation(distinct_id="user-1", response_id=str(response_id))
+    observation.search_hit = True
+    observation.sources = [{"id": "q1", "kind": "faq", "title": "Деканат"}]
 
     async def collect() -> list[str]:
         timings = RequestTimings()
@@ -120,13 +123,9 @@ def test_stream_schedules_question_answer_and_diagnostics(monkeypatch):
             payload=payload,
             response_id=response_id,
             timings=timings,
-            retrieval_hit=True,
             distinct_id="user-1",
             session_id=None,
-            observation=StreamObservation(
-                distinct_id="user-1", response_id=str(response_id)
-            ),
-            effective_transform_mode=payload.query_transform_mode,
+            observation=observation,
             storage=storage,
         )
         return [str(chunk) async for chunk in stream]
@@ -147,6 +146,8 @@ def test_stream_schedules_question_answer_and_diagnostics(monkeypatch):
     diagnostics = cast("dict[str, object]", metadata["diagnostics"])
     assert diagnostics["outcome"] == "completed"
     assert diagnostics["historyTurns"] == 2
+    assert diagnostics["retrievalHit"] is True
+    assert not any("queryTransform" in key for key in diagnostics)
     assert "total_ms" in cast("dict[str, object]", diagnostics["timing"])
     retrieval = cast("dict[str, object]", diagnostics["retrieval"])
     assert retrieval["retrieval_ids"] == ["faq-id"]
@@ -174,11 +175,9 @@ def test_stream_without_storage_schedules_nothing(monkeypatch):
             payload=payload,
             response_id=uuid4(),
             timings=RequestTimings(),
-            retrieval_hit=True,
             distinct_id="user-1",
             session_id=None,
             observation=StreamObservation(distinct_id="user-1", response_id="r"),
-            effective_transform_mode=payload.query_transform_mode,
         )
         async for _ in stream:
             pass
@@ -204,7 +203,7 @@ async def test_terminal_paths_store_once_and_reset_discards_old_answer(
     payload = _payload()
     assert payload.user_id is not None
     storage = DiscordStorage(
-        _DB, UUID(_CONVERSATION), payload.user_id, [], 0, DiscordWriteRegistry()
+        _DB, UUID(_CONVERSATION), payload.user_id, 0, DiscordWriteRegistry()
     )
 
     async def body():
@@ -224,11 +223,9 @@ async def test_terminal_paths_store_once_and_reset_discards_old_answer(
         payload=payload,
         response_id=uuid4(),
         timings=RequestTimings(),
-        retrieval_hit=True,
         distinct_id="test",
         session_id=None,
         observation=StreamObservation(distinct_id="test", response_id="test"),
-        effective_transform_mode=payload.query_transform_mode,
         storage=storage,
     )
     if kind in {"cancel", "close"}:

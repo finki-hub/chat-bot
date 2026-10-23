@@ -187,7 +187,6 @@ def test_read_queries_use_serialized_readonly_transactions():
 def test_observer_runs_actual_mocked_production_selection(monkeypatch, score):
     from app.llms import context  # noqa: PLC0415 -- actual production boundary test
     from app.llms.models import Model  # noqa: PLC0415
-    from app.llms.query_modes import QueryTransformMode  # noqa: PLC0415
     from app.schemas.questions import QuestionSchema  # noqa: PLC0415
     from app.utils import timing  # noqa: PLC0415
 
@@ -227,7 +226,6 @@ def test_observer_runs_actual_mocked_production_selection(monkeypatch, score):
             case(),
             anchor=str(faq.id),
             db=db,
-            mode=QueryTransformMode.RAW,
         )
 
     row = anyio.run(run)
@@ -336,7 +334,6 @@ def test_actual_production_swallowed_read_faults_invalidate_replay(monkeypatch, 
     from app.llms.faq_query_recovery import resolve_faq_query  # noqa: PLC0415
     from app.llms.faq_query_recovery_plan import FaqQueryRecoveryPlan  # noqa: PLC0415
     from app.llms.models import Model  # noqa: PLC0415
-    from app.llms.query_modes import QueryTransformMode  # noqa: PLC0415
     from app.schemas.documents import ChunkSchema  # noqa: PLC0415
     from app.schemas.questions import QuestionSchema  # noqa: PLC0415
     from app.utils import timing  # noqa: PLC0415
@@ -437,7 +434,6 @@ def test_actual_production_swallowed_read_faults_invalidate_replay(monkeypatch, 
             public_case,
             anchor=str(faq.id),
             db=db,
-            mode=QueryTransformMode.RAW,
         )
 
     row = anyio.run(run)

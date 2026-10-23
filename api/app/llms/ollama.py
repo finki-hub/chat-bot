@@ -17,7 +17,7 @@ from app.llms.agents import (
 from app.llms.models import ChatModel, Model, model_id
 from app.llms.prompts import build_agent_messages, stitch_conversation
 from app.llms.provider_credentials import require_provider_credential
-from app.llms.tools import get_agent_tools
+from app.llms.tools import agent_middleware, get_agent_tools
 from app.schemas.chat_credentials import OLLAMA_DEFAULT_BASE_URL, ChatCredentialSecret
 
 from .ollama_catalog import fetch_ollama_catalog
@@ -244,7 +244,7 @@ async def stream_ollama_agent_response(
             ", ".join(tool.name for tool in tools) if tools else "None",
         )
 
-        agent = create_agent(llm, tools)
+        agent = create_agent(llm, tools, middleware=agent_middleware())
 
         messages = build_agent_messages(system_prompt, history or [], user_prompt)
 

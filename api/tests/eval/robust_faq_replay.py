@@ -181,7 +181,6 @@ async def observe_case(
     *,
     anchor: str | None,
     db,
-    mode,
     case_timeout: float = 90,
     scope_catalog: dict | None = None,
 ) -> dict:
@@ -196,7 +195,6 @@ async def observe_case(
     rerank_queries: list[str] = []
     rerank_scores: list[dict] = []
     counters = {"embedding_calls": 0, "rerank_calls": 0, "build_calls": 0}
-    stages: list[str] = []
     build = context._build_candidates
     embed = context._embed_variant
     rerank = context._post_rerank
@@ -249,7 +247,6 @@ async def observe_case(
         expected_id=anchor,
         answer_fact_available=case.get("answer_fact_available"),
         fact_availability_scope=case.get("fact_availability_scope"),
-        requested_transform_mode=str(mode),
     )
     try:
         with ExitStack() as stack:
@@ -269,12 +266,9 @@ async def observe_case(
                     db,
                     case["query"],
                     models.BGE_M3_LOCAL,
-                    models.GPT_5_4_MINI,
-                    query_transform_mode=mode,
                     credentials=None,
                     initial_k=30,
                     top_k=10,
-                    on_stage=stages.append,
                 )
         if counters["build_calls"] != 1:
             raise ReplaySafetyError("Production candidate capture interface changed")
@@ -318,7 +312,6 @@ async def observe_case(
         row.update(
             execution_status="completed",
             error_type=None,
-            effective_transform_mode=result.effective_transform_mode.value,
             n_candidates=len(candidates),
             candidates=[candidate_record(c) for c in candidates],
             selected_ids=list(timings.retrieval_ids),
@@ -355,7 +348,6 @@ async def observe_case(
             rerank_queries=rerank_queries,
             rerank_scores=rerank_scores,
             counters=counters,
-            stages=stages,
             context_characters=len(result.text),
             context_sha256=digest(result.text),
             timings=timings.as_record(),
@@ -429,7 +421,6 @@ async def observe_case(
             error_type=type(exc).__name__[:80],
             counters=counters,
             fallback=timings.fallback_record(),
-            failure_stage=stages[-1] if stages else "not_started",
         )
     finally:
         after = read_failure_record(db)
@@ -592,7 +583,6 @@ async def run(ns: argparse.Namespace) -> dict:
         MODEL_DISTANCE_THRESHOLDS,
         Model,
     )
-    from app.llms.query_modes import QueryTransformMode
     from app.utils import http_client, timing
 
     scope_catalog = None
@@ -612,10 +602,6 @@ async def run(ns: argparse.Namespace) -> dict:
     if not dsn:
         raise ReplaySafetyError("DATABASE_URL must be inherited in memory")
     settings = context.settings
-    modes = {
-        "raw": QueryTransformMode.RAW,
-        "credential_missing": QueryTransformMode.REWRITE_HYDE,
-    }
     if (settings.RERANKER_MIN_SCORE, settings.SOURCE_RERANKER_MIN_SCORE) != (0.1, 0.3):
         raise ReplaySafetyError("Unexpected context/source floors")
     calls: Counter = Counter()
@@ -710,7 +696,6 @@ async def run(ns: argparse.Namespace) -> dict:
             "source_floor": 0.3,
             "initial_k": 30,
             "top_k": 10,
-            "execution_mode": ns.mode,
             "credentials_supplied": False,
             "transport": "actual production retrieval; GPU-only HTTP; sequential; no generation",
             "fingerprint_note": "FAQ rows match supplied manifest; full-row hashed fingerprints are runner-specific and include vectors/revisions. Short read-only transactions do not share one snapshot across GPU calls; before/after drift invalidates run.",
@@ -731,7 +716,6 @@ async def run(ns: argparse.Namespace) -> dict:
                     case,
                     anchor=checked["anchors"].get(case["id"]),
                     db=db,
-                    mode=modes[ns.mode],
                     scope_catalog=scope_catalog,
                 )
                 artifact["results"].append(row)
@@ -786,7 +770,6 @@ def parser() -> argparse.ArgumentParser:
         required=True,
         help="Parent-verified public GPU/model identity artifact; only its hash is saved",
     )
-    cli.add_argument("--mode", choices=("raw", "credential_missing"), default="raw")
     cli.add_argument("--output", required=True)
     return cli
 

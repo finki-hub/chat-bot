@@ -24,7 +24,7 @@ Results are broken down by `source` (faq/chunk) and `difficulty` (easy/hard), an
 final-recall miss is printed with a tag (`CEILING-DROP` / `KBUDGET-DROP` / `ANN-MISS` /
 `RERANK-MISS`) so failures are diagnosable, not just counted.
 
-Raw-mode evaluation also uses the production `plan_faq_query_recovery()` and
+Evaluation also uses the production `plan_faq_query_recovery()` and
 candidate builder. A resolved public FAQ can enter through exact-title recovery
 even when dense recall is false. Its actual canonical query is used for optional
 dense expansion and reranking; only the optional canonical search degrades on
@@ -86,16 +86,14 @@ Compare embedders (this is the praksa A/B):
 # ... --embedding-model text-embedding-3-large
 ```
 
-Useful flags: `--transform-mode raw|rewrite|hyde|rewrite_hyde`, `--no-transform`
-(legacy alias for `--transform-mode raw`), `--top-k`, `--initial-k`, `--ideal-limit`,
-`--concurrency`, `--json out.json` (per-example dump for diffing across runs).
+Useful flags: `--top-k`, `--initial-k`, `--ideal-limit`, `--concurrency`,
+`--json out.json` (per-example dump for diffing across runs).
 
-JSON output keeps the legacy config keys `query_transform_mode`, `initial_k`,
-`per_query_k`, and `ideal_limit` for existing comparison tooling. Those values describe
-the requested mode's nominal budget. The explicit `requested_*` config keys preserve the
-CLI inputs, while each result's `effective_transform_mode`, `effective_initial_k`, and
-`effective_per_query_k` record the variants and retrieval budget actually used after a
-transform is omitted or fails.
+Retrieval is raw-only, as in production: the query plus its Cyrillic transliteration
+when it is romanized. JSON config keys `initial_k`, `per_query_k`, and `ideal_limit`
+describe the nominal single-variant budget and `requested_initial_k` preserves the CLI
+input, while each result's `effective_initial_k` and `effective_per_query_k` record the
+budget actually used (a transliteration variant splits it).
 
 Each result also records `execution_status` (`completed` or `error`) and
 `error_type` (a sanitized, at-most-80-character exception class name, or `null`
@@ -127,7 +125,6 @@ docker exec -e PYTHONPATH=/app finki-hub-chat-bot-api-1 \
     python /app/tests/eval/run_eval.py \
     --golden /app/tests/eval/golden.jsonl \
     --embedding-model BAAI/bge-m3 \
-    --transform-mode raw \
     --json /app/tests/eval/candidate.json
 
 docker exec -e PYTHONPATH=/app finki-hub-chat-bot-api-1 \
@@ -139,33 +136,21 @@ docker exec -e PYTHONPATH=/app finki-hub-chat-bot-api-1 \
 The comparison report shows bucket deltas, fixed cases, newly broken cases, and
 unchanged misses. It exits non-zero when new regressions exceed `--max-regressions`
 (default `0`), so it can be used as a manual release gate before changing embeddings,
-thresholds, reranking, query transformation, chunking, or corpus ingestion.
-Cases whose effective query-transform mode or retrieval budget differs from that run's
+thresholds, reranking, chunking, or corpus ingestion.
+Cases whose effective retrieval budget differs from that run's
 requested configuration are reported as incomparable and make the comparison invalid
 instead of being counted as retrieval regressions. The only declared per-case budget
-exception is `local_faq_recovery_outcome: "matched"` in requested and effective RAW:
-the expected per-query budget is `min(nominal_per_query_k, 31)`, with the same initial
-budget. Unmarked caps, other budget changes and transform-mode fallbacks remain
-incomparable; recovery outcomes are retained and unknown values are rejected.
-Intentional comparisons between two
-different requested modes remain valid when each run actually used its requested mode.
+exception is `local_faq_recovery_outcome: "matched"`: the expected per-query budget is
+`min(nominal_per_query_k, 31)`, with the same initial budget. Unmarked caps and other
+budget changes remain incomparable; recovery outcomes are retained and unknown values
+are rejected. Intentional comparisons between two different requested budgets remain
+valid when each run actually used its requested budget. Query-transform keys in older
+artifacts are ignored.
 Explicit `execution_status: "error"` in either artifact makes comparison invalid
 (exit **2**) regardless of effective configuration or regression budget. Older
 artifacts without execution status remain supported, including the existing
 legacy effective-configuration behavior; modern null effective configurations
 still make comparison invalid.
-
-Run the same golden set across modes to isolate query-transformation impact:
-
-```bash
-for mode in raw rewrite hyde rewrite_hyde; do
-    docker exec -e PYTHONPATH=/app finki-hub-chat-bot-api-1 \
-        python /app/tests/eval/run_eval.py \
-        --golden /app/tests/eval/golden.jsonl \
-        --embedding-model BAAI/bge-m3 \
-        --transform-mode "$mode"
-done
-```
 
 ## Extending the set
 

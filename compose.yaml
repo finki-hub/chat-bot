@@ -36,8 +36,6 @@ services:
       RAG_SYNC_EXPECTED_SOURCE_COMMIT: ${RAG_SYNC_EXPECTED_SOURCE_COMMIT:-}
       RAG_SYNC_DEPLOYMENT_IDENTITY: ${RAG_SYNC_DEPLOYMENT_IDENTITY:-}
       SOURCE_RERANKER_MIN_SCORE: ${SOURCE_RERANKER_MIN_SCORE:-0.3}
-      CHAT_RETRIEVAL_MODE: ${CHAT_RETRIEVAL_MODE:-agent}
-      AGENT_MAX_SEARCHES: ${AGENT_MAX_SEARCHES:-4}
       # Sponsored model settings are API-only and fail closed unless explicitly enabled.
       # Never expose the sponsored key or endpoint through the web service.
       SPONSORED_MODEL_ENABLED: ${SPONSORED_MODEL_ENABLED:-false}

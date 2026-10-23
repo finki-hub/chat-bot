@@ -19,7 +19,7 @@ from app.llms.agents import (
 from app.llms.models import Model
 from app.llms.prompts import build_agent_messages
 from app.llms.provider_credentials import require_provider_credential
-from app.llms.tools import get_agent_tools
+from app.llms.tools import agent_middleware, get_agent_tools
 from app.schemas.chat_credentials import ChatCredentialSecret
 
 logger = logging.getLogger(__name__)
@@ -246,7 +246,7 @@ async def stream_google_agent_response(
             ", ".join(tool.name for tool in tools) if tools else "None",
         )
 
-        agent = create_agent(llm, tools)
+        agent = create_agent(llm, tools, middleware=agent_middleware())
 
         messages = build_agent_messages(system_prompt, history or [], user_prompt)
 

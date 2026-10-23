@@ -23,7 +23,7 @@ from app.llms.agents import (
 from app.llms.models import OPENROUTER_MANDATORY_REASONING_MODELS, Model
 from app.llms.prompts import build_agent_messages
 from app.llms.provider_credentials import require_provider_credential
-from app.llms.tools import get_agent_tools
+from app.llms.tools import agent_middleware, get_agent_tools
 from app.schemas.chat_credentials import ChatCredentialSecret
 
 logger = logging.getLogger(__name__)
@@ -151,7 +151,7 @@ async def stream_openrouter_agent_response(
             upstream_model=upstream_model,
         )
         tools = await get_agent_tools()
-        agent = create_agent(llm, tools)
+        agent = create_agent(llm, tools, middleware=agent_middleware())
         messages = build_agent_messages(system_prompt, history or [], user_prompt)
         return StreamingResponse(
             create_agent_token_generator(agent, messages, observation),

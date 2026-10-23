@@ -31,9 +31,8 @@ API. The curated model IDs are `opencode-go:gpt-6-luna`, `opencode-go:grok-4.7`,
 `opencode-go:deepseek-v4-pro`.
 
 Send the conversation's UUID in `x-conversation-id` on chat and title requests.
-Main, retrieval rewrite/HyDE/contextualization, title, and agent-setup fallback
-calls use `User-Agent: finki-hub/1.0` and that same `x-opencode-session` value.
-Chat rejects missing/invalid IDs; optional title/query generation falls back
+Main, title, and agent-setup fallback calls use `User-Agent: finki-hub/1.0` and that same `x-opencode-session` value.
+Chat rejects missing/invalid IDs; optional title generation falls back
 locally if session context or a Go user key is unavailable. Go credentials never
 fall back to deployment credentials or keys saved for other providers.
 
@@ -88,36 +87,26 @@ Thinking contracts: [DeepSeek](https://api-docs.deepseek.com/api/create-chat-com
 MiniMax's model-specific Messages contract:
 <https://platform.minimax.io/docs/api-reference/text-anthropic-api>.
 
+## Agent search
+
+Chat does not retrieve context up front. The agent calls the `search_knowledge_base`
+tool with its own short query, as often as it needs (at most 4 searches and 15 tool
+calls per answer, enforced by `ToolCallLimitMiddleware`). Each search runs raw
+retrieval over FAQs and document chunks (plus a Cyrillic variant for romanized
+queries), reranks, and appends the most relevant catalog links. The request fields
+`query_transform_mode` and `query_transform_model` are accepted for client
+compatibility and ignored by chat; chat titles still use the transform model.
+
+Every agent tool call is streamed as a `tool_call` event (`id`, `name`, `label`,
+`input`) and a `tool_result` event (`id`, `name`, `ok`, `summary`); text written
+around tool calls is kept. `sources` is re-sent after each search, deduplicated,
+interleaved across searches and capped at 12.
+
 ## Retrieval fields
 
-The API emits the following bounded, content-free fields on `retrieval_used`,
-`retrieval_miss`, `$ai_generation`, and the `chat.timing` log. Requested and effective
-query-transform modes retain their existing meanings: effective mode describes
-the variants actually retained for retrieval.
-
-These fields enrich events that the API already emits; they do not add terminal
-telemetry for failures before stream instrumentation starts. In particular, a
-pre-stream retrieval exception can return an error without a `retrieval_*` event,
-`$ai_generation` event, or `chat.timing` log. `not_run` is a diagnostic default,
-not a guarantee that every failed or cancelled request emits an event.
-
-## `query_transform_fallback_reason`
-
-| Value | Meaning |
-| --- | --- |
-| `not_run` | No completed variant-generation outcome was recorded (initial/error/cancellation default). |
-| `not_requested` | The requested variant mode was `raw`. This does not describe history contextualization. |
-| `credential_missing` | A transform was requested, but no matching user-provider credential was available; retrieval used raw mode. |
-| `no_usable_variants` | Transform calls completed or failed, but no requested variant survived. Exceptions and blank output count as unusable; output unchanged from the search query counts as unusable unless every missing variant was unchanged. |
-| `partial_variants` | Only one of the requested rewrite and HyDE variants survived, and the other failed or was blank. |
-| `unchanged_variants` | Every requested variant that is missing returned the search query unchanged, so it was deduplicated against the raw query (common for rewrite after history contextualization). Provider adapters that swallow an error return the input unchanged too, so pair this with their `query transformation failed` warnings. |
-| `none` | All requested transformed variants survived. |
-
-Query transforms default to the sponsored model (`gpt-6-luna`). A user key for
-the transform model's provider is used when present; otherwise, when sponsorship
-is enabled, transforms and chat titles run on the sponsored credential, for BYOK
-answers too, without drawing on the sponsored daily quota. A credential for a
-different provider does not make the selected transform available.
+The API emits the following bounded, content-free retrieval fields on
+`$ai_generation` and the `chat.timing` log. They describe the most recent search of
+the answer; `retrieval_hit` is true when any search returned context.
 
 ## Reranker fields
 

@@ -26,7 +26,6 @@ from app.api.provider_credentials import (
 )
 from app.api.sponsored_access import (
     resolve_sponsored_inference,
-    sponsored_query_transform,
 )
 from app.data.connection import Database
 from app.data.db import get_db
@@ -42,13 +41,9 @@ from app.llms.agents import (
     StreamObservation,
     error_event,
     meta_event,
-    sources_event,
     sponsored_error_event,
-    status_event,
 )
 from app.llms.chat import handle_chat
-from app.llms.context import get_retrieved_context_with_sources
-from app.llms.link_context import get_links_context
 from app.llms.model_access import (
     ModelAccessContext,
     SponsoredSettings,
@@ -56,12 +51,10 @@ from app.llms.model_access import (
 )
 from app.llms.model_catalog import model_catalog_service
 from app.llms.model_catalog_types import ModelCatalogResponse, OllamaCatalogModel
-from app.llms.models import ChatModel, model_id
+from app.llms.models import model_id
 from app.llms.ollama import fetch_ollama_catalog
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.llms.provider_credentials import provider_for_model
-from app.llms.query_modes import QueryTransformMode
-from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema
 from app.schemas.sponsored_access import SponsoredQuotaSnapshot
 from app.utils.async_iterators import closing_stream
@@ -92,8 +85,6 @@ logger = logging.getLogger(__name__)
 settings = Settings()
 
 _TZ = ZoneInfo(settings.TZ)
-_HISTORY_TURNS_FOR_RETRIEVAL = 6
-_HISTORY_TURN_MAX_CHARS = 600
 _PRE_STREAM_ERROR_MSG = (
     "Се случи грешка при подготовка на одговорот. Обидете се повторно."
 )
@@ -113,28 +104,6 @@ _CREDENTIAL_PROVIDER_LABELS = {
     "openrouter": "OpenRouter",
     "opencode-go": "OpenCode Go",
 }
-
-
-def _clip(text: str) -> str:
-    if len(text) <= _HISTORY_TURN_MAX_CHARS:
-        return text
-    return text[:_HISTORY_TURN_MAX_CHARS].rstrip() + "…"
-
-
-def _history_for_retrieval(payload: ChatSchema) -> str | None:
-    """Recent prior turns as a transcript, for history-aware retrieval (None if none).
-
-    Each turn's text is clipped so a few long turns can't bloat the contextualization
-    prompt (and blow a small local model's window) — reference resolution only needs the
-    gist of earlier turns, not their full text.
-    """
-    turns = payload.history[-_HISTORY_TURNS_FOR_RETRIEVAL:]
-    if not turns:
-        return None
-    return "\n".join(
-        f"{'Корисник' if t.role == 'user' else 'Асистент'}: {_clip(t.content)}"
-        for t in turns
-    )
 
 
 def _sse_event_name(chunk: bytes | str | memoryview) -> str:
@@ -193,17 +162,6 @@ def _ms(value: float | None) -> float | None:
     return round(value, 1) if value is not None else None
 
 
-def _query_transform_ms(timings: RequestTimings) -> float | None:
-    transform_ms = timings.spans.get("retrieval.query_transform")
-    if transform_ms is not None:
-        return transform_ms
-    rewrite_ms = timings.spans.get("retrieval.query_rewrite")
-    hyde_ms = timings.spans.get("retrieval.hyde")
-    if rewrite_ms is None and hyde_ms is None:
-        return None
-    return (rewrite_ms or 0.0) + (hyde_ms or 0.0)
-
-
 _WEB_SEARCH_HINTS = ("web_search", "web-search", "websearch", "search_web", "tavily")
 _SSE_DATA_PREFIX = "data:"
 
@@ -214,8 +172,6 @@ def _chat_request_log_fields(
     return {
         "inference_model": model_id(payload.inference_model),
         "embeddings_model": payload.embeddings_model.value,
-        "query_transform_model": model_id(payload.query_transform_model),
-        "query_transform_mode": payload.query_transform_mode.value,
         "reasoning": payload.reasoning,
         "interface": payload.interface,
         "temperature": payload.temperature,
@@ -259,7 +215,6 @@ def _capture_chat_response(
     observation: StreamObservation,
     answer_text: str,
     session_id: str | None,
-    effective_transform_mode: QueryTransformMode,
     model_access_mode: Literal["sponsored", "byok", "ordinary"] = "ordinary",
 ) -> None:
     model = payload.inference_model
@@ -295,11 +250,6 @@ def _capture_chat_response(
         "embedding_ms": _ms(timings.spans.get("retrieval.embed")),
         "retrieval_ms": _ms(timings.spans.get("retrieval.vector_search")),
         "rerank_ms": _ms(timings.spans.get("retrieval.rerank")),
-        "query_transform_ms": _ms(_query_transform_ms(timings)),
-        "query_rewrite_ms": _ms(timings.spans.get("retrieval.query_rewrite")),
-        "hyde_ms": _ms(timings.spans.get("retrieval.hyde")),
-        "requested_query_transform_mode": payload.query_transform_mode.value,
-        "query_transform_mode": effective_transform_mode.value,
         "candidate_count": timings.candidate_count,
         "top_distance": timings.top_distance,
         "transliteration_variant_added": timings.transliteration_variant_added,
@@ -460,14 +410,11 @@ async def _instrument_stream(
     payload: ChatSchema,
     response_id: UUID,
     timings: RequestTimings,
-    retrieval_hit: bool,
     distinct_id: str,
     session_id: str | None,
     observation: StreamObservation,
-    effective_transform_mode: QueryTransformMode,
     sponsored_mode: str | None = None,
     model_access_mode: Literal["sponsored", "byok", "ordinary"] = "ordinary",
-    query_transform_model: ChatModel | None = None,
     storage: DiscordStorage | None = None,
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
@@ -539,7 +486,7 @@ async def _instrument_stream(
         record = timings.as_record()
         if outcome == "completed" and not answered:
             outcome = "empty_answer"
-        retrieval_hit = retrieval_hit or observation.search_hit
+        retrieval_hit = observation.search_hit
         logger.info(
             "chat.timing %s",
             json.dumps(
@@ -547,11 +494,6 @@ async def _instrument_stream(
                     "response_id": str(response_id),
                     "inference_model": model_id(payload.inference_model),
                     "embeddings_model": payload.embeddings_model.value,
-                    "query_transform_model": model_id(
-                        query_transform_model or payload.query_transform_model,
-                    ),
-                    "requested_query_transform_mode": payload.query_transform_mode.value,
-                    "query_transform_mode": effective_transform_mode.value,
                     **timings.fallback_record(),
                     "retrieval_hit": retrieval_hit,
                     "outcome": outcome,
@@ -573,7 +515,6 @@ async def _instrument_stream(
             observation=observation,
             answer_text="".join(answer_parts),
             session_id=session_id,
-            effective_transform_mode=effective_transform_mode,
             model_access_mode=model_access_mode,
         )
         if sponsored_mode is not None:
@@ -616,20 +557,10 @@ async def _instrument_stream(
                         "interface": "discord",
                         "responseId": str(response_id),
                         "inferenceModel": model_id(payload.inference_model),
-                        "sources": [
-                            dict(source)
-                            for source in (observation.sources or storage.sources)
-                        ],
+                        "sources": [dict(source) for source in observation.sources],
                         "diagnostics": {
                             "outcome": outcome,
                             "embeddingsModel": payload.embeddings_model.value,
-                            "queryTransformModel": model_id(
-                                query_transform_model or payload.query_transform_model,
-                            ),
-                            "requestedQueryTransformMode": (
-                                payload.query_transform_mode.value
-                            ),
-                            "queryTransformMode": effective_transform_mode.value,
                             "retrievalHit": retrieval_hit,
                             "historyTurns": len(payload.history),
                             "fallbacks": timings.fallback_record(),
@@ -742,10 +673,8 @@ async def _prepare_chat_response_stream(
         conversation_id,
         getattr(request.app.state, "discord_writes", None),
     )
-    history_text = _history_for_retrieval(payload)
     if conversation_id is None and "opencode-go" in credential_providers_for_models(
         payload.inference_model,
-        payload.query_transform_model,
     ):
         preparation.capture("denied", "missing_conversation_id")
         yield error_event("missing_conversation_id", "MissingConversationID")
@@ -756,7 +685,6 @@ async def _prepare_chat_response_stream(
         providers=credential_providers_for_models(
             payload.embeddings_model,
             payload.inference_model,
-            payload.query_transform_model,
         ),
         settings=settings,
     )
@@ -779,22 +707,6 @@ async def _prepare_chat_response_stream(
         settings,
         user_credential_rejected=user_credential_rejected,
     )
-    retrieval_transform_model, retrieval_credentials = sponsored_query_transform(
-        payload.query_transform_model,
-        credentials,
-        inference_resolution,
-        payload.inference_model,
-        settings,
-        conversation_id=conversation_id,
-    )
-    if (
-        retrieval_credentials is not None
-        and conversation_id is not None
-        and retrieval_credentials.conversation_id is None
-    ):
-        retrieval_credentials = replace(
-            retrieval_credentials, conversation_id=conversation_id
-        )
     if (
         inference_resolution.sponsored
         and is_opencode_go_base_url(settings.SPONSORED_MODEL_BASE_URL)
@@ -845,7 +757,6 @@ async def _prepare_chat_response_stream(
     accepted = False
     storage_handed_off = False
     early_outcome = "provider_error"
-    early_transform_mode = "not_run"
     try:
         preparation.phase = "admission"
         if inference_resolution.sponsored:
@@ -952,103 +863,9 @@ async def _prepare_chat_response_stream(
             },
         )
 
-        # Run retrieval and links loading concurrently, streaming retrieval
-        # stage events to the client as they happen.
-        stage_queue: asyncio.Queue[str | None] = asyncio.Queue()
-
-        def on_stage(stage: str) -> None:
-            stage_queue.put_nowait(status_event(stage=stage))
-
-        agent_search = settings.CHAT_RETRIEVAL_MODE == "agent"
-
-        async def run_retrieval() -> RetrievedContext:
-            try:
-                if agent_search:
-                    return RetrievedContext(
-                        text="",
-                        effective_transform_mode=QueryTransformMode.RAW,
-                    )
-                return await get_retrieved_context_with_sources(
-                    db=db,
-                    query=payload.query,
-                    embedding_model=payload.embeddings_model,
-                    query_transform_model=retrieval_transform_model,
-                    query_transform_mode=payload.query_transform_mode,
-                    history_text=history_text,
-                    on_stage=on_stage,
-                    credentials=retrieval_credentials,
-                )
-            finally:
-                stage_queue.put_nowait(None)
-
-        retrieval_task = asyncio.create_task(run_retrieval())
-        links_task = asyncio.create_task(get_links_context(db, query=payload.query))
-
-        def on_links_done(task: asyncio.Task[str]) -> None:
-            if not task.cancelled() and task.exception() is not None:
-                stage_queue.put_nowait(None)
-
-        links_task.add_done_callback(on_links_done)
-
         try:
-            while (event := await stage_queue.get()) is not None:
-                yield event
-
-            if links_task.done():
-                links_task.result()
-            retrieved = await retrieval_task
-            early_transform_mode = retrieved.effective_transform_mode.value
-            if storage is not None:
-                storage = replace(storage, sources=retrieved.sources_payload())
-            links_context = await links_task
-
-            if agent_search:
-                context = _AGENT_SEARCH_CONTEXT
-                if links_context:
-                    context = f"{context}\n\n{links_context}"
-            elif not retrieved.text:
-                capture(
-                    distinct_id,
-                    "retrieval_miss",
-                    {
-                        "response_id": str(response_id),
-                        "embeddings_model": payload.embeddings_model.value,
-                        "query_transform_model": model_id(retrieval_transform_model),
-                        "requested_query_transform_mode": payload.query_transform_mode.value,
-                        "query_transform_mode": retrieved.effective_transform_mode.value,
-                        **timings.fallback_record(),
-                        "candidate_count": timings.candidate_count,
-                        "top_distance": timings.top_distance,
-                        "query_len": len(payload.query),
-                        **_session_props(session_id),
-                    },
-                )
-                context = (
-                    "Не можев да пронајдам релевантни информации во базата на податоци."
-                )
-                if links_context:
-                    context = f"{context}\n\n{links_context}"
-            else:
-                context = retrieved.text
-                observation.context_chars = len(retrieved.text)
-                if links_context:
-                    context = f"{retrieved.text}\n\n{links_context}"
-                if timings.retrieval_ids:
-                    capture(
-                        distinct_id,
-                        "retrieval_used",
-                        {
-                            "response_id": str(response_id),
-                            "embeddings_model": payload.embeddings_model.value,
-                            "retrieval_ids": timings.retrieval_ids,
-                            "retrieval_count": len(timings.retrieval_ids),
-                            **timings.fallback_record(),
-                            **_session_props(session_id),
-                        },
-                    )
-
             today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
-            context = f"Денешен датум: {today}.\n\n{context}"
+            context = f"Денешен датум: {today}.\n\n{_AGENT_SEARCH_CONTEXT}"
 
             preparation.phase = "agent_setup"
             with timed("agent.setup"):
@@ -1069,23 +886,18 @@ async def _prepare_chat_response_stream(
                         if inference_resolution.max_output_tokens is not None
                         else None
                     ),
+                    retrieval_credentials=credentials,
                 )
         # ruff: ignore[BLE001] -- the stream boundary converts every provider failure to a safe event
         except Exception as exc:
             preparation.capture("error", "preparation_failed")
             logger.log(
                 logging.ERROR,
-                "Chat context build failed before streaming error_type=%s",
+                "Chat agent setup failed before streaming error_type=%s",
                 type(exc).__name__,
             )
             yield error_event("agent_error", _PRE_STREAM_ERROR_MSG)
             return
-        finally:
-            for task in (retrieval_task, links_task):
-                if not task.done():
-                    task.cancel()
-            with anyio.CancelScope(shield=True):
-                await asyncio.gather(retrieval_task, links_task, return_exceptions=True)
 
         model_access_mode: Literal["sponsored", "byok", "ordinary"]
         if inference_resolution.sponsored:
@@ -1100,19 +912,13 @@ async def _prepare_chat_response_stream(
             payload=payload,
             response_id=response_id,
             timings=timings,
-            retrieval_hit=bool(retrieved.text),
             distinct_id=distinct_id,
             observation=observation,
             session_id=session_id,
-            effective_transform_mode=retrieved.effective_transform_mode,
             sponsored_mode=sponsored_mode,
             model_access_mode=model_access_mode,
-            query_transform_model=retrieval_transform_model,
             storage=storage,
         )
-
-        if retrieved.sources:
-            yield sources_event(retrieved.sources_payload())
 
         # No suspension between handoff and first iteration: generation owns all
         # subsequent terminal outcomes, including provider failure/disconnect.
@@ -1141,15 +947,12 @@ async def _prepare_chat_response_stream(
                         "interface": "discord",
                         "responseId": str(response_id),
                         "inferenceModel": model_id(payload.inference_model),
-                        "sources": [dict(source) for source in storage.sources],
+                        "sources": [],
                         "discord": discord_context_metadata(payload),
                         "diagnostics": {
                             "outcome": early_outcome,
                             "phase": preparation.phase,
                             "embeddingsModel": payload.embeddings_model.value,
-                            "queryTransformModel": model_id(retrieval_transform_model),
-                            "requestedQueryTransformMode": payload.query_transform_mode.value,
-                            "queryTransformMode": early_transform_mode,
                             "historyTurns": len(payload.history),
                             "timing": timings.as_record(),
                             "retrieval": {

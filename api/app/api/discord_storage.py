@@ -5,7 +5,6 @@ from uuid import UUID
 
 from app.data.connection import Database
 from app.data.discord_conversations import DiscordExchange, store_discord_exchange
-from app.llms.retrieval_result import RetrievalSourcePayload
 from app.schemas.chat import ChatSchema
 
 logger = logging.getLogger(__name__)
@@ -46,7 +45,6 @@ class DiscordStorage:
     db: Database
     conversation_id: UUID
     user_id: UUID
-    sources: list[RetrievalSourcePayload]
     history_generation: int
     registry: DiscordWriteRegistry
 
@@ -80,7 +78,7 @@ async def discord_storage(
     if not isinstance(generation, int):
         return None
     return DiscordStorage(
-        db, UUID(conversation_id), payload.user_id, [], generation, registry
+        db, UUID(conversation_id), payload.user_id, generation, registry
     )
 
 

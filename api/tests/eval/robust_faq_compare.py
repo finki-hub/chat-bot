@@ -21,7 +21,6 @@ PAIRED_MANIFEST_KEYS = (
     "source_floor",
     "initial_k",
     "top_k",
-    "execution_mode",
     "credentials_supplied",
     "python",
     "dependencies",
@@ -64,8 +63,6 @@ def validate_artifact(artifact: dict, cases: list[dict]) -> dict[str, dict]:
             raise ValueError("Case metadata differs from fixture")
         if row.get("answer_fact_available") != case.get("answer_fact_available"):
             raise ValueError("Fact availability metadata differs from fixture")
-        if row.get("effective_transform_mode") != "raw":
-            raise ValueError("Unexpected effective transform mode")
         if (
             row.get("target_visible_hit") is True
             and row.get("target_context_hit") is not True

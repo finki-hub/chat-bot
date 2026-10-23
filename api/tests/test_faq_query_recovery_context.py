@@ -14,7 +14,6 @@ from app.llms.context import _search_both, get_retrieved_context_with_sources
 from app.llms.faq_query_recovery import FaqQueryRecovery
 from app.llms.faq_query_recovery_plan import FaqQueryRecoveryPlan
 from app.llms.models import Model
-from app.llms.query_modes import QueryTransformMode
 from app.llms.query_variants import QueryVariant, QueryVariantBundle
 from app.schemas.questions import QuestionSchema
 from app.utils.exceptions import RetrievalError
@@ -68,7 +67,7 @@ def _install_raw_retrieval_mocks(
     search: object,
     rerank: object,
 ) -> None:
-    async def build_variants(query, *args, **kwargs):
+    def build_variants(query, *args, **kwargs):
         raw = QueryVariant(kind="raw", text=query, is_document=False)
         return QueryVariantBundle(variants=(raw,), rerank_query=query)
 
@@ -129,8 +128,6 @@ def test_resolved_faq_adds_one_canonical_embedding_and_direct_candidate(
             Database("postgresql://unused"),
             "Каде е службата?",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
             initial_k=120,
         )
 
@@ -184,8 +181,6 @@ def test_resolved_faq_direct_and_vector_candidates_are_deduplicated(
             Database("postgresql://unused"),
             f"Каде е {faq.name}?",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     result, timings = _run_with_timings(run)
@@ -224,8 +219,6 @@ def test_resolved_faq_is_not_exposed_when_reranker_fails(
             Database("postgresql://unused"),
             "Каде е службата?",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     result, timings = _run_with_timings(run)
@@ -273,8 +266,6 @@ def test_optional_canonical_search_failure_keeps_raw_and_direct_faq_candidates(
             Database("postgresql://unused"),
             "Каде е службата?",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     result, timings = _run_with_timings(run)
@@ -349,8 +340,6 @@ def test_optional_canonical_search_drains_failed_search_sibling(
             Database("postgresql://unused"),
             "Каде е службата?",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     result, timings = _run_with_timings(run)
@@ -437,8 +426,6 @@ def test_main_embedding_failure_records_match_without_claiming_rerank_use(
             Database("postgresql://unused"),
             "Каде е службата?",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     timings, token = start_request_timings()
@@ -523,8 +510,6 @@ def test_vector_search_failure_and_cancellation_drain_all_search_tasks(
                     Database("postgresql://unused"),
                     raw_query,
                     Model.BGE_M3_LOCAL,
-                    Model.GPT_5_4_MINI,
-                    query_transform_mode=QueryTransformMode.RAW,
                 ),
             )
             try:
@@ -593,8 +578,6 @@ def test_optional_canonical_search_cancellation_propagates(
             Database("postgresql://unused"),
             "Каде е службата?",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     with pytest.raises(asyncio.CancelledError):
@@ -630,74 +613,11 @@ def test_mandatory_raw_search_failure_remains_retrieval_error(
             Database("postgresql://unused"),
             "Каде е службата?",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     with pytest.raises(RetrievalError, match="multi-query vector search") as exc_info:
         anyio.run(run)
     assert isinstance(exc_info.value.__cause__, RuntimeError)
-
-
-def test_partial_rewrite_mode_does_not_run_local_recovery(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    embedding_texts: list[str] = []
-    rerank_queries: list[str] = []
-    faq = _question(distance=0.2)
-    planner = AsyncMock(side_effect=AssertionError("non-raw mode must skip recovery"))
-
-    async def embed(text, *args, **kwargs):
-        embedding_texts.append(text)
-        return [0.1]
-
-    async def search(*args, **kwargs):
-        return [faq], []
-
-    async def no_lexical_results(*args, **kwargs):
-        return []
-
-    async def build_variants(query, *args, **kwargs):
-        return QueryVariantBundle(
-            variants=(
-                QueryVariant(kind="rewrite", text="rewritten query", is_document=False),
-                QueryVariant(kind="raw", text=query, is_document=False),
-            ),
-            rerank_query="rewritten query",
-        )
-
-    class EmptyRerankResponse:
-        def json(self):
-            return {"reranked_documents": []}
-
-    async def rerank(payload):
-        rerank_queries.append(payload["query"])
-        return EmptyRerankResponse()
-
-    monkeypatch.setattr(context_module, "build_query_variants", build_variants)
-    monkeypatch.setattr(context_module, "_embed_variant", embed)
-    monkeypatch.setattr(context_module, "_search_both", search)
-    monkeypatch.setattr(context_module, "get_matching_questions", no_lexical_results)
-    monkeypatch.setattr(context_module, "plan_faq_query_recovery", planner)
-    monkeypatch.setattr(context_module, "_post_rerank", rerank)
-
-    async def run():
-        return await get_retrieved_context_with_sources(
-            Database("postgresql://unused"),
-            "Каде е службата?",
-            Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.REWRITE_HYDE,
-        )
-
-    _, timings = _run_with_timings(run)
-
-    planner.assert_not_awaited()
-    assert set(embedding_texts) == {"rewritten query", "Каде е службата?"}
-    assert rerank_queries == ["rewritten query"]
-    assert timings.local_faq_recovery_outcome == "skipped"
-    assert timings.local_query_variant_added is False
-    assert timings.local_rerank_query_used is False
 
 
 def test_catalog_lookup_error_uses_original_retrieval_and_rerank_query(
@@ -717,7 +637,7 @@ def test_catalog_lookup_error_uses_original_retrieval_and_rerank_query(
     async def no_lexical_results(*args, **kwargs):
         return []
 
-    async def build_variants(query, *args, **kwargs):
+    def build_variants(query, *args, **kwargs):
         return QueryVariantBundle(
             variants=(QueryVariant(kind="raw", text=query, is_document=False),),
             rerank_query=query,
@@ -747,8 +667,6 @@ def test_catalog_lookup_error_uses_original_retrieval_and_rerank_query(
             Database("postgresql://unused"),
             "Каде е службата?",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     result, timings = _run_with_timings(run)
@@ -761,10 +679,9 @@ def test_catalog_lookup_error_uses_original_retrieval_and_rerank_query(
     assert timings.local_rerank_query_used is False
 
 
-def test_recovery_uses_contextualized_query_and_rejects_foreign_modifier(
+def test_recovery_rejects_foreign_modifier(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    original_query = "Каде е службата?"
     search_query = "Каде е студентската служба на Оксфорд?"
     names = AsyncMock(return_value=["Студентска служба"])
     exact = AsyncMock()
@@ -772,10 +689,6 @@ def test_recovery_uses_contextualized_query_and_rejects_foreign_modifier(
     planned_queries: list[str] = []
     monkeypatch.setattr(plan_module, "get_question_names_query", names)
     monkeypatch.setattr(plan_module, "get_question_by_name_query", exact)
-    monkeypatch.setattr(context_module, "has_provider_credential", lambda *args: True)
-
-    async def contextualize(*args, **kwargs):
-        return search_query
 
     async def plan(db, query):
         planned_queries.append(query)
@@ -785,7 +698,7 @@ def test_recovery_uses_contextualized_query_and_rejects_foreign_modifier(
         embedded.append(text)
         return [0.1]
 
-    async def variants(query, *args, **kwargs):
+    def variants(query, *args, **kwargs):
         return QueryVariantBundle(
             variants=(QueryVariant(kind="raw", text=query, is_document=False),),
             rerank_query=query,
@@ -797,7 +710,6 @@ def test_recovery_uses_contextualized_query_and_rejects_foreign_modifier(
     async def no_lexical_results(*args, **kwargs):
         return []
 
-    monkeypatch.setattr(context_module, "_contextualize_query", contextualize)
     monkeypatch.setattr(context_module, "plan_faq_query_recovery", plan)
     monkeypatch.setattr(context_module, "_embed_variant", embed)
     monkeypatch.setattr(context_module, "build_query_variants", variants)
@@ -807,11 +719,8 @@ def test_recovery_uses_contextualized_query_and_rejects_foreign_modifier(
     async def run():
         return await get_retrieved_context_with_sources(
             Database("postgresql://unused"),
-            original_query,
+            search_query,
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
-            history_text="User referred to a different university.",
         )
 
     result, timings = _run_with_timings(run)

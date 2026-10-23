@@ -54,13 +54,12 @@ resolver must reject ambiguous/missing anchors rather than selecting the first r
 
 Use the actual production retrieval/context path under the approved baseline and
 candidate revisions with the same frozen public corpus, BGE versions and budgets.
-Raw mode and missing-transform-credential behavior require separate observations.
 Do not replace production selection with an oracle rerank containing an injected
 target FAQ, duplicate production normalization inside a scorer, or count a useful
 link as proof that FAQ content was retrieved.
 
 Save candidate membership, final-context/content checks, source visibility, actual
-rerank queries/scores, recovery activation, effective mode/fallback, budgets,
+rerank queries/scores, recovery activation, fallbacks, budgets,
 execution status and code/corpus/model/fixture hashes. Keep positive and negative
 denominators separate. Any execution error, missing case or corpus/config mismatch
 invalidates a paired quality claim. No paid query transforms or answer generation
@@ -73,7 +72,7 @@ are needed; retrieval recall is not answer accuracy or citation entailment.
 calls, emitted rerank query and selected IDs. It does not inject a target FAQ,
 canonical question or candidate order. Thus it measures the current generic
 canonical template, not the earlier eight-FAQ oracle experiment. All calls are
-sequential. Raw and requested-transform-with-missing-credentials are separate modes.
+sequential.
 
 Run from `api/` using its installed Python, in a fresh disposable process. The
 parent must supply the correct baseline/candidate application import path,
@@ -83,14 +82,12 @@ manifest is an existing public model/runtime identity artifact verified by the
 parent; its hash is recorded without opening a new health/model probe.
 
 ```text
-python -B -m tests.eval.robust_faq_replay --corpus-manifest CORPUS.json --gpu-manifest GPU.json --revision-label BASELINE_SHA --mode raw --output baseline-raw.json
-python -B -m tests.eval.robust_faq_replay --corpus-manifest CORPUS.json --gpu-manifest GPU.json --revision-label CANDIDATE_LABEL --mode raw --output candidate-raw.json
+python -B -m tests.eval.robust_faq_replay --corpus-manifest CORPUS.json --gpu-manifest GPU.json --revision-label BASELINE_SHA --output baseline-raw.json
+python -B -m tests.eval.robust_faq_replay --corpus-manifest CORPUS.json --gpu-manifest GPU.json --revision-label CANDIDATE_LABEL --output candidate-raw.json
 python -B -m tests.eval.robust_faq_compare --baseline baseline-raw.json --candidate candidate-raw.json
 ```
 
-Repeat the paired run with `--mode credential_missing` and new output paths when
-authorized. This requests `rewrite_hyde` with no credentials; actual effective mode
-must remain raw. No hosted provider or answer generation is allowed.
+No hosted provider or answer generation is allowed.
 
 Safety/limits:
 

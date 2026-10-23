@@ -169,11 +169,9 @@ def settings(
     sponsored_model_id: str = SPONSORED_ID,
     sponsored_provider: str = "openai",
     sponsored_model_base_url: str | None = None,
-    retrieval_mode: str = "pipeline",
 ) -> Settings:
     return Settings.model_validate(
         {
-            "CHAT_RETRIEVAL_MODE": retrieval_mode,
             "API_KEY": "test-api-key",
             "CREDENTIAL_ENCRYPTION_KEY": "test-credential-key",
             "MCP_API_KEY": "test-mcp-key",

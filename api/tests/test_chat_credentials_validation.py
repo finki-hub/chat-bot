@@ -1,3 +1,5 @@
+from typing import NoReturn
+
 import anyio.lowlevel
 import pytest
 from fastapi.testclient import TestClient
@@ -5,7 +7,6 @@ from fastapi.testclient import TestClient
 from app.api import chat as chat_api
 from app.data.db import get_db
 from app.llms.models import Model
-from app.llms.retrieval_result import RetrievedContext
 from app.main import make_app
 from app.utils.settings import Settings
 from tests.chat_persistence_fake import FakeChatDatabase
@@ -60,19 +61,15 @@ def test_chat_requires_user_credential_before_mandatory_hosted_stage(
     provider: str,
     stage: str,
 ) -> None:
-    retrieval_started = False
+    agent_started = False
 
-    async def fail_if_retrieval_starts(**kwargs) -> RetrievedContext:
+    async def fail_if_agent_starts(*args, **kwargs) -> NoReturn:
         await anyio.lowlevel.checkpoint()
-        nonlocal retrieval_started
-        retrieval_started = True
-        raise AssertionError("retrieval must not start without required BYOK")
+        nonlocal agent_started
+        agent_started = True
+        raise AssertionError("agent must not start without required BYOK")
 
-    monkeypatch.setattr(
-        chat_api,
-        "get_retrieved_context_with_sources",
-        fail_if_retrieval_starts,
-    )
+    monkeypatch.setattr(chat_api, "handle_chat", fail_if_agent_starts)
 
     response = _client().post(
         "/chat/",
@@ -89,24 +86,20 @@ def test_chat_requires_user_credential_before_mandatory_hosted_stage(
     assert '"code": "credential_required"' in response.text
     assert f'"provider": "{provider}"' in response.text
     assert f'"stage": "{stage}"' in response.text
-    assert not retrieval_started
+    assert not agent_started
 
 
-def test_removed_chat_model_is_rejected_before_retrieval_or_provider_dispatch(
+def test_removed_chat_model_is_rejected_before_provider_dispatch(
     monkeypatch,
 ) -> None:
-    retrieval_started = False
+    agent_started = False
 
-    async def fail_if_retrieval_starts(**kwargs) -> RetrievedContext:
-        nonlocal retrieval_started
-        retrieval_started = True
-        raise AssertionError("removed model reached retrieval")
+    async def fail_if_agent_starts(*args, **kwargs) -> NoReturn:
+        nonlocal agent_started
+        agent_started = True
+        raise AssertionError("removed model reached the agent")
 
-    monkeypatch.setattr(
-        chat_api,
-        "get_retrieved_context_with_sources",
-        fail_if_retrieval_starts,
-    )
+    monkeypatch.setattr(chat_api, "handle_chat", fail_if_agent_starts)
 
     response = _client().post(
         "/chat/",
@@ -119,7 +112,7 @@ def test_removed_chat_model_is_rejected_before_retrieval_or_provider_dispatch(
     )
 
     assert response.status_code == 422
-    assert not retrieval_started
+    assert not agent_started
 
 
 def test_chat_state_rejects_custom_credential_base_url_with_invalid_port() -> None:

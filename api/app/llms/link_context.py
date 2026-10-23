@@ -14,8 +14,6 @@ from app.utils.timing import timed
 logger = logging.getLogger(__name__)
 settings = Settings()
 
-# Bound the user-editable catalog's footprint in every prompt.
-_LINKS_RENDER_MAX: Final[int] = 50
 _LINK_NAME_MAX: Final[int] = 80
 _LINK_URL_MAX: Final[int] = 2048
 _LINK_DESC_MAX: Final[int] = 200
@@ -132,12 +130,12 @@ async def _rank_relevant_links(
     return [link.candidate for link in ranked[:_RELEVANT_LINKS_MAX]]
 
 
-async def get_links_context(db: Database, *, query: str | None = None) -> str:
-    """Render relevant links first, followed by the capped link catalog."""
+async def get_relevant_links_context(db: Database, query: str) -> str:
+    """Render the catalog links most relevant to a search query, or nothing."""
     try:
         with timed("links"):
             rows = await fetch_links_for_context(db)
-    # ruff: ignore[BLE001] -- links are optional retrieval enrichment
+    # ruff: ignore[BLE001] -- links are optional search enrichment
     except Exception as exc:
         logger.warning(
             "Link catalog load failed error_type=%s",
@@ -151,30 +149,17 @@ async def get_links_context(db: Database, *, query: str | None = None) -> str:
     if not candidates:
         return ""
 
-    relevant: list[_LinkCandidate] = []
-    if query:
-        try:
-            with timed("links.rerank"):
-                relevant = await _rank_relevant_links(query, candidates)
-        # ruff: ignore[BLE001] -- link reranking degrades to catalog order
-        except Exception as exc:
-            logger.warning(
-                "Link reranking failed; rendering unranked error_type=%s",
-                type(exc).__name__,
-            )
+    try:
+        with timed("links.rerank"):
+            relevant = await _rank_relevant_links(query, candidates)
+    # ruff: ignore[BLE001] -- links are optional search enrichment
+    except Exception as exc:
+        logger.warning(
+            "Link reranking failed error_type=%s",
+            type(exc).__name__,
+        )
+        return ""
 
     if not relevant:
-        return "Корисни линкови:\n" + "\n".join(
-            _line(c) for c in candidates[:_LINKS_RENDER_MAX]
-        )
-
-    relevant_keys = {c.url for c in relevant}
-    other_links = [c for c in candidates if c.url not in relevant_keys][
-        : _LINKS_RENDER_MAX - len(relevant)
-    ]
-    sections = ["Најрелевантни линкови:\n" + "\n".join(_line(c) for c in relevant)]
-    if other_links:
-        sections.append(
-            "Други корисни линкови:\n" + "\n".join(_line(c) for c in other_links),
-        )
-    return "\n\n".join(sections)
+        return ""
+    return "Корисни линкови:\n" + "\n".join(_line(c) for c in relevant)

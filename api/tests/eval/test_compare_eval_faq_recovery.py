@@ -3,7 +3,7 @@ import json
 from copy import deepcopy
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import anyio
@@ -12,7 +12,6 @@ import pytest
 from app.llms.faq_query_recovery import FaqQueryRecovery
 from app.llms.faq_query_recovery_plan import FaqQueryRecoveryPlan
 from app.llms.models import Model
-from app.llms.query_modes import QueryTransformMode
 from app.llms.query_variants import QueryVariant, QueryVariantBundle
 from app.schemas.questions import QuestionSchema
 from tests.eval import run_eval
@@ -56,9 +55,7 @@ def matched_runs(monkeypatch, tmp_path, initial_k):
     monkeypatch.setattr(run_eval, "Database", lambda **_kwargs: OfflineDatabase())
     monkeypatch.setattr(run_eval, "init_http_client", lambda: None)
     monkeypatch.setattr(run_eval, "close_http_client", AsyncMock())
-    monkeypatch.setattr(
-        run_eval, "build_query_variants", AsyncMock(return_value=bundle)
-    )
+    monkeypatch.setattr(run_eval, "build_query_variants", Mock(return_value=bundle))
     monkeypatch.setattr(
         run_eval, "plan_faq_query_recovery", AsyncMock(return_value=plan)
     )
@@ -92,10 +89,7 @@ def matched_runs(monkeypatch, tmp_path, initial_k):
             initial_k=initial_k,
             json=str(output),
             limit=0,
-            no_transform=False,
-            query_transform_model=Model.GPT_5_4_MINI.value,
             top_k=10,
-            transform_mode=QueryTransformMode.RAW,
         )
         assert anyio.run(run_eval.main_async, ns) == 0
     return [json.loads(path.read_text(encoding="utf-8")) for path in paths], paths
@@ -135,7 +129,6 @@ def test_real_matched_raw_runs_compare_with_each_other_and_themselves(
         {"effective_per_query_k": 32},
         {"effective_per_query_k": 101},
         {"effective_initial_k": 101},
-        {"effective_transform_mode": "rewrite"},
     ],
 )
 def test_recovery_declaration_does_not_waive_other_configuration_checks(
@@ -149,22 +142,6 @@ def test_recovery_declaration_does_not_waive_other_configuration_checks(
     assert [case.current.id for case in comparison.incomparable_configs] == ["public"]
     assert comparison.bucket_deltas["overall"][0].count == 0
     assert "Decision: INVALID" in render_report(comparison)
-
-
-@pytest.mark.parametrize("effective_mode", ["raw", "rewrite"])
-def test_matched_recovery_cannot_validate_a_requested_transform_mode(
-    monkeypatch,
-    tmp_path,
-    effective_mode,
-):
-    (baseline, current), _paths = matched_runs(monkeypatch, tmp_path, 100)
-    current["config"]["query_transform_mode"] = "rewrite"
-    current["config"]["per_query_k"] = 51
-    current["results"][0]["effective_transform_mode"] = effective_mode
-    current["results"][0]["effective_per_query_k"] = (
-        51 if effective_mode == "rewrite" else 31
-    )
-    assert len(compare_runs(baseline, current).incomparable_configs) == 1
 
 
 @pytest.mark.parametrize("outcome", ["unknown", True, 1, {}])

@@ -9,13 +9,13 @@ from app.data.connection import Database
 from app.llms import agents, search_tools
 from app.llms.agents import StreamObservation
 from app.llms.models import Model
-from app.llms.query_modes import QueryTransformMode
 from app.llms.retrieval_result import (
     RetrievalSource,
     RetrievalSourcePayload,
     RetrievedContext,
 )
 from app.llms.search_tools import build_search_tools
+from app.llms.tools import SEARCH_TOOL_NAME, agent_middleware
 from tests.test_agent_error_log_privacy import TestAgentGraph
 
 
@@ -178,32 +178,41 @@ async def test_non_search_tool_gets_generic_label() -> None:
 def _retrieved(text: str) -> RetrievedContext:
     return RetrievedContext(
         text=text,
-        effective_transform_mode=QueryTransformMode.RAW,
         sources=(RetrievalSource(id="1", kind="faq", title="Префрлување"),)
         if text
         else (),
     )
 
 
-@pytest.mark.anyio
-async def test_search_tool_returns_context_and_source_artifact(monkeypatch) -> None:
-    retrieve = AsyncMock(return_value=_retrieved("блок"))
+def _search_tool(monkeypatch, retrieved: RetrievedContext, links: str = ""):
+    retrieve = AsyncMock(return_value=retrieved)
     monkeypatch.setattr(search_tools, "get_retrieved_context_with_sources", retrieve)
+    relevant_links = AsyncMock(return_value=links)
+    monkeypatch.setattr(search_tools, "get_relevant_links_context", relevant_links)
     [tool] = build_search_tools(
         cast("Database", object()),
         Model.MULTILINGUAL_E5_LARGE,
-        Model.GPT_6_LUNA,
-        max_searches=4,
+        None,
     )
+    return tool, retrieve, relevant_links
 
-    message = await tool.ainvoke(
+
+async def _invoke(tool, query: str) -> ToolMessage:
+    return await tool.ainvoke(
         {
             "type": "tool_call",
             "id": "t1",
             "name": tool.name,
-            "args": {"query": "префрлување"},
+            "args": {"query": query},
         },
     )
+
+
+@pytest.mark.anyio
+async def test_search_tool_returns_context_and_source_artifact(monkeypatch) -> None:
+    tool, retrieve, _ = _search_tool(monkeypatch, _retrieved("блок"))
+
+    message = await _invoke(tool, "префрлување")
 
     assert message.content == "блок"
     assert message.artifact == {
@@ -213,37 +222,41 @@ async def test_search_tool_returns_context_and_source_artifact(monkeypatch) -> N
     }
     assert retrieve.await_args is not None
     assert retrieve.await_args.kwargs["query"] == "префрлување"
-    assert retrieve.await_args.kwargs["query_transform_mode"] == QueryTransformMode.RAW
 
 
 @pytest.mark.anyio
-async def test_search_tool_caps_searches_per_answer(monkeypatch) -> None:
-    retrieve = AsyncMock(return_value=_retrieved(""))
-    monkeypatch.setattr(search_tools, "get_retrieved_context_with_sources", retrieve)
-    [tool] = build_search_tools(
-        cast("Database", object()),
-        Model.MULTILINGUAL_E5_LARGE,
-        Model.GPT_6_LUNA,
-        max_searches=2,
-    )
+async def test_search_tool_appends_relevant_links(monkeypatch) -> None:
+    links = "Корисни линкови:\n- Распоред: https://finki-hub.com"
+    tool, _, relevant_links = _search_tool(monkeypatch, _retrieved("блок"), links)
 
-    messages = [
-        await tool.ainvoke(
-            {
-                "type": "tool_call",
-                "id": f"t{i}",
-                "name": tool.name,
-                "args": {"query": "q"},
-            },
-        )
-        for i in range(3)
+    message = await _invoke(tool, "распоред")
+
+    assert message.content == f"блок\n\n{links}"
+    assert relevant_links.await_args is not None
+    assert relevant_links.await_args.args[1] == "распоред"
+
+
+@pytest.mark.anyio
+async def test_search_tool_without_results_says_so(monkeypatch) -> None:
+    tool, _, _ = _search_tool(monkeypatch, _retrieved(""))
+
+    message = await _invoke(tool, "q")
+
+    assert message.content == "Нема пронајдени извори за ова барање."
+    assert message.artifact == {
+        "hit": False,
+        "sources": [],
+        "summary": "Нема пронајдени извори",
+    }
+
+
+def test_agent_middleware_limits_searches_and_all_tool_calls() -> None:
+    limits = [
+        (middleware.tool_name, middleware.run_limit)
+        for middleware in agent_middleware()
     ]
 
-    assert retrieve.await_count == 2
-    assert messages[0].content == "Нема пронајдени извори за ова барање."
-    assert messages[0].artifact["summary"] == "Нема пронајдени извори"
-    assert "лимитот" in messages[2].content
-    assert "sources" not in messages[2].artifact
+    assert limits == [(SEARCH_TOOL_NAME, 4), (None, 15)]
 
 
 def test_interleaving_keeps_each_search_best_hits_within_cap() -> None:

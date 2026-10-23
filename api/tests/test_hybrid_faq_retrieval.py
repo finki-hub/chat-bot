@@ -11,7 +11,6 @@ from app.data.questions import get_matching_questions
 from app.llms import context as context_module
 from app.llms.context import get_retrieved_context_with_sources
 from app.llms.models import Model
-from app.llms.query_modes import QueryTransformMode
 from app.llms.query_variants import QueryVariant, QueryVariantBundle
 from app.llms.retrieval_result import RetrievedContext
 from app.schemas.documents import ChunkSchema
@@ -109,7 +108,7 @@ def test_normalized_lexical_faq_reaches_existing_reranker(
     async def vector_search(*args, **kwargs):
         return [vector_faq], []
 
-    async def build_variants(*args, **kwargs):
+    def build_variants(*args, **kwargs):
         raw = QueryVariant(kind="raw", text="smerovi SEIS23", is_document=False)
         return QueryVariantBundle(variants=(raw,), rerank_query="rewritten query")
 
@@ -141,8 +140,6 @@ def test_normalized_lexical_faq_reaches_existing_reranker(
             Database("postgresql://unused"),
             "smerovi SEIS23",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     result, timings = _run_with_timings(run)
@@ -206,8 +203,6 @@ def test_lexical_faq_failure_preserves_dense_retrieval(
             Database("postgresql://unused"),
             "kontakt na finki",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     result, timings = _run_with_timings(run)
@@ -247,8 +242,6 @@ def test_lexical_faq_search_is_skipped_without_vector_domain_signal(
             Database("postgresql://unused"),
             "рецепт за торта",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     result, timings = _run_with_timings(run)
@@ -308,8 +301,6 @@ def test_lexical_faq_search_records_no_match(
             Database("postgresql://unused"),
             "smerovi na finki",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     result, timings = _run_with_timings(run)
@@ -354,16 +345,16 @@ def test_reranker_failure_preserves_faq_first_dense_fallback_order(
         search_call += 1
         return ([], [dense_chunk]) if search_call == 1 else ([fallback_faq], [])
 
-    async def build_variants(*args, **kwargs):
-        rewritten = QueryVariant(
-            kind="rewrite",
-            text="препишано прашање",
+    def build_variants(*args, **kwargs):
+        transliterated = QueryVariant(
+            kind="transliteration",
+            text="смерови на финки",
             is_document=False,
         )
         raw = QueryVariant(kind="raw", text="smerovi na finki", is_document=False)
         return QueryVariantBundle(
-            variants=(rewritten, raw),
-            rerank_query=rewritten.text,
+            variants=(transliterated, raw),
+            rerank_query=transliterated.text,
         )
 
     async def lexical_search(*args, **kwargs):
@@ -386,7 +377,6 @@ def test_reranker_failure_preserves_faq_first_dense_fallback_order(
         return []
 
     monkeypatch.setattr(context_module, "_embed_variant", embed)
-    monkeypatch.setattr(context_module, "has_provider_credential", lambda *args: True)
     monkeypatch.setattr(context_module, "build_query_variants", build_variants)
     monkeypatch.setattr(context_module, "_search_both", vector_search)
     monkeypatch.setattr(context_module, "get_matching_questions", lexical_search)
@@ -398,8 +388,6 @@ def test_reranker_failure_preserves_faq_first_dense_fallback_order(
             Database("postgresql://unused"),
             "smerovi na finki",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.REWRITE,
             top_k=1,
         )
 
@@ -482,8 +470,6 @@ def test_successful_rerank_preserves_cross_source_relevance_order(
             Database("postgresql://unused"),
             "прашање",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
             top_k=1,
         )
 
@@ -579,8 +565,6 @@ def test_reranker_failure_falls_back_to_dense_candidates_only(
             Database("postgresql://unused"),
             "smerovi na finki",
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
             top_k=2,
         )
 

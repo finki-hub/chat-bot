@@ -58,11 +58,9 @@ def _run_captured_stream(
             payload=payload,
             response_id=uuid4(),
             timings=RequestTimings(),
-            retrieval_hit=True,
             distinct_id="user-1",
             session_id="session-1",
             observation=observation,
-            effective_transform_mode=payload.query_transform_mode,
         )
         return [str(chunk) async for chunk in stream]
 
@@ -137,8 +135,6 @@ def test_chat_request_log_fields_do_not_include_message_content():
         "interface",
         "max_tokens",
         "query_len",
-        "query_transform_model",
-        "query_transform_mode",
         "reasoning",
         "temperature",
     }

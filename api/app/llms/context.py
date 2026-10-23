@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import math
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable
 from dataclasses import dataclass, replace
 from typing import Literal, assert_never
 from uuid import UUID
@@ -18,19 +18,14 @@ from app.llms.faq_evidence_constraints import (
     plan_faq_evidence_constraints,
 )
 from app.llms.faq_query_recovery_plan import (
-    FaqQueryRecoveryPlan,
     plan_faq_query_recovery,
     plan_faq_query_recovery_from_titles,
 )
-from app.llms.models import ChatModel, Model
-from app.llms.prompts import CONTEXTUALIZE_SYSTEM_PROMPT
+from app.llms.models import Model
 from app.llms.provider_credentials import (
     LlmProviderCredentials,
-    has_provider_credential,
 )
-from app.llms.query_modes import QueryTransformMode
 from app.llms.query_normalization import query_search_variants
-from app.llms.query_transform import QUERY_TRANSFORM_MAX_TOKENS, transform_query
 from app.llms.query_variants import (
     QueryVariantKind,
     build_query_variants,
@@ -58,7 +53,6 @@ from app.utils.timing import (
     RetrievalSelectionMetrics,
     record_faq_evidence_constraint,
     record_local_faq_recovery,
-    record_query_transform_reason,
     record_reranker_scores,
     record_retrieval_candidates,
     record_retrieval_ids,
@@ -152,7 +146,7 @@ def _embedding_for_variant(
     match kind:
         case "raw":
             return original_embedding_task
-        case "rewrite" | "hyde" | "transliteration":
+        case "transliteration":
             return _embed_variant(
                 text,
                 embedding_model,
@@ -359,80 +353,24 @@ def _valid_rerank_results(
     return valid, invalid_count
 
 
-async def get_retrieved_context(
-    db: Database,
-    query: str,
-    embedding_model: Model,
-    query_transform_model: ChatModel,
-    *,
-    query_transform_mode: QueryTransformMode = QueryTransformMode.REWRITE_HYDE,
-    history_text: str | None = None,
-    initial_k: int = 30,
-    top_k: int = 10,
-    on_stage: Callable[[str], None] | None = None,
-    credentials: LlmProviderCredentials | None = None,
-) -> str:
-    result = await get_retrieved_context_with_sources(
-        db=db,
-        query=query,
-        embedding_model=embedding_model,
-        query_transform_model=query_transform_model,
-        query_transform_mode=query_transform_mode,
-        history_text=history_text,
-        initial_k=initial_k,
-        top_k=top_k,
-        on_stage=on_stage,
-        credentials=credentials,
-    )
-    return result.text
-
-
 async def get_retrieved_context_with_sources(
     db: Database,
     query: str,
     embedding_model: Model,
-    query_transform_model: ChatModel,
     *,
-    query_transform_mode: QueryTransformMode = QueryTransformMode.REWRITE_HYDE,
-    history_text: str | None = None,
     initial_k: int = 30,
     top_k: int = 10,
-    on_stage: Callable[[str], None] | None = None,
     credentials: LlmProviderCredentials | None = None,
 ) -> RetrievedContext:
-    """Multi-query (original + rewritten + HyDE) retrieval over FAQ and chunks, reranked by a cross-encoder with vector-order fallback."""
+    """Search FAQ and chunks with the query (plus its Cyrillic form when romanized),
+    rerank with a cross-encoder and fall back to vector order."""
 
     logger.info(
         "Retrieving context: query_len=%d embedding_model=%s",
         len(query),
         embedding_model.value,
     )
-
-    def _stage(stage: str) -> None:
-        if on_stage is not None:
-            on_stage(stage)
-
-    transform_available = has_provider_credential(credentials, query_transform_model)
-    effective_transform_mode = (
-        query_transform_mode if transform_available else QueryTransformMode.RAW
-    )
-    if query_transform_mode == QueryTransformMode.RAW:
-        record_query_transform_reason("not_requested")
-    elif not transform_available:
-        record_query_transform_reason("credential_missing")
-    _stage("contextualize")
-
-    with timed("retrieval.contextualize"):
-        search_query = (
-            await _contextualize_query(
-                query,
-                query_transform_model,
-                history_text,
-                credentials,
-            )
-            if transform_available
-            else query
-        )
+    search_query = query
 
     original_embedding_task = asyncio.create_task(
         _embed_variant(
@@ -442,35 +380,7 @@ async def get_retrieved_context_with_sources(
             credentials=credentials,
         ),
     )
-
-    try:
-        with timed("retrieval.query_transform"):
-            variant_bundle = await build_query_variants(
-                search_query,
-                query_transform_model,
-                effective_transform_mode,
-                credentials,
-            )
-    except asyncio.CancelledError:
-        original_embedding_task.cancel()
-        await asyncio.gather(original_embedding_task, return_exceptions=True)
-        raise
-    except Exception as e:
-        original_embedding_task.cancel()
-        await asyncio.gather(original_embedding_task, return_exceptions=True)
-        raise RetrievalError("Failed during query transform / HyDE generation") from e
-
-    if transform_available or query_transform_mode == QueryTransformMode.RAW:
-        record_query_transform_reason(
-            variant_bundle.fallback_reason(query_transform_mode)
-        )
-
-    logger.info(
-        "Query transform mode %s produced variants: %s unchanged: %s",
-        variant_bundle.mode.value,
-        [(variant.kind, len(variant.text)) for variant in variant_bundle.variants],
-        sorted(variant_bundle.unchanged_kinds),
-    )
+    variant_bundle = build_query_variants(search_query)
 
     try:
         with timed("retrieval.faq_evidence_constraints"):
@@ -497,35 +407,30 @@ async def get_retrieved_context_with_sources(
             reason="catalog_error",
             constrained_abstained=True,
         )
-        return RetrievedContext(
-            text="",
-            effective_transform_mode=variant_bundle.mode,
-        )
+        return RetrievedContext(text="")
     if active_faq_constraints is not None:
         record_faq_evidence_constraint(
             applied=True,
             reason=active_faq_constraints.reason,
         )
 
-    local_recovery_plan = FaqQueryRecoveryPlan(outcome="skipped")
-    if variant_bundle.mode == QueryTransformMode.RAW:
-        try:
-            with timed("retrieval.local_faq_recovery"):
-                if evidence_plan.catalog_titles is not None:
-                    local_recovery_plan = await plan_faq_query_recovery_from_titles(
-                        db,
-                        search_query,
-                        evidence_plan.catalog_titles,
-                    )
-                else:
-                    local_recovery_plan = await plan_faq_query_recovery(
-                        db,
-                        search_query,
-                    )
-        except asyncio.CancelledError:
-            original_embedding_task.cancel()
-            await asyncio.gather(original_embedding_task, return_exceptions=True)
-            raise
+    try:
+        with timed("retrieval.local_faq_recovery"):
+            if evidence_plan.catalog_titles is not None:
+                local_recovery_plan = await plan_faq_query_recovery_from_titles(
+                    db,
+                    search_query,
+                    evidence_plan.catalog_titles,
+                )
+            else:
+                local_recovery_plan = await plan_faq_query_recovery(
+                    db,
+                    search_query,
+                )
+    except asyncio.CancelledError:
+        original_embedding_task.cancel()
+        await asyncio.gather(original_embedding_task, return_exceptions=True)
+        raise
     local_canonical_query = (
         local_recovery_plan.recovery.canonical_query
         if local_recovery_plan.recovery is not None
@@ -544,17 +449,14 @@ async def get_retrieved_context_with_sources(
     )
 
     budget = retrieval_budget(
-        variant_bundle.mode,
         initial_k,
-        extra_variants=variant_bundle.transliteration_variant_count,
+        variant_count=len(variant_bundle.variants),
     )
     per_query_k = (
         min(budget.per_query_k, 31)
         if local_recovery_plan.outcome == "matched"
         else budget.per_query_k
     )
-
-    _stage("retrieve")
 
     try:
         with timed("retrieval.embed"):
@@ -739,10 +641,7 @@ async def get_retrieved_context_with_sources(
             )
 
         if not candidates:
-            return RetrievedContext(
-                text="",
-                effective_transform_mode=variant_bundle.mode,
-            )
+            return RetrievedContext(text="")
 
     except Exception as e:
         raise RetrievalError("Failed during multi-query vector search") from e
@@ -754,8 +653,6 @@ async def get_retrieved_context_with_sources(
     invalid_result_count = 0
     final: list[_Candidate] = []
     sources: tuple[RetrievalSource, ...] = ()
-
-    _stage("rerank")
 
     try:
         logger.info("Sending %d candidates to re-ranker...", len(rerank_texts))
@@ -926,61 +823,11 @@ async def get_retrieved_context_with_sources(
     )
     record_retrieval_ids([c.key for c in final[:_RETRIEVAL_IDS_CAP]])
 
-    _stage("context")
-
     with timed("retrieval.expand"):
         text = await _expand_and_render(db, final, embedding_model)
     if text and reranker_fallback_reason == "score_floor":
         text = f"{_WEAK_MATCH_NOTICE}\n\n{text}"
-    return RetrievedContext(
-        text=text,
-        effective_transform_mode=variant_bundle.mode,
-        sources=sources,
-    )
-
-
-async def _contextualize_query(
-    query: str,
-    query_transform_model: ChatModel,
-    history_text: str | None,
-    credentials: LlmProviderCredentials | None = None,
-) -> str:
-    """Fold prior turns into a standalone retrieval query, so a follow-up like
-    'колку чини тоа?' retrieves on the full question rather than a context-free fragment.
-    Returns the raw query unchanged when there's no history or the rewrite fails.
-    """
-    if not history_text:
-        return query
-    transform_input = f"Претходен разговор:\n{history_text}\n\nНово прашање: {query}"
-    try:
-        condensed = await transform_query(
-            transform_input,
-            query_transform_model,
-            system_prompt=CONTEXTUALIZE_SYSTEM_PROMPT,
-            temperature=0.0,
-            top_p=1.0,
-            max_tokens=QUERY_TRANSFORM_MAX_TOKENS,
-            credentials=credentials,
-        )
-    # ruff: ignore[BLE001] -- contextualization degrades to the original user query
-    except Exception as exc:
-        logger.warning(
-            "Query contextualization failed; using raw query error_type=%s",
-            type(exc).__name__,
-        )
-        return query
-    condensed = condensed.strip()
-    if condensed == transform_input.strip():
-        return query
-    if condensed and condensed != query:
-        logger.info(
-            "Contextualized query: query_len=%d condensed_len=%d history_char_len=%d",
-            len(query),
-            len(condensed),
-            len(history_text),
-        )
-        return condensed
-    return query
+    return RetrievedContext(text=text, sources=sources)
 
 
 async def _expand_and_render(

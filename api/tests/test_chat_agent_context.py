@@ -13,7 +13,6 @@ from app.schemas.chat import ChatSchema
 from tests.chat_models_access_support import credentials, settings
 
 USER_ID = UUID("00000000-0000-4000-8000-000000000002")
-LINKS = "Корисни линкови: Студентска служба"
 
 
 def _payload() -> ChatSchema:
@@ -28,22 +27,19 @@ def _payload() -> ChatSchema:
 
 
 @pytest.mark.anyio
-async def test_agent_mode_skips_pre_retrieval_and_points_agent_to_search(
+async def test_chat_points_agent_to_search_without_pre_retrieval(
     monkeypatch,
 ) -> None:
     contexts: list[str] = []
+    retrieval_credentials: list[object] = []
+    resolved = credentials(openai=True)
 
     async def resolve_credentials(*args, **kwargs):
-        return credentials(openai=True)
-
-    async def fail_if_retrieval_runs(*args, **kwargs):
-        raise AssertionError("agent mode must not pre-retrieve")
-
-    async def links(*args, **kwargs):
-        return LINKS
+        return resolved
 
     async def answer(payload, context, **kwargs):
         contexts.append(context)
+        retrieval_credentials.append(kwargs["retrieval_credentials"])
 
         async def body():
             yield 'event: token\ndata: {"text": "ok"}\n\n'
@@ -52,20 +48,12 @@ async def test_agent_mode_skips_pre_retrieval_and_points_agent_to_search(
         return StreamingResponse(body())
 
     monkeypatch.setattr(chat_api, "resolve_provider_credentials", resolve_credentials)
-    monkeypatch.setattr(
-        chat_api,
-        "get_retrieved_context_with_sources",
-        fail_if_retrieval_runs,
-    )
-    monkeypatch.setattr(chat_api, "get_links_context", links)
     monkeypatch.setattr(chat_api, "handle_chat", answer)
     monkeypatch.setattr(chat_api, "capture", lambda *args, **kwargs: None)
     request = cast(
         "Request",
         SimpleNamespace(
-            app=SimpleNamespace(
-                state=SimpleNamespace(settings=settings(retrieval_mode="agent")),
-            ),
+            app=SimpleNamespace(state=SimpleNamespace(settings=settings())),
             headers={"X-Distinct-Id": "test-distinct-id"},
         ),
     )
@@ -84,5 +72,7 @@ async def test_agent_mode_skips_pre_retrieval_and_points_agent_to_search(
 
     assert '"text": "ok"' in rendered
     assert "event: sources" not in rendered
+    assert "event: status" not in rendered
     [context] = contexts
-    assert context.endswith(f"\n\n{chat_api._AGENT_SEARCH_CONTEXT}\n\n{LINKS}")  # noqa: SLF001
+    assert context.endswith(f"\n\n{chat_api._AGENT_SEARCH_CONTEXT}")  # noqa: SLF001
+    assert retrieval_credentials == [resolved]

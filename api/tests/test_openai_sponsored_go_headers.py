@@ -320,6 +320,7 @@ def test_query_transform_forwards_conversation_to_sponsored_go_client(
         lambda: query_transform.transform_query(
             "query",
             Model.GPT_6_LUNA,
+            system_prompt="system",
             temperature=0.0,
             top_p=1.0,
             max_tokens=128,

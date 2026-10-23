@@ -7,15 +7,6 @@ from typing import Literal
 
 type LexicalSearchOutcome = Literal["skipped", "no_match", "matched", "error"]
 type RetrievalPath = Literal["none", "dense", "lexical", "hybrid"]
-type QueryTransformFallbackReason = Literal[
-    "not_run",
-    "not_requested",
-    "credential_missing",
-    "no_usable_variants",
-    "partial_variants",
-    "unchanged_variants",
-    "none",
-]
 type RerankerFallbackReason = Literal[
     "not_run", "none", "score_floor", "empty_or_invalid_response", "error"
 ]
@@ -82,7 +73,6 @@ class RequestTimings:
         self.lexical_only_final_count = 0
         self.retrieval_path: RetrievalPath = "none"
         self.reranker_fallback = False
-        self.query_transform_fallback_reason: QueryTransformFallbackReason = "not_run"
         self.reranker_fallback_reason: RerankerFallbackReason = "not_run"
         self.reranker_invalid_result_count = 0
         self.local_faq_recovery_outcome: LocalFaqRecoveryOutcome = "skipped"
@@ -147,7 +137,6 @@ class RequestTimings:
     def fallback_record(self) -> dict[str, object]:
         """Content-free, bounded diagnostics shared by retrieval and generation events."""
         return {
-            "query_transform_fallback_reason": self.query_transform_fallback_reason,
             "reranker_fallback": self.reranker_fallback,
             "reranker_fallback_reason": self.reranker_fallback_reason,
             "reranker_invalid_result_count": self.reranker_invalid_result_count,
@@ -227,12 +216,6 @@ def record_retrieval_selection(metrics: RetrievalSelectionMetrics) -> None:
             1000,
         )
         timings.retrieval_path = metrics.retrieval_path
-
-
-def record_query_transform_reason(reason: QueryTransformFallbackReason) -> None:
-    timings = _current.get()
-    if timings is not None:
-        timings.query_transform_fallback_reason = reason
 
 
 def record_local_faq_recovery(

@@ -12,9 +12,8 @@ from app.api import discord_storage as storage_api
 from app.api.discord_storage import DiscordStorage, DiscordWriteRegistry
 from app.data.connection import Database
 from app.data.discord_conversations import DiscordExchange
-from app.llms.retrieval_result import RetrievalSource, RetrievedContext
 from tests.chat_models_access_support import settings
-from tests.test_chat_pre_stream_outcomes import _consume, _stream
+from tests.test_chat_pre_stream_outcomes import _consume
 from tests.test_chat_pre_stream_outcomes import prepared as prepared_fixture
 from tests.test_chat_sponsored_admission import credentials
 
@@ -37,10 +36,9 @@ def discord_prepared(prepared, monkeypatch):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("phase", ["context", "links", "agent_setup"])
-async def test_accepted_pre_stream_failure_is_stored_once(discord_prepared, phase):
+async def test_accepted_pre_stream_failure_is_stored_once(discord_prepared):
     p = discord_prepared
-    p.mocks[phase].side_effect = RuntimeError("private provider error")
+    p.mocks["agent_setup"].side_effect = RuntimeError("private provider error")
     await _consume(p)
     (exchange,) = p.scheduled
     assert exchange.question == p.payload.query
@@ -48,13 +46,12 @@ async def test_accepted_pre_stream_failure_is_stored_once(discord_prepared, phas
     assert exchange.response_id == p.response_id
     assert exchange.history_generation == 4
     assert exchange.metadata["diagnostics"]["outcome"] == "provider_error"
+    assert exchange.metadata["sources"] == []
     assert "private provider error" not in str(exchange.metadata)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize(
-    "phase", ["credentials", "admission", "context", "agent_setup"]
-)
+@pytest.mark.parametrize("phase", ["credentials", "admission", "agent_setup"])
 async def test_cancellation_persists_only_after_admission(discord_prepared, phase):
     p = discord_prepared
     p.mocks["credentials"].return_value = credentials(openai=False)
@@ -71,7 +68,7 @@ async def test_cancellation_persists_only_after_admission(discord_prepared, phas
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
-    if phase in {"context", "agent_setup"}:
+    if phase == "agent_setup":
         (exchange,) = p.scheduled
         assert exchange.answer == ""
         assert exchange.metadata["diagnostics"]["outcome"] == "client_disconnect"
@@ -113,23 +110,6 @@ async def test_success_handoff_schedules_once_and_capture_precedes_credentials(
 
 
 @pytest.mark.anyio
-async def test_close_at_sources_before_generator_start_stores_once(discord_prepared):
-    p = discord_prepared
-    p.mocks["context"].return_value = RetrievedContext(
-        text="context",
-        effective_transform_mode=p.payload.query_transform_mode,
-        sources=(RetrievalSource(id="faq", kind="faq", title="Source"),),
-    )
-    stream = _stream(p)
-    assert "event: sources" in str(await anext(stream))
-    await stream.aclose()
-    (exchange,) = p.scheduled
-    assert exchange.answer == ""
-    assert exchange.metadata["diagnostics"]["outcome"] == "client_disconnect"
-    assert exchange.metadata["sources"][0]["id"] == "faq"
-
-
-@pytest.mark.anyio
 async def test_credential_denial_has_no_transcript(discord_prepared):
     p = discord_prepared
     p.mocks["credentials"].return_value = credentials(openai=False)
@@ -153,7 +133,6 @@ async def test_registry_drains_or_cancels_and_rejects_new_writes(monkeypatch, bl
         cast("Database", object()),
         exchange.conversation_id,
         exchange.user_id,
-        [],
         0,
         registry,
     )
@@ -212,7 +191,6 @@ async def test_lifespan_awaits_storage_before_database_disconnect(monkeypatch):
             app.state.db,
             exchange.conversation_id,
             exchange.user_id,
-            [],
             0,
             app.state.discord_writes,
         )
@@ -233,7 +211,6 @@ async def test_registry_suppression_is_normal_and_backend_logs_never_include_con
         cast("Database", object()),
         exchange.conversation_id,
         exchange.user_id,
-        [],
         0,
         registry,
     )
