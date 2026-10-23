@@ -214,6 +214,6 @@ describe('tool part persistence', () => {
     ]);
 
     expect(restored?.parts).toStrictEqual(message.parts);
-    expect(joinText(message)).toBe(`${PREAMBLE}${ANSWER}`);
+    expect(joinText(message)).toBe(`${PREAMBLE}\n\n${ANSWER}`);
   });
 });

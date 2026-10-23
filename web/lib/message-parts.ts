@@ -25,22 +25,31 @@ export const textParts = (message: MyUIMessage): TextPart[] =>
 export const reasoningParts = (message: MyUIMessage): ReasoningPart[] =>
   message.parts.filter(isReasoningPart);
 
+export const toolCallParts = (message: MyUIMessage): DynamicToolUIPart[] =>
+  message.parts.filter(isToolCallPart);
+
+export const hasToolCalls = (message: MyUIMessage): boolean =>
+  message.parts.some(isToolCallPart);
+
+// Text around tool calls forms separate segments of one answer; without tool calls,
+// extra text parts come from legacy streams and are joined as before.
 export const joinText = (message: MyUIMessage): string =>
   textParts(message)
     .map((part) => part.text)
-    .join('');
+    .filter((text) => !hasToolCalls(message) || text.trim() !== '')
+    .join(hasToolCalls(message) ? '\n\n' : '');
 
 export const lastText = (message: MyUIMessage): null | string =>
   textParts(message).at(-1)?.text ?? null;
+
+// The answer a user copies or a title is generated from: every segment when the
+// message has tool calls, otherwise the last text part (earlier ones are a legacy
+// pre-tool preamble that the UI hides).
+export const answerText = (message: MyUIMessage): null | string =>
+  hasToolCalls(message) ? joinText(message) || null : lastText(message);
 
 export const hasText = (message: MyUIMessage): boolean =>
   textParts(message).some((part) => part.text.length > 0);
 
 export const hasReasoning = (message: MyUIMessage): boolean =>
   reasoningParts(message).some((part) => part.text.length > 0);
-
-export const toolCallParts = (message: MyUIMessage): DynamicToolUIPart[] =>
-  message.parts.filter(isToolCallPart);
-
-export const hasToolCalls = (message: MyUIMessage): boolean =>
-  message.parts.some(isToolCallPart);

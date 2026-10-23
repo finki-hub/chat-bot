@@ -5,7 +5,7 @@ import type {
   MyUIMessage,
 } from '@/lib/api-types';
 
-import { joinText, lastText } from '@/lib/message-parts';
+import { answerText, joinText } from '@/lib/message-parts';
 
 const TITLE_CONTEXT_TURNS = 4;
 
@@ -18,7 +18,7 @@ type ChatTitleTranslateInput = {
 const toTurn = (message: MyUIMessage): ConversationTurn => {
   const role = message.role === 'assistant' ? 'assistant' : 'user';
   const content =
-    (role === 'assistant' ? lastText(message) : joinText(message)) ?? '';
+    (role === 'assistant' ? answerText(message) : joinText(message)) ?? '';
 
   return { content, role };
 };
