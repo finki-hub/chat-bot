@@ -27,6 +27,8 @@ export type ChatClientBody = {
   trigger?: string;
 };
 
+export type ToolCallOutput = { summary: string };
+
 export type UiStreamMeta = {
   inferenceModel?: string;
   replacementMessageId?: string;
@@ -51,6 +53,26 @@ export type UiStreamPart =
     }
   | { delta: string; id: string; type: 'reasoning-delta' }
   | { delta: string; id: string; type: 'text-delta' }
+  | {
+      dynamic: true;
+      errorText: string;
+      toolCallId: string;
+      type: 'tool-output-error';
+    }
+  | {
+      dynamic: true;
+      input: Record<string, unknown>;
+      title: string;
+      toolCallId: string;
+      toolName: string;
+      type: 'tool-input-available';
+    }
+  | {
+      dynamic: true;
+      output: ToolCallOutput;
+      toolCallId: string;
+      type: 'tool-output-available';
+    }
   | { id: string; type: 'reasoning-end' }
   | { id: string; type: 'reasoning-start' }
   | { id: string; type: 'text-end' }
@@ -161,6 +183,70 @@ const createStreamPart = (
   };
 };
 
+type StatusEvent = Extract<ParsedEvent, { type: 'status' }>;
+type ToolCallEvent = Extract<ParsedEvent, { type: 'tool_call' }>;
+type ToolResultEvent = Extract<ParsedEvent, { type: 'tool_result' }>;
+
+const createToolCalls = (writer: UiStreamWriter) => {
+  const seen = new Set<string>();
+  // Owns the tool lifecycle and the `status` frames that duplicate it. The SDK throws on
+  // a result for an unknown call id, so only pending calls resolve.
+  const pending = new Set<string>();
+
+  return {
+    call(event: ToolCallEvent): void {
+      seen.add(event.id);
+      pending.add(event.id);
+      writer.write({
+        dynamic: true,
+        input: event.input,
+        title: event.label,
+        toolCallId: event.id,
+        toolName: event.name,
+        type: 'tool-input-available',
+      });
+    },
+    isNew: (id: string): boolean => !seen.has(id),
+    result(event: ToolResultEvent): void {
+      if (!pending.delete(event.id)) {
+        return;
+      }
+
+      writer.write(
+        event.ok
+          ? {
+              dynamic: true,
+              output: { summary: event.summary },
+              toolCallId: event.id,
+              type: 'tool-output-available',
+            }
+          : {
+              dynamic: true,
+              errorText: event.summary,
+              toolCallId: event.id,
+              type: 'tool-output-error',
+            },
+      );
+    },
+    status(event: StatusEvent): void {
+      // Tool statuses duplicate the inline tool parts once the API sends them.
+      if (event.tool !== undefined && seen.size > 0) {
+        return;
+      }
+
+      writer.write({
+        data: {
+          label: event.label,
+          ...(event.stage !== undefined && { stage: event.stage }),
+          ...(event.tool !== undefined && { tool: event.tool }),
+        },
+        transient: true,
+        type: 'data-status',
+      });
+    },
+  };
+};
+
 const drain = async (
   events: AsyncIterable<ParsedEvent>,
   handle: (event: ParsedEvent) => void,
@@ -188,6 +274,7 @@ export const translateToUiStream = async (
 
   const textPart = createStreamPart(writer, idGen, 'text');
   const reasoningPart = createStreamPart(writer, idGen, 'reasoning');
+  const toolCalls = createToolCalls(writer);
   let stopped = false;
 
   const handleEvent = (event: ParsedEvent): void => {
@@ -240,15 +327,7 @@ export const translateToUiStream = async (
         break;
 
       case 'status':
-        writer.write({
-          data: {
-            label: event.label,
-            ...(event.stage !== undefined && { stage: event.stage }),
-            ...(event.tool !== undefined && { tool: event.tool }),
-          },
-          transient: true,
-          type: 'data-status',
-        });
+        toolCalls.status(event);
         break;
 
       case 'thinking':
@@ -264,6 +343,20 @@ export const translateToUiStream = async (
           textPart.appendDelta(event.text);
         }
 
+        break;
+
+      case 'tool_call':
+        if (!stopped && toolCalls.isNew(event.id)) {
+          // Ending the open parts makes text after the call start a new segment.
+          reasoningPart.end();
+          textPart.end();
+          toolCalls.call(event);
+        }
+
+        break;
+
+      case 'tool_result':
+        toolCalls.result(event);
         break;
 
       default:

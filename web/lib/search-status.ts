@@ -22,12 +22,14 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   faq_search: MessageCircleQuestion,
   search_docs: FileText,
   search_documents: FileText,
+  search_knowledge_base: Search,
 };
 
 const TOOL_LABELS: Record<string, string> = {
   faq_search: t('searchTool.faq_search'),
   search_docs: t('searchTool.search_docs'),
   search_documents: t('searchTool.search_documents'),
+  search_knowledge_base: t('searchTool.search_knowledge_base'),
 };
 /* eslint-enable camelcase -- keys are backend tool names, not camelCase identifiers */
 

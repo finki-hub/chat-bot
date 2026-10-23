@@ -218,6 +218,19 @@ export type ProtocolV2Event =
       event: 'meta';
     }
   | {
+      data: {
+        id: string;
+        input: Record<string, unknown>;
+        label: string;
+        name: string;
+      };
+      event: 'tool_call';
+    }
+  | {
+      data: { id: string; name: string; ok: boolean; summary: string };
+      event: 'tool_result';
+    }
+  | {
       data: { label: string; stage?: string; state: string; tool?: string };
       event: 'status';
     }

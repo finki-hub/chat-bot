@@ -1,3 +1,5 @@
+import type { DynamicToolUIPart } from 'ai';
+
 import type { MyUIMessage } from '@/lib/api-types';
 
 type MessagePart = MyUIMessage['parts'][number];
@@ -10,6 +12,9 @@ type TextPart = { text: string; type: 'text' };
 
 const isTextPart = (part: MessagePart): part is TextPart =>
   part.type === 'text';
+
+export const isToolCallPart = (part: MessagePart): part is DynamicToolUIPart =>
+  part.type === 'dynamic-tool';
 
 const isReasoningPart = (part: MessagePart): part is ReasoningPart =>
   part.type === 'reasoning';
@@ -33,3 +38,9 @@ export const hasText = (message: MyUIMessage): boolean =>
 
 export const hasReasoning = (message: MyUIMessage): boolean =>
   reasoningParts(message).some((part) => part.text.length > 0);
+
+export const toolCallParts = (message: MyUIMessage): DynamicToolUIPart[] =>
+  message.parts.filter(isToolCallPart);
+
+export const hasToolCalls = (message: MyUIMessage): boolean =>
+  message.parts.some(isToolCallPart);

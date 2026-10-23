@@ -1,3 +1,4 @@
+import { readUIMessageStream, type UIMessageChunk } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 /* eslint-disable camelcase -- fixtures mirror the Python SSE wire contract. */
@@ -448,6 +449,261 @@ describe('translateToUiStream', () => {
       textStart(T1),
       textDelta(T1, 'Одговор'),
       textEnd(T1),
+    ]);
+  });
+});
+
+const searchCall = (id: string, query: string): ParsedEvent => ({
+  id,
+  input: { query },
+  label: `Пребарувам: ${query}`,
+  name: 'search_knowledge_base',
+  type: 'tool_call',
+});
+
+const searchResult = (
+  id: string,
+  ok: boolean,
+  summary: string,
+): ParsedEvent => ({
+  id,
+  name: 'search_knowledge_base',
+  ok,
+  summary,
+  type: 'tool_result',
+});
+
+const toolInput = (id: string, query: string): UiStreamPart => ({
+  dynamic: true,
+  input: { query },
+  title: `Пребарувам: ${query}`,
+  toolCallId: id,
+  toolName: 'search_knowledge_base',
+  type: 'tool-input-available',
+});
+
+const toolOutput = (id: string, summary: string): UiStreamPart => ({
+  dynamic: true,
+  output: { summary },
+  toolCallId: id,
+  type: 'tool-output-available',
+});
+
+const toolStatus: ParsedEvent = {
+  label: 'Пребарувам…',
+  state: 'tool_call',
+  tool: 'search_knowledge_base',
+  type: 'status',
+};
+
+const toolStatusPart: UiStreamPart = {
+  data: { label: 'Пребарувам…', tool: 'search_knowledge_base' },
+  transient: true,
+  type: 'data-status',
+};
+
+// Replays the non-transient chunks through the real SDK reader to check the parts.
+const toUiMessage = async (
+  writer: FakeWriter,
+): Promise<MyUIMessage | undefined> => {
+  const stream = new ReadableStream<UIMessageChunk>({
+    start(controller) {
+      for (const part of writer.parts) {
+        if (!('transient' in part)) {
+          controller.enqueue(part);
+        }
+      }
+
+      controller.close();
+    },
+  });
+  const messages = readUIMessageStream<MyUIMessage>({ stream });
+  let last: MyUIMessage | undefined;
+
+  for await (const message of messages) {
+    last = message;
+  }
+
+  return last;
+};
+
+describe('translateToUiStream tool calls', () => {
+  it('interleaves text segments with dynamic tool parts', async () => {
+    const writer = new FakeWriter();
+
+    await translateToUiStream(
+      events(
+        { text: 'Ќе проверам.', type: 'token' },
+        toolStatus,
+        searchCall('c1', 'упис'),
+        searchResult('c1', true, 'Пронајдени 4 извори'),
+        { text: 'Одговор.', type: 'token' },
+        DONE,
+      ),
+      writer,
+      {},
+      ids(),
+    );
+
+    expect(writer.parts).toStrictEqual([
+      startWith({}),
+      textStart(T1),
+      textDelta(T1, 'Ќе проверам.'),
+      toolStatusPart,
+      textEnd(T1),
+      toolInput('c1', 'упис'),
+      toolOutput('c1', 'Пронајдени 4 извори'),
+      textStart(T2),
+      textDelta(T2, 'Одговор.'),
+      textEnd(T2),
+    ]);
+
+    const message = await toUiMessage(writer);
+
+    expect(message?.parts.map((part) => part.type)).toStrictEqual([
+      'text',
+      'dynamic-tool',
+      'text',
+    ]);
+  });
+
+  it('resolves parallel calls out of order and drops later tool statuses', async () => {
+    const writer = new FakeWriter();
+
+    await translateToUiStream(
+      events(
+        searchCall('c1', 'упис'),
+        searchCall('c2', 'стипендии'),
+        toolStatus,
+        searchResult('c2', true, 'Пронајдени 2 извори'),
+        searchResult('c1', true, 'Пронајдени 3 извори'),
+        {
+          label: 'Пребарување…',
+          stage: 'retrieve',
+          state: 'stage',
+          type: 'status',
+        },
+        { text: 'Одговор.', type: 'token' },
+        DONE,
+      ),
+      writer,
+      {},
+      ids(),
+    );
+
+    expect(writer.parts).toStrictEqual([
+      startWith({}),
+      toolInput('c1', 'упис'),
+      toolInput('c2', 'стипендии'),
+      toolOutput('c2', 'Пронајдени 2 извори'),
+      toolOutput('c1', 'Пронајдени 3 извори'),
+      {
+        data: { label: 'Пребарување…', stage: 'retrieve' },
+        transient: true,
+        type: 'data-status',
+      },
+      textStart(T1),
+      textDelta(T1, 'Одговор.'),
+      textEnd(T1),
+    ]);
+
+    const message = await toUiMessage(writer);
+    const toolStates = message?.parts.flatMap((part) =>
+      part.type === 'dynamic-tool' ? [[part.toolCallId, part.state]] : [],
+    );
+
+    expect(toolStates).toStrictEqual([
+      ['c1', 'output-available'],
+      ['c2', 'output-available'],
+    ]);
+  });
+
+  it('maps a failed result to tool-output-error', async () => {
+    const writer = new FakeWriter();
+
+    await translateToUiStream(
+      events(
+        searchCall('c1', 'упис'),
+        searchResult('c1', false, 'Пребарувањето не успеа'),
+        DONE,
+      ),
+      writer,
+      {},
+      ids(),
+    );
+
+    expect(writer.parts).toStrictEqual([
+      startWith({}),
+      toolInput('c1', 'упис'),
+      {
+        dynamic: true,
+        errorText: 'Пребарувањето не успеа',
+        toolCallId: 'c1',
+        type: 'tool-output-error',
+      },
+    ]);
+
+    const message = await toUiMessage(writer);
+
+    expect(message?.parts[0]).toMatchObject({
+      errorText: 'Пребарувањето не успеа',
+      state: 'output-error',
+      type: 'dynamic-tool',
+    });
+  });
+
+  it('ignores duplicate calls and results for unknown or resolved calls', async () => {
+    const writer = new FakeWriter();
+
+    await translateToUiStream(
+      events(
+        searchResult('c0', true, 'никој'),
+        searchCall('c1', 'упис'),
+        searchCall('c1', 'упис'),
+        searchResult('c1', true, 'прв'),
+        searchResult('c1', true, 'втор'),
+        DONE,
+      ),
+      writer,
+      {},
+      ids(),
+    );
+
+    expect(writer.parts).toStrictEqual([
+      startWith({}),
+      toolInput('c1', 'упис'),
+      toolOutput('c1', 'прв'),
+    ]);
+  });
+
+  it('keeps forwarding tool statuses and reset on the legacy path', async () => {
+    const writer = new FakeWriter();
+
+    await translateToUiStream(
+      events(
+        toolStatus,
+        { text: 'преамбула', type: 'token' },
+        { type: 'reset' },
+        toolStatus,
+        { text: 'одговор', type: 'token' },
+        DONE,
+      ),
+      writer,
+      {},
+      ids(),
+    );
+
+    expect(writer.parts).toStrictEqual([
+      startWith({}),
+      toolStatusPart,
+      textStart(T1),
+      textDelta(T1, 'преамбула'),
+      textEnd(T1),
+      { data: {}, transient: true, type: 'data-reset' },
+      toolStatusPart,
+      textStart(T2),
+      textDelta(T2, 'одговор'),
+      textEnd(T2),
     ]);
   });
 });

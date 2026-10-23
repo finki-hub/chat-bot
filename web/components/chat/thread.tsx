@@ -15,7 +15,12 @@ import {
 import { AssistantMessage, MessageError } from '@/components/chat/message';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { t } from '@/lib/i18n';
-import { hasReasoning, hasText, joinText } from '@/lib/message-parts';
+import {
+  hasReasoning,
+  hasText,
+  hasToolCalls,
+  joinText,
+} from '@/lib/message-parts';
 
 export type ThreadProps = {
   activeError?: ErrorNotice;
@@ -156,7 +161,8 @@ export const Thread = ({
                 m.role === 'assistant' &&
                 m.id === lastAssistantId &&
                 !hasText(m) &&
-                !hasReasoning(m)
+                !hasReasoning(m) &&
+                !hasToolCalls(m)
               ) {
                 return null;
               }

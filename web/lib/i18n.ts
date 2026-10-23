@@ -107,6 +107,7 @@ export const messages = {
   'searchTool.faq_search': 'Барам во прашања…',
   'searchTool.search_docs': 'Барам во документи…',
   'searchTool.search_documents': 'Барам во документи…',
+  'searchTool.search_knowledge_base': 'Барам во базата на знаење…',
   'service.unavailable':
     'Услугата е привремено недостапна. Чатот не е достапен во моментов.',
   'settings.apiKey': 'API клуч',
@@ -168,6 +169,12 @@ export const messages = {
   'thread.firstToken': 'прв токен',
   'thread.reasoning': 'Размислување',
   'thread.thinking': 'Размислување…',
+  'toolCall.done': 'Завршено',
+  'toolCall.failed': 'Неуспешно',
+  'toolCall.incomplete': 'Прекинато',
+  'toolCall.input': 'Барање',
+  'toolCall.result': 'Резултат',
+  'toolCall.running': 'Во тек',
 } as const;
 
 export type TKey = keyof typeof messages;
