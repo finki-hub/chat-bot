@@ -13,21 +13,18 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isResolved = (part: DynamicToolUIPart): boolean =>
   part.state === 'output-available' || part.state === 'output-error';
 
-// Unresolved calls that the stream has already moved past: answer text or a
-// resolved call follows them, so they will not resolve any more.
+// Unresolved calls the model has already answered past: answer text follows them, so
+// they will not resolve any more. A later call resolving first proves nothing, since
+// parallel calls finish in any order.
 export const supersededToolCalls = (message: MyUIMessage): Set<string> => {
   const superseded = new Set<string>();
-  let progressed = false;
+  let answered = false;
 
   for (const part of message.parts.toReversed()) {
-    if (isToolCallPart(part)) {
-      if (isResolved(part)) {
-        progressed = true;
-      } else if (progressed) {
-        superseded.add(part.toolCallId);
-      }
-    } else if (part.type === 'text' && part.text.trim() !== '') {
-      progressed = true;
+    if (part.type === 'text' && part.text.trim() !== '') {
+      answered = true;
+    } else if (answered && isToolCallPart(part) && !isResolved(part)) {
+      superseded.add(part.toolCallId);
     }
   }
 

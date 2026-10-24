@@ -177,7 +177,7 @@ describe('AssistantMessage tool calls', () => {
 });
 
 describe('AssistantMessage tool-call progress', () => {
-  it('stops spinning a call once later parts follow it', () => {
+  it('stops spinning a call once answer text follows it', () => {
     const { rerender } = render(
       <AssistantMessage
         message={assistant([call('c1'), { text: ANSWER, type: 'text' }])}
@@ -194,7 +194,8 @@ describe('AssistantMessage tool-call progress', () => {
       />,
     );
 
-    expect(toolStates()).toStrictEqual(['incomplete', 'done']);
+    // Parallel calls resolve in any order, so c1 is still running.
+    expect(toolStates()).toStrictEqual(['running', 'done']);
 
     rerender(
       <AssistantMessage
