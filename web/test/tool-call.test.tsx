@@ -26,6 +26,9 @@ const TOOL_STATUS = { label: 'Пребарувам…', tool: 'search_knowledge_
 const RETRIEVE_STATUS = { ...TOOL_STATUS, stage: 'retrieve' };
 
 const TOOL_CALL = 'tool-call';
+const SUMMARY_ROW = 'tool-call-summary';
+const PANEL = 'tool-call-panel';
+const ANSWER_TEXT = 'answer-text';
 const TYPING = 'typing-indicator';
 const ACTIONS_STUB = 'answer-actions-stub';
 const ACTIONS = <div data-testid={ACTIONS_STUB} />;
@@ -80,7 +83,7 @@ describe('AssistantMessage tool calls', () => {
       child instanceof HTMLElement ? (child.dataset['testid'] ?? '') : '',
     );
 
-    expect(order).toStrictEqual(['answer-text', 'tool-call', 'answer-text']);
+    expect(order).toStrictEqual([ANSWER_TEXT, 'tool-call', ANSWER_TEXT]);
     expect(parts).toHaveTextContent(PREAMBLE);
     expect(parts).toHaveTextContent(ANSWER);
   });
@@ -92,18 +95,19 @@ describe('AssistantMessage tool calls', () => {
     const toggle = screen.getByRole('button', { name: new RegExp(LABEL, 'u') });
 
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByTestId('tool-call-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId(PANEL)).not.toBeInTheDocument();
 
     await user.click(toggle);
 
-    const panel = screen.getByTestId('tool-call-panel');
+    const panel = screen.getByTestId(PANEL);
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(panel).toHaveTextContent(QUERY);
     expect(panel).toHaveTextContent(SUMMARY);
   });
 
-  it('shows running, done, error and interrupted states', () => {
+  it('shows running, done, error and interrupted states', async () => {
+    const user = userEvent.setup();
     const { rerender } = render(
       <AssistantMessage
         message={assistant([call('c1', DONE), call('c2')])}
@@ -121,6 +125,7 @@ describe('AssistantMessage tool calls', () => {
         message={assistant([call('c1'), call('c2', FAILED)])}
       />,
     );
+    await user.click(screen.getByTestId(SUMMARY_ROW));
 
     expect(states()).toStrictEqual(['incomplete', 'error']);
     expect(screen.getAllByTestId(TOOL_CALL)[1]).toHaveTextContent('Неуспешно');
@@ -148,7 +153,7 @@ describe('AssistantMessage tool calls', () => {
       />,
     );
 
-    expect(screen.getByTestId('answer-text')).toHaveTextContent(PREAMBLE);
+    expect(screen.getByTestId(ANSWER_TEXT)).toHaveTextContent(PREAMBLE);
   });
 
   it('shows the typing indicator while the model writes after resolved calls', () => {
@@ -302,7 +307,7 @@ describe('AssistantMessage tool-call progress', () => {
 
     expect(toggle).toHaveAttribute(
       'aria-controls',
-      screen.getByTestId('tool-call-panel').id,
+      screen.getByTestId(PANEL).id,
     );
   });
 
@@ -318,10 +323,166 @@ describe('AssistantMessage tool-call progress', () => {
       screen.getByRole('button', { name: new RegExp(LABEL, 'u') }),
     );
 
-    const panel = screen.getByTestId('tool-call-panel');
+    const panel = screen.getByTestId(PANEL);
 
     expect(panel).not.toHaveTextContent('Барање');
     expect(panel).toHaveTextContent(SUMMARY);
+  });
+});
+
+const dataCall = (toolCallId: string): DynamicToolUIPart => ({
+  input: {},
+  output: { summary: '' },
+  state: DONE,
+  title: 'Предмети',
+  toolCallId,
+  toolName: 'list_courses',
+  type: 'dynamic-tool',
+});
+
+const FIRST_LABEL = 'Пребарувам: рокови';
+
+const withSummary = (part: DynamicToolUIPart, summary: string) =>
+  ({ ...part, output: { summary } }) as DynamicToolUIPart;
+
+describe('AssistantMessage finished tool-call summary', () => {
+  it('collapses several finished calls into one summary row', async () => {
+    const user = userEvent.setup();
+    render(
+      <AssistantMessage
+        message={assistant([
+          { ...call('c1', DONE), title: FIRST_LABEL },
+          call('c2', DONE),
+          dataCall('c3'),
+          { text: ANSWER, type: 'text' },
+        ])}
+      />,
+    );
+
+    const summary = screen.getByTestId(SUMMARY_ROW);
+
+    expect(summary).toHaveTextContent('2 пребарувања · 1 алатка');
+    expect(summary).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId(TOOL_CALL)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tool-call-problems')).not.toBeInTheDocument();
+
+    await user.click(summary);
+
+    expect(summary).toHaveAttribute('aria-expanded', 'true');
+    expect(toolStates()).toStrictEqual(['done', 'done', 'done']);
+
+    await user.click(
+      screen.getByRole('button', { name: new RegExp(FIRST_LABEL, 'u') }),
+    );
+
+    expect(screen.getByTestId(PANEL)).toHaveTextContent(SUMMARY);
+  });
+
+  it('keeps individual rows live while the message is pending', () => {
+    render(
+      <AssistantMessage
+        message={assistant([call('c1', DONE), call('c2', DONE), call('c3')])}
+        pending
+      />,
+    );
+
+    expect(screen.queryByTestId(SUMMARY_ROW)).not.toBeInTheDocument();
+    expect(toolStates()).toStrictEqual(['done', 'done', 'running']);
+  });
+
+  it('keeps a single finished call as its own row', () => {
+    render(
+      <AssistantMessage
+        message={assistant([call('c1', DONE), { text: ANSWER, type: 'text' }])}
+      />,
+    );
+
+    expect(screen.queryByTestId(SUMMARY_ROW)).not.toBeInTheDocument();
+    expect(toolStates()).toStrictEqual(['done']);
+  });
+
+  it('counts failed and interrupted calls in the summary', () => {
+    render(
+      <AssistantMessage
+        message={assistant([
+          call('c1', DONE),
+          call('c2', FAILED),
+          call('c3'),
+          call('c4', DONE),
+        ])}
+      />,
+    );
+
+    expect(screen.getByTestId(SUMMARY_ROW)).toHaveTextContent('4 пребарувања');
+    expect(screen.getByTestId('tool-call-problems')).toHaveTextContent(
+      '2 неуспешни или прекинати',
+    );
+  });
+
+  it('uses the singular for one search among data tools', () => {
+    render(
+      <AssistantMessage
+        message={assistant([call('c1', DONE), dataCall('c2'), dataCall('c3')])}
+      />,
+    );
+
+    expect(screen.getByTestId(SUMMARY_ROW)).toHaveTextContent(
+      '1 пребарување · 2 алатки',
+    );
+  });
+
+  it('collapses each run of calls separately around text', () => {
+    render(
+      <AssistantMessage
+        message={assistant([
+          call('c1', DONE),
+          call('c2', DONE),
+          { text: PREAMBLE, type: 'text' },
+          call('c3', DONE),
+          { text: ANSWER, type: 'text' },
+        ])}
+      />,
+    );
+
+    const order = [...screen.getByTestId('answer-parts').children].map(
+      (child) =>
+        child instanceof HTMLElement ? (child.dataset['testid'] ?? '') : '',
+    );
+
+    expect(order).toStrictEqual([
+      'tool-call-group',
+      ANSWER_TEXT,
+      'tool-call',
+      ANSWER_TEXT,
+    ]);
+  });
+});
+
+describe('ToolCall result count', () => {
+  it.each([
+    ['Пронајдени извори: 6', '6 извори'],
+    ['Пронајдени извори: 1', '1 извор'],
+    ['Нема пронајдени извори', 'нема извори'],
+    ['Пронајдени се делумно поврзани извори', 'делумно поврзани'],
+  ])('shows %s as %s on the row header', (summary, badge) => {
+    render(
+      <AssistantMessage
+        message={assistant([withSummary(call('c1', DONE), summary)])}
+      />,
+    );
+
+    expect(screen.getByTestId('tool-call-count')).toHaveTextContent(badge);
+  });
+
+  it('shows no count for data tools or unfinished searches', () => {
+    render(
+      <AssistantMessage
+        message={assistant([dataCall('c1'), call('c2')])}
+        pending
+      />,
+    );
+
+    expect(screen.queryByTestId('tool-call-count')).not.toBeInTheDocument();
   });
 });
 

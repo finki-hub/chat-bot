@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
@@ -67,5 +67,129 @@ describe('SourceCards', () => {
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(cardButton).toHaveAttribute('aria-expanded', 'true');
+  });
+});
+
+const RULES = 'Правилник за студии';
+const RULES_URL = 'https://finki.ukim.mk/rules.pdf';
+const chunk = (
+  id: string,
+  extra: Partial<RetrievedSource> = {},
+): RetrievedSource => ({
+  authorityUrl: RULES_URL,
+  id,
+  kind: 'chunk',
+  links: [{ label: RULES, url: RULES_URL }],
+  snippet: `Текст ${id}`,
+  title: RULES,
+  ...extra,
+});
+const faq = (id: string): RetrievedSource => ({
+  id,
+  kind: 'faq',
+  snippet: `Одговор ${id}`,
+  title: 'Упис',
+});
+
+describe('SourceCards grouping', () => {
+  it('groups chunks of one document into a card in first-appearance order', async () => {
+    const user = userEvent.setup();
+    render(
+      <SourceCards
+        complete
+        sources={[
+          faq('q1'),
+          chunk('c1', { chunkIndex: 30, section: 'Член 26' }),
+          faq('q2'),
+          chunk('c2', { chunkIndex: 31, section: 'Член 27' }),
+          chunk('c3', { chunkIndex: 32, section: 'Член 26' }),
+        ]}
+      />,
+    );
+
+    const toggle = screen.getByRole('button', { name: 'Прикажи извори' });
+
+    expect(toggle).toHaveTextContent('3');
+
+    await user.click(toggle);
+    const panel = toggle.nextElementSibling;
+
+    expect(panel).toHaveAttribute('id', toggle.getAttribute('aria-controls'));
+    expect(
+      [...(panel?.children ?? [])].map((item) => item.textContent),
+    ).toStrictEqual([
+      expect.stringContaining('Упис'),
+      expect.stringContaining(RULES),
+      expect.stringContaining('Упис'),
+    ]);
+
+    const card = screen.getByTestId('source-document');
+    const sections = within(card).getByRole('list', { name: 'Делови' });
+
+    expect(
+      within(sections)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toStrictEqual(['Член 26', 'Член 27']);
+    expect(
+      within(card).getAllByRole('link', { name: `Врска: ${RULES}` }),
+    ).toHaveLength(1);
+    expect(within(card).getAllByText(RULES)).toHaveLength(1);
+  });
+
+  it('expands a grouped document to every chunk snippet', async () => {
+    const user = userEvent.setup();
+    render(
+      <SourceCards
+        complete
+        sources={[chunk('c1', { section: 'Член 26' }), chunk('c2')]}
+      />,
+    );
+
+    const card = screen.getByTestId('source-document');
+    const toggle = within(card).getByRole('button');
+
+    expect(
+      screen.getByRole('button', { name: 'Сокриј извори' }),
+    ).toHaveTextContent('1');
+    expect(within(card).queryByText('Текст c1')).not.toBeInTheDocument();
+
+    await user.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(within(card).getByText('Текст c1')).toBeInTheDocument();
+    expect(within(card).getByText('Текст c2')).toBeInTheDocument();
+  });
+
+  it('counts parts when the chunks have no sections', () => {
+    render(
+      <SourceCards
+        complete
+        sources={[
+          chunk('c1', { links: [] }),
+          chunk('c2', { links: [] }),
+          chunk('c3', { links: [] }),
+        ]}
+      />,
+    );
+
+    const card = screen.getByTestId('source-document');
+
+    expect(card).toHaveTextContent('3 делови');
+    expect(
+      within(card).getByRole('link', { name: `Врска: ${RULES}` }),
+    ).toHaveAttribute('href', RULES_URL);
+  });
+
+  it('keeps a single chunk per document as a plain card', () => {
+    render(
+      <SourceCards
+        complete
+        sources={[chunk('c1', { section: 'Член 26' }), faq('q1')]}
+      />,
+    );
+
+    expect(screen.queryByTestId('source-document')).not.toBeInTheDocument();
+    expect(screen.getByText(`${RULES} · Член 26`)).toBeInTheDocument();
   });
 });
