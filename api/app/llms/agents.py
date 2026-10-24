@@ -493,6 +493,13 @@ def _finish_reason(output: object) -> str:
     return mapping.get(str(raw), str(raw))
 
 
+# create_agent compiles a high step limit, but a config passed at run time falls back
+# to LangChain's default of 25 graph steps. The agent takes several steps per model
+# turn, so 25 cut answers off after four or five tool rounds; the model and tool call
+# limits in app.llms.tools are what should end a run.
+AGENT_RECURSION_LIMIT = 200
+
+
 async def create_agent_token_generator[ResponseT](
     agent: CompiledStateGraph[
         AgentState[ResponseT], None, InputAgentState, OutputAgentState[ResponseT]
@@ -524,7 +531,10 @@ async def create_agent_token_generator[ResponseT](
         async with closing_stream(
             agent.astream_events(
                 agent_input,
-                {"configurable": {"thread_id": "default"}},
+                {
+                    "configurable": {"thread_id": "default"},
+                    "recursion_limit": AGENT_RECURSION_LIMIT,
+                },
                 version="v2",
             ),
         ) as events:
