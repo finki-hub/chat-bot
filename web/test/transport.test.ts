@@ -90,8 +90,6 @@ describe('buildChatTransport', () => {
       embeddingsModel: 'BAAI/bge-m3',
       maxTokens: 2_048,
       model: GPT_MODEL,
-      queryTransformMode: 'rewrite_hyde',
-      queryTransformModel: GPT_MODEL,
       temperature: 0.5,
       topP: 0.9,
     });
@@ -105,8 +103,6 @@ describe('buildChatTransport', () => {
       embeddingsModel: 'BAAI/bge-m3',
       maxTokens: 2_048,
       model: GPT_MODEL,
-      queryTransformMode: 'rewrite_hyde',
-      queryTransformModel: GPT_MODEL,
       temperature: 0.5,
       topP: 0.9,
     });
