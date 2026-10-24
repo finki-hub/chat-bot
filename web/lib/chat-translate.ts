@@ -174,11 +174,10 @@ const createStreamPart = (
   };
 };
 
-type StatusEvent = Extract<ParsedEvent, { type: 'status' }>;
-type ToolCallEvent = Extract<ParsedEvent, { type: 'tool_call' }>;
-type ToolResultEvent = Extract<ParsedEvent, { type: 'tool_result' }>;
-
 const createToolCalls = (writer: UiStreamWriter) => {
+  type ToolResultEvent = Extract<ParsedEvent, { type: 'tool_result' }>;
+  type ToolCallEvent = Extract<ParsedEvent, { type: 'tool_call' }>;
+  type StatusEvent = Extract<ParsedEvent, { type: 'status' }>;
   const seen = new Set<string>();
   // Owns the tool lifecycle and the `status` frames that duplicate it. The SDK throws on
   // a result for an unknown call id, so only pending calls resolve.

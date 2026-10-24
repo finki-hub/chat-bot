@@ -19,12 +19,12 @@ const isAbortError = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'AbortError';
 
 const shareUrlFromResponseBody = (body: unknown): null | string =>
-  !isRecord(body) || typeof body['shareToken'] !== 'string'
-    ? null
-    : new URL(
+  isRecord(body) && typeof body['shareToken'] === 'string'
+    ? new URL(
         `/share/${encodeURIComponent(body['shareToken'])}`,
         location.origin,
-      ).href;
+      ).href
+    : null;
 
 export const useConversationSharing = (conversationId: null | string) => {
   const [state, setState] = useState<ConversationShareState>({

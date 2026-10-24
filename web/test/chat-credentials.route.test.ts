@@ -9,27 +9,24 @@ import { ChatStateRequestError as ChatStateRequestErrorForTest } from '@/lib/cha
 
 /* eslint-disable camelcase -- Route tests assert the Python API wire contract. */
 
-type DeleteCredentialInput = {
-  readonly provider: ChatCredentialProvider;
-  readonly userId: string;
-};
-
-type ListCredentialsInput = {
-  readonly userId: string;
-};
-
-type UpsertCredentialInput = {
-  readonly apiKey: string;
-  readonly baseUrl?: null | string;
-  readonly provider: ChatCredentialProvider;
-  readonly userId: string;
-};
-
 const {
   createChatStateClientMock,
   getAuthenticatedChatUserIdMock,
   stateClientMock,
 } = vi.hoisted(() => {
+  type DeleteCredentialInput = {
+    readonly provider: ChatCredentialProvider;
+    readonly userId: string;
+  };
+  type UpsertCredentialInput = {
+    readonly apiKey: string;
+    readonly baseUrl?: null | string;
+    readonly provider: ChatCredentialProvider;
+    readonly userId: string;
+  };
+  type ListCredentialsInput = {
+    readonly userId: string;
+  };
   const client = {
     deleteCredential: vi.fn<(input: DeleteCredentialInput) => Promise<void>>(),
     listCredentials:

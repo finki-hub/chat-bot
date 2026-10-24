@@ -66,10 +66,13 @@ const regenerationRequest = (): Request =>
   });
 
 describe('POST /api/chat', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules();
     resetRouteMocks();
     installRouteMocks();
+    // Finish loading the route and its partial mocks before a request test starts.
+    // Otherwise a timed-out cold import can resume inside the next test's fetch mock.
+    await importPost();
   });
 
   afterEach(() => {

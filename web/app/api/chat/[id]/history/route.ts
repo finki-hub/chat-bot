@@ -14,16 +14,6 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-type HistoryConversation = {
-  readonly activeStream: null | {
-    readonly id: string;
-    readonly replacementMessageId: null | string;
-  };
-  readonly id: string;
-  readonly model: ModelId | null;
-  readonly title: null | string;
-};
-
 type RouteContext = {
   readonly params: Promise<{ readonly id: string }>;
 };
@@ -38,6 +28,15 @@ export const GET = async (
   const chatState = createChatStateClient();
 
   try {
+    type HistoryConversation = {
+      readonly activeStream: null | {
+        readonly id: string;
+        readonly replacementMessageId: null | string;
+      };
+      readonly id: string;
+      readonly model: ModelId | null;
+      readonly title: null | string;
+    };
     const userId = await getAuthenticatedChatUserId();
     const { conversation, messages } = await chatState.loadConversation({
       conversationId,

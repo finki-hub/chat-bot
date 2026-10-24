@@ -281,10 +281,7 @@ export const recoverSelectedModel = (
   current: string,
   fallback: string,
 ): string => {
-  if (models.length === 0) {
-    return current;
-  }
-  if (models.some((model) => model.id === current)) {
+  if (models.length === 0 || models.some((model) => model.id === current)) {
     return current;
   }
   return models.some((model) => model.id === fallback)

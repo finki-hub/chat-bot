@@ -88,9 +88,9 @@ const urlOf = (input: RequestInfo | URL): string => {
 };
 
 const methodOf = (input: RequestInfo | URL, init?: RequestInit): string =>
-  typeof input !== 'string' && !(input instanceof URL)
-    ? input.method
-    : (init?.method ?? 'GET');
+  typeof input === 'string' || input instanceof URL
+    ? (init?.method ?? 'GET')
+    : input.method;
 
 describe('useUiStore', () => {
   beforeEach(() => {
