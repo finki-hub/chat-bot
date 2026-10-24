@@ -3,13 +3,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from app.llms.query_modes import QueryTransformMode
 from app.llms.retrieval_budget import retrieval_budget
 
 from . import resolve_eval_json_path
 
 AnchorType = Literal["Q", "C", "none"]
-TransformMode = Literal["raw", "rewrite", "hyde", "rewrite_hyde"]
 LocalFaqRecoveryOutcome = Literal["skipped", "no_match", "matched", "error"]
 JsonValue = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 
@@ -20,7 +18,6 @@ class EvalJsonError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class EffectiveRetrievalConfig:
-    transform_mode: TransformMode
     initial_k: int
     per_query_k: int
 
@@ -51,12 +48,9 @@ class EvalCase:
     def used_requested_config(self) -> bool:
         expected = self.requested_config
         if self.local_faq_recovery_outcome == "matched":
-            # A matched RAW plan declares a bounded per-case treatment, not an
-            # unexpected budget fallback. Mode and initial budget must still agree.
-            if expected.transform_mode != "raw":
-                return False
+            # A matched plan declares a bounded per-case treatment, not an
+            # unexpected budget fallback. The initial budget must still agree.
             expected = EffectiveRetrievalConfig(
-                transform_mode="raw",
                 initial_k=expected.initial_k,
                 per_query_k=min(expected.per_query_k, 31),
             )
@@ -114,19 +108,6 @@ def _required_int(value: JsonValue, path: str) -> int:
     return parsed
 
 
-def _transform_mode(value: JsonValue, path: str) -> TransformMode:
-    raw = _text(value, path)
-    if raw == "raw":
-        return "raw"
-    if raw == "rewrite":
-        return "rewrite"
-    if raw == "hyde":
-        return "hyde"
-    if raw == "rewrite_hyde":
-        return "rewrite_hyde"
-    raise EvalJsonError(f"{path}: expected raw, rewrite, hyde, or rewrite_hyde")
-
-
 def _anchor_type(value: JsonValue, path: str) -> AnchorType:
     raw = _text(_mapping(value, path).get("type"), f"{path}.type")
     if raw == "Q":
@@ -143,11 +124,7 @@ def _effective_config(
     path: str,
     requested_config: EffectiveRetrievalConfig,
 ) -> EffectiveRetrievalConfig | None:
-    keys = (
-        "effective_transform_mode",
-        "effective_initial_k",
-        "effective_per_query_k",
-    )
+    keys = ("effective_initial_k", "effective_per_query_k")
     present = [key in row for key in keys]
     if not any(present):
         return requested_config
@@ -159,12 +136,8 @@ def _effective_config(
     if any(value is None for value in values):
         raise EvalJsonError(f"{path}: effective retrieval configuration is partial")
     return EffectiveRetrievalConfig(
-        transform_mode=_transform_mode(
-            values[0],
-            f"{path}.effective_transform_mode",
-        ),
-        initial_k=_required_int(values[1], f"{path}.effective_initial_k"),
-        per_query_k=_required_int(values[2], f"{path}.effective_per_query_k"),
+        initial_k=_required_int(values[0], f"{path}.effective_initial_k"),
+        per_query_k=_required_int(values[1], f"{path}.effective_per_query_k"),
     )
 
 
@@ -223,14 +196,10 @@ def _requested_config(
     config: dict[str, JsonValue],
     path: str,
 ) -> EffectiveRetrievalConfig:
-    nominal_keys = ("query_transform_mode", "initial_k", "per_query_k")
+    nominal_keys = ("initial_k", "per_query_k")
     nominal_present = [key in config for key in nominal_keys]
     if all(nominal_present):
         return EffectiveRetrievalConfig(
-            transform_mode=_transform_mode(
-                config["query_transform_mode"],
-                f"{path}.query_transform_mode",
-            ),
             initial_k=_required_int(config["initial_k"], f"{path}.initial_k"),
             per_query_k=_required_int(
                 config["per_query_k"],
@@ -240,28 +209,14 @@ def _requested_config(
     if any(nominal_present):
         raise EvalJsonError(f"{path}: requested retrieval configuration is partial")
 
-    prior_keys = ("requested_query_transform_mode", "requested_initial_k")
-    prior_present = [key in config for key in prior_keys]
-    if all(prior_present):
-        transform_mode = _transform_mode(
-            config["requested_query_transform_mode"],
-            f"{path}.requested_query_transform_mode",
-        )
-        requested_initial_k = _required_int(
-            config["requested_initial_k"],
-            f"{path}.requested_initial_k",
-        )
+    if "requested_initial_k" in config:
         budget = retrieval_budget(
-            QueryTransformMode(transform_mode),
-            requested_initial_k,
+            _required_int(config["requested_initial_k"], f"{path}.requested_initial_k"),
         )
         return EffectiveRetrievalConfig(
-            transform_mode=transform_mode,
             initial_k=budget.initial_k,
             per_query_k=budget.per_query_k,
         )
-    if any(prior_present):
-        raise EvalJsonError(f"{path}: requested retrieval configuration is partial")
     raise EvalJsonError(f"{path}: requested retrieval configuration is missing")
 
 

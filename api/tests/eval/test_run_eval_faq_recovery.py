@@ -1,7 +1,7 @@
 import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import anyio
@@ -11,7 +11,6 @@ from app.data.connection import Database
 from app.llms.faq_query_recovery import FaqQueryRecovery
 from app.llms.faq_query_recovery_plan import FaqQueryRecoveryPlan
 from app.llms.models import Model
-from app.llms.query_modes import QueryTransformMode
 from app.llms.query_variants import QueryVariant, QueryVariantBundle
 from app.schemas.questions import QuestionSchema
 from tests.eval import run_eval
@@ -70,9 +69,7 @@ def test_shared_recovery_recovers_exact_faq_and_uses_canonical_rerank(
         variants=(QueryVariant(kind="raw", text=query, is_document=False),),
         rerank_query=query,
     )
-    monkeypatch.setattr(
-        run_eval, "build_query_variants", AsyncMock(return_value=bundle)
-    )
+    monkeypatch.setattr(run_eval, "build_query_variants", Mock(return_value=bundle))
     monkeypatch.setattr(run_eval, "plan_faq_query_recovery", planner)
     monkeypatch.setattr(run_eval, "_embed_variant", embed)
     monkeypatch.setattr(run_eval, "get_closest_questions", empty)
@@ -88,11 +85,9 @@ def test_shared_recovery_recovers_exact_faq_and_uses_canonical_rerank(
                 id="public", query=query, anchor={"type": "Q", "name": faq.name}
             ),
             embedding_model=Model.BGE_M3_LOCAL,
-            qt_model=Model.GPT_5_4_MINI,
             initial_k=100,
             top_k=10,
             ideal_limit=20,
-            transform_mode=QueryTransformMode.RAW,
         )
 
     result = anyio.run(run)
@@ -112,44 +107,6 @@ def test_shared_recovery_recovers_exact_faq_and_uses_canonical_rerank(
     assert rerank.await_args is not None
     assert rerank.await_args.args[0]["query"] == canonical
     assert all(call.kwargs["limit"] == 31 for call in empty.await_args_list)
-
-
-def test_transformed_bundle_does_not_call_local_recovery_planner(monkeypatch):
-    query = "query"
-    bundle = QueryVariantBundle(
-        variants=(
-            QueryVariant(kind="rewrite", text="rewritten", is_document=False),
-            QueryVariant(kind="raw", text=query, is_document=False),
-        ),
-        rerank_query="rewritten",
-    )
-    planner = AsyncMock()
-    monkeypatch.setattr(
-        run_eval, "build_query_variants", AsyncMock(return_value=bundle)
-    )
-    monkeypatch.setattr(run_eval, "plan_faq_query_recovery", planner)
-    monkeypatch.setattr(run_eval, "_embed_variant", AsyncMock(return_value=[0.1]))
-    monkeypatch.setattr(run_eval, "get_closest_questions", AsyncMock(return_value=[]))
-    monkeypatch.setattr(run_eval, "get_closest_chunks", AsyncMock(return_value=[]))
-
-    async def run():
-        return await run_eval.evaluate_one(
-            Database("postgresql://unused"),
-            run_eval.Example(id="public", query=query, anchor={"type": "none"}),
-            embedding_model=Model.BGE_M3_LOCAL,
-            qt_model=Model.GPT_5_4_MINI,
-            initial_k=30,
-            top_k=10,
-            ideal_limit=20,
-            transform_mode=QueryTransformMode.REWRITE,
-        )
-
-    result = anyio.run(run)
-    planner.assert_not_awaited()
-    assert result.local_faq_recovery_outcome == "skipped"
-    assert result.local_query_variant_added is False
-    assert result.local_rerank_query_used is False
-    assert result.effective_transform_mode == QueryTransformMode.REWRITE
 
 
 def test_ann_pair_failure_drains_sibling_and_preserves_original_error(monkeypatch):

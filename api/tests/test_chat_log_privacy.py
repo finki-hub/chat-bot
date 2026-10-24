@@ -12,9 +12,8 @@ from app.llms import google as google_module
 from app.llms import ollama as ollama_module
 from app.llms import openai as openai_module
 from app.llms import query_transform as query_transform_module
-from app.llms.context import _contextualize_query, get_retrieved_context_with_sources
+from app.llms.context import get_retrieved_context_with_sources
 from app.llms.models import Model
-from app.llms.query_modes import QueryTransformMode
 from app.llms.query_variants import QueryVariant, QueryVariantBundle
 
 
@@ -29,37 +28,8 @@ class _FakeLlm:
         return _FakeResponse()
 
 
-def test_contextualize_query_logs_lengths_without_raw_text(caplog, monkeypatch):
-    async def fake_transform_query(*args, **kwargs):
-        await checkpoint()
-        return "rewritten private query"
-
-    monkeypatch.setattr(context_module, "transform_query", fake_transform_query)
-    caplog.set_level(logging.INFO, logger="app.llms.context")
-
-    result = anyio.run(
-        _contextualize_query,
-        "original private query",
-        Model.CLAUDE_HAIKU_5_5,
-        "private history",
-    )
-
-    assert result == "rewritten private query"
-    assert "original private query" not in caplog.text
-    assert "rewritten private query" not in caplog.text
-    assert "private history" not in caplog.text
-    assert "query_len=" in caplog.text
-    assert "condensed_len=" in caplog.text
-    assert "history_char_len=" in caplog.text
-
-
 def test_retrieval_logs_lengths_without_raw_query(caplog, monkeypatch):
-    async def fake_contextualize_query(*args, **kwargs):
-        await checkpoint()
-        return "private retrieval query"
-
-    async def fake_build_query_variants(*args, **kwargs):
-        await checkpoint()
+    def fake_build_query_variants(*args, **kwargs):
         raw = QueryVariant(
             kind="raw",
             text="private retrieval query",
@@ -80,11 +50,6 @@ def test_retrieval_logs_lengths_without_raw_query(caplog, monkeypatch):
 
     monkeypatch.setattr(
         context_module,
-        "_contextualize_query",
-        fake_contextualize_query,
-    )
-    monkeypatch.setattr(
-        context_module,
         "build_query_variants",
         fake_build_query_variants,
     )
@@ -97,8 +62,6 @@ def test_retrieval_logs_lengths_without_raw_query(caplog, monkeypatch):
             Database("postgresql://unused"),
             "private retrieval query",
             Model.BGE_M3,
-            Model.CLAUDE_HAIKU_5_5,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     result = anyio.run(collect)
@@ -125,6 +88,7 @@ def test_query_transform_logs_lengths_without_raw_query(caplog, monkeypatch):
         return await query_transform_module.transform_query(
             "private transform query",
             Model.GPT_5_4_MINI,
+            system_prompt="Transform the query.",
             temperature=0.0,
             top_p=1.0,
             max_tokens=128,

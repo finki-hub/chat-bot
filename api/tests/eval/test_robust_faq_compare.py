@@ -30,7 +30,6 @@ def inputs():
             **case,
             "expected_id": "a" if case["id"] == "positive" else None,
             "execution_status": "completed",
-            "effective_transform_mode": "raw",
             "n_candidates": 0,
             "candidates": [],
             "selected_ids": [],

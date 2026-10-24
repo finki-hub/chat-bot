@@ -17,8 +17,6 @@ from app.data.sponsored_usage import (
     SponsoredQuotaExceededError,
     SponsoredRequestInProgressError,
 )
-from app.llms.query_modes import QueryTransformMode
-from app.llms.retrieval_result import RetrievalSource, RetrievedContext
 from app.main import make_app
 from app.utils import posthog_client
 from app.utils.async_iterators import closing_stream
@@ -50,21 +48,12 @@ def prepared(monkeypatch):
         "admission": AsyncMock(
             side_effect=lambda db, **kw: _admission(kw["request_id"])
         ),
-        "context": AsyncMock(
-            return_value=RetrievedContext(
-                text="context",
-                effective_transform_mode=QueryTransformMode.REWRITE_HYDE,
-            )
-        ),
-        "links": AsyncMock(return_value=""),
         "agent_setup": AsyncMock(return_value=StreamingResponse(body())),
         "release": AsyncMock(),
     }
     for phase, name in {
         "credentials": "resolve_provider_credentials",
         "admission": "admit_sponsored_request",
-        "context": "get_retrieved_context_with_sources",
-        "links": "get_links_context",
         "agent_setup": "handle_chat",
         "release": "release_sponsored_request",
     }.items():
@@ -123,9 +112,7 @@ def _assert_outcome(prepared, phase, outcome, reason):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize(
-    "phase", ["credentials", "admission", "context", "links", "agent_setup"]
-)
+@pytest.mark.parametrize("phase", ["credentials", "admission", "agent_setup"])
 async def test_preparation_exception_is_joined_once_without_private_content(
     prepared, phase
 ):
@@ -141,18 +128,11 @@ async def test_preparation_exception_is_joined_once_without_private_content(
         chunks = await _consume(prepared)
         assert sum('"code": "agent_error"' in chunk for chunk in chunks) == 1
         assert SENTINEL not in "".join(chunks)
-    _assert_outcome(
-        prepared,
-        "context" if phase == "links" else phase,
-        "error",
-        "preparation_failed",
-    )
+    _assert_outcome(prepared, phase, "error", "preparation_failed")
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize(
-    "phase", ["credentials", "admission", "context", "agent_setup"]
-)
+@pytest.mark.parametrize("phase", ["credentials", "admission", "agent_setup"])
 async def test_cancellation_is_reraised_with_phase_and_releases_only_admitted_lease(
     prepared, phase
 ):
@@ -171,7 +151,7 @@ async def test_cancellation_is_reraised_with_phase_and_releases_only_admitted_le
         with pytest.raises(asyncio.CancelledError):
             await task
     _assert_outcome(prepared, phase, "client_disconnect", "cancelled")
-    if phase in {"context", "agent_setup"}:
+    if phase == "agent_setup":
         prepared.mocks["release"].assert_awaited_once()
         assert (
             prepared.mocks["release"].call_args.kwargs["request_id"]
@@ -179,21 +159,6 @@ async def test_cancellation_is_reraised_with_phase_and_releases_only_admitted_le
         )
     else:
         prepared.mocks["release"].assert_not_awaited()
-
-
-@pytest.mark.anyio
-async def test_close_while_sources_yielded_is_pre_stream_and_cleans_lease(prepared):
-    prepared.mocks["credentials"].return_value = credentials(openai=False)
-    prepared.mocks["context"].return_value = RetrievedContext(
-        text="context",
-        effective_transform_mode=QueryTransformMode.REWRITE_HYDE,
-        sources=(RetrievalSource(id="faq", kind="faq", title="Source"),),
-    )
-    stream = _stream(prepared)
-    assert "event: sources" in str(await anext(stream))
-    await stream.aclose()
-    _assert_outcome(prepared, "agent_setup", "client_disconnect", "cancelled")
-    prepared.mocks["release"].assert_awaited_once()
 
 
 @pytest.mark.anyio
@@ -228,7 +193,7 @@ async def test_generation_owns_terminal_outcome_after_handoff(prepared, kind):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("code", ["credential_required", "free_tier_unavailable"])
-async def test_credential_denials_never_start_retrieval_or_admission(prepared, code):
+async def test_credential_denials_never_start_admission_or_agent(prepared, code):
     prepared.mocks["credentials"].return_value = credentials(openai=False)
     prepared.request.app.state.settings = settings(enabled=False)
     if code == "credential_required":
@@ -236,34 +201,8 @@ async def test_credential_denials_never_start_retrieval_or_admission(prepared, c
     chunks = await _consume(prepared)
     assert code in "".join(chunks)
     _assert_outcome(prepared, "credentials", "denied", code)
-    for phase in ("admission", "context", "agent_setup", "release"):
+    for phase in ("admission", "agent_setup", "release"):
         prepared.mocks[phase].assert_not_awaited()
-
-
-@pytest.mark.anyio
-async def test_context_failure_cancels_sibling_and_releases_once(prepared):
-    prepared.mocks["credentials"].return_value = credentials(openai=False)
-    started = asyncio.Event()
-    finished = asyncio.Event()
-
-    async def retrieve(*args, **kwargs):
-        started.set()
-        try:
-            await asyncio.Event().wait()
-        finally:
-            finished.set()
-
-    async def links(*args, **kwargs):
-        await started.wait()
-        raise RuntimeError(SENTINEL)
-
-    prepared.mocks["context"].side_effect = retrieve
-    prepared.mocks["links"].side_effect = links
-    async with asyncio.timeout(2):
-        await _consume(prepared)
-    assert finished.is_set()
-    _assert_outcome(prepared, "context", "error", "preparation_failed")
-    prepared.mocks["release"].assert_awaited_once()
 
 
 @pytest.mark.anyio
@@ -299,7 +238,7 @@ async def test_admission_denial_before_quota_does_not_consume_lease(prepared, co
     # Closing at the denial yield must not also record a disconnect.
     await stream.aclose()
     _assert_outcome(prepared, "admission", "denied", code)
-    for phase in ("admission", "context", "agent_setup", "release"):
+    for phase in ("admission", "agent_setup", "release"):
         prepared.mocks[phase].assert_not_awaited()
 
 
@@ -391,31 +330,10 @@ async def test_asgi_send_failure_closes_all_streams_preserving_exception(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("phase", ["context", "generation"])
-async def test_asgi_disconnect_shields_provider_sibling_and_lease_cleanup(
-    prepared, phase
-):
+async def test_asgi_disconnect_shields_provider_and_lease_cleanup(prepared):
     prepared.mocks["credentials"].return_value = credentials(openai=False)
     sent = asyncio.Event()
-    sibling_started = asyncio.Event()
     closed = []
-
-    async def retrieve(*args, **kwargs):
-        await sibling_started.wait()
-        kwargs["on_stage"]("retrieving")
-        try:
-            await asyncio.Event().wait()
-        finally:
-            await anyio.lowlevel.checkpoint()
-            closed.append("retrieval")
-
-    async def links(*args, **kwargs):
-        sibling_started.set()
-        try:
-            await asyncio.Event().wait()
-        finally:
-            await anyio.lowlevel.checkpoint()
-            closed.append("links")
 
     async def body():
         try:
@@ -438,9 +356,6 @@ async def test_asgi_disconnect_shields_provider_sibling_and_lease_cleanup(
         await sent.wait()
         return {"type": "http.disconnect"}
 
-    if phase == "context":
-        prepared.mocks["context"].side_effect = retrieve
-        prepared.mocks["links"].side_effect = links
     prepared.mocks["agent_setup"].return_value = StreamingResponse(body())
     prepared.mocks["release"].side_effect = release
     response = await chat_api.chat(
@@ -451,13 +366,8 @@ async def test_asgi_disconnect_shields_provider_sibling_and_lease_cleanup(
     )
     async with asyncio.timeout(2):
         await response({"type": "http", "asgi": {"spec_version": "2.3"}}, receive, send)
-    if phase == "context":
-        assert sorted(closed) == ["lease", "links", "retrieval"]
-        _assert_outcome(prepared, "context", "client_disconnect", "cancelled")
-        prepared.mocks["release"].assert_awaited_once()
-    else:
-        assert closed == ["provider", "lease"]
-        _assert_generation_disconnect(prepared)
+    assert closed == ["provider", "lease"]
+    _assert_generation_disconnect(prepared)
 
 
 @pytest.mark.anyio

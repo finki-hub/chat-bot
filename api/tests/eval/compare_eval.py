@@ -165,10 +165,7 @@ def _append_cases(lines: list[str], title: str, cases: list[CaseDelta]) -> None:
 def _format_config(config: EffectiveRetrievalConfig | None) -> str:
     if config is None:
         return "unavailable"
-    return (
-        f"{config.transform_mode}(initial_k={config.initial_k}, "
-        f"per_query_k={config.per_query_k})"
-    )
+    return f"initial_k={config.initial_k}, per_query_k={config.per_query_k}"
 
 
 def render_report(comparison: EvalComparison, *, max_regressions: int = 0) -> str:

@@ -21,7 +21,7 @@ from app.llms.models import (
 )
 from app.llms.prompts import build_agent_messages
 from app.llms.provider_credentials import require_provider_credential
-from app.llms.tools import get_agent_tools
+from app.llms.tools import agent_middleware, fallback_prompts, get_agent_tools
 from app.schemas.chat_credentials import ChatCredentialSecret
 
 logger = logging.getLogger(__name__)
@@ -228,7 +228,7 @@ async def stream_anthropic_agent_response(
             ", ".join(tool.name for tool in tools) if tools else "None",
         )
 
-        agent = create_agent(llm, tools)
+        agent = create_agent(llm, tools, middleware=agent_middleware())
 
         messages = build_agent_messages(system_prompt, history or [], user_prompt)
 
@@ -258,6 +258,10 @@ async def stream_anthropic_agent_response(
             reason="agent_setup_failed",
         )
 
+        system_prompt, user_prompt = await fallback_prompts(
+            system_prompt,
+            user_prompt,
+        )
         return stream_anthropic_response(
             user_prompt,
             model,

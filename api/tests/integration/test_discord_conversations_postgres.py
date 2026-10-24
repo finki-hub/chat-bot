@@ -720,9 +720,7 @@ def test_shutdown_cancels_pending_sql_write_and_awaits_real_transaction_rollback
 
             held = cast("Database", _InterceptDatabase(db, pause_after_insert))
             registry = DiscordWriteRegistry()
-            storage = DiscordStorage(
-                held, exchange.conversation_id, owner, [], 0, registry
-            )
+            storage = DiscordStorage(held, exchange.conversation_id, owner, 0, registry)
             try:
                 async with asyncio.timeout(5):
                     registry.schedule(storage, exchange)

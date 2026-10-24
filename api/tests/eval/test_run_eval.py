@@ -9,13 +9,12 @@ import pytest
 
 from app.data.connection import Database
 from app.llms.models import Model
-from app.llms.query_modes import QueryTransformMode
 from app.llms.query_variants import QueryVariant, QueryVariantBundle
 from app.schemas.questions import QuestionSchema
 from tests.eval import run_eval
 
 
-def test_main_async_json_preserves_legacy_config_and_reports_effective_budget(
+def test_main_async_json_reports_requested_and_effective_budget(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -40,7 +39,6 @@ def test_main_async_json_preserves_legacy_config_and_reports_effective_budget(
     async def evaluate_one(*args, **kwargs) -> run_eval.Result:
         return run_eval.Result(
             example=args[1],
-            effective_transform_mode=QueryTransformMode.RAW,
             effective_initial_k=30,
             effective_per_query_k=31,
         )
@@ -58,10 +56,7 @@ def test_main_async_json_preserves_legacy_config_and_reports_effective_budget(
         initial_k=30,
         json=str(output_path),
         limit=None,
-        no_transform=False,
-        query_transform_model=Model.GPT_5_4_MINI.value,
         top_k=10,
-        transform_mode=QueryTransformMode.REWRITE_HYDE,
     )
 
     exit_code = anyio.run(run_eval.main_async, namespace)
@@ -70,19 +65,15 @@ def test_main_async_json_preserves_legacy_config_and_reports_effective_budget(
     assert exit_code == 0
     assert payload["config"] == {
         "embedding_model": Model.BGE_M3_LOCAL.value,
-        "query_transform_model": Model.GPT_5_4_MINI.value,
-        "query_transform_mode": QueryTransformMode.REWRITE_HYDE.value,
-        "initial_k": 60,
-        "per_query_k": 21,
+        "initial_k": 30,
+        "per_query_k": 31,
         "ideal_limit": 60,
-        "requested_query_transform_mode": QueryTransformMode.REWRITE_HYDE.value,
         "requested_initial_k": 30,
-        "budget_scope": "per_example_effective_mode",
         "ideal_limit_floor": 60,
         "top_k": 10,
         "reranker_min_score": run_eval.settings.RERANKER_MIN_SCORE,
     }
-    assert payload["results"][0]["effective_transform_mode"] == "raw"
+    assert "effective_transform_mode" not in payload["results"][0]
     assert payload["results"][0]["effective_initial_k"] == 30
     assert payload["results"][0]["effective_per_query_k"] == 31
     assert payload["results"][0]["cohort"] == "romanized_macedonian"
@@ -116,12 +107,17 @@ def test_aggregate_report_breaks_down_named_cohorts() -> None:
     assert "MRR (reranked)    : 0.500" in report
 
 
-def test_evaluate_one_budgets_from_retained_query_variants(
+def test_evaluate_one_splits_budget_across_query_variants(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def return_raw_bundle(*args, **kwargs):
+    def return_transliterated_bundle(*args, **kwargs):
+        transliterated = QueryVariant(
+            kind="transliteration", text="кверија", is_document=False
+        )
         raw = QueryVariant(kind="raw", text="query", is_document=False)
-        return QueryVariantBundle(variants=(raw,), rerank_query="query")
+        return QueryVariantBundle(
+            variants=(transliterated, raw), rerank_query=transliterated.text
+        )
 
     async def return_embedding(*args, **kwargs):
         return [0.1]
@@ -129,7 +125,7 @@ def test_evaluate_one_budgets_from_retained_query_variants(
     async def return_no_results(*args, **kwargs):
         return []
 
-    monkeypatch.setattr(run_eval, "build_query_variants", return_raw_bundle)
+    monkeypatch.setattr(run_eval, "build_query_variants", return_transliterated_bundle)
     monkeypatch.setattr(run_eval, "_embed_variant", return_embedding)
     monkeypatch.setattr(run_eval, "get_closest_questions", return_no_results)
     monkeypatch.setattr(run_eval, "get_closest_chunks", return_no_results)
@@ -139,23 +135,20 @@ def test_evaluate_one_budgets_from_retained_query_variants(
         return await run_eval.evaluate_one(
             Database("postgresql://unused"),
             run_eval.Example(
-                id="raw-fallback",
+                id="romanized",
                 query="query",
                 anchor={"type": "none"},
             ),
             embedding_model=Model.BGE_M3_LOCAL,
-            qt_model=Model.GPT_5_4_MINI,
             initial_k=30,
             top_k=10,
             ideal_limit=60,
-            transform_mode=QueryTransformMode.REWRITE_HYDE,
         )
 
     result = anyio.run(evaluate)
 
-    assert result.effective_transform_mode == QueryTransformMode.RAW
     assert result.effective_initial_k == 30
-    assert result.effective_per_query_k == 31
+    assert result.effective_per_query_k == 16
 
 
 def test_evaluate_one_can_recover_faq_from_lexical_candidates(
@@ -179,7 +172,7 @@ def test_evaluate_one_can_recover_faq_from_lexical_candidates(
         distance=0.2,
     )
 
-    async def return_raw_bundle(*args, **kwargs):
+    def return_raw_bundle(*args, **kwargs):
         raw = QueryVariant(kind="raw", text="smerovi SEIS23", is_document=False)
         return QueryVariantBundle(variants=(raw,), rerank_query=raw.text)
 
@@ -223,11 +216,9 @@ def test_evaluate_one_can_recover_faq_from_lexical_candidates(
                 anchor={"type": "Q", "name": faq.name},
             ),
             embedding_model=Model.BGE_M3_LOCAL,
-            qt_model=Model.GPT_5_4_MINI,
             initial_k=30,
             top_k=10,
             ideal_limit=60,
-            transform_mode=QueryTransformMode.RAW,
         )
 
     result = anyio.run(evaluate)
@@ -242,7 +233,7 @@ def test_evaluate_one_skips_lexical_without_vector_candidates(
 ) -> None:
     lexical_calls = 0
 
-    async def return_raw_bundle(*args, **kwargs):
+    def return_raw_bundle(*args, **kwargs):
         raw = QueryVariant(kind="raw", text="рецепт за торта", is_document=False)
         return QueryVariantBundle(variants=(raw,), rerank_query=raw.text)
 
@@ -272,11 +263,9 @@ def test_evaluate_one_skips_lexical_without_vector_candidates(
                 anchor={"type": "none"},
             ),
             embedding_model=Model.BGE_M3_LOCAL,
-            qt_model=Model.GPT_5_4_MINI,
             initial_k=30,
             top_k=10,
             ideal_limit=60,
-            transform_mode=QueryTransformMode.RAW,
         )
 
     result = anyio.run(evaluate)

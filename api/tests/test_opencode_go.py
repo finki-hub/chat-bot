@@ -47,8 +47,6 @@ from app.llms.provider_credentials import (
     ProviderCredentialRequiredError,
     provider_for_model,
 )
-from app.llms.query_modes import QueryTransformMode
-from app.llms.retrieval_result import RetrievedContext
 from app.schemas.chat import ChatSchema, ConversationTurn
 from app.schemas.chat_credentials import ChatCredentialSecret, ChatCredentialUpsert
 from app.schemas.chat_title import ChatTitleSchema
@@ -414,6 +412,7 @@ def test_go_query_and_title_auxiliary_calls_retain_session(monkeypatch):
         await query_transform.transform_query(
             "test",
             Model.OPENCODE_GO_GPT_6_LUNA,
+            system_prompt="system",
             temperature=0,
             top_p=1,
             max_tokens=128,
@@ -819,11 +818,6 @@ def test_go_headers_persist_on_actual_stream_and_auxiliary_http_calls(
 def test_go_chat_request_session_reaches_main_and_retrieval(session, monkeypatch):
     provider_credentials = LlmProviderCredentials(opencode_go=GO_CREDENTIAL)
     resolver = AsyncMock(return_value=provider_credentials)
-    context = AsyncMock(
-        return_value=RetrievedContext(
-            text="context", effective_transform_mode=QueryTransformMode.RAW
-        )
-    )
 
     async def body():
         yield 'event: token\ndata: {"text":"answer"}\n\n'
@@ -831,8 +825,6 @@ def test_go_chat_request_session_reaches_main_and_retrieval(session, monkeypatch
 
     main = AsyncMock(return_value=StreamingResponse(body()))
     monkeypatch.setattr(chat_api, "resolve_provider_credentials", resolver)
-    monkeypatch.setattr(chat_api, "get_retrieved_context_with_sources", context)
-    monkeypatch.setattr(chat_api, "get_links_context", AsyncMock(return_value=""))
     monkeypatch.setattr(chat_api, "handle_chat", main)
     payload = ChatSchema(
         user_id=USER_ID,
@@ -846,7 +838,11 @@ def test_go_chat_request_session_reaches_main_and_retrieval(session, monkeypatch
         {
             "type": "http",
             "headers": request_headers,
-            "app": SimpleNamespace(state=SimpleNamespace(settings=Settings())),
+            "app": SimpleNamespace(
+                state=SimpleNamespace(
+                    settings=Settings(),
+                ),
+            ),
         }
     )
 
@@ -863,7 +859,7 @@ def test_go_chat_request_session_reaches_main_and_retrieval(session, monkeypatch
     text = anyio.run(run)
     if session == SESSION:
         assert "answer" in text
-        assert context.call_args.kwargs["credentials"].conversation_id == SESSION
+        assert main.call_args.kwargs["retrieval_credentials"].conversation_id == SESSION
         assert main.call_args.kwargs["conversation_id"] == SESSION
         assert main.call_args.kwargs["inference_credential"] == GO_CREDENTIAL
         assert provider_credentials.conversation_id is None
@@ -874,7 +870,6 @@ def test_go_chat_request_session_reaches_main_and_retrieval(session, monkeypatch
             else "missing_conversation_id" in text
         )
         resolver.assert_not_called()
-        context.assert_not_called()
         main.assert_not_called()
 
 
@@ -888,8 +883,8 @@ def test_go_missing_user_key_is_a_safe_credential_denial(monkeypatch):
             )
         ),
     )
-    context = AsyncMock()
-    monkeypatch.setattr(chat_api, "get_retrieved_context_with_sources", context)
+    main = AsyncMock()
+    monkeypatch.setattr(chat_api, "handle_chat", main)
     payload = ChatSchema(
         user_id=USER_ID,
         inference_model=Model.OPENCODE_GO_GPT_6_LUNA,
@@ -899,7 +894,11 @@ def test_go_missing_user_key_is_a_safe_credential_denial(monkeypatch):
         {
             "type": "http",
             "headers": [(b"x-conversation-id", SESSION.encode())],
-            "app": SimpleNamespace(state=SimpleNamespace(settings=Settings())),
+            "app": SimpleNamespace(
+                state=SimpleNamespace(
+                    settings=Settings(),
+                ),
+            ),
         }
     )
 
@@ -917,7 +916,7 @@ def test_go_missing_user_key_is_a_safe_credential_denial(monkeypatch):
     assert "credential_required" in text
     assert '"provider": "opencode-go"' in text
     assert "other-provider" not in text
-    context.assert_not_called()
+    main.assert_not_called()
 
 
 @pytest.mark.parametrize("outcome", ["error", "cancel"])
@@ -1017,7 +1016,12 @@ def test_go_direct_unknown_dispatch_is_rejected_before_ollama(monkeypatch):
     async def run():
         with pytest.raises(ValueError, match="Unsupported"):
             await query_transform.transform_query(
-                "test", "opencode-go:unknown", temperature=0, top_p=1, max_tokens=128
+                "test",
+                "opencode-go:unknown",
+                system_prompt="system",
+                temperature=0,
+                top_p=1,
+                max_tokens=128,
             )
         with pytest.raises(ValueError, match="Unsupported"):
             await streams.stream_response_with_agent(
@@ -1080,6 +1084,7 @@ def test_go_deepseek_auxiliary_wire_explicitly_disables_default_thinking(
             result = await query_transform.transform_query(
                 "Reply with OK.",
                 model,
+                system_prompt="system",
                 temperature=0,
                 top_p=1,
                 max_tokens=128,
@@ -1293,6 +1298,7 @@ def test_go_messages_auxiliary_low_budget_off_sdk_wire(model, auxiliary, monkeyp
             result = await query_transform.transform_query(
                 "test",
                 model,
+                system_prompt="system",
                 temperature=0,
                 top_p=0.1,
                 max_tokens=128,

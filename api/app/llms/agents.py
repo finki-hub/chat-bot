@@ -56,6 +56,26 @@ def status_event(*, stage: str, tool: str | None = None) -> str:
     return _sse("status", payload)
 
 
+def tool_call_event(
+    *,
+    call_id: str,
+    name: str,
+    label: str,
+    tool_input: object,
+) -> str:
+    return _sse(
+        "tool_call",
+        {"id": call_id, "name": name, "label": label, "input": tool_input},
+    )
+
+
+def tool_result_event(*, call_id: str, name: str, ok: bool, summary: str) -> str:
+    return _sse(
+        "tool_result",
+        {"id": call_id, "name": name, "ok": ok, "summary": summary},
+    )
+
+
 def error_event(code: str, message: str, **details: str) -> str:
     return _sse("error", {"code": code, "message": message, **details})
 
@@ -111,6 +131,8 @@ class StreamObservation:
     tool_names: set[str] = field(default_factory=set)
     finish_reason: str = ""
     context_chars: int = 0
+    search_hit: bool = False
+    sources: list[RetrievalSourcePayload] = field(default_factory=list)
 
 
 def _error_status_code(exc: BaseException) -> int | None:
@@ -137,6 +159,54 @@ def _tool_succeeded(output: object) -> bool:
     return getattr(output, "status", None) != "error"
 
 
+_TOOL_FAILED_SUMMARY = "Алатката не врати резултат"
+
+
+def _tool_label(name: str, tool_input: object) -> str:
+    query = tool_input.get("query") if isinstance(tool_input, dict) else None
+    if isinstance(query, str) and query.strip():
+        return f"Пребарувам: {query.strip()}"
+    return f"Користам алатка: {name}"
+
+
+def _tool_artifact(output: object) -> dict[str, object]:
+    artifact = getattr(output, "artifact", None)
+    return artifact if isinstance(artifact, dict) else {}
+
+
+# Each search returns up to 10 ranked sources; interleaving keeps every search's best
+# hits visible instead of letting the first search fill the list.
+_MAX_STREAM_SOURCES = 12
+
+
+def _interleave_sources(
+    per_search: list[list[RetrievalSourcePayload]],
+) -> list[RetrievalSourcePayload]:
+    merged: list[RetrievalSourcePayload] = []
+    seen: set[tuple[object, object]] = set()
+    for rank in range(max((len(found) for found in per_search), default=0)):
+        for found in per_search:
+            if rank >= len(found):
+                continue
+            source = found[rank]
+            key = (source["kind"], source["id"])
+            if key not in seen:
+                seen.add(key)
+                merged.append(source)
+    return merged[:_MAX_STREAM_SOURCES]
+
+
+def _search_sources(artifact: dict[str, object]) -> list[RetrievalSourcePayload]:
+    found = artifact.get("sources")
+    if not isinstance(found, list):
+        return []
+    return [
+        cast("RetrievalSourcePayload", source)
+        for source in found
+        if isinstance(source, dict) and "kind" in source and "id" in source
+    ]
+
+
 def capture_tool_called(
     observation: StreamObservation | None,
     *,
@@ -145,6 +215,7 @@ def capture_tool_called(
     success: bool,
     arg_len: int,
     result_len: int,
+    search: dict[str, object] | None = None,
 ) -> None:
     if observation is None:
         return
@@ -160,6 +231,7 @@ def capture_tool_called(
             "success": success,
             "arg_len": arg_len,
             "result_len": result_len,
+            **(search or {}),
         },
     )
 
@@ -401,10 +473,14 @@ async def create_agent_token_generator[ResponseT](
     emit_reasoning: bool = True,
 ) -> AsyncGenerator[str]:
     """Stream an agent run as SSE, mapping `astream_events` onto the protocol: each
-    `on_tool_start` becomes a `status`, and a `reset` precedes the answer so any
-    pre-tool preamble is dropped."""
+    tool run becomes a `tool_call`/`tool_result` pair (plus a legacy `status`), text
+    written around tool calls is kept, and search results extend a cumulative
+    `sources` event."""
     streamed_text = False
-    pending_reset = False
+    # Text resuming after a tool call starts a new paragraph, so clients that render
+    # one text stream and the stored answer do not fuse it onto earlier text.
+    tool_since_text = False
+    per_search: list[list[RetrievalSourcePayload]] = []
     usage = (
         observation.usage
         if observation is not None
@@ -425,13 +501,20 @@ async def create_agent_token_generator[ResponseT](
             async for event in events:
                 kind = event["event"]
                 if kind == "on_tool_start":
+                    tool_input = event["data"].get("input")
                     tool_runs[event["run_id"]] = (
                         event["name"],
                         time.perf_counter(),
-                        _content_len(event["data"].get("input")),
+                        _content_len(tool_input),
                     )
+                    tool_since_text = streamed_text
                     yield status_event(stage="retrieve", tool=event["name"])
-                    pending_reset = True
+                    yield tool_call_event(
+                        call_id=event["run_id"],
+                        name=event["name"],
+                        label=_tool_label(event["name"], tool_input),
+                        tool_input=tool_input if isinstance(tool_input, dict) else {},
+                    )
                     continue
 
                 if kind in ("on_tool_end", "on_tool_error"):
@@ -440,17 +523,54 @@ async def create_agent_token_generator[ResponseT](
                         name, start, arg_len = started
                         is_error = kind == "on_tool_error"
                         output = None if is_error else event["data"].get("output")
+                        artifact = _tool_artifact(output)
+                        succeeded = (
+                            not is_error
+                            and _tool_succeeded(output)
+                            and artifact.get("failed") is not True
+                        )
+                        found = _search_sources(artifact)
                         capture_tool_called(
                             observation,
                             tool=name,
                             latency_ms=(time.perf_counter() - start) * 1000.0,
-                            success=not is_error and _tool_succeeded(output),
+                            success=succeeded,
                             arg_len=arg_len,
                             result_len=_content_len(output),
+                            search=(
+                                {
+                                    "hit": artifact.get("hit") is True,
+                                    "source_count": len(found),
+                                }
+                                if "hit" in artifact
+                                else None
+                            ),
                         )
                         if observation is not None:
                             observation.tool_call_count += 1
                             observation.tool_names.add(name)
+                            if artifact.get("hit") is True:
+                                observation.search_hit = True
+                            context_chars = artifact.get("context_chars")
+                            if isinstance(context_chars, int):
+                                observation.context_chars += context_chars
+                        summary = artifact.get("summary")
+                        yield tool_result_event(
+                            call_id=event["run_id"],
+                            name=name,
+                            ok=succeeded,
+                            summary=(
+                                summary
+                                if succeeded and isinstance(summary, str)
+                                else ("" if succeeded else _TOOL_FAILED_SUMMARY)
+                            ),
+                        )
+                        if found:
+                            per_search.append(found)
+                            sources = _interleave_sources(per_search)
+                            if observation is not None:
+                                observation.sources = sources
+                            yield sources_event(sources)
                     continue
 
                 if kind == "on_chat_model_end":
@@ -477,14 +597,9 @@ async def create_agent_token_generator[ResponseT](
                 if not text:
                     continue
 
-                if pending_reset:
-                    pending_reset = False
-                    # The client clears any pre-tool preamble on reset; mirror that so the
-                    # length reflects the final answer only.
-                    if observation is not None:
-                        observation.answer_chars = 0
-                    yield RESET_EVENT
-
+                if tool_since_text:
+                    tool_since_text = False
+                    text = "\n\n" + text.lstrip()
                 streamed_text = True
                 if observation is not None:
                     observation.answer_chars += len(text)

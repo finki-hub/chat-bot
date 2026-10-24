@@ -22,8 +22,6 @@ from app.llms.faq_query_recovery import (
     is_faq_query_recovery_eligible,
 )
 from app.llms.models import Model
-from app.llms.query_modes import QueryTransformMode
-from app.llms.query_variants import QueryVariant, QueryVariantBundle
 from app.schemas.documents import ChunkSchema
 from app.schemas.questions import QuestionSchema
 from app.utils.timing import (
@@ -55,51 +53,10 @@ def _faq(title: str, *, content: str | None = None) -> QuestionSchema:
 def _install_pipeline_mocks(
     monkeypatch: pytest.MonkeyPatch,
     *,
-    mode: QueryTransformMode,
     candidates: list[QuestionSchema],
     rerank: object,
 ) -> list[str]:
     planned_queries: list[str] = []
-
-    async def contextualize(query, *args, **kwargs):
-        return query
-
-    async def variants(query, *args, **kwargs):
-        requested = args[1] if len(args) > 1 else kwargs.get("mode", mode)
-        variants_list: tuple[QueryVariant, ...]
-        if requested == QueryTransformMode.RAW:
-            variants_list = (QueryVariant(kind="raw", text=query, is_document=False),)
-        elif requested == QueryTransformMode.REWRITE:
-            variants_list = (
-                QueryVariant(
-                    kind="rewrite",
-                    text="rewrite without user constraints",
-                    is_document=False,
-                ),
-                QueryVariant(kind="raw", text=query, is_document=False),
-            )
-        elif requested == QueryTransformMode.HYDE:
-            variants_list = (
-                QueryVariant(
-                    kind="hyde", text="hyde without user constraints", is_document=True
-                ),
-                QueryVariant(kind="raw", text=query, is_document=False),
-            )
-        else:
-            variants_list = (
-                QueryVariant(
-                    kind="rewrite",
-                    text="rewrite without user constraints",
-                    is_document=False,
-                ),
-                QueryVariant(
-                    kind="hyde", text="hyde without user constraints", is_document=True
-                ),
-                QueryVariant(kind="raw", text=query, is_document=False),
-            )
-        return QueryVariantBundle(
-            variants=variants_list, rerank_query=variants_list[0].text
-        )
 
     async def embed(*args, **kwargs):
         return [1.0]
@@ -114,9 +71,6 @@ def _install_pipeline_mocks(
     async def no_lexical(*args, **kwargs):
         return []
 
-    monkeypatch.setattr(context_module, "has_provider_credential", lambda *args: True)
-    monkeypatch.setattr(context_module, "_contextualize_query", contextualize)
-    monkeypatch.setattr(context_module, "build_query_variants", variants)
     monkeypatch.setattr(context_module, "_embed_variant", embed)
     monkeypatch.setattr(context_module, "_search_both", search)
     monkeypatch.setattr(context_module, "get_matching_questions", no_lexical)
@@ -125,10 +79,8 @@ def _install_pipeline_mocks(
     return planned_queries
 
 
-@pytest.mark.parametrize("mode", list(QueryTransformMode))
-def test_original_institution_constraint_survives_all_transform_modes(
+def test_foreign_institution_constraint_filters_mapped_office_faqs(
     monkeypatch: pytest.MonkeyPatch,
-    mode: QueryTransformMode,
 ) -> None:
     query = "Каде е студентската служба на Правен факултет?"
     candidates = [_faq("Студентска служба"), _faq("Контакт и локација")]
@@ -139,7 +91,6 @@ def test_original_institution_constraint_survives_all_transform_modes(
     )
     planned_queries = _install_pipeline_mocks(
         monkeypatch,
-        mode=mode,
         candidates=candidates,
         rerank=rerank,
     )
@@ -149,8 +100,6 @@ def test_original_institution_constraint_survives_all_transform_modes(
             Database("postgresql://unused"),
             query,
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=mode,
         )
 
     timings, token = start_request_timings()
@@ -164,59 +113,6 @@ def test_original_institution_constraint_survives_all_transform_modes(
     assert timings.faq_evidence_constraint_applied is True
     assert timings.faq_evidence_constraint_reason == "institution_scope"
     assert timings.faq_evidence_excluded_candidate_count == 2
-    assert timings.faq_evidence_constrained_abstained is True
-    rerank.assert_not_awaited()
-
-
-def test_original_exclusion_filters_exact_faq_added_from_contextualized_query(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    query = "Каде е Деканатот? Не прашувам за студентската служба."
-    contextualized = "Каде е службата?"
-    student_service = _faq("Студентска служба")
-    monkeypatch.setattr(
-        constraints_module,
-        "get_question_names_query",
-        AsyncMock(return_value=list(_OFFICES)),
-    )
-    exact = AsyncMock(return_value=student_service)
-    monkeypatch.setattr(recovery_plan_module, "get_question_by_name_query", exact)
-    rerank = AsyncMock(side_effect=AssertionError("excluded exact FAQ must not rerank"))
-    planned_queries = _install_pipeline_mocks(
-        monkeypatch,
-        mode=QueryTransformMode.RAW,
-        candidates=[],
-        rerank=rerank,
-    )
-    monkeypatch.setattr(
-        context_module,
-        "_contextualize_query",
-        AsyncMock(return_value=contextualized),
-    )
-    db = Database("postgresql://unused")
-
-    async def run():
-        return await context_module.get_retrieved_context_with_sources(
-            db,
-            query,
-            Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
-            history_text="prior user context",
-        )
-
-    timings, token = start_request_timings()
-    try:
-        result = anyio.run(run)
-    finally:
-        reset_request_timings(token)
-
-    assert result.text == ""
-    assert planned_queries == [query]
-    exact.assert_awaited_once_with(db, "Студентска служба")
-    assert timings.local_faq_recovery_outcome == "matched"
-    assert timings.faq_evidence_constraint_reason == "entity_exclusion"
-    assert timings.faq_evidence_excluded_candidate_count == 1
     assert timings.faq_evidence_constrained_abstained is True
     rerank.assert_not_awaited()
 
@@ -251,7 +147,6 @@ def test_exclusion_constraint_survives_unrelated_office_title_collision(
 
     _install_pipeline_mocks(
         monkeypatch,
-        mode=QueryTransformMode.REWRITE,
         candidates=[student_service, deanery],
         rerank=rerank,
     )
@@ -261,8 +156,6 @@ def test_exclusion_constraint_survives_unrelated_office_title_collision(
             Database("postgresql://unused"),
             query,
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.REWRITE,
         )
 
     timings, token = start_request_timings()
@@ -368,7 +261,6 @@ def test_exclusion_withholds_mapped_direct_facts_without_dropping_alternative_fa
 
     _install_pipeline_mocks(
         monkeypatch,
-        mode=QueryTransformMode.REWRITE,
         candidates=candidates,
         rerank=rerank,
     )
@@ -378,8 +270,6 @@ def test_exclusion_withholds_mapped_direct_facts_without_dropping_alternative_fa
             Database("postgresql://unused"),
             query,
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.REWRITE,
         )
 
     result = anyio.run(run)
@@ -420,7 +310,6 @@ def test_constrained_queries_never_use_unscored_or_score_floor_fallback(
 
     _install_pipeline_mocks(
         monkeypatch,
-        mode=QueryTransformMode.REWRITE,
         candidates=[_faq("Студентска служба"), faq],
         rerank=rerank,
     )
@@ -430,8 +319,6 @@ def test_constrained_queries_never_use_unscored_or_score_floor_fallback(
             Database("postgresql://unused"),
             query,
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.REWRITE,
         )
 
     timings, token = start_request_timings()
@@ -475,7 +362,6 @@ def test_finki_scope_keeps_ordinary_fallbacks(
 
     _install_pipeline_mocks(
         monkeypatch,
-        mode=QueryTransformMode.REWRITE,
         candidates=[office],
         rerank=rerank,
     )
@@ -485,8 +371,6 @@ def test_finki_scope_keeps_ordinary_fallbacks(
             Database("postgresql://unused"),
             query,
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.REWRITE,
         )
 
     timings, token = start_request_timings()
@@ -518,20 +402,6 @@ def test_constraint_catalog_error_fails_closed_and_cancels_owned_embedding(
             embedding_cancelled.set()
 
     monkeypatch.setattr(constraints_module, "get_question_names_query", failed_catalog)
-    monkeypatch.setattr(context_module, "has_provider_credential", lambda *args: True)
-    monkeypatch.setattr(
-        context_module, "_contextualize_query", AsyncMock(return_value=query)
-    )
-    monkeypatch.setattr(
-        context_module,
-        "build_query_variants",
-        AsyncMock(
-            return_value=QueryVariantBundle(
-                variants=(QueryVariant(kind="raw", text=query, is_document=False),),
-                rerank_query=query,
-            ),
-        ),
-    )
     monkeypatch.setattr(context_module, "_embed_variant", blocked_embedding)
 
     async def run():
@@ -539,8 +409,6 @@ def test_constraint_catalog_error_fails_closed_and_cancels_owned_embedding(
             Database("postgresql://unused"),
             query,
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.RAW,
         )
 
     timings, token = start_request_timings()
@@ -575,20 +443,6 @@ def test_constraint_planning_cancellation_drains_owned_embedding(
             embedding_cleaned.set()
 
     monkeypatch.setattr(constraints_module, "get_question_names_query", blocked_catalog)
-    monkeypatch.setattr(context_module, "has_provider_credential", lambda *args: True)
-    monkeypatch.setattr(
-        context_module, "_contextualize_query", AsyncMock(return_value=query)
-    )
-    monkeypatch.setattr(
-        context_module,
-        "build_query_variants",
-        AsyncMock(
-            return_value=QueryVariantBundle(
-                variants=(QueryVariant(kind="raw", text=query, is_document=False),),
-                rerank_query=query,
-            ),
-        ),
-    )
     monkeypatch.setattr(context_module, "_embed_variant", blocked_embedding)
 
     async def run():
@@ -597,8 +451,6 @@ def test_constraint_planning_cancellation_drains_owned_embedding(
                 Database("postgresql://unused"),
                 query,
                 Model.BGE_M3_LOCAL,
-                Model.GPT_5_4_MINI,
-                query_transform_mode=QueryTransformMode.RAW,
             ),
         )
         await planner_started.wait()
@@ -1054,13 +906,11 @@ def test_planner_propagates_cancellation(monkeypatch: pytest.MonkeyPatch) -> Non
         )
 
 
-@pytest.mark.parametrize("mode", list(QueryTransformMode))
 @pytest.mark.parametrize("exclusion_first", [False, True])
 @pytest.mark.parametrize("institution", ["Правен факултет", "ФИНКИ"])
 @pytest.mark.parametrize("office", ["Деканатот", "Архивата"])
 def test_compound_scope_and_exclusion_are_both_enforced_before_rerank(
     monkeypatch: pytest.MonkeyPatch,
-    mode: QueryTransformMode,
     exclusion_first: bool,
     institution: str,
     office: str,
@@ -1103,18 +953,12 @@ def test_compound_scope_and_exclusion_are_both_enforced_before_rerank(
         return Response()
 
     planned_queries = _install_pipeline_mocks(
-        monkeypatch, mode=mode, candidates=candidates, rerank=rerank
+        monkeypatch, candidates=candidates, rerank=rerank
     )
     monkeypatch.setattr(
         context_module, "_search_both", AsyncMock(return_value=(candidates, [chunk]))
     )
     monkeypatch.setattr(context_module, "get_chunks_window", AsyncMock(return_value=[]))
-    # Rewrites and history may remove both clauses; only the latest query sets policy.
-    monkeypatch.setattr(
-        context_module,
-        "_contextualize_query",
-        AsyncMock(return_value="Каде е службата?"),
-    )
     exact = AsyncMock(return_value=candidates[0])
     monkeypatch.setattr(recovery_plan_module, "get_question_by_name_query", exact)
 
@@ -1123,9 +967,6 @@ def test_compound_scope_and_exclusion_are_both_enforced_before_rerank(
             Database("postgresql://unused"),
             query,
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=mode,
-            history_text="previous office conversation",
         )
 
     timings, token = start_request_timings()
@@ -1155,8 +996,6 @@ def test_compound_scope_and_exclusion_are_both_enforced_before_rerank(
     assert timings.faq_evidence_excluded_candidate_count == (
         2 if institution == "ФИНКИ" else 4
     )
-    if mode == QueryTransformMode.RAW:
-        exact.assert_awaited_once()
 
 
 @pytest.mark.parametrize(
@@ -1210,7 +1049,6 @@ def test_normalized_exclusion_withholds_actual_catalog_fact_carriers(
 
     _install_pipeline_mocks(
         monkeypatch,
-        mode=QueryTransformMode.REWRITE,
         candidates=candidates,
         rerank=rerank,
     )
@@ -1220,8 +1058,6 @@ def test_normalized_exclusion_withholds_actual_catalog_fact_carriers(
             Database("postgresql://unused"),
             query,
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.REWRITE,
         )
 
     timings, token = start_request_timings()
@@ -1273,17 +1109,13 @@ def test_noninstitution_complements_preserve_ordinary_pipeline(
         payloads.append(payload)
         return Response()
 
-    _install_pipeline_mocks(
-        monkeypatch, mode=QueryTransformMode.REWRITE, candidates=[faq], rerank=rerank
-    )
+    _install_pipeline_mocks(monkeypatch, candidates=[faq], rerank=rerank)
 
     async def run():
         return await context_module.get_retrieved_context_with_sources(
             Database("postgresql://unused"),
             query,
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.REWRITE,
         )
 
     timings, token = start_request_timings()
@@ -1328,7 +1160,6 @@ def test_compound_live_catalog_cannot_drop_either_recognized_constraint(
     rerank = AsyncMock(side_effect=AssertionError("invalid catalog must fail closed"))
     _install_pipeline_mocks(
         monkeypatch,
-        mode=QueryTransformMode.REWRITE,
         candidates=[_faq(title) for title in _OFFICES],
         rerank=rerank,
     )
@@ -1338,8 +1169,6 @@ def test_compound_live_catalog_cannot_drop_either_recognized_constraint(
             Database("postgresql://unused"),
             query,
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.REWRITE,
         )
 
     timings, token = start_request_timings()
@@ -1459,7 +1288,6 @@ def test_compound_catalog_collisions_only_block_affected_evidence(
 
     _install_pipeline_mocks(
         monkeypatch,
-        mode=QueryTransformMode.REWRITE,
         candidates=candidates,
         rerank=rerank,
     )
@@ -1469,8 +1297,6 @@ def test_compound_catalog_collisions_only_block_affected_evidence(
             Database("postgresql://unused"),
             query,
             Model.BGE_M3_LOCAL,
-            Model.GPT_5_4_MINI,
-            query_transform_mode=QueryTransformMode.REWRITE,
         )
 
     timings, token = start_request_timings()

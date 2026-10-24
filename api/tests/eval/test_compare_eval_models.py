@@ -24,16 +24,11 @@ def _result(**effective_config: JsonValue) -> dict[str, JsonValue]:
     return result
 
 
-def _run(
-    results: list[JsonValue],
-    *,
-    mode: str = "rewrite_hyde",
-) -> dict[str, JsonValue]:
+def _run(results: list[JsonValue]) -> dict[str, JsonValue]:
     return {
         "config": {
-            "query_transform_mode": mode,
             "initial_k": 40,
-            "per_query_k": 40 if mode == "raw" else 10,
+            "per_query_k": 10,
         },
         "results": results,
     }
@@ -44,7 +39,6 @@ def test_legacy_result_uses_run_config_when_compared_with_modern_result():
     modern = _run(
         [
             _result(
-                effective_transform_mode="rewrite_hyde",
                 effective_initial_k=40,
                 effective_per_query_k=10,
             ),
@@ -60,7 +54,6 @@ def test_null_effective_config_is_incomparable():
     unavailable = _run(
         [
             _result(
-                effective_transform_mode=None,
                 effective_initial_k=None,
                 effective_per_query_k=None,
             ),
@@ -75,16 +68,14 @@ def test_null_effective_config_is_incomparable():
 @pytest.mark.parametrize(
     "effective_config",
     [
-        {"effective_transform_mode": "raw"},
+        {"effective_initial_k": 40},
         {
-            "effective_transform_mode": "raw",
             "effective_initial_k": True,
             "effective_per_query_k": 40,
         },
         {
-            "effective_transform_mode": "unknown",
             "effective_initial_k": 40,
-            "effective_per_query_k": 40,
+            "effective_per_query_k": None,
         },
     ],
 )
@@ -104,25 +95,19 @@ def test_duplicate_case_ids_are_rejected():
 
 def test_prior_requested_only_schema_derives_nominal_budget():
     prior: dict[str, JsonValue] = {
-        "config": {
-            "requested_query_transform_mode": "rewrite_hyde",
-            "requested_initial_k": 30,
-        },
+        "config": {"requested_initial_k": 20},
         "results": [_result()],
     }
     modern: dict[str, JsonValue] = {
         "config": {
-            "query_transform_mode": "rewrite_hyde",
-            "initial_k": 60,
-            "per_query_k": 21,
-            "requested_query_transform_mode": "rewrite_hyde",
-            "requested_initial_k": 30,
+            "initial_k": 30,
+            "per_query_k": 31,
+            "requested_initial_k": 20,
         },
         "results": [
             _result(
-                effective_transform_mode="rewrite_hyde",
-                effective_initial_k=60,
-                effective_per_query_k=21,
+                effective_initial_k=30,
+                effective_per_query_k=31,
             ),
         ],
     }
@@ -131,9 +116,8 @@ def test_prior_requested_only_schema_derives_nominal_budget():
     comparison = compare_runs(prior, modern)
 
     assert prior_case.requested_config == EffectiveRetrievalConfig(
-        transform_mode="rewrite_hyde",
-        initial_k=60,
-        per_query_k=21,
+        initial_k=30,
+        per_query_k=31,
     )
     assert comparison.incomparable_configs == []
 
@@ -164,17 +148,10 @@ def test_null_nominal_run_budget_is_rejected(null_key: str):
     "effective_config",
     [
         {
-            "effective_transform_mode": "raw",
-            "effective_initial_k": 40,
-            "effective_per_query_k": 10,
-        },
-        {
-            "effective_transform_mode": "rewrite_hyde",
             "effective_initial_k": 41,
             "effective_per_query_k": 10,
         },
         {
-            "effective_transform_mode": "rewrite_hyde",
             "effective_initial_k": 40,
             "effective_per_query_k": 11,
         },

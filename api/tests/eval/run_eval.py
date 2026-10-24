@@ -36,18 +36,13 @@ import asyncio
 import json
 import re
 import sys
-import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
 from asyncpg import PostgresError
 
-from app.api.sponsored_access import (
-    resolve_sponsored_inference,
-    sponsored_query_transform,
-)
 from app.data.connection import Database
 from app.data.documents import get_closest_chunks
 from app.data.questions import get_closest_questions, get_matching_questions
@@ -65,16 +60,11 @@ from app.llms.faq_evidence_constraints import (
 )
 from app.llms.faq_query_recovery_plan import (
     FaqQueryRecoveryOutcome,
-    FaqQueryRecoveryPlan,
     plan_faq_query_recovery,
 )
-from app.llms.models import MODEL_DISTANCE_THRESHOLDS, Model, model_id
-from app.llms.provider_credentials import LlmProviderCredentials
-from app.llms.query_modes import QueryTransformMode
+from app.llms.models import MODEL_DISTANCE_THRESHOLDS, Model
 from app.llms.query_normalization import query_search_variants
-from app.llms.query_variants import (
-    build_query_variants,
-)
+from app.llms.query_variants import build_query_variants
 from app.llms.reranker import post_rerank as _post_rerank
 from app.llms.retrieval_budget import retrieval_budget
 from app.llms.retrieval_routing import lexical_faq_expansion_allowed
@@ -84,28 +74,6 @@ from app.utils.http_client import close_http_client, init_http_client
 from app.utils.settings import Settings
 
 settings = Settings()
-
-
-def resolve_transform_credentials(
-    qt_model: Model,
-) -> tuple[Model, LlmProviderCredentials | None]:
-    """Run query transforms on the sponsored model, as /chat does for users without a key."""
-    resolution = resolve_sponsored_inference(
-        settings.SPONSORED_MODEL_ID, None, settings
-    )
-    # The OpenCode Go sponsored endpoint only serves requests that carry a session.
-    conversation_id = f"eval-{uuid.uuid4()}"
-    model, credentials = sponsored_query_transform(
-        qt_model,
-        None,
-        resolution,
-        settings.SPONSORED_MODEL_ID,
-        settings,
-        conversation_id=conversation_id,
-    )
-    if credentials is not None and credentials.conversation_id is None:
-        credentials = replace(credentials, conversation_id=conversation_id)
-    return Model(model_id(model)), credentials
 
 
 # A ceiling high enough to disable the distance pre-filter (cosine distance maxes at 2.0).
@@ -180,7 +148,6 @@ class Result:
     local_query_variant_added: bool = False
     local_rerank_query_used: bool = False
     best_distance: float | None = None
-    effective_transform_mode: QueryTransformMode | None = None
     effective_initial_k: int | None = None
     effective_per_query_k: int | None = None
 
@@ -349,12 +316,9 @@ async def evaluate_one(
     ex: Example,
     *,
     embedding_model: Model,
-    qt_model: Model,
     initial_k: int,
     top_k: int,
     ideal_limit: int,
-    transform_mode: QueryTransformMode,
-    qt_credentials: LlmProviderCredentials | None = None,
 ) -> Result:
     want = anchor_key(ex.anchor)
     evidence_plan = await plan_faq_evidence_constraints(db, ex.query)
@@ -362,23 +326,12 @@ async def evaluate_one(
         raise ValueError("FAQ evidence constraint catalog failure")
     constraints = evidence_plan.constraints
 
-    variant_bundle = await build_query_variants(
-        ex.query,
-        qt_model,
-        transform_mode,
-        credentials=qt_credentials,
-    )
+    variant_bundle = build_query_variants(ex.query)
     variants = [
         (variant.text, variant.is_document) for variant in variant_bundle.variants
     ]
-    budget = retrieval_budget(
-        variant_bundle.mode,
-        initial_k,
-        extra_variants=variant_bundle.transliteration_variant_count,
-    )
-    recovery_plan = FaqQueryRecoveryPlan(outcome="skipped")
-    if variant_bundle.mode == QueryTransformMode.RAW:
-        recovery_plan = await plan_faq_query_recovery(db, ex.query)
+    budget = retrieval_budget(initial_k, variant_count=len(variants))
+    recovery_plan = await plan_faq_query_recovery(db, ex.query)
     canonical_query = (
         recovery_plan.recovery.canonical_query
         if recovery_plan.recovery is not None
@@ -581,7 +534,6 @@ async def evaluate_one(
         local_rerank_query_used=recovery_plan.recovery is not None
         and bool(cand_rerank),
         best_distance=round(best_distance, 4) if best_distance is not None else None,
-        effective_transform_mode=variant_bundle.mode,
         effective_initial_k=budget.initial_k,
         effective_per_query_k=per_query_k,
     )
@@ -617,10 +569,6 @@ async def main_async(ns: argparse.Namespace) -> int:
     if ns.limit:
         examples = examples[: ns.limit]
     embedding_model = Model(ns.embedding_model)
-    transform_mode = QueryTransformMode.RAW if ns.no_transform else ns.transform_mode
-    qt_model, qt_credentials = resolve_transform_credentials(
-        Model(ns.query_transform_model),
-    )
 
     init_http_client()
     db = Database(dsn=settings.DATABASE_URL)
@@ -637,12 +585,9 @@ async def main_async(ns: argparse.Namespace) -> int:
                         db,
                         ex,
                         embedding_model=embedding_model,
-                        qt_model=qt_model,
                         initial_k=ns.initial_k,
                         top_k=ns.top_k,
                         ideal_limit=ns.ideal_limit,
-                        transform_mode=transform_mode,
-                        qt_credentials=qt_credentials,
                     )
                 # ruff: ignore[BLE001] -- one failed case must not abort the evaluation run
                 except Exception as exc:
@@ -664,8 +609,7 @@ async def main_async(ns: argparse.Namespace) -> int:
 
     header = (
         f"golden={ns.golden}  n={len(examples)}  embed={embedding_model.value}  "
-        f"qt={qt_model.value}  requested_transform_mode={transform_mode.value}  "
-        f"requested_initial_k={ns.initial_k}  budget=per-example-effective-mode  "
+        f"requested_initial_k={ns.initial_k}  "
         f"ideal_limit_floor={ns.ideal_limit}  top_k={ns.top_k}  "
         f"reranker_min={settings.RERANKER_MIN_SCORE}"
     )
@@ -673,18 +617,14 @@ async def main_async(ns: argparse.Namespace) -> int:
     print(agg.report())
 
     if ns.json:
-        requested_budget = retrieval_budget(transform_mode, ns.initial_k)
+        requested_budget = retrieval_budget(ns.initial_k)
         out = {
             "config": {
                 "embedding_model": embedding_model.value,
-                "query_transform_model": qt_model.value,
-                "query_transform_mode": transform_mode.value,
                 "initial_k": requested_budget.initial_k,
                 "per_query_k": requested_budget.per_query_k,
                 "ideal_limit": max(ns.ideal_limit, requested_budget.per_query_k),
-                "requested_query_transform_mode": transform_mode.value,
                 "requested_initial_k": ns.initial_k,
-                "budget_scope": "per_example_effective_mode",
                 "ideal_limit_floor": ns.ideal_limit,
                 "top_k": ns.top_k,
                 "reranker_min_score": settings.RERANKER_MIN_SCORE,
@@ -730,11 +670,6 @@ async def main_async(ns: argparse.Namespace) -> int:
                     "faq_evidence_constrained_abstained": r.faq_evidence_constrained_abstained
                     if r.execution_status == "completed"
                     else None,
-                    "effective_transform_mode": (
-                        r.effective_transform_mode.value
-                        if r.effective_transform_mode is not None
-                        else None
-                    ),
                     "effective_initial_k": r.effective_initial_k,
                     "effective_per_query_k": r.effective_per_query_k,
                 }
@@ -754,14 +689,6 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="FINKI retrieval-evaluation harness")
     p.add_argument("--golden", default=str(Path(__file__).parent / "golden.jsonl"))
     p.add_argument("--embedding-model", default=Model.BGE_M3_LOCAL.value)
-    p.add_argument("--query-transform-model", default=Model.GPT_5_4_MINI.value)
-    p.add_argument(
-        "--transform-mode",
-        choices=list(QueryTransformMode),
-        default=QueryTransformMode.REWRITE_HYDE,
-        type=QueryTransformMode,
-        help="query variants to compare: raw, rewrite, hyde, or rewrite_hyde",
-    )
     p.add_argument(
         "--initial-k",
         type=int,
@@ -774,11 +701,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=20,
         help="per-variant limit for the no-threshold ideal-recall probe",
-    )
-    p.add_argument(
-        "--no-transform",
-        action="store_true",
-        help="legacy alias for --transform-mode raw",
     )
     p.add_argument("--concurrency", type=int, default=4)
     p.add_argument(

@@ -82,10 +82,9 @@ ordinary pool; unavailable constraint diagnostics must be explicit.
 Save before/after keys, excluded keys/counts, actual constraint/strict-mode
 diagnostics, exact emitted rerank query/scores, selected/visible IDs and known
 forbidden fact hits computed from the **whole returned context**. The fact-hit
-checks are evaluation only. Preserve original query constraints across mocked
-contextualization/rewrite/HyDE tests; the legacy harness has no conversation
-history and must call the shared production parser/filter on its original input,
-not recreate routing logic or parse a rewrite instead.
+checks are evaluation only. The legacy harness has no conversation history and
+must call the shared production parser/filter on its original input, not recreate
+routing logic.
 
 Comparison gates:
 - Every required guard excludes declared forbidden evidence at post-filter,
@@ -150,7 +149,7 @@ not instructions to deploy or generate answers.
 ```powershell
 $evidence = 'C:/Users/Stefan/AppData/Local/Temp/opencode/faq-evidence-scope-verified-20261014T013144Z'
 $out = 'NEW_APPROVED_OUTPUT_DIRECTORY'
-$common = @('--corpus-manifest', "$evidence/frozen-corpus.json", '--gpu-manifest', "$evidence/gpu-identity.json", '--mode', 'raw')
+$common = @('--corpus-manifest', "$evidence/frozen-corpus.json", '--gpu-manifest', "$evidence/gpu-identity.json")
 # Verified isolated PR1114 post-review baseline import: 819cbd720ae174a7e75506c3e606ef7844427ef8
 python -B -m tests.eval.robust_faq_replay @common --fixture tests/eval/faq_evidence_scope_golden.jsonl --scope-catalog tests/eval/faq_evidence_scope_facts.json --revision-label PR1114-819cbd7 --output "$out/baseline-scope-raw.json"
 python -B -m tests.eval.robust_faq_replay @common --revision-label PR1114-819cbd7 --output "$out/baseline-preservation-raw.json"

@@ -40,7 +40,7 @@ from app.llms.models import (
 )
 from app.llms.prompts import build_agent_messages
 from app.llms.provider_credentials import require_provider_credential
-from app.llms.tools import get_agent_tools
+from app.llms.tools import agent_middleware, fallback_prompts, get_agent_tools
 from app.schemas.chat_credentials import (
     OPENCODE_GO_DEFAULT_BASE_URL,
     ChatCredentialSecret,
@@ -255,7 +255,11 @@ async def stream_opencode_go_agent_response(
     )
     messages = build_agent_messages(system_prompt, history or [], user_prompt)
     try:
-        agent = create_agent(llm, await get_agent_tools())
+        agent = create_agent(
+            llm,
+            await get_agent_tools(),
+            middleware=agent_middleware(),
+        )
         return StreamingResponse(
             create_agent_token_generator(agent, messages, observation),
             media_type="text/event-stream",
@@ -274,8 +278,18 @@ async def stream_opencode_go_agent_response(
             reason="agent_setup_failed",
         )
 
+        fallback_system, fallback_user = await fallback_prompts(
+            system_prompt,
+            user_prompt,
+        )
+        fallback_messages = build_agent_messages(
+            fallback_system,
+            history or [],
+            fallback_user,
+        )
+
         def chunks() -> Generator[AIMessageChunk]:
-            yield from llm.stream(messages)
+            yield from llm.stream(fallback_messages)
 
         return stream_sync_gen_as_sse(chunks())
 

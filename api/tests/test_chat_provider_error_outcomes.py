@@ -17,8 +17,6 @@ from app.data.db import get_db
 from app.llms import agents
 from app.llms import chat as llm_chat
 from app.llms import openai as openai_module
-from app.llms.query_modes import QueryTransformMode
-from app.llms.retrieval_result import RetrievedContext
 from app.utils import posthog_client
 from app.utils.auth import verify_api_key
 from app.utils.timing import RequestTimings
@@ -94,15 +92,6 @@ def _configure_route(monkeypatch, *, case, mode, graph_closed=None):
     async def resolve(*args, **kwargs):
         return credentials(openai=mode == "byok")
 
-    async def context(*args, **kwargs):
-        return RetrievedContext(
-            text="context",
-            effective_transform_mode=QueryTransformMode.REWRITE_HYDE,
-        )
-
-    async def links(*args, **kwargs):
-        return ""
-
     async def admit(db, **kwargs):
         admitted.append((kwargs["user_id"], kwargs["request_id"]))
         return _admission(kwargs["request_id"])
@@ -114,11 +103,9 @@ def _configure_route(monkeypatch, *, case, mode, graph_closed=None):
     # Only provider graph events/construction and external services are replaced.
     monkeypatch.setattr(openai_module, "get_openai_llm", lambda *a, **kw: object())
     monkeypatch.setattr(openai_module, "get_agent_tools", tools)
-    monkeypatch.setattr(openai_module, "create_agent", lambda *a: GraphEdge())
+    monkeypatch.setattr(openai_module, "create_agent", lambda *a, **kw: GraphEdge())
     monkeypatch.setattr(llm_chat, "build_recommendation_tools", lambda db: [])
     monkeypatch.setattr(chat_api, "resolve_provider_credentials", resolve)
-    monkeypatch.setattr(chat_api, "get_retrieved_context_with_sources", context)
-    monkeypatch.setattr(chat_api, "get_links_context", links)
     monkeypatch.setattr(chat_api, "admit_sponsored_request", admit)
     monkeypatch.setattr(chat_api, "release_sponsored_request", release)
     app = FastAPI()
@@ -307,11 +294,9 @@ def _instrument(body):
         payload=_payload(),
         response_id=uuid4(),
         timings=RequestTimings(),
-        retrieval_hit=False,
         distinct_id="test",
         session_id=None,
         observation=agents.StreamObservation(distinct_id="test", response_id="test"),
-        effective_transform_mode=QueryTransformMode.REWRITE_HYDE,
         sponsored_mode="sponsored",
     )
 

@@ -19,9 +19,7 @@ def _load_prompt(filename: str) -> str:
 
 
 DEFAULT_AGENT_SYSTEM_PROMPT = _load_prompt("agent_system.txt")
-HYDE_SYSTEM_PROMPT = _load_prompt("hyde_system.txt")
-DEFAULT_QUERY_TRANSFORM_SYSTEM_PROMPT = _load_prompt("query_transform_system.txt")
-CONTEXTUALIZE_SYSTEM_PROMPT = _load_prompt("contextualize_system.txt")
+AGENT_SEARCH_TOOLS_PROMPT = _load_prompt("agent_tools_search.txt")
 _DISCORD_MARKDOWN_INSTRUCTIONS = _load_prompt("discord_format.txt")
 _WEB_MARKDOWN_INSTRUCTIONS = _load_prompt("web_format.txt")
 

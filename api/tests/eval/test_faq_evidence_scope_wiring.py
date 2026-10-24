@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import anyio
@@ -14,7 +14,6 @@ from app.llms.faq_evidence_constraints import (
 )
 from app.llms.faq_query_recovery_plan import FaqQueryRecoveryPlan
 from app.llms.models import Model
-from app.llms.query_modes import QueryTransformMode
 from app.llms.query_variants import QueryVariant, QueryVariantBundle
 from app.schemas.questions import QuestionSchema
 from app.utils import timing
@@ -50,13 +49,10 @@ def _plan(query):
     )
 
 
-@pytest.mark.parametrize(
-    "mode", [QueryTransformMode.RAW, QueryTransformMode.REWRITE_HYDE]
-)
 @pytest.mark.parametrize("hook_available", [True, False])
 @pytest.mark.parametrize("score", [0.9, 0.01])
 def test_actual_observer_pool_is_filtered_before_rerank(
-    monkeypatch, mode, hook_available, score
+    monkeypatch, hook_available, score
 ):
     query = "Каде е студентската служба на Медицински факултет?"
     service, process = _faq("Студентска служба"), _faq("Признавање кредити")
@@ -108,7 +104,6 @@ def test_actual_observer_pool_is_filtered_before_rerank(
             case,
             anchor=None,
             db=db,
-            mode=mode,
             scope_catalog={"facts": {}},
         )
 
@@ -146,13 +141,10 @@ def test_actual_observer_pool_is_filtered_before_rerank(
 
 
 @pytest.mark.parametrize(
-    "mode", [QueryTransformMode.RAW, QueryTransformMode.REWRITE_HYDE]
-)
-@pytest.mark.parametrize(
     "rerank_result", ["below_floor", "invalid", "failure", "above_floor"]
 )
 def test_legacy_shared_original_constraints_and_strict_abstention(
-    monkeypatch, mode, rerank_result
+    monkeypatch, rerank_result
 ):
     query = "Каде е деканатот, не прашувам за студентската служба?"
     service, dean = _faq("Студентска служба"), _faq("Деканат")
@@ -165,26 +157,11 @@ def test_legacy_shared_original_constraints_and_strict_abstention(
         "plan_faq_query_recovery",
         AsyncMock(return_value=FaqQueryRecoveryPlan(outcome="skipped")),
     )
-    # A rewrite drops the exclusion: the planner must still see the original.
-    variants: tuple[QueryVariant, ...] = (
-        QueryVariant(kind="raw", text=query, is_document=False),
-    )
-    if mode == QueryTransformMode.REWRITE_HYDE:
-        variants += (
-            QueryVariant(kind="rewrite", text="Каде е деканатот?", is_document=False),
-            QueryVariant(
-                kind="hyde",
-                text="Деканатот е во административната зграда.",
-                is_document=True,
-            ),
-        )
     bundle = QueryVariantBundle(
-        variants=variants,
-        rerank_query="Каде е деканатот?",
+        variants=(QueryVariant(kind="raw", text=query, is_document=False),),
+        rerank_query=query,
     )
-    monkeypatch.setattr(
-        run_eval, "build_query_variants", AsyncMock(return_value=bundle)
-    )
+    monkeypatch.setattr(run_eval, "build_query_variants", Mock(return_value=bundle))
     monkeypatch.setattr(run_eval, "_embed_variant", AsyncMock(return_value=[1.0]))
     monkeypatch.setattr(
         run_eval, "get_closest_questions", AsyncMock(return_value=[service, dean])
@@ -211,11 +188,9 @@ def test_legacy_shared_original_constraints_and_strict_abstention(
                 id="public", query=query, anchor={"type": "Q", "name": dean.name}
             ),
             embedding_model=Model.BGE_M3_LOCAL,
-            qt_model=Model.GPT_5_4_MINI,
             initial_k=30,
             top_k=10,
             ideal_limit=30,
-            transform_mode=mode,
         )
 
     result = anyio.run(run)
@@ -242,7 +217,6 @@ def test_added_offline_modifier_and_quoted_marker_controls_do_not_change_frozen_
     assert parse_explicit_faq_constraints(query) is None
 
 
-@pytest.mark.parametrize("mode", list(QueryTransformMode))
 @pytest.mark.parametrize(
     ("stage", "abstained"),
     [
@@ -258,7 +232,6 @@ def test_added_offline_modifier_and_quoted_marker_controls_do_not_change_frozen_
 )
 def test_actual_production_and_legacy_abstention_denial_stage_parity(
     monkeypatch,
-    mode,
     stage,
     abstained,
 ):
@@ -273,14 +246,10 @@ def test_actual_production_and_legacy_abstention_denial_stage_parity(
         if stage == "filtered_all"
         else [remaining]
     )
-    variants = [QueryVariant(kind="raw", text=query, is_document=False)]
-    if mode in {QueryTransformMode.REWRITE, QueryTransformMode.REWRITE_HYDE}:
-        variants.append(
-            QueryVariant(kind="rewrite", text="rewritten", is_document=False)
-        )
-    if mode in {QueryTransformMode.HYDE, QueryTransformMode.REWRITE_HYDE}:
-        variants.append(QueryVariant(kind="hyde", text="hypothesis", is_document=True))
-    bundle = QueryVariantBundle(variants=tuple(variants), rerank_query=query)
+    bundle = QueryVariantBundle(
+        variants=(QueryVariant(kind="raw", text=query, is_document=False),),
+        rerank_query=query,
+    )
     top_k = 0 if stage == "top_k_zero" else 10
     for module in (context, run_eval):
         monkeypatch.setattr(
@@ -291,16 +260,11 @@ def test_actual_production_and_legacy_abstention_denial_stage_parity(
             "plan_faq_query_recovery",
             AsyncMock(return_value=FaqQueryRecoveryPlan(outcome="skipped")),
         )
-        monkeypatch.setattr(
-            module, "build_query_variants", AsyncMock(return_value=bundle)
-        )
+        monkeypatch.setattr(module, "build_query_variants", Mock(return_value=bundle))
         monkeypatch.setattr(module, "_embed_variant", AsyncMock(return_value=[1.0]))
         monkeypatch.setattr(
             module, "get_matching_questions", AsyncMock(return_value=[])
         )
-    # Exercise every effective mode without enabling an actual provider transform.
-    monkeypatch.setattr(context, "has_provider_credential", lambda *_args: True)
-    monkeypatch.setattr(context, "_contextualize_query", AsyncMock(return_value=query))
     monkeypatch.setattr(
         context, "_search_both", AsyncMock(return_value=(questions, []))
     )
@@ -344,8 +308,6 @@ def test_actual_production_and_legacy_abstention_denial_stage_parity(
                 db,
                 query,
                 Model.BGE_M3_LOCAL,
-                Model.GPT_5_4_MINI,
-                query_transform_mode=mode,
                 top_k=top_k,
                 credentials=None,
             )
@@ -363,18 +325,13 @@ def test_actual_production_and_legacy_abstention_denial_stage_parity(
                 },
             ),
             embedding_model=Model.BGE_M3_LOCAL,
-            qt_model=Model.GPT_5_4_MINI,
             initial_k=30,
             top_k=top_k,
             ideal_limit=30,
-            transform_mode=mode,
         )
         return production, diagnostics, legacy
 
     production, diagnostics, legacy = anyio.run(run)
-    assert (
-        production.effective_transform_mode == legacy.effective_transform_mode == mode
-    )
     assert (
         diagnostics["faq_evidence_constraint_applied"]
         is legacy.faq_evidence_constraint_applied
@@ -417,9 +374,7 @@ def test_ordinary_legacy_rerank_handling_is_not_changed(monkeypatch, rerank_resu
         "plan_faq_query_recovery",
         AsyncMock(return_value=FaqQueryRecoveryPlan(outcome="skipped")),
     )
-    monkeypatch.setattr(
-        run_eval, "build_query_variants", AsyncMock(return_value=bundle)
-    )
+    monkeypatch.setattr(run_eval, "build_query_variants", Mock(return_value=bundle))
     monkeypatch.setattr(run_eval, "_embed_variant", AsyncMock(return_value=[1.0]))
     monkeypatch.setattr(
         run_eval, "get_closest_questions", AsyncMock(return_value=[faq])
@@ -445,11 +400,9 @@ def test_ordinary_legacy_rerank_handling_is_not_changed(monkeypatch, rerank_resu
                 id="ordinary", query=query, anchor={"type": "Q", "name": faq.name}
             ),
             embedding_model=Model.BGE_M3_LOCAL,
-            qt_model=Model.GPT_5_4_MINI,
             initial_k=30,
             top_k=10,
             ideal_limit=30,
-            transform_mode=QueryTransformMode.RAW,
         )
 
     if rerank_result == "failure":
@@ -470,7 +423,7 @@ def test_catalog_failure_remains_production_abstention_and_legacy_execution_erro
         variants=(QueryVariant(kind="raw", text=query, is_document=False),),
         rerank_query=query,
     )
-    legacy_build = AsyncMock(return_value=bundle)
+    legacy_build = Mock(return_value=bundle)
     legacy_embed = AsyncMock(return_value=[1.0])
     for module in (context, run_eval):
         monkeypatch.setattr(
@@ -481,7 +434,7 @@ def test_catalog_failure_remains_production_abstention_and_legacy_execution_erro
         monkeypatch.setattr(
             module,
             "build_query_variants",
-            legacy_build if module is run_eval else AsyncMock(return_value=bundle),
+            legacy_build if module is run_eval else Mock(return_value=bundle),
         )
         monkeypatch.setattr(
             module,
@@ -498,13 +451,11 @@ def test_catalog_failure_remains_production_abstention_and_legacy_execution_erro
                     id="catalog-error", query=query, anchor={"type": "none"}
                 ),
                 embedding_model=Model.BGE_M3_LOCAL,
-                qt_model=Model.GPT_5_4_MINI,
                 initial_k=30,
                 top_k=10,
                 ideal_limit=30,
-                transform_mode=QueryTransformMode.RAW,
             )
-        legacy_build.assert_not_awaited()
+        legacy_build.assert_not_called()
         legacy_embed.assert_not_awaited()
         observed, token = timing.start_request_timings()
         try:
@@ -512,8 +463,6 @@ def test_catalog_failure_remains_production_abstention_and_legacy_execution_erro
                 db,
                 query,
                 Model.BGE_M3_LOCAL,
-                Model.GPT_5_4_MINI,
-                query_transform_mode=QueryTransformMode.RAW,
                 credentials=None,
             )
             assert production.text == ""

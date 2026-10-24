@@ -43,7 +43,6 @@ def _capture_properties(
         ),
         answer_text="",
         session_id=None,
-        effective_transform_mode=QueryTransformMode.RAW,
         model_access_mode=model_access_mode,
     )
 
@@ -73,14 +72,13 @@ def test_invalid_thresholds_are_missing_not_zero(monkeypatch, score):
     assert "source_reranker_min_score" not in properties
 
 
-def test_generation_telemetry_distinguishes_requested_and_effective_transform_modes(
+def test_generation_telemetry_ignores_requested_transform_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     properties = _capture_properties(monkeypatch, "query")
 
-    assert properties["requested_query_transform_mode"] == "rewrite_hyde"
-    assert properties["query_transform_mode"] == "raw"
-    assert properties["query_transform_fallback_reason"] == "not_run"
+    assert not any("query_transform" in key for key in properties)
+    assert "hyde_ms" not in properties
     assert properties["reranker_fallback_reason"] == "not_run"
     assert properties["reranker_invalid_result_count"] == 0
 
@@ -119,7 +117,6 @@ def test_generation_telemetry_emits_content_free_retrieval_aggregates(
     timings.lexical_only_final_count = 1
     timings.retrieval_path = "hybrid"
     timings.reranker_fallback = False
-    timings.query_transform_fallback_reason = "partial_variants"
     timings.reranker_fallback_reason = "none"
     timings.reranker_invalid_result_count = 2
     timings.local_faq_recovery_outcome = "matched"
@@ -143,7 +140,6 @@ def test_generation_telemetry_emits_content_free_retrieval_aggregates(
     assert properties["lexical_only_final_count"] == 1
     assert properties["retrieval_path"] == "hybrid"
     assert properties["reranker_fallback"] is False
-    assert properties["query_transform_fallback_reason"] == "partial_variants"
     assert properties["reranker_fallback_reason"] == "none"
     assert properties["reranker_invalid_result_count"] == 2
     assert properties["local_faq_recovery_outcome"] == "matched"

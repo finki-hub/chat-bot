@@ -71,8 +71,6 @@ def test_runner_execution_errors_are_not_quality_results(
             str(golden),
             "--json",
             str(output),
-            "--transform-mode",
-            "raw",
             "--concurrency",
             "1",
             "--limit",
@@ -97,7 +95,7 @@ def test_runner_execution_errors_are_not_quality_results(
         is_error = row["id"] in failed
         assert row["execution_status"] == ("error" if is_error else "completed")
         assert row["error_type"] == ("TimeoutError" if is_error else None)
-        assert row["effective_transform_mode"] == (None if is_error else "raw")
+        assert row["effective_per_query_k"] == (None if is_error else 31)
         if is_error:
             assert f"[ANN-MISS] {row['id']}" not in captured.out
     if completed == 0:
@@ -131,7 +129,6 @@ def test_compare_rejects_explicit_error_regardless_of_config_or_budget(
         }
         if effective != "absent":
             row.update(
-                effective_transform_mode="raw" if effective == "present" else None,
                 effective_initial_k=30 if effective == "present" else None,
                 effective_per_query_k=31 if effective == "present" else None,
             )
@@ -140,7 +137,6 @@ def test_compare_rejects_explicit_error_regardless_of_config_or_budget(
             json.dumps(
                 {
                     "config": {
-                        "query_transform_mode": "raw",
                         "initial_k": 30,
                         "per_query_k": 31,
                     },

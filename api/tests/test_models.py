@@ -325,6 +325,7 @@ def test_query_transform_routes_openrouter_credential(monkeypatch) -> None:
         return await query_transform.transform_query(
             "test",
             Model.OPENROUTER_DEEPSEEK_V4_PRO_0813,
+            system_prompt="system",
             temperature=0.0,
             top_p=1.0,
             max_tokens=256,

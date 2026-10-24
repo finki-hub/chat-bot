@@ -46,7 +46,6 @@ def _result(
 def _run(results: list[dict[str, JsonValue]]) -> dict[str, JsonValue]:
     config: dict[str, JsonValue] = {
         "embedding_model": "BAAI/bge-m3",
-        "query_transform_mode": "rewrite_hyde",
         "initial_k": 40,
         "per_query_k": 10,
     }

@@ -16,7 +16,6 @@ from app.llms.ollama import transform_query_with_ollama
 from app.llms.openai import transform_query_with_openai
 from app.llms.opencode_go import transform_query_with_opencode_go
 from app.llms.openrouter import transform_query_with_openrouter
-from app.llms.prompts import DEFAULT_QUERY_TRANSFORM_SYSTEM_PROMPT
 from app.llms.provider_credentials import LlmProviderCredentials
 
 logger = logging.getLogger(__name__)
@@ -30,7 +29,7 @@ async def transform_query(
     query: str,
     model: ChatModel,
     *,
-    system_prompt: str = DEFAULT_QUERY_TRANSFORM_SYSTEM_PROMPT,
+    system_prompt: str,
     temperature: float,
     top_p: float,
     max_tokens: int,

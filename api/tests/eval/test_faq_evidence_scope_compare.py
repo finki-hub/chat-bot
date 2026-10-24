@@ -54,7 +54,6 @@ def _inputs():
         row = {
             **case,
             "execution_status": "completed",
-            "effective_transform_mode": "raw",
             "n_candidates": len(observation["after_candidates"]),
             "candidates": observation["after_candidates"],
             "selected_ids": observation["selected_ids"],
