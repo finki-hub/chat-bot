@@ -10,7 +10,7 @@ import {
 import { type ReactNode, useId, useState } from 'react';
 
 import { t } from '@/lib/i18n';
-import { searchToolIcon, searchToolLabel } from '@/lib/search-status';
+import { searchToolLabel, toolCallIcon } from '@/lib/search-status';
 import {
   toolCallInputText,
   toolCallResultText,
@@ -33,16 +33,18 @@ const STATUS_LABELS: Record<ToolCallStatus, string> = {
 };
 
 export const ToolCall = ({
+  className = '',
   part,
   running = false,
 }: {
+  className?: string;
   part: DynamicToolUIPart;
   running?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const status = toolCallStatus(part, running);
-  const ToolIcon = searchToolIcon(part.toolName);
+  const ToolIcon = toolCallIcon(part.toolName);
   const label =
     part.title !== undefined && part.title.length > 0
       ? part.title
@@ -52,7 +54,7 @@ export const ToolCall = ({
 
   return (
     <div
-      className="w-fit max-w-full rounded-lg border border-border bg-muted/40 text-sm"
+      className={`w-fit max-w-full rounded-lg border border-border bg-muted/40 text-sm ${className}`}
       data-state={status}
       data-testid="tool-call"
       data-tool={part.toolName}
