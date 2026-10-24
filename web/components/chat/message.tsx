@@ -1,3 +1,5 @@
+import type { DynamicToolUIPart } from 'ai';
+
 import { Clock3 } from 'lucide-react';
 import { type ReactNode, useRef } from 'react';
 
@@ -12,6 +14,7 @@ import { ReasoningDisclosure } from '@/components/chat/reasoning-disclosure';
 import { SearchStatus } from '@/components/chat/search-status';
 import { SearchStepper } from '@/components/chat/search-stepper';
 import { SourceCards } from '@/components/chat/source-cards';
+import { ToolCall } from '@/components/chat/tool-call';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,7 +25,15 @@ import {
 import { formatThroughput } from '@/lib/diagnostics';
 import { formatDuration } from '@/lib/duration';
 import { formatSpanLabel, t } from '@/lib/i18n';
-import { reasoningParts, textParts } from '@/lib/message-parts';
+import {
+  hasToolCalls,
+  isTextPart,
+  isToolCallPart,
+  joinReasoning,
+  textParts,
+  toolCallParts,
+} from '@/lib/message-parts';
+import { supersededToolCalls, toolCallStatus } from '@/lib/tool-calls';
 import { usePresence } from '@/lib/use-presence';
 import { useSearchStage } from '@/lib/use-search-stage';
 
@@ -496,17 +507,21 @@ export const MessageError = ({
 const STEP_EXIT_MS = 300;
 
 const AssistantMessageStatus = ({
+  awaitingModel = false,
   errorPart,
   pending,
   reasoningText,
   statusPart,
   text,
+  toolCallsShown = false,
 }: {
+  awaitingModel?: boolean;
   errorPart?: ErrorNotice;
   pending?: boolean;
   reasoningText: string;
   statusPart?: StatusPart;
   text: null | string;
+  toolCallsShown?: boolean;
 }) => {
   const stages = useSearchStage({
     pending,
@@ -516,19 +531,26 @@ const AssistantMessageStatus = ({
     text,
   });
 
+  // Tool-call messages show their progress inline as tool rows instead.
   const showStepper =
-    stages.length > 0 && text === null && (pending ?? Boolean(statusPart));
+    !toolCallsShown &&
+    stages.length > 0 &&
+    text === null &&
+    (pending ?? Boolean(statusPart));
   const stepper = usePresence(showStepper, STEP_EXIT_MS);
-  const showChip = Boolean(statusPart) && !text && !statusPart?.stage;
+  const showChip =
+    Boolean(statusPart) && !text && !statusPart?.stage && !toolCallsShown;
   const showDots =
-    Boolean(pending) &&
-    !text &&
-    !statusPart &&
-    !errorPart &&
-    reasoningText.length === 0 &&
-    stages.length === 0;
+    awaitingModel ||
+    (!toolCallsShown &&
+      Boolean(pending) &&
+      !text &&
+      !statusPart &&
+      !errorPart &&
+      reasoningText.length === 0 &&
+      stages.length === 0);
 
-  if (stepper.mounted) {
+  if (!toolCallsShown && stepper.mounted) {
     // Collapse + fade the steps on exit (grid-rows 1fr→0fr squashes them
     // upward) instead of unmounting abruptly when the answer arrives.
     return (
@@ -560,21 +582,122 @@ const AssistantMessageStatus = ({
 
   return showDots ? <TypingIndicator /> : null;
 };
-export const AssistantMessage = ({
-  actions,
-  complete,
+
+type AnswerSegment =
+  | { key: string; part: DynamicToolUIPart; type: 'tool' }
+  | { key: string; text: string; type: 'text' };
+
+// Text parts carry no id, so each is keyed by the tool call it follows.
+const answerSegments = (message: MyUIMessage): AnswerSegment[] => {
+  const segments: AnswerSegment[] = [];
+  let anchor = 'start';
+  let textCount = 0;
+
+  for (const part of message.parts) {
+    if (isToolCallPart(part)) {
+      anchor = part.toolCallId;
+      textCount = 0;
+      segments.push({ key: anchor, part, type: 'tool' });
+    } else if (part.type === 'text' && part.text.length > 0) {
+      textCount += 1;
+      segments.push({
+        key: `${anchor}:text:${textCount}`,
+        text: part.text,
+        type: 'text',
+      });
+    }
+  }
+
+  return segments;
+};
+
+// Tool-call messages render every part in stream order: text written before,
+// between and after the calls is all part of the answer.
+const InterleavedParts = ({
+  message,
+  pending,
+}: {
+  message: MyUIMessage;
+  pending: boolean;
+}) => {
+  const superseded = supersededToolCalls(message);
+
+  return (
+    <div
+      className="flex flex-col gap-2"
+      data-testid="answer-parts"
+    >
+      {answerSegments(message).map((segment) =>
+        segment.type === 'tool' ? (
+          <ToolCall
+            key={segment.key}
+            part={segment.part}
+            running={pending && !superseded.has(segment.part.toolCallId)}
+          />
+        ) : (
+          <div
+            data-testid="answer-text"
+            key={segment.key}
+          >
+            <MessageResponse>{segment.text}</MessageResponse>
+          </div>
+        ),
+      )}
+    </div>
+  );
+};
+
+const nonEmptyTexts = (parts: MyUIMessage['parts']): string[] =>
+  parts
+    .filter(isTextPart)
+    .map((part) => part.text)
+    .filter((text) => text.trim() !== '');
+
+type AnswerState = {
+  awaitingModel: boolean;
+  text: null | string;
+  withToolCalls: boolean;
+};
+
+const answerState = ({
   errorPart,
   message,
-  onManageCredentials,
-  onRetry,
   pending,
-  retryPending,
   statusPart,
-}: AssistantMessageProps) => {
+}: Pick<
+  AssistantMessageProps,
+  'errorPart' | 'message' | 'pending' | 'statusPart'
+>): AnswerState => {
+  if (!pending && hasToolCalls(message)) {
+    return {
+      awaitingModel: false,
+      text: nonEmptyTexts(message.parts).at(-1) ?? null,
+      withToolCalls: true,
+    };
+  }
+
+  if (hasToolCalls(message)) {
+    // While streaming, only text after the last call is the answer; earlier
+    // segments are preamble the model wrote before searching.
+    const answer = nonEmptyTexts(
+      message.parts.slice(message.parts.findLastIndex(isToolCallPart) + 1),
+    ).at(-1);
+    const superseded = supersededToolCalls(message);
+    const callsRunning = toolCallParts(message).some(
+      (part) =>
+        toolCallStatus(part, !superseded.has(part.toolCallId)) === 'running',
+    );
+
+    return {
+      // Once the calls resolve, the model is writing its next turn.
+      awaitingModel: !errorPart && answer === undefined && !callsRunning,
+      text: answer ?? null,
+      withToolCalls: true,
+    };
+  }
+
   const parts = textParts(message);
-  const reasoningText = reasoningParts(message)
-    .map((part) => part.text)
-    .join('');
+
   // A text part that is still the FIRST part while a stage-less tool/chip status
   // is active is the model's pre-tool preamble (the backend discards it via a
   // `reset` once the real answer begins); suppress it so it does not render and
@@ -586,7 +709,32 @@ export const AssistantMessage = ({
     Boolean(statusPart) &&
     statusPart?.stage === undefined &&
     parts.length <= 1;
-  const text = inPreamble ? null : (parts.at(-1)?.text ?? null);
+
+  return {
+    awaitingModel: false,
+    text: inPreamble ? null : (parts.at(-1)?.text ?? null),
+    withToolCalls: false,
+  };
+};
+
+export const AssistantMessage = ({
+  actions,
+  complete,
+  errorPart,
+  message,
+  onManageCredentials,
+  onRetry,
+  pending,
+  retryPending,
+  statusPart,
+}: AssistantMessageProps) => {
+  const { awaitingModel, text, withToolCalls } = answerState({
+    errorPart,
+    message,
+    pending,
+    statusPart,
+  });
+  const reasoningText = joinReasoning(message);
   const answerVisible = Boolean(text);
   const reasoningStreaming =
     Boolean(pending) && reasoningText.length > 0 && text === null;
@@ -608,7 +756,13 @@ export const AssistantMessage = ({
             text={reasoningText}
           />
         ) : null}
-        {text ? (
+        {withToolCalls ? (
+          <InterleavedParts
+            message={message}
+            pending={Boolean(pending)}
+          />
+        ) : null}
+        {!withToolCalls && text ? (
           <div data-testid="answer-text">
             <MessageResponse>{text}</MessageResponse>
           </div>
@@ -630,11 +784,13 @@ export const AssistantMessage = ({
           />
         )}
         <AssistantMessageStatus
+          awaitingModel={awaitingModel}
           errorPart={errorPart}
           pending={pending}
           reasoningText={reasoningText}
           statusPart={statusPart}
           text={text}
+          toolCallsShown={withToolCalls}
         />
         {/* While still streaming (no answer yet), reasoning streams in BELOW the
             step list so it grows downward instead of displacing the steps. */}

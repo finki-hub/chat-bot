@@ -10,7 +10,7 @@ import type {
 
 import { ControlTooltip } from '@/components/ui/icon-controls';
 import { t } from '@/lib/i18n';
-import { lastText } from '@/lib/message-parts';
+import { answerText } from '@/lib/message-parts';
 import { cn } from '@/lib/utils';
 
 export type AnswerActionsProps = {
@@ -43,7 +43,7 @@ export const AnswerActions = ({
     return null;
   }
 
-  const text = lastText(message) ?? '';
+  const text = answerText(message) ?? '';
   const votingDisabled = pending || submittingFeedback;
 
   const copy = async (): Promise<void> => {

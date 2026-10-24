@@ -224,3 +224,71 @@ describe('parseProtocolV2', () => {
 });
 
 /* eslint-enable camelcase -- end wire-contract fixtures. */
+
+describe('parseProtocolV2 tool events', () => {
+  it('parses tool_call and tool_result frames', async () => {
+    const events = await collect(
+      'event: tool_call\ndata: {"id":"c1","name":"search_knowledge_base","label":"Пребарувам: упис","input":{"query":"упис"}}\n\n',
+      'event: tool_result\ndata: {"id":"c1","name":"search_knowledge_base","ok":true,"summary":"Пронајдени 4 извори"}\n\n',
+      'event: tool_result\ndata: {"id":"c2","name":"search_knowledge_base","ok":false,"summary":"Пребарувањето не успеа"}\n\n',
+      DONE_FRAME,
+    );
+
+    expect(events).toStrictEqual([
+      {
+        id: 'c1',
+        input: { query: 'упис' },
+        label: 'Пребарувам: упис',
+        name: 'search_knowledge_base',
+        type: 'tool_call',
+      },
+      {
+        id: 'c1',
+        name: 'search_knowledge_base',
+        ok: true,
+        summary: 'Пронајдени 4 извори',
+        type: 'tool_result',
+      },
+      {
+        id: 'c2',
+        name: 'search_knowledge_base',
+        ok: false,
+        summary: 'Пребарувањето не успеа',
+        type: 'tool_result',
+      },
+      DONE,
+    ]);
+  });
+
+  it('defaults optional tool fields', async () => {
+    const events = await collect(
+      'event: tool_call\ndata: {"id":"c1","name":"get_course","input":[1]}\n\n',
+      'event: tool_result\ndata: {"id":"c1","ok":true}\n\n',
+    );
+
+    expect(events).toStrictEqual([
+      {
+        id: 'c1',
+        input: {},
+        label: '',
+        name: 'get_course',
+        type: 'tool_call',
+      },
+      { id: 'c1', name: '', ok: true, summary: '', type: 'tool_result' },
+    ]);
+  });
+
+  it('ignores malformed tool frames', async () => {
+    const events = await collect(
+      'event: tool_call\ndata: {"name":"search_knowledge_base","label":"x"}\n\n',
+      'event: tool_call\ndata: {"id":"c1","label":"x"}\n\n',
+      'event: tool_call\ndata: {"id":"","name":"search_knowledge_base"}\n\n',
+      'event: tool_call\ndata: not json\n\n',
+      'event: tool_result\ndata: {"id":"c1","ok":"yes"}\n\n',
+      'event: tool_result\ndata: {"ok":true}\n\n',
+      DONE_FRAME,
+    );
+
+    expect(events).toStrictEqual([DONE]);
+  });
+});

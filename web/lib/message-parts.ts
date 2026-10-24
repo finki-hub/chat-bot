@@ -1,3 +1,5 @@
+import type { DynamicToolUIPart } from 'ai';
+
 import type { MyUIMessage } from '@/lib/api-types';
 
 type MessagePart = MyUIMessage['parts'][number];
@@ -8,8 +10,11 @@ type ReasoningPart = {
 };
 type TextPart = { text: string; type: 'text' };
 
-const isTextPart = (part: MessagePart): part is TextPart =>
+export const isTextPart = (part: MessagePart): part is TextPart =>
   part.type === 'text';
+
+export const isToolCallPart = (part: MessagePart): part is DynamicToolUIPart =>
+  part.type === 'dynamic-tool';
 
 const isReasoningPart = (part: MessagePart): part is ReasoningPart =>
   part.type === 'reasoning';
@@ -20,13 +25,44 @@ export const textParts = (message: MyUIMessage): TextPart[] =>
 export const reasoningParts = (message: MyUIMessage): ReasoningPart[] =>
   message.parts.filter(isReasoningPart);
 
-export const joinText = (message: MyUIMessage): string =>
-  textParts(message)
-    .map((part) => part.text)
-    .join('');
+export const toolCallParts = (message: MyUIMessage): DynamicToolUIPart[] =>
+  message.parts.filter(isToolCallPart);
+
+export const hasToolCalls = (message: MyUIMessage): boolean =>
+  message.parts.some(isToolCallPart);
+
+const joinSegments = (texts: readonly string[]): string =>
+  texts
+    .map((text) => text.trim())
+    .filter((text) => text !== '')
+    .join('\n\n');
+
+// Text around tool calls forms separate segments of one answer (the API prefixes
+// later segments with a blank line, hence the trim); without tool calls, extra
+// text parts come from legacy streams and are joined as before.
+export const joinText = (message: MyUIMessage): string => {
+  const texts = textParts(message).map((part) => part.text);
+
+  return hasToolCalls(message) ? joinSegments(texts) : texts.join('');
+};
+
+// Reasoning from separate agent turns around tool calls reads as paragraphs.
+export const joinReasoning = (message: MyUIMessage): string => {
+  const texts = reasoningParts(message).map((part) => part.text);
+
+  return hasToolCalls(message)
+    ? texts.filter((text) => text.trim() !== '').join('\n\n')
+    : texts.join('');
+};
 
 export const lastText = (message: MyUIMessage): null | string =>
   textParts(message).at(-1)?.text ?? null;
+
+// The answer a user copies or a title is generated from: every segment when the
+// message has tool calls, otherwise the last text part (earlier ones are a legacy
+// pre-tool preamble that the UI hides).
+export const answerText = (message: MyUIMessage): null | string =>
+  hasToolCalls(message) ? joinText(message) || null : lastText(message);
 
 export const hasText = (message: MyUIMessage): boolean =>
   textParts(message).some((part) => part.text.length > 0);

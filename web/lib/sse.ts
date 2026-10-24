@@ -12,6 +12,20 @@ export type ParsedEvent =
   | { code: ChatErrorCode; message: string; resets_at?: string; type: 'error' }
   | { diagnostics: MessageDiagnostics; type: 'meta' }
   | {
+      id: string;
+      input: Record<string, unknown>;
+      label: string;
+      name: string;
+      type: 'tool_call';
+    }
+  | {
+      id: string;
+      name: string;
+      ok: boolean;
+      summary: string;
+      type: 'tool_result';
+    }
+  | {
       label: string;
       stage?: string;
       state: string;
@@ -277,6 +291,39 @@ const splitFrame = (frame: string): Frame => {
   return { dataRaw: dataLines.join('\n'), eventName };
 };
 
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0;
+
+const toToolCall = (obj: Record<string, unknown>): null | ParsedEvent => {
+  const { id, input, label, name } = obj;
+
+  if (!isNonEmptyString(id) || !isNonEmptyString(name)) {
+    return null;
+  }
+
+  return {
+    id,
+    input: isRecord(input) ? input : {},
+    label: asString(label),
+    name,
+    type: 'tool_call',
+  };
+};
+
+const toToolResult = (obj: Record<string, unknown>): null | ParsedEvent => {
+  const { id, name, ok, summary } = obj;
+
+  return typeof ok === 'boolean' && isNonEmptyString(id)
+    ? {
+        id,
+        name: asString(name),
+        ok,
+        summary: asString(summary),
+        type: 'tool_result',
+      }
+    : null;
+};
+
 const buildEvent = (
   eventName: string,
   obj: Record<string, unknown>,
@@ -313,6 +360,10 @@ const buildEvent = (
       return { text: asString(obj['text']), type: 'thinking' };
     case 'token':
       return { text: asString(obj['text']), type: 'token' };
+    case 'tool_call':
+      return toToolCall(obj);
+    case 'tool_result':
+      return toToolResult(obj);
     default:
       return null;
   }
