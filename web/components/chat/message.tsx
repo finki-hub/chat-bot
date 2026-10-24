@@ -621,21 +621,30 @@ const InterleavedParts = ({
   pending: boolean;
 }) => {
   const superseded = supersededToolCalls(message);
+  const segments = answerSegments(message);
+  // Extra space where tool rows give way to text (or back), so the answer does
+  // not read as part of the last row.
+  const spacing = (index: number): string | undefined =>
+    index > 0 && segments[index - 1]?.type !== segments[index]?.type
+      ? 'mt-2'
+      : undefined;
 
   return (
     <div
       className="flex flex-col gap-2"
       data-testid="answer-parts"
     >
-      {answerSegments(message).map((segment) =>
+      {segments.map((segment, index) =>
         segment.type === 'tool' ? (
           <ToolCall
+            className={spacing(index)}
             key={segment.key}
             part={segment.part}
             running={pending && !superseded.has(segment.part.toolCallId)}
           />
         ) : (
           <div
+            className={spacing(index)}
             data-testid="answer-text"
             key={segment.key}
           >

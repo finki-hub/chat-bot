@@ -162,11 +162,35 @@ def _tool_succeeded(output: object) -> bool:
 _TOOL_FAILED_SUMMARY = "Алатката не врати резултат"
 
 
+# Readable labels for the MCP and request tools, matched by name fragment in order;
+# the first match wins, so specific fragments come before general ones.
+_TOOL_LABELS: tuple[tuple[str, str], ...] = (
+    ("recommend_diploma_committee", "Предлагам комисија за дипломска"),
+    ("exam_session", "Ги проверувам распоредите за испитни сесии"),
+    ("timetable", "Го проверувам распоредот на часови"),
+    ("consultation", "Ги проверувам консултациите"),
+    ("weekly_topics", "Ги проверувам темите по недели"),
+    ("study_program", "Ги проверувам студиските програми"),
+    ("academic_calendar", "Го проверувам академскиот календар"),
+    ("course", "Ги проверувам предметите"),
+    ("staff", "Ги проверувам податоците за вработените"),
+    ("room", "Ги проверувам просториите"),
+    ("diploma", "Ги проверувам дипломските работи"),
+    ("master", "Ги проверувам магистерските работи"),
+    ("compan", "Ги проверувам компаниите"),
+    ("quote", "Барам цитат"),
+)
+_FALLBACK_TOOL_LABEL = "Проверувам податоци"
+
+
 def _tool_label(name: str, tool_input: object) -> str:
     query = tool_input.get("query") if isinstance(tool_input, dict) else None
     if isinstance(query, str) and query.strip():
         return f"Пребарувам: {query.strip()}"
-    return f"Користам алатка: {name}"
+    return next(
+        (label for fragment, label in _TOOL_LABELS if fragment in name),
+        _FALLBACK_TOOL_LABEL,
+    )
 
 
 def _tool_artifact(output: object) -> dict[str, object]:

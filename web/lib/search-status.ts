@@ -3,6 +3,7 @@ import {
   type LucideIcon,
   MessageCircleQuestion,
   Search,
+  Wrench,
 } from 'lucide-react';
 
 import { t } from '@/lib/i18n';
@@ -49,6 +50,11 @@ export const searchStageLabel = (stage: SearchStage): string =>
 
 export const searchToolIcon = (tool: string | undefined): LucideIcon =>
   tool === undefined ? Search : (TOOL_ICONS[tool] ?? Search);
+
+// Tool-call rows: search tools keep their icon; data tools (courses, staff,
+// timetables, ...) get a wrench so they do not read as searches.
+export const toolCallIcon = (tool: string): LucideIcon =>
+  TOOL_ICONS[tool] ?? Wrench;
 
 export const searchToolLabel = (tool: string | undefined): string =>
   tool === undefined

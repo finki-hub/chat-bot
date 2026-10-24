@@ -173,7 +173,7 @@ async def test_non_search_tool_gets_generic_label() -> None:
     )
 
     call = next(data for name, data in frames if name == "tool_call")
-    assert call["label"] == "Користам алатка: list_courses"
+    assert call["label"] == "Ги проверувам предметите"
     result = next(data for name, data in frames if name == "tool_result")
     assert result["ok"] is True
     assert result["summary"] == ""
@@ -333,3 +333,61 @@ async def test_text_after_a_tool_call_starts_a_new_paragraph() -> None:
     tokens = [data["text"] for name, data in frames if name == "token"]
     assert tokens == ["Проверувам.", "\n\nОдговор."]
     assert observation.context_chars == 0
+
+
+# The tools the MCP server exposed in production on 2026-10-23.
+_LIVE_TOOLS = [
+    "list_exam_session_schedules",
+    "get_random_anto_quote",
+    "list_timetables",
+    "list_timetable_groups",
+    "list_timetable_professors",
+    "list_timetable_rooms",
+    "list_timetable_courses",
+    "list_timetable_entries",
+    "list_courses",
+    "get_course_data",
+    "get_course_staff",
+    "get_course_participants",
+    "list_rooms",
+    "get_room_data",
+    "list_staff",
+    "get_staff_member",
+    "list_diplomas",
+    "get_diploma",
+    "list_masters",
+    "get_master",
+    "get_course_weekly_topics",
+    "search_companies_by_name",
+    "get_all_companies",
+    "search_courses_by_name",
+    "get_staff_details",
+    "get_professor_consultations",
+    "get_company_by_name",
+    "search_staff_details_by_name",
+    "get_all_courses",
+    "search_study_programs_by_name",
+    "get_study_program_by_code",
+    "get_course_by_code",
+    "get_all_study_programs",
+    "get_academic_calendar",
+    "recommend_diploma_committee",
+]
+
+
+@pytest.mark.parametrize("name", _LIVE_TOOLS)
+def test_every_live_tool_has_a_readable_label(name: str) -> None:
+    label = agents._tool_label(name, {})  # noqa: SLF001
+
+    assert label != agents._FALLBACK_TOOL_LABEL  # noqa: SLF001
+    assert name not in label
+
+
+def test_specific_tool_labels_win_over_general_ones() -> None:
+    assert agents._tool_label("get_course_weekly_topics", {}) == (  # noqa: SLF001
+        "Ги проверувам темите по недели"
+    )
+    assert agents._tool_label("list_timetable_courses", {}) == (  # noqa: SLF001
+        "Го проверувам распоредот на часови"
+    )
+    assert agents._tool_label("unknown_tool", {}) == "Проверувам податоци"  # noqa: SLF001
