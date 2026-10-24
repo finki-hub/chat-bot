@@ -5,7 +5,6 @@ import {
   MAX_CHARS_PER_TURN,
   type MessageDiagnostics,
   type MyUIMessage,
-  type QueryTransformMode,
   type RetrievedSource,
 } from '@/lib/api-types';
 import { joinText } from '@/lib/message-parts';
@@ -19,8 +18,6 @@ export type ChatClientBody = {
   model?: string;
   posthogDistinctId?: string;
   posthogSessionId?: string;
-  queryTransformMode?: QueryTransformMode;
-  queryTransformModel?: string;
   reasoning?: boolean;
   temperature?: number;
   topP?: number;
@@ -127,12 +124,6 @@ export const toChatRequestBody = (body: ChatClientBody): ChatRequestBody => {
     }),
     ...(body.model !== undefined && { inference_model: body.model }),
     ...(body.maxTokens !== undefined && { max_tokens: body.maxTokens }),
-    ...(body.queryTransformModel !== undefined && {
-      query_transform_model: body.queryTransformModel,
-    }),
-    ...(body.queryTransformMode !== undefined && {
-      query_transform_mode: body.queryTransformMode,
-    }),
     ...(body.reasoning !== undefined && { reasoning: body.reasoning }),
     ...(body.temperature !== undefined && { temperature: body.temperature }),
     ...(body.topP !== undefined && { top_p: body.topP }),

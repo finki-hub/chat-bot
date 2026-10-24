@@ -31,8 +31,6 @@ export type ChatRequestBody = {
   interface: ChatInterface;
   max_tokens?: number;
   messages: readonly ConversationTurn[];
-  query_transform_mode?: QueryTransformMode;
-  query_transform_model?: ModelId;
   reasoning?: boolean;
   temperature?: number;
   top_p?: number;
@@ -84,8 +82,6 @@ export type ModelDescriptor = {
 
 // eslint-disable-next-line sonarjs/redundant-type-aliases -- semantic alias for the public wire contract; consumers reference ModelId, not bare string
 export type ModelId = string;
-
-export type QueryTransformMode = 'hyde' | 'raw' | 'rewrite' | 'rewrite_hyde';
 
 export type SponsoredQuota = {
   readonly limit: number;
@@ -149,7 +145,6 @@ export type FeedbackSchema = {
   feedback_type: FeedbackType;
   guild_id?: string;
   inference_model?: string;
-  query_transform_model?: string;
   question_text?: string;
   response_id: string;
   user_id: string;

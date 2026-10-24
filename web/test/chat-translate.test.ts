@@ -28,8 +28,6 @@ describe('toChatRequestBody', () => {
       maxTokens: 2_048,
       messages: [msg('user', 'Кога е ', 'испитот?')],
       model: MODEL,
-      queryTransformMode: 'rewrite',
-      queryTransformModel: 'gpt-5.4-mini',
       temperature: 0.5,
       topP: 0.9,
     };
@@ -42,10 +40,6 @@ describe('toChatRequestBody', () => {
 
       max_tokens: 2_048,
       messages: [{ content: 'Кога е испитот?', role: 'user' }],
-
-      query_transform_mode: 'rewrite',
-
-      query_transform_model: 'gpt-5.4-mini',
       temperature: 0.5,
 
       top_p: 0.9,
