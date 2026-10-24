@@ -113,8 +113,6 @@ def make_app(settings: Settings) -> FastAPI:
             {"name": "Links", "description": "Manage links"},
             {"name": "Health", "description": "Health check and API status"},
         ],
-        host=settings.HOST,
-        port=settings.PORT,
     )
     app.state.settings = settings
     app.state.discord_writes = DiscordWriteRegistry()

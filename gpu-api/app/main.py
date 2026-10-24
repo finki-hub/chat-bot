@@ -71,8 +71,6 @@ def make_app(settings: Settings) -> FastAPI:
             {"name": "Embeddings", "description": "Manage embeddings"},
             {"name": "Health", "description": "Health check and API status"},
         ],
-        host=settings.HOST,
-        port=settings.PORT,
     )
     app.state.settings = settings
 
