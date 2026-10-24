@@ -215,6 +215,7 @@ def capture_tool_called(
     success: bool,
     arg_len: int,
     result_len: int,
+    search: dict[str, object] | None = None,
 ) -> None:
     if observation is None:
         return
@@ -230,6 +231,7 @@ def capture_tool_called(
             "success": success,
             "arg_len": arg_len,
             "result_len": result_len,
+            **(search or {}),
         },
     )
 
@@ -475,6 +477,9 @@ async def create_agent_token_generator[ResponseT](
     written around tool calls is kept, and search results extend a cumulative
     `sources` event."""
     streamed_text = False
+    # Text resuming after a tool call starts a new paragraph, so clients that render
+    # one text stream and the stored answer do not fuse it onto earlier text.
+    tool_since_text = False
     per_search: list[list[RetrievalSourcePayload]] = []
     usage = (
         observation.usage
@@ -502,6 +507,7 @@ async def create_agent_token_generator[ResponseT](
                         time.perf_counter(),
                         _content_len(tool_input),
                     )
+                    tool_since_text = streamed_text
                     yield status_event(stage="retrieve", tool=event["name"])
                     yield tool_call_event(
                         call_id=event["run_id"],
@@ -517,7 +523,13 @@ async def create_agent_token_generator[ResponseT](
                         name, start, arg_len = started
                         is_error = kind == "on_tool_error"
                         output = None if is_error else event["data"].get("output")
-                        succeeded = not is_error and _tool_succeeded(output)
+                        artifact = _tool_artifact(output)
+                        succeeded = (
+                            not is_error
+                            and _tool_succeeded(output)
+                            and artifact.get("failed") is not True
+                        )
+                        found = _search_sources(artifact)
                         capture_tool_called(
                             observation,
                             tool=name,
@@ -525,13 +537,23 @@ async def create_agent_token_generator[ResponseT](
                             success=succeeded,
                             arg_len=arg_len,
                             result_len=_content_len(output),
+                            search=(
+                                {
+                                    "hit": artifact.get("hit") is True,
+                                    "source_count": len(found),
+                                }
+                                if "hit" in artifact
+                                else None
+                            ),
                         )
-                        artifact = _tool_artifact(output)
                         if observation is not None:
                             observation.tool_call_count += 1
                             observation.tool_names.add(name)
                             if artifact.get("hit") is True:
                                 observation.search_hit = True
+                            context_chars = artifact.get("context_chars")
+                            if isinstance(context_chars, int):
+                                observation.context_chars += context_chars
                         summary = artifact.get("summary")
                         yield tool_result_event(
                             call_id=event["run_id"],
@@ -543,7 +565,6 @@ async def create_agent_token_generator[ResponseT](
                                 else ("" if succeeded else _TOOL_FAILED_SUMMARY)
                             ),
                         )
-                        found = _search_sources(artifact)
                         if found:
                             per_search.append(found)
                             sources = _interleave_sources(per_search)
@@ -576,6 +597,9 @@ async def create_agent_token_generator[ResponseT](
                 if not text:
                     continue
 
+                if tool_since_text:
+                    tool_since_text = False
+                    text = "\n\n" + text.lstrip()
                 streamed_text = True
                 if observation is not None:
                     observation.answer_chars += len(text)

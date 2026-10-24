@@ -3,6 +3,10 @@ from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
+from langchain.agents.middleware import (
+    ModelCallLimitMiddleware,
+    ToolCallLimitMiddleware,
+)
 from langchain_core.messages import AIMessageChunk, ToolMessage
 
 from app.data.connection import Database
@@ -14,7 +18,7 @@ from app.llms.retrieval_result import (
     RetrievalSourcePayload,
     RetrievedContext,
 )
-from app.llms.search_tools import build_search_tools
+from app.llms.search_tools import KnowledgeSearch
 from app.llms.tools import SEARCH_TOOL_NAME, agent_middleware
 from tests.test_agent_error_log_privacy import TestAgentGraph
 
@@ -116,7 +120,7 @@ async def test_text_around_parallel_tool_calls_is_kept_in_order() -> None:
     sources = [data["sources"] for name, data in frames if name == "sources"]
     assert sources == [[DOC], [DOC, FAQ]]
     tokens = [data["text"] for name, data in frames if name == "token"]
-    assert tokens == ["Проверувам. ", "Одговор."]
+    assert tokens == ["Проверувам. ", "\n\nОдговор."]
     assert observation.search_hit is True
     assert observation.sources == [DOC, FAQ]
     assert observation.tool_call_count == 2
@@ -188,12 +192,17 @@ def _search_tool(monkeypatch, retrieved: RetrievedContext, links: str = ""):
     retrieve = AsyncMock(return_value=retrieved)
     monkeypatch.setattr(search_tools, "get_retrieved_context_with_sources", retrieve)
     relevant_links = AsyncMock(return_value=links)
-    monkeypatch.setattr(search_tools, "get_relevant_links_context", relevant_links)
-    [tool] = build_search_tools(
+
+    class _Links:
+        def __init__(self, _db) -> None:
+            self.render = relevant_links
+
+    monkeypatch.setattr(search_tools, "RelevantLinks", _Links)
+    [tool] = KnowledgeSearch(
         cast("Database", object()),
         Model.MULTILINGUAL_E5_LARGE,
         None,
-    )
+    ).tools()
     return tool, retrieve, relevant_links
 
 
@@ -219,6 +228,7 @@ async def test_search_tool_returns_context_and_source_artifact(monkeypatch) -> N
         "hit": True,
         "sources": [{"id": "1", "kind": "faq", "title": "Префрлување"}],
         "summary": "Пронајдени извори: 1",
+        "context_chars": 4,
     }
     assert retrieve.await_args is not None
     assert retrieve.await_args.kwargs["query"] == "префрлување"
@@ -233,7 +243,7 @@ async def test_search_tool_appends_relevant_links(monkeypatch) -> None:
 
     assert message.content == f"блок\n\n{links}"
     assert relevant_links.await_args is not None
-    assert relevant_links.await_args.args[1] == "распоред"
+    assert relevant_links.await_args.args[0] == "распоред"
 
 
 @pytest.mark.anyio
@@ -247,16 +257,30 @@ async def test_search_tool_without_results_says_so(monkeypatch) -> None:
         "hit": False,
         "sources": [],
         "summary": "Нема пронајдени извори",
+        "context_chars": 0,
     }
 
 
-def test_agent_middleware_limits_searches_and_all_tool_calls() -> None:
-    limits = [
-        (middleware.tool_name, middleware.run_limit)
-        for middleware in agent_middleware()
-    ]
+@pytest.mark.anyio
+async def test_failed_search_becomes_a_failed_result_not_an_error(monkeypatch) -> None:
+    tool, retrieve, _ = _search_tool(monkeypatch, _retrieved(""))
+    retrieve.side_effect = RuntimeError("gpu-api down")
 
-    assert limits == [(SEARCH_TOOL_NAME, 4), (None, 15)]
+    message = await _invoke(tool, "q")
+
+    assert message.artifact == {"failed": True}
+    assert "gpu-api" not in message.content
+
+
+def test_agent_middleware_limits_searches_tool_calls_and_model_calls() -> None:
+    search, tools, model = agent_middleware()
+
+    assert isinstance(search, ToolCallLimitMiddleware)
+    assert (search.tool_name, search.run_limit) == (SEARCH_TOOL_NAME, 4)
+    assert isinstance(tools, ToolCallLimitMiddleware)
+    assert (tools.tool_name, tools.run_limit) == (None, 15)
+    assert isinstance(model, ModelCallLimitMiddleware)
+    assert (model.run_limit, model.exit_behavior) == (10, "end")
 
 
 def test_interleaving_keeps_each_search_best_hits_within_cap() -> None:
@@ -271,3 +295,41 @@ def test_interleaving_keeps_each_search_best_hits_within_cap() -> None:
 
     assert len(merged) == 12
     assert [s["id"] for s in merged[:4]] == ["0", "f0", "1", "f1"]
+
+
+def _failed_search_end(run_id: str) -> dict:
+    output = ToolMessage(
+        content="failed", tool_call_id=run_id, artifact={"failed": True}
+    )
+    return {
+        "event": "on_tool_end",
+        "run_id": run_id,
+        "name": "search_knowledge_base",
+        "data": {"output": output},
+    }
+
+
+@pytest.mark.anyio
+async def test_failed_search_result_is_reported_as_not_ok() -> None:
+    frames = await _run([_tool_start("a", "рок"), _failed_search_end("a"), _text("ok")])
+
+    result = next(data for name, data in frames if name == "tool_result")
+    assert (result["ok"], result["summary"]) == (False, "Алатката не врати резултат")
+
+
+@pytest.mark.anyio
+async def test_text_after_a_tool_call_starts_a_new_paragraph() -> None:
+    observation = StreamObservation(distinct_id="d", response_id="r")
+    frames = await _run(
+        [
+            _text("Проверувам."),
+            _tool_start("a", "рок"),
+            _tool_end("a", [FAQ]),
+            _text(" Одговор."),
+        ],
+        observation,
+    )
+
+    tokens = [data["text"] for name, data in frames if name == "token"]
+    assert tokens == ["Проверувам.", "\n\nОдговор."]
+    assert observation.context_chars == 0

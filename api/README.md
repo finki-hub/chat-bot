@@ -90,8 +90,11 @@ MiniMax's model-specific Messages contract:
 ## Agent search
 
 Chat does not retrieve context up front. The agent calls the `search_knowledge_base`
-tool with its own short query, as often as it needs (at most 4 searches and 15 tool
-calls per answer, enforced by `ToolCallLimitMiddleware`). Each search runs raw
+tool with its own short query, as often as it needs. Per answer, LangChain middleware
+allows at most 4 searches and 15 tool calls (over-limit calls are blocked and the model
+answers with what it has) and 10 model calls (the run ends). A failed search is
+returned to the model as a failed tool result instead of ending the answer. If agent
+setup fails, the provider answers without tools from one search on the question. Each search runs raw
 retrieval over FAQs and document chunks (plus a Cyrillic variant for romanized
 queries), reranks, and appends the most relevant catalog links. The request fields
 `query_transform_mode` and `query_transform_model` are accepted for client
@@ -105,8 +108,11 @@ interleaved across searches and capped at 12.
 ## Retrieval fields
 
 The API emits the following bounded, content-free retrieval fields on
-`$ai_generation` and the `chat.timing` log. They describe the most recent search of
-the answer; `retrieval_hit` is true when any search returned context.
+`$ai_generation` and the `chat.timing` log. Counts, ids and reranker fields describe the
+most recently finished search of the answer, while `retrieval.*` span durations add up
+across searches (parallel searches overlap, so the sum exceeds wall-clock time).
+`retrieval_hit` is true when any search returned context; each search also reports
+`hit` and `source_count` on its `tool_called` event.
 
 ## Reranker fields
 

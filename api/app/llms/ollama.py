@@ -17,7 +17,7 @@ from app.llms.agents import (
 from app.llms.models import ChatModel, Model, model_id
 from app.llms.prompts import build_agent_messages, stitch_conversation
 from app.llms.provider_credentials import require_provider_credential
-from app.llms.tools import agent_middleware, get_agent_tools
+from app.llms.tools import agent_middleware, fallback_prompts, get_agent_tools
 from app.schemas.chat_credentials import OLLAMA_DEFAULT_BASE_URL, ChatCredentialSecret
 
 from .ollama_catalog import fetch_ollama_catalog
@@ -267,6 +267,10 @@ async def stream_ollama_agent_response(
             reason="agent_setup_failed",
         )
 
+        system_prompt, user_prompt = await fallback_prompts(
+            system_prompt,
+            user_prompt,
+        )
         return stream_ollama_response(
             user_prompt,
             model,

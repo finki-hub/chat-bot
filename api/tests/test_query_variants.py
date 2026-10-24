@@ -13,7 +13,7 @@ def test_romanized_macedonian_query_adds_cyrillic_variant() -> None:
         text="Каде е слузба",
         is_document=False,
     )
-    assert result.transliteration_variant_count == 1
+    assert len(result.variants) == 2
     assert result.rerank_query == "Каде е слузба"
 
 
@@ -36,5 +36,5 @@ def test_english_query_adds_no_transliteration_variant() -> None:
     result = query_variants.build_query_variants("Web programming")
 
     assert tuple(variant.kind for variant in result.variants) == ("raw",)
-    assert result.transliteration_variant_count == 0
+    assert len(result.variants) == 1
     assert result.rerank_query == "Web programming"

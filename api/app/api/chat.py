@@ -89,7 +89,6 @@ _PRE_STREAM_ERROR_MSG = (
     "Се случи грешка при подготовка на одговорот. Обидете се повторно."
 )
 _SPONSORED_UNAVAILABLE_MSG = "Бесплатниот пристап моментално не е достапен."
-_AGENT_SEARCH_CONTEXT = "Изворите не се пребарани однапред; пребарај ги со алатката."
 _SPONSORED_QUOTA_MSG = (
     "Бесплатната квота е искористена. Обидете се повторно по ресетирањето."
 )
@@ -865,7 +864,7 @@ async def _prepare_chat_response_stream(
 
         try:
             today = datetime.now(tz=_TZ).strftime("%d.%m.%Y")
-            context = f"Денешен датум: {today}.\n\n{_AGENT_SEARCH_CONTEXT}"
+            context = f"Денешен датум: {today}."
 
             preparation.phase = "agent_setup"
             with timed("agent.setup"):

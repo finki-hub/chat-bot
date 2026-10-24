@@ -1,12 +1,13 @@
 import asyncio
 import logging
+from dataclasses import dataclass
 
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field
 
 from app.data.connection import Database
 from app.llms.context import get_retrieved_context_with_sources
-from app.llms.link_context import get_relevant_links_context
+from app.llms.link_context import RelevantLinks
 from app.llms.models import Model
 from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.retrieval_result import RetrievalSourcePayload
@@ -20,6 +21,7 @@ _SEARCH_TOOL_DESCRIPTION = (
     "за барањето. Испрати кратко барање на македонски, со кирилица, со клучните поими."
 )
 _NO_RESULTS = "Нема пронајдени извори за ова барање."
+_SEARCH_FAILED = "Пребарувањето не успеа. Обиди се со поинакво барање."
 
 
 class SearchKnowledgeBaseSchema(BaseModel):
@@ -30,6 +32,13 @@ class SearchKnowledgeBaseSchema(BaseModel):
     )
 
 
+@dataclass(frozen=True, slots=True)
+class SearchResult:
+    content: str
+    sources: list[RetrievalSourcePayload]
+    hit: bool
+
+
 def _search_summary(source_count: int, *, hit: bool) -> str:
     if not hit:
         return "Нема пронајдени извори"
@@ -38,46 +47,70 @@ def _search_summary(source_count: int, *, hit: bool) -> str:
     return f"Пронајдени извори: {source_count}"
 
 
-def build_search_tools(
-    db: Database,
-    embedding_model: Model,
-    credentials: LlmProviderCredentials | None,
-) -> list[BaseTool]:
-    async def search_knowledge_base(
-        query: str,
-    ) -> tuple[str, dict[str, object]]:
+class KnowledgeSearch:
+    """Search FAQs, documents and relevant links for one answer."""
+
+    def __init__(
+        self,
+        db: Database,
+        embedding_model: Model,
+        credentials: LlmProviderCredentials | None,
+    ) -> None:
+        self._db = db
+        self._embedding_model = embedding_model
+        self._credentials = credentials
+        self._links = RelevantLinks(db)
+
+    async def search(self, query: str) -> SearchResult:
         retrieved, links = await asyncio.gather(
             get_retrieved_context_with_sources(
-                db=db,
+                db=self._db,
                 query=query,
-                embedding_model=embedding_model,
-                credentials=credentials,
+                embedding_model=self._embedding_model,
+                credentials=self._credentials,
             ),
-            get_relevant_links_context(db, query),
+            self._links.render(query),
         )
-        sources: list[RetrievalSourcePayload] = retrieved.sources_payload()
-        hit = bool(retrieved.text)
+        sources = retrieved.sources_payload()
+        content = "\n\n".join(part for part in (retrieved.text, links) if part)
         logger.info(
             "agent.search query_len=%d hit=%s sources=%d context_chars=%d links=%s",
             len(query),
-            hit,
+            bool(retrieved.text),
             len(sources),
             len(retrieved.text),
             bool(links),
         )
-        content = "\n\n".join(part for part in (retrieved.text, links) if part)
-        return content or _NO_RESULTS, {
-            "hit": hit,
-            "sources": sources,
-            "summary": _search_summary(len(sources), hit=hit),
-        }
+        return SearchResult(content=content, sources=sources, hit=bool(retrieved.text))
 
-    return [
-        StructuredTool.from_function(
-            coroutine=search_knowledge_base,
-            name=SEARCH_TOOL_NAME,
-            description=_SEARCH_TOOL_DESCRIPTION,
-            args_schema=SearchKnowledgeBaseSchema,
-            response_format="content_and_artifact",
-        ),
-    ]
+    def tools(self) -> list[BaseTool]:
+        async def search_knowledge_base(
+            query: str,
+        ) -> tuple[str, dict[str, object]]:
+            try:
+                result = await self.search(query)
+            # The default tool error handler re-raises, which would end the whole answer;
+            # a failed search becomes a failed tool result the model can work around.
+            # ruff: ignore[BLE001] -- every search failure must reach the model as a result
+            except Exception as exc:
+                logger.warning(
+                    "Knowledge search failed error_type=%s",
+                    type(exc).__name__,
+                )
+                return _SEARCH_FAILED, {"failed": True}
+            return result.content or _NO_RESULTS, {
+                "hit": result.hit,
+                "sources": result.sources,
+                "summary": _search_summary(len(result.sources), hit=result.hit),
+                "context_chars": len(result.content),
+            }
+
+        return [
+            StructuredTool.from_function(
+                coroutine=search_knowledge_base,
+                name=SEARCH_TOOL_NAME,
+                description=_SEARCH_TOOL_DESCRIPTION,
+                args_schema=SearchKnowledgeBaseSchema,
+                response_format="content_and_artifact",
+            ),
+        ]

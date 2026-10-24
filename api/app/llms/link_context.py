@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import unicodedata
 from dataclasses import dataclass
@@ -130,36 +131,53 @@ async def _rank_relevant_links(
     return [link.candidate for link in ranked[:_RELEVANT_LINKS_MAX]]
 
 
+class RelevantLinks:
+    """Load the link catalog once and render the links relevant to each query."""
+
+    def __init__(self, db: Database) -> None:
+        self._db = db
+        self._candidates: list[_LinkCandidate] | None = None
+        self._lock = asyncio.Lock()
+
+    async def _catalog(self) -> list[_LinkCandidate]:
+        async with self._lock:
+            if self._candidates is None:
+                try:
+                    with timed("links"):
+                        rows = await fetch_links_for_context(self._db)
+                # ruff: ignore[BLE001] -- links are optional search enrichment
+                except Exception as exc:
+                    logger.warning(
+                        "Link catalog load failed error_type=%s",
+                        type(exc).__name__,
+                    )
+                    rows = []
+                self._candidates = [
+                    candidate
+                    for row in rows
+                    if (candidate := _candidate_from_row(row)) is not None
+                ]
+            return self._candidates
+
+    async def render(self, query: str) -> str:
+        candidates = await self._catalog()
+        if not candidates:
+            return ""
+        try:
+            with timed("links.rerank"):
+                relevant = await _rank_relevant_links(query, candidates)
+        # ruff: ignore[BLE001] -- links are optional search enrichment
+        except Exception as exc:
+            logger.warning(
+                "Link reranking failed error_type=%s",
+                type(exc).__name__,
+            )
+            return ""
+        if not relevant:
+            return ""
+        return "Корисни линкови:\n" + "\n".join(_line(c) for c in relevant)
+
+
 async def get_relevant_links_context(db: Database, query: str) -> str:
     """Render the catalog links most relevant to a search query, or nothing."""
-    try:
-        with timed("links"):
-            rows = await fetch_links_for_context(db)
-    # ruff: ignore[BLE001] -- links are optional search enrichment
-    except Exception as exc:
-        logger.warning(
-            "Link catalog load failed error_type=%s",
-            type(exc).__name__,
-        )
-        return ""
-
-    candidates = [
-        candidate for row in rows if (candidate := _candidate_from_row(row)) is not None
-    ]
-    if not candidates:
-        return ""
-
-    try:
-        with timed("links.rerank"):
-            relevant = await _rank_relevant_links(query, candidates)
-    # ruff: ignore[BLE001] -- links are optional search enrichment
-    except Exception as exc:
-        logger.warning(
-            "Link reranking failed error_type=%s",
-            type(exc).__name__,
-        )
-        return ""
-
-    if not relevant:
-        return ""
-    return "Корисни линкови:\n" + "\n".join(_line(c) for c in relevant)
+    return await RelevantLinks(db).render(query)

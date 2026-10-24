@@ -14,9 +14,9 @@ from app.llms.prompts import (
 )
 from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.recommendation_tools import build_recommendation_tools
-from app.llms.search_tools import build_search_tools
+from app.llms.search_tools import KnowledgeSearch
 from app.llms.streams import stream_response_with_agent
-from app.llms.tools import agent_request_tools
+from app.llms.tools import MAX_SEARCHES_PER_ANSWER, agent_request_tools
 from app.schemas.chat import ChatSchema
 from app.schemas.chat_credentials import ChatCredentialSecret
 from app.utils.settings import Settings
@@ -24,6 +24,10 @@ from app.utils.settings import Settings
 logger = logging.getLogger(__name__)
 
 settings = Settings()
+
+PROMPT_SEPARATOR = "\n\n"
+AGENT_SEARCH_CONTEXT = "Изворите не се пребарани однапред; пребарај ги со алатката."
+NO_SOURCES = "Не можев да пронајдам релевантни информации во базата на податоци."
 
 
 async def handle_chat(
@@ -48,14 +52,21 @@ async def handle_chat(
         model_id(payload.inference_model),
     )
 
-    system_prompt = "\n\n".join(
+    interface_format = markdown_instructions(payload.interface)
+    system_prompt = PROMPT_SEPARATOR.join(
         [
             DEFAULT_AGENT_SYSTEM_PROMPT,
-            AGENT_SEARCH_TOOLS_PROMPT,
-            markdown_instructions(payload.interface),
+            AGENT_SEARCH_TOOLS_PROMPT.replace(
+                "{max_searches}",
+                str(MAX_SEARCHES_PER_ANSWER),
+            ),
+            interface_format,
         ],
     )
-    user_prompt = build_user_agent_prompt(context, payload.query)
+    user_prompt = build_user_agent_prompt(
+        PROMPT_SEPARATOR.join([context, AGENT_SEARCH_CONTEXT]),
+        payload.query,
+    )
     history = to_history_messages(
         [
             (turn.role, turn.content)
@@ -64,11 +75,26 @@ async def handle_chat(
     )
 
     tools = build_recommendation_tools(db) if db is not None else []
-    if db is not None:
-        tools.extend(
-            build_search_tools(db, payload.embeddings_model, retrieval_credentials),
+    search = (
+        KnowledgeSearch(db, payload.embeddings_model, retrieval_credentials)
+        if db is not None
+        else None
+    )
+    if search is not None:
+        tools.extend(search.tools())
+
+    async def fallback() -> tuple[str, str]:
+        found = await search.search(payload.query) if search is not None else None
+        sources = found.content if found is not None and found.content else NO_SOURCES
+        return (
+            PROMPT_SEPARATOR.join([DEFAULT_AGENT_SYSTEM_PROMPT, interface_format]),
+            build_user_agent_prompt(
+                PROMPT_SEPARATOR.join([context, sources]),
+                payload.query,
+            ),
         )
-    with agent_request_tools(tools):
+
+    with agent_request_tools(tools, fallback):
         return await stream_response_with_agent(
             user_prompt,
             payload.inference_model,

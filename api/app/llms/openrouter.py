@@ -23,7 +23,7 @@ from app.llms.agents import (
 from app.llms.models import OPENROUTER_MANDATORY_REASONING_MODELS, Model
 from app.llms.prompts import build_agent_messages
 from app.llms.provider_credentials import require_provider_credential
-from app.llms.tools import agent_middleware, get_agent_tools
+from app.llms.tools import agent_middleware, fallback_prompts, get_agent_tools
 from app.schemas.chat_credentials import ChatCredentialSecret
 
 logger = logging.getLogger(__name__)
@@ -169,6 +169,10 @@ async def stream_openrouter_agent_response(
             from_model=model.value,
             to_model=model.value,
             reason="agent_setup_failed",
+        )
+        system_prompt, user_prompt = await fallback_prompts(
+            system_prompt,
+            user_prompt,
         )
         return stream_openrouter_response(
             user_prompt,

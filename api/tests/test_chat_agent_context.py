@@ -74,5 +74,5 @@ async def test_chat_points_agent_to_search_without_pre_retrieval(
     assert "event: sources" not in rendered
     assert "event: status" not in rendered
     [context] = contexts
-    assert context.endswith(f"\n\n{chat_api._AGENT_SEARCH_CONTEXT}")  # noqa: SLF001
+    assert context.startswith("Денешен датум: ")
     assert retrieval_credentials == [resolved]

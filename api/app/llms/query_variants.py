@@ -18,10 +18,6 @@ class QueryVariantBundle:
     variants: tuple[QueryVariant, ...]
     rerank_query: str
 
-    @property
-    def transliteration_variant_count(self) -> int:
-        return sum(variant.kind == "transliteration" for variant in self.variants)
-
 
 def build_query_variants(search_query: str) -> QueryVariantBundle:
     raw = QueryVariant(kind="raw", text=search_query, is_document=False)
