@@ -1,6 +1,7 @@
 import {
   FileText,
   type LucideIcon,
+  Megaphone,
   MessageCircleQuestion,
   Search,
   Wrench,
@@ -54,7 +55,7 @@ export const searchToolIcon = (tool: string | undefined): LucideIcon =>
 // Tool-call rows: search tools keep their icon; data tools (courses, staff,
 // timetables, ...) get a wrench so they do not read as searches.
 export const toolCallIcon = (tool: string): LucideIcon =>
-  TOOL_ICONS[tool] ?? Wrench;
+  TOOL_ICONS[tool] ?? (tool.includes('announcement') ? Megaphone : Wrench);
 
 export const isSearchTool = (tool: string): boolean =>
   Object.hasOwn(TOOL_ICONS, tool);
