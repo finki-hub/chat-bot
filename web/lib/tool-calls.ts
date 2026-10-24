@@ -4,6 +4,7 @@ import type { MyUIMessage } from '@/lib/api-types';
 
 import { t } from '@/lib/i18n';
 import { isToolCallPart } from '@/lib/message-parts';
+import { isSearchTool } from '@/lib/search-status';
 
 export type ToolCallStatus = 'done' | 'error' | 'incomplete' | 'running';
 
@@ -73,4 +74,66 @@ export const toolCallResultText = (part: DynamicToolUIPart): null | string => {
   const { summary } = part.output;
 
   return typeof summary === 'string' && summary.length > 0 ? summary : null;
+};
+
+export const countLabel = (count: number, one: string, many: string): string =>
+  `${count} ${count === 1 ? one : many}`;
+
+const SOURCE_COUNT_RE = /\d+/u;
+
+// Compact result for a search row header, read from the API summaries
+// ("Пронајдени извори: 6", "Нема пронајдени извори", "...делумно поврзани извори").
+export const toolCallResultBadge = (part: DynamicToolUIPart): null | string => {
+  if (part.state !== 'output-available' || !isSearchTool(part.toolName)) {
+    return null;
+  }
+
+  const summary = toolCallResultText(part);
+
+  if (summary === null) {
+    return null;
+  }
+
+  const count = SOURCE_COUNT_RE.exec(summary)?.[0];
+
+  if (count !== undefined) {
+    return countLabel(
+      Number(count),
+      t('toolCall.sourceOne'),
+      t('toolCall.sourceMany'),
+    );
+  }
+
+  if (summary.startsWith('Нема')) {
+    return t('toolCall.noSources');
+  }
+
+  return summary.includes('делумно') ? t('toolCall.partialSources') : null;
+};
+
+export type ToolCallTally = {
+  problems: number;
+  searches: number;
+  tools: number;
+};
+
+// Counts for a finished message, where every unresolved call was interrupted.
+export const tallyToolCalls = (
+  parts: readonly DynamicToolUIPart[],
+): ToolCallTally => {
+  const tally: ToolCallTally = { problems: 0, searches: 0, tools: 0 };
+
+  for (const part of parts) {
+    if (isSearchTool(part.toolName)) {
+      tally.searches += 1;
+    } else {
+      tally.tools += 1;
+    }
+
+    if (toolCallStatus(part, false) !== 'done') {
+      tally.problems += 1;
+    }
+  }
+
+  return tally;
 };

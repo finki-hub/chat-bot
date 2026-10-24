@@ -56,6 +56,9 @@ export const searchToolIcon = (tool: string | undefined): LucideIcon =>
 export const toolCallIcon = (tool: string): LucideIcon =>
   TOOL_ICONS[tool] ?? Wrench;
 
+export const isSearchTool = (tool: string): boolean =>
+  Object.hasOwn(TOOL_ICONS, tool);
+
 export const searchToolLabel = (tool: string | undefined): string =>
   tool === undefined
     ? t('searchTool.fallback')

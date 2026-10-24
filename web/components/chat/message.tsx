@@ -14,7 +14,7 @@ import { ReasoningDisclosure } from '@/components/chat/reasoning-disclosure';
 import { SearchStatus } from '@/components/chat/search-status';
 import { SearchStepper } from '@/components/chat/search-stepper';
 import { SourceCards } from '@/components/chat/source-cards';
-import { ToolCall } from '@/components/chat/tool-call';
+import { ToolCall, ToolCallGroup } from '@/components/chat/tool-call';
 import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { Button } from '@/components/ui/button';
 import {
@@ -611,8 +611,36 @@ const answerSegments = (message: MyUIMessage): AnswerSegment[] => {
   return segments;
 };
 
+type RenderSegment =
+  AnswerSegment | { key: string; parts: DynamicToolUIPart[]; type: 'tools' };
+
+const collapseToolRuns = (segments: AnswerSegment[]): RenderSegment[] => {
+  const collapsed: RenderSegment[] = [];
+
+  for (const segment of segments) {
+    const previous = collapsed.at(-1);
+
+    if (segment.type !== 'tool') {
+      collapsed.push(segment);
+    } else if (previous?.type === 'tools') {
+      previous.parts.push(segment.part);
+    } else if (previous?.type === 'tool') {
+      collapsed[collapsed.length - 1] = {
+        key: `${previous.key}:group`,
+        parts: [previous.part, segment.part],
+        type: 'tools',
+      };
+    } else {
+      collapsed.push(segment);
+    }
+  }
+
+  return collapsed;
+};
+
 // Tool-call messages render every part in stream order: text written before,
-// between and after the calls is all part of the answer.
+// between and after the calls is all part of the answer. Once finished, each
+// run of several calls folds into one summary row.
 const InterleavedParts = ({
   message,
   pending,
@@ -621,21 +649,36 @@ const InterleavedParts = ({
   pending: boolean;
 }) => {
   const superseded = supersededToolCalls(message);
-  const segments = answerSegments(message);
+  const answer = answerSegments(message);
+  const segments: RenderSegment[] =
+    !pending && toolCallParts(message).length > 1
+      ? collapseToolRuns(answer)
+      : answer;
+  const isText = (index: number): boolean => segments[index]?.type === 'text';
   // Extra space where tool rows give way to text (or back), so the answer does
   // not read as part of the last row.
   const spacing = (index: number): string | undefined =>
-    index > 0 && segments[index - 1]?.type !== segments[index]?.type
-      ? 'mt-2'
-      : undefined;
+    index > 0 && isText(index - 1) !== isText(index) ? 'mt-2' : undefined;
 
   return (
     <div
       className="flex flex-col gap-2"
       data-testid="answer-parts"
     >
-      {segments.map((segment, index) =>
-        segment.type === 'tool' ? (
+      {segments.map((segment, index) => {
+        if (segment.type === 'text') {
+          return (
+            <div
+              className={spacing(index)}
+              data-testid="answer-text"
+              key={segment.key}
+            >
+              <MessageResponse>{segment.text}</MessageResponse>
+            </div>
+          );
+        }
+
+        return segment.type === 'tool' ? (
           <ToolCall
             className={spacing(index)}
             key={segment.key}
@@ -643,15 +686,13 @@ const InterleavedParts = ({
             running={pending && !superseded.has(segment.part.toolCallId)}
           />
         ) : (
-          <div
+          <ToolCallGroup
             className={spacing(index)}
-            data-testid="answer-text"
             key={segment.key}
-          >
-            <MessageResponse>{segment.text}</MessageResponse>
-          </div>
-        ),
-      )}
+            parts={segment.parts}
+          />
+        );
+      })}
     </div>
   );
 };

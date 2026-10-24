@@ -3,13 +3,14 @@
 import { BookOpenText, ChevronRight, ExternalLink } from 'lucide-react';
 import { useId, useState } from 'react';
 
-import type { RetrievedSource } from '@/lib/api-types';
+import type { RetrievedSource, RetrievedSourceLink } from '@/lib/api-types';
 
 import {
   MessageResponse,
   type MessageResponseProps,
 } from '@/components/ai-elements/message';
 import { t } from '@/lib/i18n';
+import { groupLinks, groupSections, groupSources } from '@/lib/source-groups';
 
 const AUTO_EXPAND_SOURCE_LIMIT = 2;
 type MarkdownComponents = NonNullable<MessageResponseProps['components']>;
@@ -42,6 +43,27 @@ const SourceKindLabel = ({ source }: { source: RetrievedSource }) => (
     {source.kind === 'faq' ? t('sources.faq') : t('sources.chunk')}
   </span>
 );
+
+const SourceLinks = ({ links }: { links: readonly RetrievedSourceLink[] }) =>
+  links.length > 0 ? (
+    <div className="flex shrink-0 flex-wrap justify-end gap-1">
+      {links.map((link) => (
+        <a
+          aria-label={`${t('sources.link')}: ${link.label}`}
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0 pointer-fine:min-w-0 pointer-fine:p-1"
+          href={link.url}
+          key={`${link.label}:${link.url}`}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <ExternalLink
+            aria-hidden="true"
+            className="size-3.5"
+          />
+        </a>
+      ))}
+    </div>
+  ) : null;
 
 const SourceCard = ({ source }: { source: RetrievedSource }) => {
   const [expanded, setExpanded] = useState(false);
@@ -115,25 +137,128 @@ const SourceCard = ({ source }: { source: RetrievedSource }) => {
         ) : (
           <div className="min-w-0 flex-1 space-y-1">{content}</div>
         )}
-        {links.length > 0 ? (
-          <div className="flex shrink-0 flex-wrap justify-end gap-1">
-            {links.map((link) => (
-              <a
-                aria-label={`${t('sources.link')}: ${link.label}`}
-                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0 pointer-fine:min-w-0 pointer-fine:p-1"
-                href={link.url}
-                key={`${link.label}:${link.url}`}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <ExternalLink
-                  aria-hidden="true"
-                  className="size-3.5"
-                />
-              </a>
-            ))}
-          </div>
+        <SourceLinks links={links} />
+      </div>
+    </li>
+  );
+};
+
+const partLabel = (source: RetrievedSource): null | string => {
+  if (source.section) {
+    return source.section;
+  }
+
+  return typeof source.chunkIndex === 'number'
+    ? `#${source.chunkIndex + 1}`
+    : null;
+};
+
+// Several chunks of one document: the title once, its sections, and every
+// chunk's snippet on expansion.
+const SourceDocumentCard = ({
+  sources,
+}: {
+  sources: readonly [RetrievedSource, ...RetrievedSource[]];
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const snippetsId = useId();
+  const [first] = sources;
+  const sections = groupSections(sources);
+  const withSnippets = sources.filter(
+    (source) => (source.snippet ?? '').length > 0,
+  );
+  const hasSnippets = withSnippets.length > 0;
+  const heading = (
+    <>
+      <span className="flex flex-wrap items-center gap-2">
+        <SourceKindLabel source={first} />
+        {hasSnippets ? (
+          <ChevronRight
+            aria-hidden="true"
+            className={`size-3 text-muted-foreground/70 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          />
         ) : null}
+      </span>
+      <span className="block line-clamp-2 text-sm font-medium leading-snug text-foreground">
+        {first.title}
+      </span>
+    </>
+  );
+
+  return (
+    <li
+      className="min-w-0 rounded-lg border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/35"
+      data-testid="source-document"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          {hasSnippets ? (
+            <button
+              aria-controls={expanded ? snippetsId : undefined}
+              aria-expanded={expanded}
+              className="min-h-11 w-full rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0"
+              onClick={() => {
+                setExpanded((current) => !current);
+              }}
+              type="button"
+            >
+              {heading}
+            </button>
+          ) : (
+            heading
+          )}
+          {sections.length > 0 ? (
+            <ul
+              aria-label={t('sources.sections')}
+              className="flex flex-wrap gap-1"
+            >
+              {sections.map((section) => (
+                <li
+                  className="rounded-md border border-border/70 px-1.5 py-0.5 text-xs text-muted-foreground"
+                  key={section}
+                >
+                  {section}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {`${sources.length} ${t('sources.partMany')}`}
+            </p>
+          )}
+          {expanded ? (
+            <ul
+              className="mt-2 space-y-2 text-xs leading-relaxed text-muted-foreground"
+              id={snippetsId}
+            >
+              {withSnippets.map((source) => {
+                const label = partLabel(source);
+
+                return (
+                  <li
+                    className="whitespace-pre-wrap border-l border-border/70 pl-2"
+                    key={source.id}
+                  >
+                    {label === null ? null : (
+                      <p className="font-medium text-foreground/80">{label}</p>
+                    )}
+                    <MessageResponse
+                      className="h-auto"
+                      components={sourceMarkdownComponents}
+                      controls={false}
+                      disallowedElements={disallowedSourceMarkdownElements}
+                      mode="static"
+                      plugins={sourceMarkdownPlugins}
+                    >
+                      {source.snippet ?? ''}
+                    </MessageResponse>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </div>
+        <SourceLinks links={groupLinks(sources)} />
       </div>
     </li>
   );
@@ -146,7 +271,8 @@ export const SourceCards = ({
   complete: boolean;
   sources: readonly RetrievedSource[];
 }) => {
-  const sourceCount = sources.length;
+  const groups = groupSources(sources);
+  const sourceCount = groups.length;
   const [disclosure, setDisclosure] = useState<'automatic' | 'closed' | 'open'>(
     'automatic',
   );
@@ -198,12 +324,25 @@ export const SourceCards = ({
           className="grid items-start gap-2 sm:grid-cols-2"
           id={panelId}
         >
-          {sources.map((source) => (
-            <SourceCard
-              key={`${source.kind}:${source.id}`}
-              source={source}
-            />
-          ))}
+          {groups.map(({ key, sources: grouped }) => {
+            const [first, ...rest] = grouped;
+
+            if (first === undefined) {
+              return null;
+            }
+
+            return rest.length === 0 ? (
+              <SourceCard
+                key={`${first.kind}:${first.id}`}
+                source={first}
+              />
+            ) : (
+              <SourceDocumentCard
+                key={key}
+                sources={[first, ...rest]}
+              />
+            );
+          })}
         </ul>
       ) : null}
     </section>

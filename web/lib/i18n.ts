@@ -162,6 +162,8 @@ export const messages = {
   'sources.faq': 'прашање',
   'sources.hide': 'Сокриј извори',
   'sources.link': 'Врска',
+  'sources.partMany': 'делови',
+  'sources.sections': 'Делови',
   'sources.show': 'Прикажи извори',
   'sources.title': 'Извори',
   'thread.emptyDescription': 'Прашај нешто за студиите на\u{A0}ФИНКИ.',
@@ -173,8 +175,17 @@ export const messages = {
   'toolCall.failed': 'Неуспешно',
   'toolCall.incomplete': 'Прекинато',
   'toolCall.input': 'Барање',
+  'toolCall.noSources': 'нема извори',
+  'toolCall.partialSources': 'делумно поврзани',
   'toolCall.result': 'Резултат',
   'toolCall.running': 'Во тек',
+  'toolCall.sourceMany': 'извори',
+  'toolCall.sourceOne': 'извор',
+  'toolCalls.problems': 'неуспешни или прекинати',
+  'toolCalls.searchMany': 'пребарувања',
+  'toolCalls.searchOne': 'пребарување',
+  'toolCalls.toolMany': 'алатки',
+  'toolCalls.toolOne': 'алатка',
 } as const;
 
 export type TKey = keyof typeof messages;
