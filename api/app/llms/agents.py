@@ -181,12 +181,18 @@ _TOOL_LABELS: tuple[tuple[str, str], ...] = (
     ("quote", "Барам цитат"),
 )
 _FALLBACK_TOOL_LABEL = "Проверувам податоци"
+_ANNOUNCEMENTS_LABEL = "Ги проверувам огласите"
 
 
 def _tool_label(name: str, tool_input: object) -> str:
     query = tool_input.get("query") if isinstance(tool_input, dict) else None
-    if isinstance(query, str) and query.strip():
-        return f"Пребарувам: {query.strip()}"
+    query = query.strip() if isinstance(query, str) else ""
+    # Announcement searches also take a query; keep them distinct from the
+    # knowledge-base search in the step list.
+    if "announcement" in name:
+        return f"{_ANNOUNCEMENTS_LABEL}: {query}" if query else _ANNOUNCEMENTS_LABEL
+    if query:
+        return f"Пребарувам: {query}"
     return next(
         (label for fragment, label in _TOOL_LABELS if fragment in name),
         _FALLBACK_TOOL_LABEL,

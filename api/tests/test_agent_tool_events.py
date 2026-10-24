@@ -391,3 +391,12 @@ def test_specific_tool_labels_win_over_general_ones() -> None:
         "Го проверувам распоредот на часови"
     )
     assert agents._tool_label("unknown_tool", {}) == "Проверувам податоци"  # noqa: SLF001
+
+
+def test_announcement_tools_get_their_own_label() -> None:
+    assert agents._tool_label(  # noqa: SLF001
+        "search_announcements",
+        {"query": " упис семестар "},
+    ) == ("Ги проверувам огласите: упис семестар")
+    assert agents._tool_label("search_announcements", {}) == "Ги проверувам огласите"  # noqa: SLF001
+    assert agents._tool_label("get_announcement", {"id": 7}) == "Ги проверувам огласите"  # noqa: SLF001
