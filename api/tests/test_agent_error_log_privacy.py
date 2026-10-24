@@ -67,7 +67,10 @@ def test_agent_stream_failure_omits_raw_error(
     assert len(received_messages) == 1
     assert isinstance(received_messages[0], dict)
     assert received_messages[0]["type"] == "human"
-    assert fake_agent.config == {"configurable": {"thread_id": "default"}}
+    assert fake_agent.config == {
+        "configurable": {"thread_id": "default"},
+        "recursion_limit": agents_module.AGENT_RECURSION_LIMIT,
+    }
     assert fake_agent.version == "v2"
     assert _PRIVATE_PROVIDER_ERROR not in caplog.text
     assert "error_type=RuntimeError" in caplog.text
