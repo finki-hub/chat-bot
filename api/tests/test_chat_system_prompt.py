@@ -126,6 +126,18 @@ def test_system_prompt_lets_newer_announcements_set_current_deadlines():
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
 
 
+def test_past_announcements_do_not_replace_standing_faq_rules():
+    # A one-off pickup window in an old announcement once overrode the FAQ rule
+    # that original documents can be collected at any time.
+    assert (
+        "Огласот важи само за настанот и периодот што ги опишува. Ако тој период "
+        "поминал, тоа не значи дека постапката повеќе не е можна"
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert (
+        "Огласите не ги заменуваат трајните правила и постапки од базата на знаења."
+    ) in AGENT_ANNOUNCEMENTS_PROMPT
+
+
 def test_announcements_prompt_points_current_deadlines_to_the_tool():
     assert "search_announcements" in AGENT_ANNOUNCEMENTS_PROMPT
     assert "Не набројувај имиња на лица од огласите" in AGENT_ANNOUNCEMENTS_PROMPT
