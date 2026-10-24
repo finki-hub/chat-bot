@@ -6,6 +6,7 @@ from app.data.connection import Database
 from app.llms.agents import StreamObservation
 from app.llms.models import model_id
 from app.llms.prompts import (
+    AGENT_ANNOUNCEMENTS_PROMPT,
     AGENT_SEARCH_TOOLS_PROMPT,
     DEFAULT_AGENT_SYSTEM_PROMPT,
     build_user_agent_prompt,
@@ -16,7 +17,11 @@ from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.recommendation_tools import build_recommendation_tools
 from app.llms.search_tools import KnowledgeSearch
 from app.llms.streams import stream_response_with_agent
-from app.llms.tools import MAX_SEARCHES_PER_ANSWER, agent_request_tools
+from app.llms.tools import (
+    MAX_SEARCHES_PER_ANSWER,
+    agent_request_tools,
+    get_agent_tools,
+)
 from app.schemas.chat import ChatSchema
 from app.schemas.chat_credentials import ChatCredentialSecret
 from app.utils.settings import Settings
@@ -28,6 +33,15 @@ settings = Settings()
 PROMPT_SEPARATOR = "\n\n"
 AGENT_SEARCH_CONTEXT = "Изворите не се пребарани однапред; пребарај ги со алатката."
 NO_SOURCES = "Не можев да пронајдам релевантни информации во базата на податоци."
+ANNOUNCEMENTS_TOOL_NAME = "search_announcements"
+
+
+async def _has_tool(name: str) -> bool:
+    try:
+        tools = await get_agent_tools()
+    except Exception:  # ruff: ignore[BLE001] -- the agent reports tool loading failures itself
+        return False
+    return any(tool.name == name for tool in tools)
 
 
 async def handle_chat(
@@ -53,16 +67,12 @@ async def handle_chat(
     )
 
     interface_format = markdown_instructions(payload.interface)
-    system_prompt = PROMPT_SEPARATOR.join(
-        [
-            DEFAULT_AGENT_SYSTEM_PROMPT,
-            AGENT_SEARCH_TOOLS_PROMPT.replace(
-                "{max_searches}",
-                str(MAX_SEARCHES_PER_ANSWER),
-            ),
-            interface_format,
-        ],
-    )
+    tool_rules = [
+        AGENT_SEARCH_TOOLS_PROMPT.replace(
+            "{max_searches}",
+            str(MAX_SEARCHES_PER_ANSWER),
+        ),
+    ]
     user_prompt = build_user_agent_prompt(
         PROMPT_SEPARATOR.join([context, AGENT_SEARCH_CONTEXT]),
         payload.query,
@@ -95,6 +105,12 @@ async def handle_chat(
         )
 
     with agent_request_tools(tools, fallback):
+        # Only point the model at announcements when the MCP server provides them.
+        if await _has_tool(ANNOUNCEMENTS_TOOL_NAME):
+            tool_rules.append(AGENT_ANNOUNCEMENTS_PROMPT)
+        system_prompt = PROMPT_SEPARATOR.join(
+            [DEFAULT_AGENT_SYSTEM_PROMPT, *tool_rules, interface_format],
+        )
         return await stream_response_with_agent(
             user_prompt,
             payload.inference_model,

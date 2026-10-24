@@ -20,6 +20,7 @@ def _load_prompt(filename: str) -> str:
 
 DEFAULT_AGENT_SYSTEM_PROMPT = _load_prompt("agent_system.txt")
 AGENT_SEARCH_TOOLS_PROMPT = _load_prompt("agent_tools_search.txt")
+AGENT_ANNOUNCEMENTS_PROMPT = _load_prompt("agent_tools_announcements.txt")
 _DISCORD_MARKDOWN_INSTRUCTIONS = _load_prompt("discord_format.txt")
 _WEB_MARKDOWN_INSTRUCTIONS = _load_prompt("web_format.txt")
 
