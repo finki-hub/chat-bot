@@ -10,16 +10,15 @@ import {
 } from '@/components/ai-elements/conversation';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 
-type StickToBottomRootProps = {
-  readonly children?: ReactNode;
-  readonly initial?: boolean | ScrollBehavior;
-  readonly resize?: ScrollBehavior;
-};
-
 const stickToBottom = vi.hoisted(() => {
+  type StickToBottomRootProps = {
+    readonly children?: ReactNode;
+    readonly initial?: boolean | ScrollBehavior;
+    readonly resize?: ScrollBehavior;
+  };
   const rootProps: StickToBottomRootProps[] = [];
   const scrollToBottom = vi.fn<(behavior?: ScrollBehavior) => void>();
-  // eslint-disable-next-line unicorn/consistent-function-scoping -- Vitest mock factories are hoisted, so mock components must be created inside vi.hoisted.
+
   const Content = ({ children }: { readonly children?: ReactNode }) => (
     <div>{children}</div>
   );

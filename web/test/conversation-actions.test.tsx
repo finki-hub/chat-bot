@@ -43,7 +43,7 @@ describe('renderAnswerActions', () => {
   });
 
   it('drops the regenerate action when the backend is unavailable', () => {
-    expect(renderFor('r1', false).props.onRegenerate).toBeDefined();
+    expect(renderFor('r1').props.onRegenerate).toBeDefined();
     expect(renderFor('r1', true).props.onRegenerate).toBeUndefined();
   });
 
@@ -54,7 +54,7 @@ describe('renderAnswerActions', () => {
   });
 
   it('enables the regenerate button when idle', () => {
-    render(renderFor('r1', false, 'ready'));
+    render(renderFor('r1'));
 
     expect(screen.getByRole('button', { name: REGENERATE })).toBeEnabled();
   });

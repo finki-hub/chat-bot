@@ -125,13 +125,6 @@ const EXCHANGES: Exchange[] = [
   },
 ];
 
-type ChatMessage = {
-  key: string;
-  role: 'assistant' | 'user';
-  source?: ExchangeSource;
-  text: string;
-};
-
 const QUESTION_PAUSE_MS = 600;
 const TYPING_MS = 1_300;
 const ANSWER_DWELL_MS = 4_200;
@@ -210,6 +203,12 @@ const TypingDots = () => (
 );
 
 export const ChatShowcase = () => {
+  type ChatMessage = {
+    key: string;
+    role: 'assistant' | 'user';
+    source?: ExchangeSource;
+    text: string;
+  };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // slotReserved mounts the fixed-height indicator slot; typing fades the
   // dots in inside it without changing the layout

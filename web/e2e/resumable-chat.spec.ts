@@ -31,20 +31,13 @@ const SPONSORED_CATALOG: ModelCatalog = {
   version: 1,
 };
 
-type ConversationRow = {
-  readonly id: string;
-  readonly model: string;
-  readonly title: string;
-};
-
-type PostRequestBody = {
-  readonly id?: unknown;
-};
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const parseConversationId = (body: null | string): string => {
+  type PostRequestBody = {
+    readonly id?: unknown;
+  };
   if (body === null) {
     throw new Error('chat request did not include a body');
   }
@@ -115,6 +108,11 @@ const installChatStateRoutes = async (page: Page): Promise<void> => {
 };
 
 test.describe('resumable chat lifecycle (mocked BFF)', () => {
+  type ConversationRow = {
+    readonly id: string;
+    readonly model: string;
+    readonly title: string;
+  };
   test('resumes after refresh and persists the completed assistant response', async ({
     page,
   }, testInfo) => {

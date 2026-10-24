@@ -2,22 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORIGINAL = { ...process.env };
 
-type AuthConfig = {
-  readonly callbacks: {
-    readonly jwt: (input: {
-      readonly account?: {
-        readonly provider: string;
-        readonly providerAccountId: string;
-      };
-      readonly token: Record<string, string>;
-    }) => Record<string, string>;
-    readonly session: (input: {
-      readonly session: { readonly user: Record<string, string> };
-      readonly token: Record<string, string>;
-    }) => { readonly user: Record<string, string> };
-  };
-};
-
 const { nextAuthMock } = vi.hoisted(() => ({
   nextAuthMock: vi.fn<
     (config: unknown) => {
@@ -146,6 +130,21 @@ describe('Auth.js route handler', () => {
   });
 
   it('copies provider account claims from JWT into the session user', async () => {
+    type AuthConfig = {
+      readonly callbacks: {
+        readonly jwt: (input: {
+          readonly account?: {
+            readonly provider: string;
+            readonly providerAccountId: string;
+          };
+          readonly token: Record<string, string>;
+        }) => Record<string, string>;
+        readonly session: (input: {
+          readonly session: { readonly user: Record<string, string> };
+          readonly token: Record<string, string>;
+        }) => { readonly user: Record<string, string> };
+      };
+    };
     await import('@/auth');
     const config = nextAuthMock.mock.calls[0]?.[0] as AuthConfig;
 

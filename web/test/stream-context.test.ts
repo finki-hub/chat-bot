@@ -3,16 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const VALID_RESPONSE_ID = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d21';
 const STREAM_REDIS_URL = 'redis://stream-store:6379';
 
-type FakeStreamContext = {
-  readonly marker: 'fake-resumable-context';
-};
-
 type StreamContextOptions = {
   readonly keyPrefix?: string;
   readonly waitUntil: ((promise: Promise<unknown>) => void) | null;
 };
 
 const mocks = vi.hoisted(() => {
+  type FakeStreamContext = {
+    readonly marker: 'fake-resumable-context';
+  };
   const createResumableStreamContext = vi.fn<
     (options: StreamContextOptions) => FakeStreamContext
   >(() => ({

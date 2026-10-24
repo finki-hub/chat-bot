@@ -6,9 +6,6 @@ import type { ErrorNotice, MyUIMessage } from '@/lib/api-types';
 
 import { useConversationHydration } from '@/lib/use-conversation-hydration';
 
-type ActiveStatus =
-  undefined | { readonly label: string; readonly tool?: string };
-
 const ACTIVE_ID = 'conversation-b';
 const PREVIOUS_ID = 'previous-a';
 const PREVIOUS_TEXT = 'Conversation A';
@@ -61,6 +58,8 @@ const useHydratedMessages = ({
   readonly initialMessages?: readonly MyUIMessage[];
   readonly preserveEmptyHydrationId?: null | string;
 } = {}): MyUIMessage[] => {
+  type ActiveStatus =
+    undefined | { readonly label: string; readonly tool?: string };
   const [messages, setMessages] = useState<MyUIMessage[]>(() =>
     initialMessages === undefined
       ? [message(PREVIOUS_ID, PREVIOUS_TEXT)]

@@ -56,11 +56,6 @@ type CredentialSettingsDialogProps = {
   readonly open: boolean;
 };
 
-type DialogOperation = {
-  readonly dialogCycle: number;
-  readonly sessionKey: string;
-};
-
 const providerList: readonly ProviderConfig[] = PROVIDERS;
 const SHORT_DIALOG_MAX_HEIGHT_PX = 480;
 const useIsomorphicLayoutEffect =
@@ -211,6 +206,10 @@ export const CredentialSettingsDialog = ({
   onRestoreFocusAction,
   open,
 }: CredentialSettingsDialogProps) => {
+  type DialogOperation = {
+    readonly dialogCycle: number;
+    readonly sessionKey: string;
+  };
   const queryClient = useQueryClient();
   const {
     credentials,
@@ -554,7 +553,7 @@ export const CredentialSettingsDialog = ({
                     {saveError}
                   </p>
                 )}
-                {!loading && !credentialsLoadError ? (
+                {loading || credentialsLoadError ? null : (
                   <CredentialProviderList
                     busyProvider={busyProvider}
                     failures={saveFailures}
@@ -564,7 +563,7 @@ export const CredentialSettingsDialog = ({
                     saved={saved}
                     saving={saving}
                   />
-                ) : null}
+                )}
               </div>
             </div>
             <div className="border-t border-border bg-background">
