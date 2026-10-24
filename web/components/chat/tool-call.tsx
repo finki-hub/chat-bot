@@ -34,14 +34,14 @@ const STATUS_LABELS: Record<ToolCallStatus, string> = {
 
 export const ToolCall = ({
   part,
-  pending = false,
+  running = false,
 }: {
   part: DynamicToolUIPart;
-  pending?: boolean;
+  running?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
   const panelId = useId();
-  const status = toolCallStatus(part, pending);
+  const status = toolCallStatus(part, running);
   const ToolIcon = searchToolIcon(part.toolName);
   const label =
     part.title !== undefined && part.title.length > 0
@@ -58,7 +58,7 @@ export const ToolCall = ({
       data-tool={part.toolName}
     >
       <button
-        aria-controls={panelId}
+        aria-controls={open ? panelId : undefined}
         aria-expanded={open}
         className="flex w-full min-w-0 items-center gap-2 rounded-lg px-3 py-1.5 text-left text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={() => {

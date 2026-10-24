@@ -136,7 +136,8 @@ export const Thread = ({
     (lastMessage?.role !== 'assistant' ||
       (activeStatus === undefined &&
         !hasText(lastMessage) &&
-        !hasReasoning(lastMessage)));
+        !hasReasoning(lastMessage) &&
+        !hasToolCalls(lastMessage)));
   return (
     <Conversation
       className="flex-1"

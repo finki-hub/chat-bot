@@ -192,6 +192,7 @@ const createToolCalls = (writer: UiStreamWriter) => {
   // Owns the tool lifecycle and the `status` frames that duplicate it. The SDK throws on
   // a result for an unknown call id, so only pending calls resolve.
   const pending = new Set<string>();
+  let statusShown = false;
 
   return {
     call(event: ToolCallEvent): void {
@@ -205,6 +206,18 @@ const createToolCalls = (writer: UiStreamWriter) => {
         toolName: event.name,
         type: 'tool-input-available',
       });
+
+      // The tool row replaces the status sent just before it; clear it so it
+      // does not linger as the active status.
+      if (!statusShown) {
+        return;
+      }
+
+      statusShown = false;
+      writer.write({ data: {}, transient: true, type: 'data-reset' });
+    },
+    clearStatus(): void {
+      statusShown = false;
     },
     isNew: (id: string): boolean => !seen.has(id),
     result(event: ToolResultEvent): void {
@@ -234,6 +247,7 @@ const createToolCalls = (writer: UiStreamWriter) => {
         return;
       }
 
+      statusShown = true;
       writer.write({
         data: {
           label: event.label,
@@ -316,6 +330,7 @@ export const translateToUiStream = async (
       case 'reset':
         // `reset` only delimits the dropped pre-tool text preamble — never reasoning.
         textPart.end();
+        toolCalls.clearStatus();
         writer.write({ data: {}, transient: true, type: 'data-reset' });
         break;
 

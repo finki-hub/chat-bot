@@ -10,7 +10,7 @@ type ReasoningPart = {
 };
 type TextPart = { text: string; type: 'text' };
 
-const isTextPart = (part: MessagePart): part is TextPart =>
+export const isTextPart = (part: MessagePart): part is TextPart =>
   part.type === 'text';
 
 export const isToolCallPart = (part: MessagePart): part is DynamicToolUIPart =>
@@ -31,13 +31,29 @@ export const toolCallParts = (message: MyUIMessage): DynamicToolUIPart[] =>
 export const hasToolCalls = (message: MyUIMessage): boolean =>
   message.parts.some(isToolCallPart);
 
-// Text around tool calls forms separate segments of one answer; without tool calls,
-// extra text parts come from legacy streams and are joined as before.
-export const joinText = (message: MyUIMessage): string =>
-  textParts(message)
-    .map((part) => part.text)
-    .filter((text) => !hasToolCalls(message) || text.trim() !== '')
-    .join(hasToolCalls(message) ? '\n\n' : '');
+const joinSegments = (texts: readonly string[]): string =>
+  texts
+    .map((text) => text.trim())
+    .filter((text) => text !== '')
+    .join('\n\n');
+
+// Text around tool calls forms separate segments of one answer (the API prefixes
+// later segments with a blank line, hence the trim); without tool calls, extra
+// text parts come from legacy streams and are joined as before.
+export const joinText = (message: MyUIMessage): string => {
+  const texts = textParts(message).map((part) => part.text);
+
+  return hasToolCalls(message) ? joinSegments(texts) : texts.join('');
+};
+
+// Reasoning from separate agent turns around tool calls reads as paragraphs.
+export const joinReasoning = (message: MyUIMessage): string => {
+  const texts = reasoningParts(message).map((part) => part.text);
+
+  return hasToolCalls(message)
+    ? texts.filter((text) => text.trim() !== '').join('\n\n')
+    : texts.join('');
+};
 
 export const lastText = (message: MyUIMessage): null | string =>
   textParts(message).at(-1)?.text ?? null;

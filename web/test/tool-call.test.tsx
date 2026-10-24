@@ -23,8 +23,12 @@ const SUMMARY = 'Пронајдени 4 извори';
 const PREAMBLE = 'Ќе проверам во базата.';
 const ANSWER = 'Уписот е во јули.';
 const TOOL_STATUS = { label: 'Пребарувам…', tool: 'search_knowledge_base' };
+const RETRIEVE_STATUS = { ...TOOL_STATUS, stage: 'retrieve' };
 
 const TOOL_CALL = 'tool-call';
+const TYPING = 'typing-indicator';
+const ACTIONS_STUB = 'answer-actions-stub';
+const ACTIONS = <div data-testid={ACTIONS_STUB} />;
 const DONE = 'output-available';
 const FAILED = 'output-error';
 
@@ -48,6 +52,9 @@ const call = (
     ? { ...base, errorText: 'Пребарувањето не успеа', state }
     : { ...base, state };
 };
+
+const toolStates = () =>
+  screen.getAllByTestId(TOOL_CALL).map((node) => node.dataset['state']);
 
 const assistant = (parts: MyUIMessage['parts']): MyUIMessage => ({
   id: 'a1',
@@ -99,15 +106,15 @@ describe('AssistantMessage tool calls', () => {
   it('shows running, done, error and interrupted states', () => {
     const { rerender } = render(
       <AssistantMessage
-        message={assistant([call('c1'), call('c2', DONE)])}
+        message={assistant([call('c1', DONE), call('c2')])}
         pending
       />,
     );
     const states = () =>
       screen.getAllByTestId(TOOL_CALL).map((node) => node.dataset['state']);
 
-    expect(states()).toStrictEqual(['running', 'done']);
-    expect(screen.getAllByTestId(TOOL_CALL)[0]).toHaveTextContent('Во тек');
+    expect(states()).toStrictEqual(['done', 'running']);
+    expect(screen.getAllByTestId(TOOL_CALL)[1]).toHaveTextContent('Во тек');
 
     rerender(
       <AssistantMessage
@@ -153,7 +160,7 @@ describe('AssistantMessage tool calls', () => {
       />,
     );
 
-    expect(screen.getByTestId('typing-indicator')).toBeInTheDocument();
+    expect(screen.getByTestId(TYPING)).toBeInTheDocument();
   });
 
   it('falls back to the tool label when the call has no title', () => {
@@ -166,6 +173,154 @@ describe('AssistantMessage tool calls', () => {
     expect(screen.getByTestId(TOOL_CALL)).toHaveTextContent(
       'Барам во базата на знаење…',
     );
+  });
+});
+
+describe('AssistantMessage tool-call progress', () => {
+  it('stops spinning a call once later parts follow it', () => {
+    const { rerender } = render(
+      <AssistantMessage
+        message={assistant([call('c1'), { text: ANSWER, type: 'text' }])}
+        pending
+      />,
+    );
+
+    expect(toolStates()).toStrictEqual(['incomplete']);
+
+    rerender(
+      <AssistantMessage
+        message={assistant([call('c1'), call('c2', DONE)])}
+        pending
+      />,
+    );
+
+    expect(toolStates()).toStrictEqual(['incomplete', 'done']);
+
+    rerender(
+      <AssistantMessage
+        message={assistant([call('c1'), call('c2')])}
+        pending
+      />,
+    );
+
+    expect(toolStates()).toStrictEqual(['running', 'running']);
+  });
+
+  it('does not show the search stepper next to tool rows', () => {
+    render(
+      <AssistantMessage
+        message={assistant([call('c1')])}
+        pending
+        statusPart={RETRIEVE_STATUS}
+      />,
+    );
+
+    expect(screen.queryByTestId('search-stepper')).not.toBeInTheDocument();
+    expect(screen.queryByTestId(TYPING)).not.toBeInTheDocument();
+  });
+
+  it('shows the typing indicator, not the stepper, after calls resolve', () => {
+    render(
+      <AssistantMessage
+        message={assistant([
+          { text: PREAMBLE, type: 'text' },
+          call('c1', DONE),
+        ])}
+        pending
+        statusPart={RETRIEVE_STATUS}
+      />,
+    );
+
+    expect(screen.queryByTestId('search-stepper')).not.toBeInTheDocument();
+    expect(screen.getByTestId(TYPING)).toBeInTheDocument();
+  });
+
+  it('treats only text after the last call as the visible answer while streaming', () => {
+    const { rerender } = render(
+      <AssistantMessage
+        actions={ACTIONS}
+        message={assistant([
+          { text: PREAMBLE, type: 'text' },
+          call('c1', DONE),
+        ])}
+        pending
+      />,
+    );
+
+    expect(screen.queryByTestId(ACTIONS_STUB)).not.toBeInTheDocument();
+
+    rerender(
+      <AssistantMessage
+        actions={ACTIONS}
+        message={assistant([{ text: PREAMBLE, type: 'text' }, call('c1')])}
+        pending
+      />,
+    );
+
+    expect(screen.queryByTestId(ACTIONS_STUB)).not.toBeInTheDocument();
+
+    rerender(
+      <AssistantMessage
+        actions={ACTIONS}
+        message={assistant([
+          { text: PREAMBLE, type: 'text' },
+          call('c1', DONE),
+          { text: `\n\n${ANSWER}`, type: 'text' },
+        ])}
+        pending
+      />,
+    );
+
+    expect(screen.getByTestId(ACTIONS_STUB)).toBeInTheDocument();
+    expect(screen.queryByTestId(TYPING)).not.toBeInTheDocument();
+  });
+
+  it('shows the actions on a finished message that only has a preamble', () => {
+    render(
+      <AssistantMessage
+        actions={ACTIONS}
+        message={assistant([
+          { text: PREAMBLE, type: 'text' },
+          call('c1', DONE),
+        ])}
+      />,
+    );
+
+    expect(screen.getByTestId(ACTIONS_STUB)).toBeInTheDocument();
+  });
+
+  it('links the toggle to the panel only while it is open', async () => {
+    const user = userEvent.setup();
+    render(<AssistantMessage message={assistant([call('c1', DONE)])} />);
+
+    const toggle = screen.getByRole('button', { name: new RegExp(LABEL, 'u') });
+
+    expect(toggle).not.toHaveAttribute('aria-controls');
+
+    await user.click(toggle);
+
+    expect(toggle).toHaveAttribute(
+      'aria-controls',
+      screen.getByTestId('tool-call-panel').id,
+    );
+  });
+
+  it('omits the query row for a blank query', async () => {
+    const user = userEvent.setup();
+    render(
+      <AssistantMessage
+        message={assistant([{ ...call('c1', DONE), input: { query: '  ' } }])}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: new RegExp(LABEL, 'u') }),
+    );
+
+    const panel = screen.getByTestId('tool-call-panel');
+
+    expect(panel).not.toHaveTextContent('Барање');
+    expect(panel).toHaveTextContent(SUMMARY);
   });
 });
 
@@ -189,6 +344,27 @@ describe('Thread tool calls', () => {
     expect(
       within(screen.getByTestId(TOOL_CALL)).getByText(LABEL),
     ).toBeInTheDocument();
+    expect(screen.queryByTestId(TYPING)).not.toBeInTheDocument();
+  });
+
+  it('shows one typing indicator inside the message once calls resolve', () => {
+    render(
+      <Thread
+        messages={[
+          {
+            id: 'u1',
+            metadata: {},
+            parts: [{ text: 'Кога е уписот?', type: 'text' }],
+            role: 'user',
+          },
+          assistant([call('c1', DONE)]),
+        ]}
+        status="streaming"
+      />,
+    );
+
+    expect(screen.getAllByTestId(TYPING)).toHaveLength(1);
+    expect(screen.getByTestId('answer-parts')).toBeInTheDocument();
   });
 });
 

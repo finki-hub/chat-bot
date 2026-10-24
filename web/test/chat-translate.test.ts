@@ -502,6 +502,12 @@ const toolStatusPart: UiStreamPart = {
   type: 'data-status',
 };
 
+const RESET_PART: UiStreamPart = {
+  data: {},
+  transient: true,
+  type: 'data-reset',
+};
+
 // Replays the non-transient chunks through the real SDK reader to check the parts.
 const toUiMessage = async (
   writer: FakeWriter,
@@ -552,6 +558,7 @@ describe('translateToUiStream tool calls', () => {
       toolStatusPart,
       textEnd(T1),
       toolInput('c1', 'упис'),
+      RESET_PART,
       toolOutput('c1', 'Пронајдени 4 извори'),
       textStart(T2),
       textDelta(T2, 'Одговор.'),
@@ -704,6 +711,41 @@ describe('translateToUiStream tool calls', () => {
       textStart(T2),
       textDelta(T2, 'одговор'),
       textEnd(T2),
+    ]);
+  });
+});
+
+describe('translateToUiStream tool statuses', () => {
+  it('clears the tool status each call replaces so none stays active', async () => {
+    const writer = new FakeWriter();
+
+    await translateToUiStream(
+      events(
+        toolStatus,
+        searchCall('c1', 'упис'),
+        searchResult('c1', true, 'прв'),
+        toolStatus,
+        searchCall('c2', 'рок'),
+        searchResult('c2', true, 'втор'),
+        { text: '\n\nОдговор.', type: 'token' },
+        DONE,
+      ),
+      writer,
+      {},
+      ids(),
+    );
+
+    expect(writer.parts).toStrictEqual([
+      startWith({}),
+      toolStatusPart,
+      toolInput('c1', 'упис'),
+      RESET_PART,
+      toolOutput('c1', 'прв'),
+      toolInput('c2', 'рок'),
+      toolOutput('c2', 'втор'),
+      textStart(T1),
+      textDelta(T1, '\n\nОдговор.'),
+      textEnd(T1),
     ]);
   });
 });
