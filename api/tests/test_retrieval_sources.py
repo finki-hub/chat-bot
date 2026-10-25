@@ -1,5 +1,6 @@
 import json
 from datetime import UTC, datetime
+from typing import cast
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
@@ -412,6 +413,7 @@ def test_chunk_retrieval_maps_document_provenance(
                 "document_current_status": "current",
                 "document_date": "2019-06-06",
                 "document_last_verified": "2026-08-31",
+                "document_assistant_note": "Членот важи само за прв циклус.",
                 "chunk_index": 4,
                 "section": "Член 12",
                 "content": "Правилата се наведени во членот.",
@@ -443,6 +445,9 @@ def test_chunk_retrieval_maps_document_provenance(
         assert chunk.document_current_status == "current"
         assert chunk.document_date == "2019-06-06"
         assert chunk.document_last_verified == "2026-08-31"
+        assert chunk.document_assistant_note == "Членот важи само за прв циклус."
+        fetch = cast("AsyncMock", database.fetch)
+        assert "d.metadata->>'assistant_note'" in fetch.await_args_list[0].args[0]
 
     anyio.run(run)
 
@@ -566,3 +571,110 @@ def test_question_candidate_omits_blank_assistant_note() -> None:
     )
 
     assert "Белешка" not in _question_candidate(question).context_text
+
+
+_DOCUMENT_NOTE = (
+    "Пријавата се пополнува во системот за уписи, кој е посебен од iKnow; "
+    "прашај <@198249751001563136>."
+)
+_REDACTED_DOCUMENT_NOTE = (
+    "Пријавата се пополнува во системот за уписи, кој е посебен од iKnow; "
+    "прашај [непозната Discord-ознака]."
+)
+
+
+def _noted_chunk(document_id: UUID, *, assistant_note: str | None) -> ChunkSchema:
+    return ChunkSchema(
+        id=uuid4(),
+        document_id=document_id,
+        document_name="upis-magisterski",
+        document_title="Потребни документи за упис",
+        document_url=HttpUrl("https://finki.ukim.mk/upisi"),
+        document_current_status="current",
+        document_assistant_note=assistant_note,
+        chunk_index=0,
+        section=None,
+        content="Пријавата се пополнува од iKnow-системот.",
+    )
+
+
+def test_chunk_candidate_renders_document_assistant_note_only_in_model_context() -> (
+    None
+):
+    # Given: a document chunk whose corpus metadata carries internal guidance.
+    candidate = _chunk_candidate(
+        _noted_chunk(uuid4(), assistant_note=_DOCUMENT_NOTE),
+    )
+
+    # When: the chunk becomes a visible sources frame.
+    payload = candidate.retrieval_source.as_payload()
+    frame = sources_event([payload])
+    streamed = frame.split("data: ", 1)[1]
+
+    # Then: the model context ends with the redacted, labelled note.
+    assert candidate.context_text == (
+        "Тип на извор: Документ\n"
+        "Извор: Потребни документи за упис\n"
+        "Статус (од корпусот): current\n"
+        "Содржина: Пријавата се пополнува од iKnow-системот.\n"
+        f"Белешка за асистентот (не ја прикажувај дословно): {_REDACTED_DOCUMENT_NOTE}"
+    )
+    assert "assistant_note" not in payload
+    assert "посебен од iKnow" not in candidate.rerank_text
+    assert "посебен од iKnow" not in candidate.retrieval_source.snippet
+    for client_text in (json.dumps(payload, ensure_ascii=False), streamed):
+        assert "посебен од iKnow" not in client_text
+        assert "Белешка" not in client_text
+        assert "198249751001563136" not in client_text
+
+
+def test_chunk_candidate_omits_blank_document_assistant_note() -> None:
+    candidate = _chunk_candidate(_noted_chunk(uuid4(), assistant_note="  "))
+
+    assert "Белешка" not in candidate.context_text
+
+
+def test_expanded_document_context_keeps_document_assistant_note(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document_id = uuid4()
+    center = _noted_chunk(document_id, assistant_note=_DOCUMENT_NOTE)
+    state = WindowState(
+        [
+            {
+                "id": center.id,
+                "document_id": document_id,
+                "chunk_index": 0,
+                "content": center.content,
+                "section": None,
+                "document_name": center.document_name,
+                "document_title": center.document_title,
+            },
+            {
+                "id": uuid4(),
+                "document_id": document_id,
+                "chunk_index": 1,
+                "content": "Се приложува диплома.",
+                "section": None,
+                "document_name": center.document_name,
+                "document_title": center.document_title,
+            },
+        ],
+    )
+    database = _database(state, monkeypatch)
+
+    async def run() -> None:
+        text = await _expand_and_render(
+            database,
+            [_chunk_candidate(center)],
+            Model.TEXT_EMBEDDING_3_LARGE,
+        )
+
+        assert text.endswith(
+            "Содржина: Пријавата се пополнува од iKnow-системот.\n"
+            "Се приложува диплома.\n"
+            f"Белешка за асистентот (не ја прикажувај дословно): "
+            f"{_REDACTED_DOCUMENT_NOTE}",
+        )
+
+    anyio.run(run)
