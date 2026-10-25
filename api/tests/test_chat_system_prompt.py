@@ -127,6 +127,28 @@ def test_system_prompt_lets_newer_announcements_set_current_deadlines():
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
 
 
+def test_answers_explain_retrieved_procedures_and_both_meanings():
+    # Answers sent students to a helpdesk although the retrieved FAQ described the
+    # procedure, and assumed "диплома" meant the FINKI diploma.
+    assert (
+        "објасни ја таа постапка, наместо корисникот само да го упатиш на техничка "
+        "поддршка или служба"
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert (
+        "земи ги предвид условите и исклучоците од сите, не само општото правило"
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert (
+        "одговори накратко за двете можности наместо да претпоставиш една"
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+
+
+def test_search_prompt_asks_for_one_concept_per_query():
+    assert "со по еден поим во барањето" in AGENT_SEARCH_TOOLS_PROMPT
+    assert (
+        "пребарај ја и најверојатната студентска постапка" in AGENT_SEARCH_TOOLS_PROMPT
+    )
+
+
 def test_general_rules_apply_to_the_users_case_before_any_hedge():
     # Answers opened with "I can't confirm..." although a retrieved FAQ covered the case.
     assert (
