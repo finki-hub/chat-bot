@@ -127,6 +127,18 @@ def test_system_prompt_lets_newer_announcements_set_current_deadlines():
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
 
 
+def test_general_rules_apply_to_the_users_case_before_any_hedge():
+    # Answers opened with "I can't confirm..." although a retrieved FAQ covered the case.
+    assert (
+        "Кога FAQ или документ дава општо правило, примени го и на конкретниот случај "
+        "на корисникот, освен ако изворот самиот го ограничува"
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert (
+        "Започни со она што изворите го кажуваат; она што навистина не е покриено "
+        "кажи го кратко по одговорот, а не пред него."
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+
+
 def test_past_announcements_do_not_replace_standing_faq_rules():
     # A one-off pickup window in an old announcement once overrode the FAQ rule
     # that original documents can be collected at any time.
