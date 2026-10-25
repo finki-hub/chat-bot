@@ -174,6 +174,13 @@ def _embedding_for_variant(
     raise AssertionError(f"Unhandled query variant kind: {kind}")
 
 
+def _assistant_note_line(note: str | None) -> str | None:
+    """Model-only guidance: kept out of the rerank text and the visible sources payload."""
+    if not note or not note.strip():
+        return None
+    return f"{_ASSISTANT_NOTE_LABEL} {redact_unresolved_discord_tokens(note)}"
+
+
 def _question_candidate(
     q: QuestionSchema,
     retrieval_path: _CandidateRetrievalPath = "dense",
@@ -190,19 +197,13 @@ def _question_candidate(
         if links
         else None
     )
-    # Model-only guidance: kept out of the rerank text and the visible sources payload.
-    note = (
-        f"{_ASSISTANT_NOTE_LABEL} {redact_unresolved_discord_tokens(q.assistant_note)}"
-        if q.assistant_note and q.assistant_note.strip()
-        else None
-    )
     context_text = "\n".join(
         part
         for part in [
             "Тип на извор: FAQ",
             f"Наслов: {name}",
             f"Содржина: {content}",
-            note,
+            _assistant_note_line(q.assistant_note),
             sources,
         ]
         if part is not None
@@ -242,6 +243,19 @@ def _document_metadata_lines(source: RetrievalSource) -> list[str]:
     ]
 
 
+def _document_block(label: str, source: RetrievalSource, content: str) -> str:
+    note = _assistant_note_line(source.assistant_note)
+    return "\n".join(
+        [
+            "Тип на извор: Документ",
+            f"Извор: {label}",
+            *_document_metadata_lines(source),
+            f"Содржина: {content}",
+            *([note] if note else []),
+        ],
+    )
+
+
 def _chunk_candidate(c: ChunkSchema) -> _Candidate:
     label = f"{c.document_title} ({c.section})" if c.section else c.document_title
     rerank_text = f"Наслов: {label}\nСодржина: {c.content}"
@@ -266,15 +280,9 @@ def _chunk_candidate(c: ChunkSchema) -> _Candidate:
         ),
         section=c.section,
         snippet=c.content,
+        assistant_note=c.document_assistant_note,
     )
-    context_text = "\n".join(
-        [
-            "Тип на извор: Документ",
-            f"Извор: {label}",
-            *_document_metadata_lines(retrieval_source),
-            f"Содржина: {c.content}",
-        ],
-    )
+    context_text = _document_block(label, retrieval_source, c.content)
     return _Candidate(
         key=f"C:{c.id}",
         source="chunk",
@@ -900,14 +908,7 @@ def _render_passage(chunks: list[ChunkSchema], source: RetrievalSource) -> str:
     label = f"{title} ({passage_section})" if passage_section else title
     metadata_source = replace(source, section=passage_section)
     body = "\n".join(c.content for c in chunks)
-    return "\n".join(
-        [
-            "Тип на извор: Документ",
-            f"Извор: {label}",
-            *_document_metadata_lines(metadata_source),
-            f"Содржина: {body}",
-        ],
-    )
+    return _document_block(label, metadata_source, body)
 
 
 def _render_blocks(

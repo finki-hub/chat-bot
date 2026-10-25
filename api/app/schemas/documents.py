@@ -80,6 +80,10 @@ class ChunkSchema(BaseModel):
         default=None,
         description="Date when the authority evidence was last reviewed",
     )
+    document_assistant_note: str | None = Field(
+        default=None,
+        description="Internal guidance for the assistant; never shown to users",
+    )
     chunk_index: int = Field(examples=[0])
     section: str | None = Field(
         default=None,

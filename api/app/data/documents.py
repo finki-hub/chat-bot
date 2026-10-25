@@ -271,6 +271,7 @@ async def get_closest_chunks(
         d.metadata->>'current_status' AS document_current_status,
         d.metadata->>'document_date' AS document_date,
         d.metadata->>'last_verified' AS document_last_verified,
+        d.metadata->>'assistant_note' AS document_assistant_note,
         {embedding.distance_operand} <=> {embedding.query_operand} AS distance
     FROM chunk c
     JOIN document d ON d.id = c.document_id
@@ -315,6 +316,7 @@ async def get_closest_chunks(
                 document_current_status=row.get("document_current_status"),
                 document_date=row.get("document_date"),
                 document_last_verified=row.get("document_last_verified"),
+                document_assistant_note=row.get("document_assistant_note"),
                 chunk_index=row["chunk_index"],
                 section=row["section"],
                 content=row["content"],

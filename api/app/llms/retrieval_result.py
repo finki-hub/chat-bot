@@ -43,6 +43,8 @@ class RetrievalSource:
     links: tuple[RetrievalSourceLink, ...] = ()
     section: str | None = None
     snippet: str = ""
+    # Model-only guidance: deliberately left out of as_payload.
+    assistant_note: str | None = None
 
     def as_payload(self) -> RetrievalSourcePayload:
         payload: RetrievalSourcePayload = {
