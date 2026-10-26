@@ -81,6 +81,16 @@ async def get_question_by_name_query(db: Database, name: str) -> QuestionSchema 
     return _question_from_row(result)
 
 
+async def get_questions_by_names_query(
+    db: Database,
+    names: list[str],
+) -> list[QuestionSchema]:
+    query = "SELECT * FROM question WHERE name = ANY($1::text[])"
+    result = await db.fetch(query, names)
+
+    return [_question_from_row(row) for row in result]
+
+
 async def get_questions_without_embeddings_query(
     db: Database,
     model: Model,

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import math
+import re
 from collections.abc import Awaitable
 from dataclasses import dataclass, replace
 from typing import Literal, assert_never
@@ -10,9 +11,14 @@ from asyncpg import PostgresError
 
 from app.data.connection import Database
 from app.data.documents import get_chunks_window, get_closest_chunks
-from app.data.questions import get_closest_questions, get_matching_questions
+from app.data.questions import (
+    get_closest_questions,
+    get_matching_questions,
+    get_questions_by_names_query,
+)
 from app.llms.embeddings import generate_embeddings
 from app.llms.faq_evidence_constraints import (
+    FaqConstraints,
     apply_faq_constraints_to_candidates,
     faq_constraints_filter_evidence,
     plan_faq_evidence_constraints,
@@ -72,6 +78,9 @@ _RETRIEVAL_IDS_CAP: int = 10
 # cutoff returned nothing for short keyword queries such as „документи Бараки“;
 # lifting it raised golden-set recall 53.5% -> 57.7% and buried facts 93.8% -> 97.9%.
 _SEARCH_DISTANCE_CUTOFF: float = 2.0
+# FAQs point to the FAQ holding a fact with „<exact FAQ title>“; no title contains „.
+_FAQ_POINTER = re.compile(r"„([^„“]+)“")
+_POINTED_FAQS_MAX: int = 3
 _ASSISTANT_NOTE_LABEL = "Белешка за асистентот (не ја прикажувај дословно):"
 # Marks context kept only by the score-floor fallback; the system prompt explains it.
 _WEAK_MATCH_NOTICE = (
@@ -848,10 +857,92 @@ async def get_retrieved_context_with_sources(
     record_retrieval_ids([c.key for c in final[:_RETRIEVAL_IDS_CAP]])
 
     with timed("retrieval.expand"):
+        final, sources = await _with_pointed_faqs(
+            db,
+            final,
+            sources,
+            active_faq_constraints,
+            top_k=top_k,
+        )
         text = await _expand_and_render(db, final, embedding_model)
     if text and reranker_fallback_reason == "score_floor":
         text = f"{_WEAK_MATCH_NOTICE}\n\n{text}"
     return RetrievedContext(text=text, sources=sources)
+
+
+async def _with_pointed_faqs(
+    db: Database,
+    final: list[_Candidate],
+    sources: tuple[RetrievalSource, ...],
+    constraints: FaqConstraints | None,
+    *,
+    top_k: int,
+) -> tuple[list[_Candidate], tuple[RetrievalSource, ...]]:
+    """Add the FAQs that selected FAQs point to, right after the FAQ that points to
+    them, so the model sees the fact and not just the pointer. One hop only."""
+    selected_keys = {c.key for c in final}
+    pointers: dict[str, str] = {}
+    for c in final:
+        if c.source != "faq":
+            continue
+        for title in _FAQ_POINTER.findall(c.retrieval_source.snippet):
+            if title != c.retrieval_source.title:
+                pointers.setdefault(title, c.key)
+    if not pointers:
+        return final, sources
+
+    try:
+        found = await get_questions_by_names_query(db, list(pointers))
+    # ruff: ignore[BLE001] -- pointer expansion is optional enrichment
+    except Exception as exc:
+        logger.warning(
+            "FAQ pointer lookup failed; rendering unexpanded error_type=%s",
+            type(exc).__name__,
+        )
+        return final, sources
+
+    by_title = {q.name: q for q in found}
+    added: dict[str, list[_Candidate]] = {}
+    added_count = 0
+    for title, pointer_key in pointers.items():
+        if added_count >= _POINTED_FAQS_MAX:
+            break
+        question = by_title.get(title)
+        if question is None:
+            continue
+        candidate = _question_candidate(question, "lexical")
+        if candidate.key in selected_keys:
+            continue
+        if constraints is not None and not apply_faq_constraints_to_candidates(
+            [candidate],
+            constraints,
+        ):
+            continue
+        selected_keys.add(candidate.key)
+        added.setdefault(pointer_key, []).append(candidate)
+        added_count += 1
+    if not added:
+        return final, sources
+
+    logger.info("Added %d FAQs pointed to by selected FAQs", added_count)
+    expanded = [
+        expanded_candidate
+        for c in final
+        for expanded_candidate in (c, *added.get(c.key, ()))
+    ]
+    # A pointed FAQ is a visible source only when the FAQ pointing to it is one, and
+    # the list keeps its per-search cap so the agent's source interleaving holds.
+    added_sources = {
+        c.retrieval_source.id: [a.retrieval_source for a in pointed]
+        for c in final
+        if (pointed := added.get(c.key))
+    }
+    expanded_sources = tuple(
+        source
+        for visible in sources
+        for source in (visible, *added_sources.get(visible.id, ()))
+    )[:top_k]
+    return expanded, expanded_sources
 
 
 async def _expand_and_render(
