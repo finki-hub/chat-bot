@@ -149,6 +149,24 @@ def test_search_prompt_asks_for_one_concept_per_query():
     )
 
 
+def test_scope_covers_off_topic_requests_that_mention_finki():
+    # Prod traffic: shopping and health questions "for FINKI" were answered.
+    assert (
+        "Барањето е надвор од опфатот и кога ја спомнува ФИНКИ само успатно"
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert "Помош за учење поврзана со предмет на ФИНКИ" in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert (
+        "Не споделувај лични профили на социјални мрежи" in DEFAULT_AGENT_SYSTEM_PROMPT
+    )
+
+
+def test_explicit_language_requests_are_honoured():
+    assert (
+        "корисникот изрично бара одговор на одреден јазик (на пример англиски), "
+        "одговори на тој јазик, и во наредните одговори во разговорот"
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+
+
 def test_general_rules_apply_to_the_users_case_before_any_hedge():
     # Answers opened with "I can't confirm..." although a retrieved FAQ covered the case.
     assert (
