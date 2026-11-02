@@ -59,8 +59,7 @@ def test_system_prompt_defaults_unstated_cycle_to_first_cycle():
         "студии, претпостави прв циклус (додипломски студии)."
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
     assert (
-        "ако се пронајдени само такви извори, кажи дека во изворите нема податок "
-        "за прв циклус"
+        "ако се пронајдени само такви извори, кажи дека нема податок за прв циклус"
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
 
 
