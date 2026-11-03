@@ -400,3 +400,41 @@ def test_announcement_tools_get_their_own_label() -> None:
     ) == ("Ги проверувам огласите: упис семестар")
     assert agents._tool_label("search_announcements", {}) == "Ги проверувам огласите"  # noqa: SLF001
     assert agents._tool_label("get_announcement", {"id": 7}) == "Ги проверувам огласите"  # noqa: SLF001
+
+
+def _room_tool_end(run_id: str, content: object) -> dict:
+    return {
+        "event": "on_tool_end",
+        "run_id": run_id,
+        "name": "get_room_data",
+        "data": {"output": ToolMessage(content=content, tool_call_id=run_id)},
+    }
+
+
+@pytest.mark.anyio
+async def test_tool_output_is_not_streamed_by_default() -> None:
+    frames = await _run([_tool_start("a", "315"), _room_tool_end("a", "ТМФ, 2. кат")])
+
+    result = next(data for name, data in frames if name == "tool_result")
+    assert "output" not in result
+
+
+@pytest.mark.anyio
+async def test_tool_output_is_streamed_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(agents.settings, "AGENT_STREAM_TOOL_OUTPUT", True)
+    frames = await _run(
+        [
+            _tool_start("a", "315"),
+            _room_tool_end("a", "ТМФ, 2. кат"),
+            _tool_start("b", "13"),
+            _room_tool_end("b", [{"type": "text", "text": "ТМФ"}, {"text": "-1"}]),
+        ],
+    )
+
+    results = [data for name, data in frames if name == "tool_result"]
+    assert [(r["id"], r["output"]) for r in results] == [
+        ("a", "ТМФ, 2. кат"),
+        ("b", "ТМФ\n-1"),
+    ]

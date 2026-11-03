@@ -116,6 +116,9 @@ class Settings(BaseSettings):
     # Thesis similarity reranks short proposal texts and was not re-tuned with the above.
     DIPLOMA_RERANKER_MIN_SCORE: float = 0.1
     SOURCE_RERANKER_MIN_SCORE: float = 0.3
+    # Adds each tool's output to its `tool_result` event so benchmarks can grade
+    # answers against what the tools returned. Keep off in production.
+    AGENT_STREAM_TOOL_OUTPUT: bool = False
     MCP_HTTP_URLS: str = ""
     MCP_SSE_URLS: str = ""
     MCP_SERVERS: list[McpServerSettings] = Field(default_factory=list)
