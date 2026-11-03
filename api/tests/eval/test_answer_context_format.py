@@ -49,7 +49,6 @@ def test_grounded_context_blocks_match_production_formatters(case: AnswerCase):
                 ),
                 document_current_status=fields.pop("Статус (од корпусот)", None),
                 document_date=fields.pop("Датум на документот", None),
-                document_last_verified=fields.pop("Последна проверка на изворот", None),
                 section=section,
                 chunk_index=index,
                 content=content,

@@ -228,11 +228,8 @@ def test_chunk_candidate_keeps_document_provenance():
     )
     assert "Статус (од корпусот): current" in cand.context_text
     assert "Датум на документот: 2019-06-06" in cand.context_text
-    assert "Последна проверка на изворот: 2026-08-31" in cand.context_text
+    assert "2026-08-31" not in cand.context_text
     assert "Секција: Член 12" in cand.context_text
-    assert cand.context_text.index("Датум на документот") < cand.context_text.index(
-        "Последна проверка на изворот",
-    )
 
     assert cand.retrieval_source.as_payload() == {
         "authority_url": "https://www.finki.ukim.mk/documents/statute",
@@ -318,7 +315,7 @@ def test_expanded_document_context_keeps_center_metadata(
 
         assert "Авторитетен URL: https://example.com/authority" in text
         assert "Датум на документот: 2020-01-01" in text
-        assert "Последна проверка на изворот: 2026-09-01" in text
+        assert "2026-09-01" not in text
         assert "Секција: Член 1" in text
         assert "Содржина: Центар.\nСосед." in text
 
