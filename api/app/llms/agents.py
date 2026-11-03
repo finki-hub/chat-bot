@@ -22,8 +22,10 @@ from app.llms.retrieval_result import RetrievalSourcePayload
 from app.schemas.sponsored_access import SafeErrorDetails, SponsoredErrorCode
 from app.utils.async_iterators import closing_stream
 from app.utils.posthog_client import capture
+from app.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
+settings = Settings()
 
 _SENTINEL = object()
 
@@ -69,11 +71,23 @@ def tool_call_event(
     )
 
 
-def tool_result_event(*, call_id: str, name: str, ok: bool, summary: str) -> str:
-    return _sse(
-        "tool_result",
-        {"id": call_id, "name": name, "ok": ok, "summary": summary},
-    )
+def tool_result_event(
+    *,
+    call_id: str,
+    name: str,
+    ok: bool,
+    summary: str,
+    output: str | None = None,
+) -> str:
+    payload: dict[str, object] = {
+        "id": call_id,
+        "name": name,
+        "ok": ok,
+        "summary": summary,
+    }
+    if output is not None:
+        payload["output"] = output
+    return _sse("tool_result", payload)
 
 
 def error_event(code: str, message: str, **details: str) -> str:
@@ -153,6 +167,20 @@ def _content_len(value: object) -> int:
     if isinstance(content, str):
         return len(content)
     return len(str(value))
+
+
+_MAX_STREAMED_TOOL_OUTPUT = 50_000
+
+
+def _tool_output_text(output: object) -> str:
+    content = getattr(output, "content", output)
+    if isinstance(content, list):
+        content = "\n".join(
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in content
+        )
+    text = "" if content is None else str(content)
+    return text[:_MAX_STREAMED_TOOL_OUTPUT]
 
 
 def _tool_succeeded(output: object) -> bool:
@@ -603,6 +631,11 @@ async def create_agent_token_generator[ResponseT](
                                 summary
                                 if succeeded and isinstance(summary, str)
                                 else ("" if succeeded else _TOOL_FAILED_SUMMARY)
+                            ),
+                            output=(
+                                _tool_output_text(output)
+                                if settings.AGENT_STREAM_TOOL_OUTPUT
+                                else None
                             ),
                         )
                         if found:

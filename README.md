@@ -78,6 +78,7 @@ then replace all placeholders before using `compose.prod.yaml`:
 - OpenAI, Google, Anthropic, Ollama, and OpenRouter models are BYOK-only and do not use deployment credentials, except for the explicitly isolated sponsored model path below. Ollama defaults to `https://ollama.com`; custom Ollama endpoints must be HTTPS and allowed by `BYOK_ALLOWED_BASE_URLS`.
 - `RESUMABLE_STREAM_REDIS_URL` - server-only Redis/Valkey URL used by the web BFF for resumable chat streams
 - `RERANKER_MIN_SCORE`, `SOURCE_RERANKER_MIN_SCORE`, `CHAT_HISTORY_MAX_TURNS` - retrieval and chat tuning
+- `AGENT_STREAM_TOOL_OUTPUT` - default `false`; adds each tool's output to its `tool_result` chat event, for benchmark containers only
 
 ## Trusted RAG corpus synchronization
 
