@@ -402,7 +402,7 @@ def test_announcement_tools_get_their_own_label() -> None:
     assert agents._tool_label("get_announcement", {"id": 7}) == "Ги проверувам огласите"  # noqa: SLF001
 
 
-def _room_tool_end(run_id: str, content: object) -> dict:
+def _room_tool_end(run_id: str, content: str | list[str | dict]) -> dict:
     return {
         "event": "on_tool_end",
         "run_id": run_id,
