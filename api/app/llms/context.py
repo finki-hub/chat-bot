@@ -228,12 +228,14 @@ def _question_candidate(
 
 
 def _document_metadata_lines(source: RetrievalSource) -> list[str]:
-    """Render optional document metadata as labelled data for the model context."""
+    """Render optional document metadata as labelled data for the model context.
+
+    last_verified stays out: the model cited it as an announcement or effective date.
+    """
     fields = (
         ("Авторитетен URL", source.authority_url),
         ("Статус (од корпусот)", source.current_status),
         ("Датум на документот", source.document_date),
-        ("Последна проверка на изворот", source.last_verified),
         ("Секција", source.section),
     )
     return [

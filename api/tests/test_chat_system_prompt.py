@@ -13,14 +13,6 @@ from app.llms.prompts import (
 from app.schemas.chat import ChatSchema
 
 
-def test_system_prompt_distinguishes_source_review_date_from_applicability():
-    assert (
-        "„Последна проверка на изворот“ означува кога изворот е проверен, "
-        "а не датум на стапување во сила или доказ дека правилото сè уште важи "
-        "или е применливо на прашањето."
-    ) in DEFAULT_AGENT_SYSTEM_PROMPT
-
-
 def test_system_prompt_grounds_system_functions_and_preserves_tool_evidence():
     assert (
         "без соодветна потврда од овластена алатка.\n"
