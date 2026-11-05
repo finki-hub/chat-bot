@@ -54,7 +54,7 @@ async def create_link_query(
     result = await db.fetchrow(
         query,
         link.name,
-        link.url,
+        str(link.url),
         link.description,
         link.user_id,
     )
