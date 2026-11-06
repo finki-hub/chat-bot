@@ -18,7 +18,7 @@ dependencies = [
     "langchain-openrouter>=0.2.9",
     "langchain-text-splitters>=1.1.3",
     "langgraph>=1.2.19",
-    "posthog>=7.81.1",
+    "posthog>=7.82.2",
     "pydantic>=2.14.2",
     "tzdata>=2026.6",
 ]
