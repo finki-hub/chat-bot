@@ -163,6 +163,14 @@ def test_scope_keeps_campus_questions_and_faculty_requests():
     ) in DEFAULT_AGENT_SYSTEM_PROMPT
 
 
+def test_program_code_tools_get_exact_codes():
+    # 22 of 24 prod curriculum lookups passed program abbreviations and got no subjects.
+    assert (
+        "примаат само точен код од list_study_programs (на пример KN23, или SIIS23_3 "
+        "за тригодишната варијанта)"
+    ) in AGENT_SEARCH_TOOLS_PROMPT
+
+
 def test_explicit_language_requests_are_honoured():
     assert (
         "корисникот изрично бара одговор на одреден јазик (на пример англиски), "
