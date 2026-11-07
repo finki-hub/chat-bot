@@ -151,6 +151,18 @@ def test_scope_covers_off_topic_requests_that_mention_finki():
     )
 
 
+def test_scope_keeps_campus_questions_and_faculty_requests():
+    # Prod traffic: "where can I eat at FINKI" and a request for a copy of a submitted
+    # document were refused as personal advice without searching.
+    assert (
+        "Во опфатот се и практичните прашања за студентскиот живот на ФИНКИ"
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert "барањата упатени до факултетот" in DEFAULT_AGENT_SYSTEM_PROMPT
+    assert (
+        "општи здравствени, правни или лични совети што не се однесуваат на ФИНКИ"
+    ) in DEFAULT_AGENT_SYSTEM_PROMPT
+
+
 def test_explicit_language_requests_are_honoured():
     assert (
         "корисникот изрично бара одговор на одреден јазик (на пример англиски), "
