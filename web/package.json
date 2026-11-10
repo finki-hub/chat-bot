@@ -65,7 +65,7 @@
     "@vitest/coverage-v8": "^5.1.0",
     "eslint": "^10.14.0",
     "eslint-config-imperium": "^5.0.0",
-    "jsdom": "^30.1.3",
+    "jsdom": "^31.0.0",
     "tailwindcss": "^4.3.4",
     "typescript": "6.0.3",
     "vitest": "^5.0.5"
