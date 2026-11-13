@@ -5,18 +5,19 @@ import {
   ChevronRight,
   CircleAlert,
   CircleDashed,
-  Loader2,
   Search,
   Wrench,
 } from 'lucide-react';
 import { type ReactNode, useId, useState } from 'react';
 
+import { ActivityPulse, Elapsed } from '@/components/chat/activity-line';
 import { t } from '@/lib/i18n';
-import { searchToolLabel, toolCallIcon } from '@/lib/search-status';
+import { toolCallIcon, toolCallLabel } from '@/lib/search-status';
 import {
   countLabel,
   tallyToolCalls,
   toolCallInputText,
+  toolCallQuery,
   toolCallResultBadge,
   toolCallResultText,
   type ToolCallStatus,
@@ -24,10 +25,10 @@ import {
 } from '@/lib/tool-calls';
 
 const STATUS_ICONS: Record<ToolCallStatus, ReactNode> = {
-  done: <Check className="size-3.5" />,
+  done: <Check className="size-3.5 text-primary" />,
   error: <CircleAlert className="size-3.5 text-destructive" />,
   incomplete: <CircleDashed className="size-3.5" />,
-  running: <Loader2 className="size-3.5 animate-spin" />,
+  running: <ActivityPulse />,
 };
 
 const STATUS_LABELS: Record<ToolCallStatus, string> = {
@@ -50,17 +51,20 @@ export const ToolCall = ({
   const panelId = useId();
   const status = toolCallStatus(part, running);
   const ToolIcon = toolCallIcon(part.toolName);
-  const label =
-    part.title !== undefined && part.title.length > 0
-      ? part.title
-      : searchToolLabel(part.toolName);
+  const label = toolCallLabel(part.toolName);
   const query = toolCallInputText(part.input);
+  const inlineQuery = toolCallQuery(part.input);
+  const isRunning = status === 'running';
   const result = toolCallResultText(part);
   const badge = toolCallResultBadge(part);
 
   return (
     <div
-      className={`w-fit max-w-full rounded-lg border border-border bg-muted/40 text-sm ${className}`}
+      className={`w-fit max-w-full rounded-lg border text-sm transition-colors duration-300 ${
+        isRunning
+          ? 'border-primary/30 bg-primary/5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1'
+          : 'border-border bg-muted/40'
+      } ${className}`}
       data-state={status}
       data-testid="tool-call"
       data-tool={part.toolName}
@@ -78,7 +82,14 @@ export const ToolCall = ({
           aria-hidden="true"
           className="size-4 shrink-0"
         />
-        <span className="min-w-0 truncate">{label}</span>
+        <span className="min-w-0 truncate">
+          <span className={isRunning ? 'text-shimmer' : undefined}>
+            {label}
+          </span>
+          {inlineQuery === null ? null : (
+            <span className="text-foreground/80">{` „${inlineQuery}“`}</span>
+          )}
+        </span>
         <span
           aria-hidden="true"
           className="inline-flex size-4 shrink-0 items-center justify-center"
@@ -86,9 +97,10 @@ export const ToolCall = ({
           {STATUS_ICONS[status]}
         </span>
         <span className="sr-only">{STATUS_LABELS[status]}</span>
+        {isRunning ? <Elapsed /> : null}
         {badge === null ? null : (
           <span
-            className="shrink-0 text-xs tabular-nums text-muted-foreground/80"
+            className="shrink-0 text-xs tabular-nums text-muted-foreground/80 motion-safe:animate-in motion-safe:fade-in-0"
             data-testid="tool-call-count"
           >
             {badge}

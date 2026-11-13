@@ -12,8 +12,8 @@ import {
   MessageContent,
   MessageResponse,
 } from '@/components/ai-elements/message';
+import { ActivityLine } from '@/components/chat/activity-line';
 import { AssistantMessage, MessageError } from '@/components/chat/message';
-import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { t } from '@/lib/i18n';
 import {
   hasReasoning,
@@ -224,7 +224,7 @@ export const Thread = ({
                 from="assistant"
               >
                 <MessageContent>
-                  <TypingIndicator />
+                  <ActivityLine label={t('activity.processing')} />
                 </MessageContent>
               </Message>
             ) : null}

@@ -5,7 +5,6 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { MyUIMessage } from '@/lib/api-types';
 
 import { AssistantMessage, MessageError } from '@/components/chat/message';
-import { SearchStatus } from '@/components/chat/search-status';
 import { Thread } from '@/components/chat/thread';
 import { ResizeObserverStub } from '@/test/helpers/dom-stubs';
 
@@ -51,40 +50,6 @@ const hasText =
       (child) => !child.textContent.includes(needle),
     );
 
-describe('SearchStatus', () => {
-  it('renders the label and exposes a status role', () => {
-    render(
-      <SearchStatus
-        label={SEARCHING}
-        tool="faq_search"
-      />,
-    );
-    const chip = screen.getByRole('status');
-
-    expect(chip).toHaveTextContent(SEARCHING);
-    expect(chip).toHaveAttribute('data-testid', 'search-status');
-    expect(chip).toHaveAttribute('data-tool', 'faq_search');
-  });
-
-  it('renders without a tool', () => {
-    render(<SearchStatus label="Размислувам…" />);
-
-    expect(screen.getByRole('status')).toHaveTextContent('Размислувам…');
-  });
-
-  it('falls back to a tool-specific label when label is omitted', () => {
-    render(<SearchStatus tool="faq_search" />);
-
-    expect(screen.getByRole('status')).toHaveTextContent('Барам во прашања…');
-  });
-
-  it('falls back to the generic label for an unknown tool', () => {
-    render(<SearchStatus tool="unknown_tool" />);
-
-    expect(screen.getByRole('status')).toHaveTextContent('Пребарувам…');
-  });
-});
-
 describe('AssistantMessage', () => {
   it('renders only the LAST text part (preamble drop)', () => {
     const msg = assistantWithParts([
@@ -110,7 +75,7 @@ describe('AssistantMessage', () => {
       />,
     );
 
-    expect(screen.getByRole('status')).toHaveTextContent(SEARCHING);
+    expect(screen.getByRole('status')).toHaveTextContent('Пребарување…');
   });
 
   it('hides the search chip once answer text has arrived', () => {
@@ -136,7 +101,7 @@ describe('AssistantMessage', () => {
     );
 
     expect(screen.queryByText(hasText(PREAMBLE))).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent(SEARCHING);
+    expect(screen.getByRole('status')).toHaveTextContent('Пребарување…');
   });
 
   it('shows the answer (not the preamble) once the answer part has started', () => {
@@ -184,7 +149,7 @@ describe('AssistantMessage', () => {
     );
 
     expect(screen.getByTestId('search-stepper')).toBeInTheDocument();
-    expect(screen.getByText('Пребарување…')).toBeInTheDocument();
+    expect(screen.getByText('Пребарување низ изворите…')).toBeInTheDocument();
   });
 
   it('advances the stepper to the generate stage after the status resets', () => {
@@ -201,7 +166,7 @@ describe('AssistantMessage', () => {
       />,
     );
 
-    expect(screen.getByText('Составување…')).toBeInTheDocument();
+    expect(screen.getByText('Подготовка на изворите…')).toBeInTheDocument();
 
     rerender(
       <AssistantMessage
@@ -211,7 +176,7 @@ describe('AssistantMessage', () => {
       />,
     );
 
-    expect(screen.getByText('Генерирање…')).toBeInTheDocument();
+    expect(screen.getByText('Пишување на одговорот…')).toBeInTheDocument();
   });
 
   it('streams the answer in the no-reset pipeline path (a stage status stays active)', () => {
@@ -242,7 +207,7 @@ describe('AssistantMessage', () => {
       />,
     );
 
-    expect(screen.getByText('Генерирање…')).toBeInTheDocument();
+    expect(screen.getByText('Пишување на одговорот…')).toBeInTheDocument();
   });
 
   it('renders safe generic guidance and Retry for an agent error', () => {
@@ -412,7 +377,7 @@ describe('AssistantMessage', () => {
     const footnote = screen.getByTestId(TIMING_TESTID);
 
     expect(footnote).toHaveTextContent('2.3s');
-    expect(footnote).toHaveTextContent('прв токен');
+    expect(footnote).toHaveTextContent('почеток за');
     expect(footnote).toHaveTextContent('1.2s');
   });
 
@@ -428,7 +393,7 @@ describe('AssistantMessage', () => {
     const footnote = screen.getByTestId(TIMING_TESTID);
 
     expect(footnote).toHaveTextContent('500ms');
-    expect(footnote).not.toHaveTextContent('прв токен');
+    expect(footnote).not.toHaveTextContent('почеток за');
   });
 
   it('renders the footnote as a hover trigger when diagnostics are present', () => {
@@ -896,7 +861,7 @@ describe('Thread', () => {
     expect(alert).not.toHaveTextContent('Не е пронајден одговор.');
   });
 
-  it('shows a typing indicator while awaiting the assistant reply', () => {
+  it('shows the activity line while awaiting the assistant reply', () => {
     render(
       <Thread
         messages={[userMessage('прашање')]}
@@ -904,10 +869,10 @@ describe('Thread', () => {
       />,
     );
 
-    expect(screen.getByTestId('typing-indicator')).toBeInTheDocument();
+    expect(screen.getByTestId('activity-line')).toBeInTheDocument();
   });
 
-  it('keeps the typing indicator mounted when an empty assistant stream shell appears', () => {
+  it('keeps the activity line mounted when an empty assistant stream shell appears', () => {
     const messages: MyUIMessage[] = [
       userMessage('прашање'),
       assistantWithParts([]),
@@ -920,11 +885,11 @@ describe('Thread', () => {
       />,
     );
 
-    expect(screen.getAllByTestId('typing-indicator')).toHaveLength(1);
+    expect(screen.getAllByTestId('activity-line')).toHaveLength(1);
     expect(screen.queryByTestId(ANSWER_TEXT_TESTID)).not.toBeInTheDocument();
   });
 
-  it('does not render an inline elapsed timer while awaiting the reply', () => {
+  it('does not show elapsed time for a short wait', () => {
     render(
       <Thread
         messages={[userMessage('прашање')]}
@@ -932,8 +897,8 @@ describe('Thread', () => {
       />,
     );
 
-    expect(screen.getByTestId('typing-indicator')).toBeInTheDocument();
-    expect(screen.queryByTestId('elapsed-timer')).toBeNull();
+    expect(screen.getByTestId('activity-line')).toBeInTheDocument();
+    expect(screen.queryByTestId('elapsed')).toBeNull();
   });
 
   it('passes the active status only to the LAST assistant message while streaming', () => {
@@ -949,7 +914,7 @@ describe('Thread', () => {
       />,
     );
 
-    expect(screen.getByRole('status')).toHaveTextContent(SEARCHING);
+    expect(screen.getByRole('status')).toHaveTextContent('Пребарување…');
   });
 
   it('renders per-message actions via renderActions', () => {
@@ -983,6 +948,6 @@ describe('Thread', () => {
     );
 
     expect(screen.getByTestId('acts')).toHaveTextContent('a1');
-    expect(screen.getAllByTestId('typing-indicator')).toHaveLength(1);
+    expect(screen.getAllByTestId('activity-line')).toHaveLength(1);
   });
 });

@@ -35,7 +35,9 @@ describe('Thread pending status', () => {
     );
 
     // Then the transient retrieval status remains visible before response content.
-    expect(screen.getByTestId('search-status')).toHaveTextContent('Пребарувам');
-    expect(screen.queryByTestId('typing-indicator')).not.toBeInTheDocument();
+    expect(screen.getByTestId('activity-line')).toHaveTextContent(
+      'Пребарување низ документите на ФИНКИ',
+    );
+    expect(screen.getAllByTestId('activity-line')).toHaveLength(1);
   });
 });

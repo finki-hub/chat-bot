@@ -10,12 +10,11 @@ import {
   MessageContent,
   MessageResponse,
 } from '@/components/ai-elements/message';
+import { ActivityLine } from '@/components/chat/activity-line';
 import { ReasoningDisclosure } from '@/components/chat/reasoning-disclosure';
-import { SearchStatus } from '@/components/chat/search-status';
 import { SearchStepper } from '@/components/chat/search-stepper';
 import { SourceCards } from '@/components/chat/source-cards';
 import { ToolCall, ToolCallGroup } from '@/components/chat/tool-call';
-import { TypingIndicator } from '@/components/chat/typing-indicator';
 import { Button } from '@/components/ui/button';
 import {
   HoverCard,
@@ -33,6 +32,7 @@ import {
   textParts,
   toolCallParts,
 } from '@/lib/message-parts';
+import { isSearchTool, searchToolLabel } from '@/lib/search-status';
 import { supersededToolCalls, toolCallStatus } from '@/lib/tool-calls';
 import { usePresence } from '@/lib/use-presence';
 import { useSearchStage } from '@/lib/use-search-stage';
@@ -507,6 +507,7 @@ export const MessageError = ({
 const STEP_EXIT_MS = 300;
 
 const AssistantMessageStatus = ({
+  awaitingLabel,
   awaitingModel = false,
   errorPart,
   pending,
@@ -515,6 +516,7 @@ const AssistantMessageStatus = ({
   text,
   toolCallsShown = false,
 }: {
+  awaitingLabel: string;
   awaitingModel?: boolean;
   errorPart?: ErrorNotice;
   pending?: boolean;
@@ -570,17 +572,23 @@ const AssistantMessageStatus = ({
   }
 
   if (showChip && statusPart) {
+    // The API's chip label is a first-person live message; show the tool's own.
+    const label = searchToolLabel(statusPart.tool);
+
     return (
-      <div data-testid="search-status-wrapper">
-        <SearchStatus
-          label={statusPart.label}
-          tool={statusPart.tool}
-        />
-      </div>
+      <ActivityLine
+        key={label}
+        label={label}
+      />
     );
   }
 
-  return showDots ? <TypingIndicator /> : null;
+  return showDots ? (
+    <ActivityLine
+      key={awaitingLabel}
+      label={awaitingLabel}
+    />
+  ) : null;
 };
 
 type AnswerSegment =
@@ -667,13 +675,20 @@ const InterleavedParts = ({
     >
       {segments.map((segment, index) => {
         if (segment.type === 'text') {
+          const streamingTail = pending && index === segments.length - 1;
+
           return (
             <div
               className={spacing(index)}
               data-testid="answer-text"
               key={segment.key}
             >
-              <MessageResponse>{segment.text}</MessageResponse>
+              <MessageResponse
+                caret="block"
+                isAnimating={streamingTail}
+              >
+                {segment.text}
+              </MessageResponse>
             </div>
           );
         }
@@ -767,6 +782,22 @@ const answerState = ({
   };
 };
 
+// What the model is doing while nothing is streaming: after a search it is
+// reading the sources, after data tools it is working through their output.
+const awaitingActivityLabel = (message: MyUIMessage): string => {
+  const parts = toolCallParts(message);
+
+  if (parts.length === 0) {
+    return t('activity.processing');
+  }
+
+  return parts.some(
+    (part) => isSearchTool(part.toolName) && part.state === 'output-available',
+  )
+    ? t('activity.readingSources')
+    : t('activity.readingResults');
+};
+
 export const AssistantMessage = ({
   actions,
   complete,
@@ -788,6 +819,10 @@ export const AssistantMessage = ({
   const answerVisible = Boolean(text);
   const reasoningStreaming =
     Boolean(pending) && reasoningText.length > 0 && text === null;
+  // Reasoning streaming right now has its own live label, so the wait line steps aside.
+  const reasoningLive =
+    Boolean(pending) && message.parts.at(-1)?.type === 'reasoning';
+  const awaitingLabel = awaitingActivityLabel(message);
 
   const timing = message.metadata?.timing;
   const diagnostics = message.metadata?.diagnostics;
@@ -802,6 +837,7 @@ export const AssistantMessage = ({
         {/* Once the answer is visible, reasoning collapses to a toggle above it. */}
         {answerVisible && reasoningText.length > 0 ? (
           <ReasoningDisclosure
+            durationMs={diagnostics?.thinkingMs}
             streaming={reasoningStreaming}
             text={reasoningText}
           />
@@ -814,7 +850,12 @@ export const AssistantMessage = ({
         ) : null}
         {!withToolCalls && text ? (
           <div data-testid="answer-text">
-            <MessageResponse>{text}</MessageResponse>
+            <MessageResponse
+              caret="block"
+              isAnimating={Boolean(pending)}
+            >
+              {text}
+            </MessageResponse>
           </div>
         ) : null}
         {/* No `pending` guard: MessageTiming renders nothing until `timing` is set
@@ -834,7 +875,8 @@ export const AssistantMessage = ({
           />
         )}
         <AssistantMessageStatus
-          awaitingModel={awaitingModel}
+          awaitingLabel={awaitingLabel}
+          awaitingModel={awaitingModel && !reasoningLive}
           errorPart={errorPart}
           pending={pending}
           reasoningText={reasoningText}
@@ -846,6 +888,7 @@ export const AssistantMessage = ({
             step list so it grows downward instead of displacing the steps. */}
         {!answerVisible && reasoningText.length > 0 ? (
           <ReasoningDisclosure
+            durationMs={diagnostics?.thinkingMs}
             streaming={reasoningStreaming}
             text={reasoningText}
           />

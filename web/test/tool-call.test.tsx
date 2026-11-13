@@ -17,7 +17,8 @@ beforeAll(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
 
-const LABEL = 'Пребарувам: упис';
+const TITLE = 'Пребарувам: упис';
+const LABEL = 'Пребарување во базата на знаење';
 const QUERY = 'упис';
 const SUMMARY = 'Пронајдени 4 извори';
 const PREAMBLE = 'Ќе проверам во базата.';
@@ -29,7 +30,7 @@ const TOOL_CALL = 'tool-call';
 const SUMMARY_ROW = 'tool-call-summary';
 const PANEL = 'tool-call-panel';
 const ANSWER_TEXT = 'answer-text';
-const TYPING = 'typing-indicator';
+const TYPING = 'activity-line';
 const ACTIONS_STUB = 'answer-actions-stub';
 const ACTIONS = <div data-testid={ACTIONS_STUB} />;
 const DONE = 'output-available';
@@ -41,7 +42,7 @@ const call = (
 ): DynamicToolUIPart => {
   const base = {
     input: { query: QUERY },
-    title: LABEL,
+    title: TITLE,
     toolCallId,
     toolName: 'search_knowledge_base',
     type: 'dynamic-tool',
@@ -165,18 +166,38 @@ describe('AssistantMessage tool calls', () => {
       />,
     );
 
-    expect(screen.getByTestId(TYPING)).toBeInTheDocument();
+    expect(screen.getByTestId(TYPING)).toHaveTextContent(
+      'Читање на пронајдените извори…',
+    );
   });
 
-  it('falls back to the tool label when the call has no title', () => {
+  it('labels calls by tool with the query inline, not by the API title', () => {
+    render(<AssistantMessage message={assistant([call('c1', DONE)])} />);
+
+    const row = screen.getByTestId(TOOL_CALL);
+
+    expect(row).toHaveTextContent(`${LABEL} „${QUERY}“`);
+    expect(row).not.toHaveTextContent(TITLE);
+  });
+
+  it('labels data tools with a tense-neutral phrase', () => {
     render(
       <AssistantMessage
-        message={assistant([{ ...call('c1', DONE), title: '' }])}
+        message={assistant([
+          {
+            input: {},
+            state: 'input-available',
+            title: 'Ги проверувам предметите',
+            toolCallId: 'c1',
+            toolName: 'list_courses',
+            type: 'dynamic-tool',
+          },
+        ])}
       />,
     );
 
     expect(screen.getByTestId(TOOL_CALL)).toHaveTextContent(
-      'Барам во базата на знаење…',
+      'Проверка на предметите',
     );
   });
 });
@@ -340,7 +361,7 @@ const dataCall = (toolCallId: string): DynamicToolUIPart => ({
   type: 'dynamic-tool',
 });
 
-const FIRST_LABEL = 'Пребарувам: рокови';
+const FIRST_LABEL = 'рокови';
 
 const withSummary = (part: DynamicToolUIPart, summary: string) =>
   ({ ...part, output: { summary } }) as DynamicToolUIPart;
@@ -351,7 +372,7 @@ describe('AssistantMessage finished tool-call summary', () => {
     render(
       <AssistantMessage
         message={assistant([
-          { ...call('c1', DONE), title: FIRST_LABEL },
+          { ...call('c1', DONE), input: { query: FIRST_LABEL } },
           call('c2', DONE),
           dataCall('c3'),
           { text: ANSWER, type: 'text' },
@@ -361,7 +382,7 @@ describe('AssistantMessage finished tool-call summary', () => {
 
     const summary = screen.getByTestId(SUMMARY_ROW);
 
-    expect(summary).toHaveTextContent('2 пребарувања · 1 алатка');
+    expect(summary).toHaveTextContent('2 пребарувања · 1 проверка');
     expect(summary).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByTestId(TOOL_CALL)).not.toBeInTheDocument();
     expect(screen.queryByTestId('tool-call-problems')).not.toBeInTheDocument();
@@ -427,7 +448,7 @@ describe('AssistantMessage finished tool-call summary', () => {
     );
 
     expect(screen.getByTestId(SUMMARY_ROW)).toHaveTextContent(
-      '1 пребарување · 2 алатки',
+      '1 пребарување · 2 проверки',
     );
   });
 
