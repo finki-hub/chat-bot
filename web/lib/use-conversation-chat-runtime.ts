@@ -52,20 +52,25 @@ const useInFlightStatus = <S extends string>(
   activeRequest: ActiveChatRequest,
   status: S,
 ) => {
-  const [inFlightRequest, setInFlightRequest] =
-    useState<ActiveChatRequest | null>(null);
+  // Each run gets its own token, so a stopped run settling late cannot clear
+  // the flag of the run that replaced it.
+  const runCounterRef = useRef(0);
+  const [inFlight, setInFlight] = useState<null | {
+    readonly id: number;
+    readonly request: ActiveChatRequest;
+  }>(null);
   const run: ActiveChatRequest['run'] = async (operation) => {
-    setInFlightRequest(activeRequest);
+    runCounterRef.current += 1;
+    const id = runCounterRef.current;
+    setInFlight({ id, request: activeRequest });
     try {
       return await activeRequest.run(operation);
     } finally {
-      setInFlightRequest((current) =>
-        current === activeRequest ? null : current,
-      );
+      setInFlight((current) => (current?.id === id ? null : current));
     }
   };
   const effectiveStatus: 'submitted' | S =
-    status === 'ready' && inFlightRequest === activeRequest
+    status === 'ready' && inFlight?.request === activeRequest
       ? 'submitted'
       : status;
 

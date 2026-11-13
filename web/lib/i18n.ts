@@ -69,6 +69,8 @@ export const messages = {
   'diagnostics.tokensTotal': 'токени (вкупно)',
   'diagnostics.topDistance': 'најблиска дистанца',
   'diagnostics.traceId': 'trace ID',
+  'elapsed.minutes': 'мин',
+  'elapsed.seconds': 'с',
   'error.credentialRequired': 'За избраниот модел е потребен API клуч.',
   'error.description': 'Се случи неочекувана грешка. Обидете се повторно.',
   'error.interrupted': 'Одговорот е прекинат.',

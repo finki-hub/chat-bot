@@ -2,21 +2,27 @@
 
 import { useEffect, useState } from 'react';
 
-// Seconds since mount; remount (via `key`) to restart. Measured against a
-// timestamp so throttled background-tab intervals still report real time.
-export const useElapsedSeconds = (): number => {
-  const [elapsed, setElapsed] = useState(0);
+const secondsSince = (start: number): number =>
+  Math.max(0, Math.floor((performance.now() - start) / 1_000));
+
+// Seconds since `startedAt` (a `performance.now()` timestamp), or since mount;
+// remount (via `key`) to restart. Measured against a timestamp so throttled
+// background-tab intervals still report real time.
+export const useElapsedSeconds = (startedAt?: number): number => {
+  const [elapsed, setElapsed] = useState(() =>
+    startedAt === undefined ? 0 : secondsSince(startedAt),
+  );
 
   useEffect(() => {
-    const start = performance.now();
+    const start = startedAt ?? performance.now();
     const id = setInterval(() => {
-      setElapsed(Math.floor((performance.now() - start) / 1_000));
+      setElapsed(secondsSince(start));
     }, 1_000);
 
     return () => {
       clearInterval(id);
     };
-  }, []);
+  }, [startedAt]);
 
   return elapsed;
 };

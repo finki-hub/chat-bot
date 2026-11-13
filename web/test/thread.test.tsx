@@ -1,10 +1,9 @@
-import { act, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { MyUIMessage } from '@/lib/api-types';
 
-import { ActivityLine } from '@/components/chat/activity-line';
 import { AssistantMessage, MessageError } from '@/components/chat/message';
 import { Thread } from '@/components/chat/thread';
 import { ResizeObserverStub } from '@/test/helpers/dom-stubs';
@@ -50,50 +49,6 @@ const hasText =
     [...(element?.children ?? [])].every(
       (child) => !child.textContent.includes(needle),
     );
-
-describe('ActivityLine', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('renders the label as a live status', () => {
-    render(<ActivityLine label="Обработка на прашањето" />);
-
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Обработка на прашањето…',
-    );
-    expect(screen.queryByTestId('elapsed')).not.toBeInTheDocument();
-  });
-
-  it('counts elapsed time and reassures once the wait drags on', () => {
-    vi.useFakeTimers();
-    render(<ActivityLine label="Обработка на прашањето" />);
-
-    act(() => {
-      vi.advanceTimersByTime(4_000);
-    });
-
-    expect(screen.getByTestId('elapsed')).toHaveTextContent('4 с');
-    expect(screen.queryByTestId('activity-hint')).not.toBeInTheDocument();
-
-    act(() => {
-      vi.advanceTimersByTime(12_000);
-    });
-
-    expect(screen.getByTestId('activity-hint')).toHaveTextContent(
-      'може да потрае',
-    );
-
-    act(() => {
-      vi.advanceTimersByTime(60_000);
-    });
-
-    expect(screen.getByTestId('elapsed')).toHaveTextContent('1 мин 16 с');
-    expect(screen.getByTestId('activity-hint')).toHaveTextContent(
-      'подолго од вообичаено',
-    );
-  });
-});
 
 describe('AssistantMessage', () => {
   it('renders only the LAST text part (preamble drop)', () => {

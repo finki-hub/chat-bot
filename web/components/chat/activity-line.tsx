@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 import { t } from '@/lib/i18n';
 import { useElapsedSeconds } from '@/lib/use-elapsed-seconds';
 
@@ -8,10 +10,36 @@ const SHOW_ELAPSED_S = 3;
 const SLOW_S = 15;
 const LONGER_S = 45;
 
-const formatElapsed = (seconds: number): string =>
-  seconds < 60
-    ? `${seconds} с`
-    : `${Math.floor(seconds / 60)} мин ${String(seconds % 60).padStart(2, '0')} с`;
+const formatElapsed = (seconds: number): string => {
+  const secondsLabel = `${String(seconds % 60)} ${t('elapsed.seconds')}`;
+
+  return seconds < 60
+    ? secondsLabel
+    : `${String(Math.floor(seconds / 60))} ${t('elapsed.minutes')} ${secondsLabel}`;
+};
+
+// One wait can hop between components (Thread's placeholder → the assistant
+// message once its shell arrives). A line with the same label that mounts while
+// or just after the previous one goes away continues its clock.
+const HANDOVER_MS = 1_000;
+const handover: {
+  last: null | {
+    readonly endedAt: null | number;
+    readonly label: string;
+    readonly start: number;
+  };
+} = { last: null };
+
+const continuedStart = (label: string): number => {
+  const now = performance.now();
+  const previous = handover.last;
+
+  return previous?.label === label &&
+    (previous.endedAt === null ||
+      (now >= previous.endedAt && now - previous.endedAt < HANDOVER_MS))
+    ? previous.start
+    : now;
+};
 
 const ElapsedText = ({
   className = '',
@@ -50,7 +78,20 @@ export const ActivityPulse = () => (
 // The single "still working" indicator for waits with nothing else moving on
 // screen: a live label, elapsed time, and a reassurance once the wait drags on.
 export const ActivityLine = ({ label }: { label: string }) => {
-  const seconds = useElapsedSeconds();
+  const [start] = useState(() => continuedStart(label));
+  const seconds = useElapsedSeconds(start);
+
+  useEffect(() => {
+    const line = { endedAt: null, label, start };
+    handover.last = line;
+
+    return () => {
+      if (handover.last === line) {
+        handover.last = { ...line, endedAt: performance.now() };
+      }
+    };
+  }, [label, start]);
+
   let hint: null | string = null;
 
   if (seconds >= LONGER_S) {
