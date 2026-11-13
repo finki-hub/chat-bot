@@ -2,12 +2,15 @@ import { ChevronRight } from 'lucide-react';
 import { useId, useState } from 'react';
 
 import { MessageResponse } from '@/components/ai-elements/message';
+import { formatDuration } from '@/lib/duration';
 import { t } from '@/lib/i18n';
 
 export const ReasoningDisclosure = ({
+  durationMs,
   streaming = false,
   text,
 }: {
+  durationMs?: null | number;
   streaming?: boolean;
   text: string;
 }) => {
@@ -39,9 +42,16 @@ export const ReasoningDisclosure = ({
           aria-hidden="true"
           className={`size-3 transition-transform ${open ? 'rotate-90' : ''}`}
         />
-        <span className={streaming ? 'animate-pulse' : undefined}>
-          {streaming ? t('thread.thinking') : t('thread.reasoning')}
-        </span>
+        {streaming ? (
+          <span className="text-shimmer">{t('thread.thinking')}</span>
+        ) : (
+          <span>
+            {t('thread.reasoning')}
+            {typeof durationMs === 'number' && durationMs > 0
+              ? ` · ${formatDuration(durationMs)}`
+              : null}
+          </span>
+        )}
       </button>
       {open ? (
         <div

@@ -20,7 +20,7 @@ const TOOL = 'search_documents';
 const ANSWER = 'Резултатите од испитите се објавуваат на https://finki.ukim.mk';
 const LINK_NAME = /finki\.ukim\.mk/u;
 const SEARCH_STEPPER_TEXT =
-  /Разбирање….*Пребарување….*Рерангирање….*Составување…/su;
+  /Анализа на прашањето.*Пребарување низ изворите.*Избор на најрелевантните извори.*Подготовка на изворите…/su;
 const DIAGNOSTICS_LABEL = /Дијагностика/u;
 const TOTAL_DURATION_PATTERN = /\d{1,2}(?:\.\d)?s/u;
 const OBSERVABLE_STAGE_GAP_MS = 5_000;
@@ -299,8 +299,8 @@ test.describe('chat streaming (mocked BFF)', () => {
     await page.getByTestId(COMPOSER_SUBMIT).click();
 
     const chip = page
-      .getByTestId('search-status')
-      .filter({ hasText: 'Пребарувам' });
+      .getByTestId('activity-line')
+      .filter({ hasText: 'Пребарување низ документите на ФИНКИ' });
     await expect(chip).toBeVisible({ timeout: 15_000 });
 
     const answer = page.getByTestId(ANSWER_TEST_ID);

@@ -45,6 +45,33 @@ const isStatusPart = (value: unknown): value is StatusPart =>
   isOptionalString(value['stage']) &&
   isOptionalString(value['tool']);
 
+// The SDK's resume probe for a fresh chat id answers 204 and resets `status`
+// to 'ready' while the real request is still in flight, which hid every
+// pending indicator (and re-offered Send) until the first content chunk.
+const useInFlightStatus = <S extends string>(
+  activeRequest: ActiveChatRequest,
+  status: S,
+) => {
+  const [inFlightRequest, setInFlightRequest] =
+    useState<ActiveChatRequest | null>(null);
+  const run: ActiveChatRequest['run'] = async (operation) => {
+    setInFlightRequest(activeRequest);
+    try {
+      return await activeRequest.run(operation);
+    } finally {
+      setInFlightRequest((current) =>
+        current === activeRequest ? null : current,
+      );
+    }
+  };
+  const effectiveStatus: 'submitted' | S =
+    status === 'ready' && inFlightRequest === activeRequest
+      ? 'submitted'
+      : status;
+
+  return { effectiveStatus, run };
+};
+
 export const useConversationChatRuntime = ({
   activeId,
   model,
@@ -194,12 +221,11 @@ export const useConversationChatRuntime = ({
   if (activeId !== null && status !== 'ready') {
     activeStreamConversationIdRef.current = activeId;
   }
+  const { effectiveStatus, run } = useInFlightStatus(activeRequest, status);
   const sendCurrentMessage: typeof sendMessage = (message, options) =>
-    activeRequest.run((metadata) =>
-      sendMessage(message, { ...options, metadata }),
-    );
+    run((metadata) => sendMessage(message, { ...options, metadata }));
   const regenerateCurrentMessage: typeof regenerate = (options) =>
-    activeRequest.run((metadata) => regenerate({ ...options, metadata }));
+    run((metadata) => regenerate({ ...options, metadata }));
   const sendMessageRef = useRef(sendCurrentMessage);
   sendMessageRef.current = sendCurrentMessage;
 
@@ -238,7 +264,7 @@ export const useConversationChatRuntime = ({
     setActiveStatus,
     setMessages,
     setRegeneratingMessageId,
-    status,
+    status: effectiveStatus,
     stop,
   };
 };

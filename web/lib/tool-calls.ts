@@ -62,6 +62,17 @@ export const toolCallInputText = (input: unknown): null | string => {
   return query.trim() === '' ? null : query;
 };
 
+// The free-text query alone, for showing inline next to the tool's label.
+export const toolCallQuery = (input: unknown): null | string => {
+  if (!isRecord(input) || typeof input['query'] !== 'string') {
+    return null;
+  }
+
+  const query = input['query'].trim();
+
+  return query === '' ? null : query;
+};
+
 export const toolCallResultText = (part: DynamicToolUIPart): null | string => {
   if (part.state === 'output-error') {
     return part.errorText.length > 0 ? part.errorText : t('toolCall.failed');

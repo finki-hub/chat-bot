@@ -7,7 +7,7 @@ import {
   Wrench,
 } from 'lucide-react';
 
-import { t } from '@/lib/i18n';
+import { t, type TKey } from '@/lib/i18n';
 
 export const SEARCH_STAGES = [
   'contextualize',
@@ -64,3 +64,39 @@ export const searchToolLabel = (tool: string | undefined): string =>
   tool === undefined
     ? t('searchTool.fallback')
     : (TOOL_LABELS[tool] ?? t('searchTool.fallback'));
+
+// Matched by name fragment in order (mirrors the API's table), so specific
+// fragments come before general ones.
+const DATA_TOOL_LABELS: ReadonlyArray<readonly [string, TKey]> = [
+  ['recommend_diploma_committee', 'toolLabel.committee'],
+  ['exam_session', 'toolLabel.examSessions'],
+  ['timetable', 'toolLabel.timetable'],
+  ['consultation', 'toolLabel.consultations'],
+  ['weekly_topics', 'toolLabel.weeklyTopics'],
+  ['study_program', 'toolLabel.studyPrograms'],
+  ['academic_calendar', 'toolLabel.academicCalendar'],
+  ['course', 'toolLabel.courses'],
+  ['staff', 'toolLabel.staff'],
+  ['room', 'toolLabel.rooms'],
+  ['diploma', 'toolLabel.diplomas'],
+  ['master', 'toolLabel.masters'],
+  ['compan', 'toolLabel.companies'],
+  ['quote', 'toolLabel.quote'],
+];
+
+// Tool rows outlive the call, so labels are tense-neutral noun phrases and the
+// status icon carries running/done. The API's first-person `title` is meant for
+// live status messages (Discord), so it is not shown here.
+export const toolCallLabel = (tool: string): string => {
+  if (isSearchTool(tool)) {
+    return searchToolLabel(tool);
+  }
+
+  if (tool.includes('announcement')) {
+    return t('toolLabel.announcements');
+  }
+
+  const match = DATA_TOOL_LABELS.find(([fragment]) => tool.includes(fragment));
+
+  return t(match?.[1] ?? 'toolLabel.fallback');
+};

@@ -187,7 +187,7 @@ describe('upstream SSE error boundary characterization', () => {
         'data-error',
       ]);
       expect(screen.queryByTestId('answer-text')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('typing-indicator')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('activity-line')).not.toBeInTheDocument();
       expect(screen.getByRole('alert')).toHaveTextContent(
         'Се случи неочекувана грешка. Обидете се повторно.',
       );
