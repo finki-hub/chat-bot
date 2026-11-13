@@ -224,7 +224,14 @@ describe('source metadata', () => {
   });
 
   it.each([
-    [{ label: RULES, url: RULES_URL }, 'PDF'],
+    [{ label: RULES, url: RULES_URL }, 'PDF · finki.ukim.mk'],
+    [
+      {
+        label: RULES,
+        url: 'https://raw.githubusercontent.com/finki-hub/documents/main/raw/rules.pdf',
+      },
+      'PDF · GitHub',
+    ],
     [{ label: 'iKnow', url: 'https://iknow.ukim.mk/' }, 'iKnow'],
     [
       { label: RULES, url: 'https://www.finki.ukim.mk/mk/rules' },

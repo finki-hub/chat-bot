@@ -104,7 +104,13 @@ export const isOutdatedSource = (source: RetrievedSource): boolean =>
 const PDF_RE = /\.pdf$/iu;
 const WWW_RE = /^w{3}\./u;
 
-// Visible text for a source link: a document file is named by its type, a page
+const GITHUB_HOSTS = new Set(['github.com', 'raw.githubusercontent.com']);
+
+const hostName = (url: URL): string =>
+  GITHUB_HOSTS.has(url.hostname) ? 'GitHub' : url.hostname.replace(WWW_RE, '');
+
+// Visible text for a source link: a document file is named by its type and host,
+// since documents usually link both the official copy and a GitHub mirror; a page
 // by its label when that says more than the card title, else by its host.
 export const sourceLinkText = (
   link: RetrievedSourceLink,
@@ -119,10 +125,10 @@ export const sourceLinkText = (
   }
 
   if (PDF_RE.test(url.pathname)) {
-    return 'PDF';
+    return `PDF · ${hostName(url)}`;
   }
 
   const labelIsUseful = link.label.trim() !== '' && link.label !== title;
 
-  return labelIsUseful ? link.label : url.hostname.replace(WWW_RE, '');
+  return labelIsUseful ? link.label : hostName(url);
 };
