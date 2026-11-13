@@ -858,6 +858,12 @@ export const AssistantMessage = ({
             </MessageResponse>
           </div>
         ) : null}
+        {text === null ? null : (
+          <SourceCards
+            complete={answerComplete}
+            sources={sources}
+          />
+        )}
         {/* No `pending` guard: MessageTiming renders nothing until `timing` is set
             on finish, so a still-streaming answer shows no footnote anyway. */}
         {text === null ? null : (
@@ -866,12 +872,6 @@ export const AssistantMessage = ({
             inferenceModel={inferenceModel}
             responseId={responseId}
             timing={timing}
-          />
-        )}
-        {text === null ? null : (
-          <SourceCards
-            complete={answerComplete}
-            sources={sources}
           />
         )}
         <AssistantMessageStatus

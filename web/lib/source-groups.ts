@@ -63,3 +63,66 @@ export const groupLinks = (
     ? [{ label: sources[0]?.title ?? authorityUrl, url: authorityUrl }]
     : links.values().toArray();
 };
+
+const DAY_RE = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u;
+const MONTH_RE = /^(?<year>\d{4})-(?<month>\d{2})$/u;
+const YEAR_RE = /^\d{4}$/u;
+
+// Corpus dates are ISO with day, month or year precision, or "unresolved".
+export const formatDocumentDate = (
+  value: string | undefined,
+): null | string => {
+  if (value === undefined) {
+    return null;
+  }
+
+  const day = DAY_RE.exec(value)?.groups;
+
+  if (day !== undefined) {
+    return `${day['day']}.${day['month']}.${day['year']}`;
+  }
+
+  const month = MONTH_RE.exec(value)?.groups;
+
+  if (month !== undefined) {
+    return `${month['month']}.${month['year']}`;
+  }
+
+  return YEAR_RE.test(value) ? value : null;
+};
+
+// Corpus statuses that mean a newer document probably replaced this one.
+const OUTDATED_STATUSES = new Set([
+  'likely_superseded',
+  'stale_review_required',
+]);
+
+export const isOutdatedSource = (source: RetrievedSource): boolean =>
+  source.currentStatus !== undefined &&
+  OUTDATED_STATUSES.has(source.currentStatus);
+
+const PDF_RE = /\.pdf$/iu;
+const WWW_RE = /^w{3}\./u;
+
+// Visible text for a source link: a document file is named by its type, a page
+// by its label when that says more than the card title, else by its host.
+export const sourceLinkText = (
+  link: RetrievedSourceLink,
+  title: string,
+): string => {
+  let url: URL;
+
+  try {
+    url = new URL(link.url);
+  } catch {
+    return link.label;
+  }
+
+  if (PDF_RE.test(url.pathname)) {
+    return 'PDF';
+  }
+
+  const labelIsUseful = link.label.trim() !== '' && link.label !== title;
+
+  return labelIsUseful ? link.label : url.hostname.replace(WWW_RE, '');
+};

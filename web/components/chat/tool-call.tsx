@@ -38,6 +38,25 @@ const STATUS_LABELS: Record<ToolCallStatus, string> = {
   running: t('toolCall.running'),
 };
 
+// A call that did not finish says so in words; the rest rely on their icon.
+const StatusText = ({ status }: { status: ToolCallStatus }) => {
+  if (status === 'error') {
+    return (
+      <span className="shrink-0 text-xs text-destructive">
+        {STATUS_LABELS.error}
+      </span>
+    );
+  }
+
+  return status === 'incomplete' ? (
+    <span className="shrink-0 text-xs text-muted-foreground/80">
+      {STATUS_LABELS.incomplete}
+    </span>
+  ) : (
+    <span className="sr-only">{STATUS_LABELS[status]}</span>
+  );
+};
+
 export const ToolCall = ({
   className = '',
   part,
@@ -82,7 +101,7 @@ export const ToolCall = ({
           aria-hidden="true"
           className="size-4 shrink-0"
         />
-        <span className="min-w-0 truncate">
+        <span className="line-clamp-2 min-w-0 break-words">
           <span className={isRunning ? 'text-shimmer' : undefined}>
             {label}
           </span>
@@ -96,7 +115,7 @@ export const ToolCall = ({
         >
           {STATUS_ICONS[status]}
         </span>
-        <span className="sr-only">{STATUS_LABELS[status]}</span>
+        <StatusText status={status} />
         {isRunning ? <Elapsed /> : null}
         {badge === null ? null : (
           <span

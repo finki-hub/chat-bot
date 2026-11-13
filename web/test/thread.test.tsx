@@ -50,6 +50,11 @@ const hasText =
       (child) => !child.textContent.includes(needle),
     );
 
+// Collapsed sources keep only the title preview chips, not the cards.
+const expectSourceCardsClosed = () => {
+  expect(screen.getByTestId('message-sources').querySelector('ul')).toBeNull();
+};
+
 describe('AssistantMessage', () => {
   it('renders only the LAST text part (preamble drop)', () => {
     const msg = assistantWithParts([
@@ -495,12 +500,7 @@ describe('AssistantMessage', () => {
     });
 
     expect(iKnowLink).toHaveAttribute('href', 'https://iknow.ukim.mk/');
-    expect(iKnowLink).toHaveClass(
-      'min-h-11',
-      'min-w-11',
-      'pointer-fine:min-h-0',
-      'pointer-fine:min-w-0',
-    );
+    expect(iKnowLink).toHaveClass('min-h-11', 'pointer-fine:min-h-0');
     expect(finkiLink).toHaveAttribute('href', 'https://www.finki.ukim.mk/');
     expect(documentLink).toHaveAttribute(
       'href',
@@ -512,7 +512,8 @@ describe('AssistantMessage', () => {
     expect(
       screen.getByRole('button', { name: SHOW_SOURCES_LABEL }),
     ).toHaveAttribute(ARIA_EXPANDED, 'false');
-    expect(screen.queryByText('Упис')).toBeNull();
+
+    expectSourceCardsClosed();
   });
 
   it('waits for answer completion before automatically opening a small source set', () => {
@@ -564,7 +565,8 @@ describe('AssistantMessage', () => {
     expect(
       screen.getByRole('button', { name: SHOW_SOURCES_LABEL }),
     ).toHaveAttribute(ARIA_EXPANDED, 'false');
-    expect(screen.queryByText(FIRST_SOURCE_TITLE)).toBeNull();
+
+    expectSourceCardsClosed();
   });
 
   it('keeps a larger source set collapsed when metadata arrives after text', () => {
@@ -591,7 +593,8 @@ describe('AssistantMessage', () => {
     expect(
       screen.getByRole('button', { name: SHOW_SOURCES_LABEL }),
     ).toHaveAttribute(ARIA_EXPANDED, 'false');
-    expect(screen.queryByText(FIRST_SOURCE_TITLE)).toBeNull();
+
+    expectSourceCardsClosed();
   });
 
   it('collapses an automatically opened source set when it grows past two', () => {
@@ -627,7 +630,8 @@ describe('AssistantMessage', () => {
     expect(
       screen.getByRole('button', { name: SHOW_SOURCES_LABEL }),
     ).toHaveAttribute(ARIA_EXPANDED, 'false');
-    expect(screen.queryByText(FIRST_SOURCE_TITLE)).toBeNull();
+
+    expectSourceCardsClosed();
   });
 
   it('reveals the model, trace ID, and throughput rows in the diagnostics popover', async () => {

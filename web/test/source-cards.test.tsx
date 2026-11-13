@@ -5,6 +5,11 @@ import { describe, expect, it } from 'vitest';
 import type { RetrievedSource } from '@/lib/api-types';
 
 import { SourceCards } from '@/components/chat/source-cards';
+import {
+  formatDocumentDate,
+  isOutdatedSource,
+  sourceLinkText,
+} from '@/lib/source-groups';
 
 const SOURCE_TITLE = 'Study rules';
 const MERMAID_CODE_RE = /flowchart LR/u;
@@ -191,5 +196,96 @@ describe('SourceCards grouping', () => {
 
     expect(screen.queryByTestId('source-document')).not.toBeInTheDocument();
     expect(screen.getByText(`${RULES} · Член 26`)).toBeInTheDocument();
+  });
+});
+
+describe('source metadata', () => {
+  it.each([
+    ['2020-12-31', '31.12.2020'],
+    ['2019-06', '06.2019'],
+    ['2024', '2024'],
+    ['unresolved', null],
+    [undefined, null],
+  ])('formats document date %s as %s', (value, expected) => {
+    expect(formatDocumentDate(value)).toBe(expected);
+  });
+
+  it('flags only superseded or stale documents as outdated', () => {
+    expect(
+      isOutdatedSource(chunk('a', { currentStatus: 'likely_superseded' })),
+    ).toBe(true);
+    expect(
+      isOutdatedSource(chunk('b', { currentStatus: 'stale_review_required' })),
+    ).toBe(true);
+    expect(
+      isOutdatedSource(chunk('c', { currentStatus: 'currentness_unresolved' })),
+    ).toBe(false);
+    expect(isOutdatedSource(chunk('d'))).toBe(false);
+  });
+
+  it.each([
+    [{ label: RULES, url: RULES_URL }, 'PDF'],
+    [{ label: 'iKnow', url: 'https://iknow.ukim.mk/' }, 'iKnow'],
+    [
+      { label: RULES, url: 'https://www.finki.ukim.mk/mk/rules' },
+      'finki.ukim.mk',
+    ],
+    [{ label: 'Врска', url: 'not a url' }, 'Врска'],
+  ])('labels link %o as %s', (link, expected) => {
+    expect(sourceLinkText(link, RULES)).toBe(expected);
+  });
+
+  it('shows the kind, the document date and an outdated warning on the card', () => {
+    render(
+      <SourceCards
+        complete
+        sources={[
+          chunk('c1', {
+            currentStatus: 'likely_superseded',
+            documentDate: '2017-10-17',
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Документ')).toBeInTheDocument();
+    expect(screen.getByText('17.10.2017')).toHaveAttribute(
+      'datetime',
+      '2017-10-17',
+    );
+    expect(screen.getByTestId('source-outdated')).toHaveTextContent(
+      'Можеби застарено',
+    );
+    expect(
+      screen.getByRole('link', { name: `Врска: ${RULES}` }),
+    ).toHaveTextContent('PDF');
+  });
+
+  it('previews the first source titles while collapsed', async () => {
+    const user = userEvent.setup();
+    render(
+      <SourceCards
+        complete
+        sources={[
+          faq('q1'),
+          chunk('c1'),
+          { ...faq('q2'), title: 'Заверка' },
+          { ...faq('q3'), title: 'Испити' },
+        ]}
+      />,
+    );
+
+    const preview = screen.getByTestId('source-preview');
+
+    expect(preview).toHaveAttribute('aria-hidden', 'true');
+    expect(preview).toHaveTextContent('Упис');
+    expect(preview).toHaveTextContent(RULES);
+    expect(preview).toHaveTextContent('Заверка');
+    expect(preview).not.toHaveTextContent('Испити');
+    expect(preview).toHaveTextContent('+1');
+
+    await user.click(screen.getByRole('button', { name: 'Прикажи извори' }));
+
+    expect(screen.queryByTestId('source-preview')).not.toBeInTheDocument();
   });
 });
