@@ -8,6 +8,7 @@ import type { MyUIMessage } from '@/lib/api-types';
 
 import { AssistantMessage } from '@/components/chat/message';
 import { Thread } from '@/components/chat/thread';
+import { ToolCall } from '@/components/chat/tool-call';
 import { parseChatStateMessages } from '@/lib/chat-history';
 import { assistantState } from '@/lib/chat-route-state';
 import { joinText } from '@/lib/message-parts';
@@ -504,6 +505,18 @@ describe('ToolCall result count', () => {
     );
 
     expect(screen.queryByTestId('tool-call-count')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [FAILED, 'Неуспешно', true],
+    ['input-available', 'Прекинато', true],
+    [DONE, 'Завршено', false],
+  ] as const)('labels a %s call as %s', (state, label, visible) => {
+    render(<ToolCall part={call('c1', state)} />);
+
+    expect(screen.getByText(label).classList.contains('sr-only')).toBe(
+      !visible,
+    );
   });
 });
 

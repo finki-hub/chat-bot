@@ -407,7 +407,11 @@ test.describe('chat streaming (mocked BFF)', () => {
       name: 'Прикажи извори',
     });
     await expect(collapsedToggle).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.getByText(sourceTitle)).toHaveCount(0);
+    // Collapsed, only the title preview shows; the cards are not rendered.
+    await expect(page.getByTestId('source-preview')).toContainText(sourceTitle);
+    await expect(page.getByTestId('message-sources').locator('ul')).toHaveCount(
+      0,
+    );
     await page.screenshot({
       animations: 'disabled',
       path: testInfo.outputPath('streaming-sources-collapsed.png'),

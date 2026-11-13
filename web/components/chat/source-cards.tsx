@@ -1,7 +1,14 @@
 'use client';
 
-import { BookOpenText, ChevronRight, ExternalLink } from 'lucide-react';
-import { useId, useState } from 'react';
+import {
+  BookOpenText,
+  ChevronRight,
+  ExternalLink,
+  FileText,
+  MessageCircleQuestion,
+  TriangleAlert,
+} from 'lucide-react';
+import { type ReactNode, useId, useState } from 'react';
 
 import type { RetrievedSource, RetrievedSourceLink } from '@/lib/api-types';
 
@@ -10,9 +17,18 @@ import {
   type MessageResponseProps,
 } from '@/components/ai-elements/message';
 import { t } from '@/lib/i18n';
-import { groupLinks, groupSections, groupSources } from '@/lib/source-groups';
+import {
+  formatDocumentDate,
+  groupLinks,
+  groupSections,
+  groupSources,
+  isOutdatedSource,
+  type SourceGroup,
+  sourceLinkText,
+} from '@/lib/source-groups';
 
 const AUTO_EXPAND_SOURCE_LIMIT = 2;
+const PREVIEW_LIMIT = 3;
 type MarkdownComponents = NonNullable<MessageResponseProps['components']>;
 
 const sourceMarkdownComponents = {
@@ -38,19 +54,99 @@ const disallowedSourceMarkdownElements = [
   'source',
 ] as const satisfies NonNullable<MessageResponseProps['disallowedElements']>;
 
-const SourceKindLabel = ({ source }: { source: RetrievedSource }) => (
-  <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-    {source.kind === 'faq' ? t('sources.faq') : t('sources.chunk')}
+const SourceKindIcon = ({
+  className,
+  source,
+}: {
+  className: string;
+  source: RetrievedSource;
+}) => {
+  const Icon = source.kind === 'faq' ? MessageCircleQuestion : FileText;
+
+  return (
+    <Icon
+      aria-hidden="true"
+      className={className}
+    />
+  );
+};
+
+// Kind, document date and a warning when the corpus marks the document stale.
+const SourceMeta = ({ source }: { source: RetrievedSource }) => {
+  const date = formatDocumentDate(source.documentDate);
+
+  return (
+    <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+      <SourceKindIcon
+        className="size-3.5 shrink-0"
+        source={source}
+      />
+      <span>
+        {source.kind === 'faq' ? t('sources.faq') : t('sources.chunk')}
+      </span>
+      {date === null ? null : (
+        <>
+          <span aria-hidden="true">·</span>
+          <time
+            dateTime={source.documentDate}
+            title={t('sources.date')}
+          >
+            {date}
+          </time>
+        </>
+      )}
+      {isOutdatedSource(source) ? (
+        <span
+          className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400"
+          data-testid="source-outdated"
+          title={t('sources.outdatedHint')}
+        >
+          <TriangleAlert
+            aria-hidden="true"
+            className="size-3"
+          />
+          {t('sources.outdated')}
+        </span>
+      ) : null}
+    </span>
+  );
+};
+
+const SourceTitle = ({
+  expandable,
+  expanded,
+  title,
+}: {
+  expandable: boolean;
+  expanded: boolean;
+  title: string;
+}) => (
+  <span className="mt-1 flex items-start justify-between gap-2">
+    <span className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
+      {title}
+    </span>
+    {expandable ? (
+      <ChevronRight
+        aria-hidden="true"
+        className={`mt-0.5 size-3.5 shrink-0 text-muted-foreground/70 transition-transform ${expanded ? 'rotate-90' : ''}`}
+      />
+    ) : null}
   </span>
 );
 
-const SourceLinks = ({ links }: { links: readonly RetrievedSourceLink[] }) =>
+const SourceLinks = ({
+  links,
+  title,
+}: {
+  links: readonly RetrievedSourceLink[];
+  title: string;
+}) =>
   links.length > 0 ? (
-    <div className="flex shrink-0 flex-wrap justify-end gap-1">
+    <div className="mt-2 flex flex-wrap gap-x-3">
       {links.map((link) => (
         <a
           aria-label={`${t('sources.link')}: ${link.label}`}
-          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0 pointer-fine:min-w-0 pointer-fine:p-1"
+          className="inline-flex min-h-11 items-center gap-1 rounded-sm text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0"
           href={link.url}
           key={`${link.label}:${link.url}`}
           rel="noreferrer"
@@ -58,87 +154,84 @@ const SourceLinks = ({ links }: { links: readonly RetrievedSourceLink[] }) =>
         >
           <ExternalLink
             aria-hidden="true"
-            className="size-3.5"
+            className="size-3.5 shrink-0"
           />
+          <span className="max-w-48 truncate">
+            {sourceLinkText(link, title)}
+          </span>
         </a>
       ))}
     </div>
   ) : null;
 
+const CARD_CLASS =
+  'min-w-0 rounded-lg border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/35';
+const CARD_TOGGLE_CLASS =
+  'block min-h-11 w-full rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0';
+
 const SourceCard = ({ source }: { source: RetrievedSource }) => {
   const [expanded, setExpanded] = useState(false);
   const snippet = source.snippet ?? '';
   const hasSnippet = snippet.length > 0;
-  const links = source.links ?? [];
   const snippetId = useId();
   const title = source.section
     ? `${source.title} · ${source.section}`
     : source.title;
-  const content = (
+  const heading = (
     <>
-      <span className="flex flex-wrap items-center gap-2">
-        <SourceKindLabel source={source} />
-        {typeof source.chunkIndex === 'number' ? (
-          <span className="text-[10px] text-muted-foreground/70">
-            #{source.chunkIndex + 1}
-          </span>
-        ) : null}
-        {hasSnippet ? (
-          <ChevronRight
-            aria-hidden="true"
-            className={`size-3 text-muted-foreground/70 transition-transform ${expanded ? 'rotate-90' : ''}`}
-          />
-        ) : null}
-      </span>
-      <span className="block line-clamp-2 text-sm font-medium leading-snug text-foreground">
-        {title}
-      </span>
+      <SourceMeta source={source} />
+      <SourceTitle
+        expandable={hasSnippet}
+        expanded={expanded}
+        title={title}
+      />
     </>
   );
 
   return (
-    <li className="min-w-0 rounded-lg border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/35">
-      <div className="flex items-start justify-between gap-3">
-        {hasSnippet ? (
-          <div className="min-w-0 flex-1">
-            <button
-              aria-controls={snippetId}
-              aria-expanded={expanded}
-              className="min-h-11 w-full rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0"
-              onClick={() => {
-                setExpanded((current) => !current);
-              }}
-              type="button"
+    <li className={CARD_CLASS}>
+      {hasSnippet ? (
+        <>
+          <button
+            aria-controls={snippetId}
+            aria-expanded={expanded}
+            className={CARD_TOGGLE_CLASS}
+            onClick={() => {
+              setExpanded((current) => !current);
+            }}
+            type="button"
+          >
+            {heading}
+          </button>
+          <div
+            aria-hidden={expanded ? undefined : true}
+            className={`mt-1.5 text-xs leading-relaxed text-muted-foreground ${expanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}
+            id={snippetId}
+          >
+            <MessageResponse
+              className="h-auto"
+              components={
+                expanded
+                  ? sourceMarkdownComponents
+                  : collapsedSourceMarkdownComponents
+              }
+              controls={false}
+              disallowedElements={disallowedSourceMarkdownElements}
+              key={expanded ? 'expanded' : 'collapsed'}
+              mode="static"
+              plugins={sourceMarkdownPlugins}
             >
-              {content}
-            </button>
-            <div
-              aria-hidden={expanded ? undefined : true}
-              className={`mt-2 text-xs leading-relaxed text-muted-foreground ${expanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}
-              id={snippetId}
-            >
-              <MessageResponse
-                className="h-auto"
-                components={
-                  expanded
-                    ? sourceMarkdownComponents
-                    : collapsedSourceMarkdownComponents
-                }
-                controls={false}
-                disallowedElements={disallowedSourceMarkdownElements}
-                key={expanded ? 'expanded' : 'collapsed'}
-                mode="static"
-                plugins={sourceMarkdownPlugins}
-              >
-                {snippet}
-              </MessageResponse>
-            </div>
+              {snippet}
+            </MessageResponse>
           </div>
-        ) : (
-          <div className="min-w-0 flex-1 space-y-1">{content}</div>
-        )}
-        <SourceLinks links={links} />
-      </div>
+        </>
+      ) : (
+        <div>{heading}</div>
+      )}
+      <SourceLinks
+        links={source.links ?? []}
+        title={source.title}
+      />
     </li>
   );
 };
@@ -152,6 +245,44 @@ const partLabel = (source: RetrievedSource): null | string => {
     ? `#${source.chunkIndex + 1}`
     : null;
 };
+
+const DocumentSnippets = ({
+  id,
+  sources,
+}: {
+  id: string;
+  sources: readonly RetrievedSource[];
+}) => (
+  <ul
+    className="mt-2 space-y-2 text-xs leading-relaxed text-muted-foreground"
+    id={id}
+  >
+    {sources.map((source) => {
+      const label = partLabel(source);
+
+      return (
+        <li
+          className="whitespace-pre-wrap border-l border-border/70 pl-2"
+          key={source.id}
+        >
+          {label === null ? null : (
+            <p className="font-medium text-foreground/80">{label}</p>
+          )}
+          <MessageResponse
+            className="h-auto"
+            components={sourceMarkdownComponents}
+            controls={false}
+            disallowedElements={disallowedSourceMarkdownElements}
+            mode="static"
+            plugins={sourceMarkdownPlugins}
+          >
+            {source.snippet ?? ''}
+          </MessageResponse>
+        </li>
+      );
+    })}
+  </ul>
+);
 
 // Several chunks of one document: the title once, its sections, and every
 // chunk's snippet on expansion.
@@ -170,97 +301,102 @@ const SourceDocumentCard = ({
   const hasSnippets = withSnippets.length > 0;
   const heading = (
     <>
-      <span className="flex flex-wrap items-center gap-2">
-        <SourceKindLabel source={first} />
-        {hasSnippets ? (
-          <ChevronRight
-            aria-hidden="true"
-            className={`size-3 text-muted-foreground/70 transition-transform ${expanded ? 'rotate-90' : ''}`}
-          />
-        ) : null}
-      </span>
-      <span className="block line-clamp-2 text-sm font-medium leading-snug text-foreground">
-        {first.title}
-      </span>
+      <SourceMeta source={first} />
+      <SourceTitle
+        expandable={hasSnippets}
+        expanded={expanded}
+        title={first.title}
+      />
     </>
   );
 
   return (
     <li
-      className="min-w-0 rounded-lg border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/35"
+      className={CARD_CLASS}
       data-testid="source-document"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-1">
-          {hasSnippets ? (
-            <button
-              aria-controls={expanded ? snippetsId : undefined}
-              aria-expanded={expanded}
-              className="min-h-11 w-full rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0"
-              onClick={() => {
-                setExpanded((current) => !current);
-              }}
-              type="button"
+      {hasSnippets ? (
+        <button
+          aria-controls={expanded ? snippetsId : undefined}
+          aria-expanded={expanded}
+          className={CARD_TOGGLE_CLASS}
+          onClick={() => {
+            setExpanded((current) => !current);
+          }}
+          type="button"
+        >
+          {heading}
+        </button>
+      ) : (
+        <div>{heading}</div>
+      )}
+      {sections.length > 0 ? (
+        <ul
+          aria-label={t('sources.sections')}
+          className="mt-1.5 flex flex-wrap gap-1"
+        >
+          {sections.map((section) => (
+            <li
+              className="rounded-md border border-border/70 px-1.5 py-0.5 text-xs text-muted-foreground"
+              key={section}
             >
-              {heading}
-            </button>
-          ) : (
-            heading
-          )}
-          {sections.length > 0 ? (
-            <ul
-              aria-label={t('sources.sections')}
-              className="flex flex-wrap gap-1"
-            >
-              {sections.map((section) => (
-                <li
-                  className="rounded-md border border-border/70 px-1.5 py-0.5 text-xs text-muted-foreground"
-                  key={section}
-                >
-                  {section}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              {`${sources.length} ${t('sources.partMany')}`}
-            </p>
-          )}
-          {expanded ? (
-            <ul
-              className="mt-2 space-y-2 text-xs leading-relaxed text-muted-foreground"
-              id={snippetsId}
-            >
-              {withSnippets.map((source) => {
-                const label = partLabel(source);
-
-                return (
-                  <li
-                    className="whitespace-pre-wrap border-l border-border/70 pl-2"
-                    key={source.id}
-                  >
-                    {label === null ? null : (
-                      <p className="font-medium text-foreground/80">{label}</p>
-                    )}
-                    <MessageResponse
-                      className="h-auto"
-                      components={sourceMarkdownComponents}
-                      controls={false}
-                      disallowedElements={disallowedSourceMarkdownElements}
-                      mode="static"
-                      plugins={sourceMarkdownPlugins}
-                    >
-                      {source.snippet ?? ''}
-                    </MessageResponse>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-        </div>
-        <SourceLinks links={groupLinks(sources)} />
-      </div>
+              {section}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {`${sources.length} ${t('sources.partMany')}`}
+        </p>
+      )}
+      {expanded ? (
+        <DocumentSnippets
+          id={snippetsId}
+          sources={withSnippets}
+        />
+      ) : null}
+      <SourceLinks
+        links={groupLinks(sources)}
+        title={first.title}
+      />
     </li>
+  );
+};
+
+// Collapsed sources still name what the answer drew on.
+const SourcePreview = ({ groups }: { groups: readonly SourceGroup[] }) => {
+  const shown = groups.slice(0, PREVIEW_LIMIT);
+  const hidden = groups.length - shown.length;
+  const chips: ReactNode[] = shown.map(({ key, sources }) => {
+    const [first] = sources;
+
+    return first === undefined ? null : (
+      <span
+        className="inline-flex min-w-0 max-w-44 items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-normal text-muted-foreground"
+        key={key}
+      >
+        <SourceKindIcon
+          className="size-3 shrink-0"
+          source={first}
+        />
+        <span className="truncate">{first.title}</span>
+      </span>
+    );
+  });
+
+  return (
+    <span
+      aria-hidden="true"
+      className="flex min-w-0 flex-wrap items-center gap-1"
+      data-testid="source-preview"
+    >
+      {chips}
+      {hidden > 0 ? (
+        <span className="text-[11px] tabular-nums text-muted-foreground/80">
+          {`+${hidden}`}
+        </span>
+      ) : null}
+    </span>
   );
 };
 
@@ -302,22 +438,25 @@ export const SourceCards = ({
         aria-controls={panelId}
         aria-expanded={open}
         aria-label={open ? t('sources.hide') : t('sources.show')}
-        className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0 pointer-fine:px-0 pointer-fine:text-xs"
+        className="flex min-h-11 max-w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md px-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0 pointer-fine:px-0 pointer-fine:text-xs"
         onClick={toggleDisclosure}
         type="button"
       >
-        <ChevronRight
-          aria-hidden="true"
-          className={`size-3 transition-transform ${open ? 'rotate-90' : ''}`}
-        />
-        <BookOpenText
-          aria-hidden="true"
-          className="size-3.5"
-        />
-        <span>{t('sources.title')}</span>
-        <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground/70">
-          {sourceCount}
+        <span className="inline-flex items-center gap-1.5">
+          <ChevronRight
+            aria-hidden="true"
+            className={`size-3 transition-transform ${open ? 'rotate-90' : ''}`}
+          />
+          <BookOpenText
+            aria-hidden="true"
+            className="size-3.5"
+          />
+          <span>{t('sources.title')}</span>
+          <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground/70">
+            {sourceCount}
+          </span>
         </span>
+        {open ? null : <SourcePreview groups={groups} />}
       </button>
       {open ? (
         <ul
