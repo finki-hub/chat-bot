@@ -64,14 +64,16 @@ class KnowledgeSearch:
         self._credentials = credentials
         self._links = RelevantLinks(db)
 
-    async def search(self, query: str) -> SearchResult:
+    async def search(self, query: str, *, cite: bool = True) -> SearchResult:
+        """`cite=False` leaves the blocks unnumbered, for answers whose sources
+        never reach the client (the tool-less fallback sends no `sources` event)."""
         retrieved, links = await asyncio.gather(
             get_retrieved_context_with_sources(
                 db=self._db,
                 query=query,
                 embedding_model=self._embedding_model,
                 credentials=self._credentials,
-                citations=self._citations,
+                citations=self._citations if cite else None,
             ),
             self._links.render(query),
         )

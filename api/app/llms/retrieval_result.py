@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from typing import Literal, NotRequired, TypedDict
 
@@ -115,3 +116,12 @@ class CitationRefs:
 
     def get(self, source: RetrievalSource) -> int | None:
         return self._refs.get(citation_key(source))
+
+
+_CITATION_MARKERS = re.compile(r" ?(?:\[\d{1,3}\])+")
+
+
+def strip_citation_markers(text: str) -> str:
+    """Drop `[N]` markers from an earlier answer: each answer numbers its own
+    sources from 1, so old markers in the history would point at the wrong ones."""
+    return _CITATION_MARKERS.sub("", text)

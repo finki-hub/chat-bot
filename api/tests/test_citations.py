@@ -1,14 +1,27 @@
 from dataclasses import replace
 from datetime import UTC, datetime
+from typing import cast
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import pytest
+
+from app.data.connection import Database
+from app.llms import search_tools
 from app.llms.context import (
     _assign_citations,
     _chunk_candidate,
     _question_candidate,
     _render_blocks,
 )
-from app.llms.retrieval_result import CitationRefs, citation_key
+from app.llms.models import Model
+from app.llms.retrieval_result import (
+    CitationRefs,
+    RetrievedContext,
+    citation_key,
+    strip_citation_markers,
+)
+from app.llms.search_tools import KnowledgeSearch
 from app.schemas.documents import ChunkSchema
 from app.schemas.questions import QuestionSchema
 
@@ -99,3 +112,37 @@ def test_the_source_payload_carries_its_number() -> None:
 
     assert "ref" not in source.as_payload()
     assert replace(source, ref=3).as_payload().get("ref") == 3
+
+
+@pytest.mark.anyio
+async def test_the_fallback_search_leaves_blocks_unnumbered(monkeypatch) -> None:
+    retrieve = AsyncMock(return_value=RetrievedContext(text="блок"))
+    monkeypatch.setattr(search_tools, "get_retrieved_context_with_sources", retrieve)
+
+    class _Links:
+        def __init__(self, _db) -> None:
+            self.render = AsyncMock(return_value="")
+
+    monkeypatch.setattr(search_tools, "RelevantLinks", _Links)
+    citations = CitationRefs()
+    search = KnowledgeSearch(
+        cast("Database", object()),
+        Model.MULTILINGUAL_E5_LARGE,
+        None,
+        citations,
+    )
+
+    await search.search("упис")
+    await search.search("упис", cite=False)
+
+    assert retrieve.await_args_list[0].kwargs["citations"] is citations
+    # The fallback answer never sends its sources, so `[N]` would point nowhere.
+    assert retrieve.await_args_list[1].kwargs["citations"] is None
+
+
+def test_history_drops_old_citation_markers() -> None:
+    assert (
+        strip_citation_markers("Изнесува 200 евра [1][2]. Рокот е јуни [3].")
+        == "Изнесува 200 евра. Рокот е јуни."
+    )
+    assert strip_citation_markers("Без ознаки.") == "Без ознаки."

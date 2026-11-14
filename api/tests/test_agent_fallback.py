@@ -33,7 +33,8 @@ async def test_tool_less_fallback_answers_from_a_search_on_the_question(
     searched: list[str] = []
     prompts: list[tuple[str, str]] = []
 
-    async def search(self, query: str) -> SearchResult:
+    async def search(self, query: str, *, cite: bool = True) -> SearchResult:
+        assert not cite, "the fallback sends no sources, so it must not number them"
         searched.append(query)
         return SearchResult(content="Тип на извор: FAQ", sources=[], hit=True)
 

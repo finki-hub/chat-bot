@@ -15,7 +15,7 @@ from app.llms.prompts import (
 )
 from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.recommendation_tools import build_recommendation_tools
-from app.llms.retrieval_result import CitationRefs
+from app.llms.retrieval_result import CitationRefs, strip_citation_markers
 from app.llms.search_tools import KnowledgeSearch
 from app.llms.streams import stream_response_with_agent
 from app.llms.tools import (
@@ -80,7 +80,12 @@ async def handle_chat(
     )
     history = to_history_messages(
         [
-            (turn.role, turn.content)
+            (
+                turn.role,
+                turn.content
+                if turn.role == "user"
+                else strip_citation_markers(turn.content),
+            )
             for turn in payload.capped_history(settings.CHAT_HISTORY_MAX_TURNS)
         ],
     )
@@ -101,7 +106,11 @@ async def handle_chat(
         tools.extend(search.tools())
 
     async def fallback() -> tuple[str, str]:
-        found = await search.search(payload.query) if search is not None else None
+        found = (
+            await search.search(payload.query, cite=False)
+            if search is not None
+            else None
+        )
         sources = found.content if found is not None and found.content else NO_SOURCES
         return (
             PROMPT_SEPARATOR.join([DEFAULT_AGENT_SYSTEM_PROMPT, interface_format]),
