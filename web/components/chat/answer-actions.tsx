@@ -8,6 +8,10 @@ import type {
   MyUIMessage,
 } from '@/lib/api-types';
 
+import {
+  type FeedbackDetails,
+  FeedbackReasonDialog,
+} from '@/components/chat/feedback-reason-dialog';
 import { ControlTooltip } from '@/components/ui/icon-controls';
 import { t } from '@/lib/i18n';
 import { answerText } from '@/lib/message-parts';
@@ -25,6 +29,23 @@ export type AnswerActionsProps = {
 const BTN =
   'inline-flex size-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40 sm:pointer-fine:size-8';
 
+// Re-sends the dislike with its details; the upsert keeps one row per answer.
+const sendDislikeDetails = async (
+  responseId: string,
+  details: FeedbackDetails,
+): Promise<boolean> => {
+  try {
+    const res = await fetch('/api/feedback', {
+      body: JSON.stringify({ feedbackType: 'dislike', responseId, ...details }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+};
+
 export const AnswerActions = ({
   message,
   onRegenerate,
@@ -38,6 +59,7 @@ export const AnswerActions = ({
     message.metadata?.feedback ?? null,
   );
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [reasonOpen, setReasonOpen] = useState(false);
   const feedbackPendingRef = useRef(false);
 
   if (!responseId) {
@@ -91,6 +113,9 @@ export const AnswerActions = ({
         return;
       }
       onVote?.(nextVote);
+      if (nextVote === 'dislike') {
+        setReasonOpen(true);
+      }
     } catch {
       setVote(previous);
     } finally {
@@ -104,6 +129,11 @@ export const AnswerActions = ({
       className="flex items-center gap-1"
       data-testid="answer-actions"
     >
+      <FeedbackReasonDialog
+        onOpenChange={setReasonOpen}
+        onSubmit={async (details) => sendDislikeDetails(responseId, details)}
+        open={reasonOpen}
+      />
       <ControlTooltip label={t('actions.copy')}>
         <button
           aria-label={t('actions.copy')}

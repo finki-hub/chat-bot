@@ -139,3 +139,59 @@ def test_web_feedback_retraction_is_idempotent() -> None:
 
     # Then: the empty state is confirmed without disturbing other metadata.
     _assert_retracted(db, response_id, response)
+
+
+def _rate(client: TestClient, response_id: UUID, **fields: object) -> Response:
+    return client.post(
+        "/chat/feedback",
+        headers=auth_headers(),
+        json={
+            "client": "web",
+            "response_id": str(response_id),
+            "user_id": OWNER_ID,
+            **fields,
+        },
+    )
+
+
+def test_a_dislike_keeps_its_reason_and_comment() -> None:
+    db = FakeFeedbackDatabase()
+    client = make_client(db)
+    _, response_id = seed_owned_response(db)
+
+    response = _rate(
+        client,
+        response_id,
+        feedback_type="dislike",
+        reason="outdated",
+        comment="  Цената е од минатата година.  ",
+    )
+
+    assert response.status_code == 200
+    [stored] = db.feedback.values()
+    assert stored["reason"] == "outdated"
+    assert stored["comment"] == "Цената е од минатата година."
+
+
+def test_a_later_like_clears_the_dislike_reason() -> None:
+    db = FakeFeedbackDatabase()
+    client = make_client(db)
+    _, response_id = seed_owned_response(db)
+
+    _rate(client, response_id, feedback_type="dislike", reason="wrong")
+    _rate(client, response_id, feedback_type="like", reason="wrong")
+
+    [stored] = db.feedback.values()
+    assert stored["feedback_type"] == "like"
+    assert stored["reason"] is None
+
+
+def test_an_unknown_reason_is_rejected() -> None:
+    db = FakeFeedbackDatabase()
+    client = make_client(db)
+    _, response_id = seed_owned_response(db)
+
+    response = _rate(client, response_id, feedback_type="dislike", reason="meh")
+
+    assert response.status_code == 422
+    assert db.feedback == {}

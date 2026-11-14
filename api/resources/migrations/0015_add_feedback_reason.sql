@@ -1,0 +1,3 @@
+ALTER TABLE feedback
+    ADD COLUMN IF NOT EXISTS reason TEXT,
+    ADD COLUMN IF NOT EXISTS comment TEXT;

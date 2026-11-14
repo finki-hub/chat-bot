@@ -117,9 +117,23 @@ export type FeedbackAck = {
 };
 
 export type FeedbackClientPayload = {
+  readonly comment?: string;
   readonly feedbackType: FeedbackType;
+  readonly reason?: FeedbackReason;
   readonly responseId: string;
 };
+
+export const FEEDBACK_REASONS = [
+  'wrong',
+  'outdated',
+  'incomplete',
+  'off_topic',
+  'other',
+] as const;
+
+export type FeedbackReason = (typeof FEEDBACK_REASONS)[number];
+
+export const FEEDBACK_COMMENT_MAX = 1_000;
 
 export type FeedbackRetractionAck = {
   readonly feedback_type: null;
@@ -141,11 +155,13 @@ export type FeedbackSchema = {
   channel_id?: string;
   client: 'web';
   client_ref?: string;
+  comment?: string;
   embeddings_model?: string;
   feedback_type: FeedbackType;
   guild_id?: string;
   inference_model?: string;
   question_text?: string;
+  reason?: FeedbackReason;
   response_id: string;
   user_id: string;
 };

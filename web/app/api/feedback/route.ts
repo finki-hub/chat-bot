@@ -1,13 +1,15 @@
-import type {
-  FeedbackAck,
-  FeedbackClientPayload,
-  FeedbackRetractionAck,
-  FeedbackRetractionClientPayload,
-  FeedbackRetractionSchema,
-  FeedbackSchema,
-  FeedbackType,
+import {
+  FEEDBACK_COMMENT_MAX,
+  FEEDBACK_REASONS,
+  type FeedbackAck,
+  type FeedbackClientPayload,
+  type FeedbackReason,
+  type FeedbackRetractionAck,
+  type FeedbackRetractionClientPayload,
+  type FeedbackRetractionSchema,
+  type FeedbackSchema,
+  type FeedbackType,
 } from '@/lib/api-types';
-
 import {
   AuthenticationRequiredError,
   getAuthenticatedChatUserId,
@@ -20,12 +22,31 @@ export const dynamic = 'force-dynamic';
 const isFeedbackType = (value: unknown): value is FeedbackType =>
   value === 'dislike' || value === 'like';
 
+const isFeedbackReason = (value: unknown): value is FeedbackReason =>
+  (FEEDBACK_REASONS as readonly unknown[]).includes(value);
+
+// Reason and comment are optional extras: a malformed one is dropped rather
+// than failing the rating itself.
+const feedbackDetails = (
+  reason: unknown,
+  comment: unknown,
+): Pick<FeedbackClientPayload, 'comment' | 'reason'> => ({
+  ...(isFeedbackReason(reason) && { reason }),
+  ...(typeof comment === 'string' &&
+    comment.trim() !== '' && {
+      comment: comment.trim().slice(0, FEEDBACK_COMMENT_MAX),
+    }),
+});
+
 const parsePayload = (value: unknown): FeedbackClientPayload | null => {
   if (typeof value !== 'object' || value === null) {
     return null;
   }
 
-  const { feedbackType, responseId } = value as Record<string, unknown>;
+  const { comment, feedbackType, reason, responseId } = value as Record<
+    string,
+    unknown
+  >;
 
   if (
     typeof responseId !== 'string' ||
@@ -37,6 +58,7 @@ const parsePayload = (value: unknown): FeedbackClientPayload | null => {
   return {
     feedbackType,
     responseId,
+    ...feedbackDetails(reason, comment),
   };
 };
 
@@ -49,6 +71,8 @@ const toSchema = (
   feedback_type: payload.feedbackType,
   response_id: payload.responseId,
   user_id: userId,
+  ...(payload.reason !== undefined && { reason: payload.reason }),
+  ...(payload.comment !== undefined && { comment: payload.comment }),
   /* eslint-enable camelcase -- snake_case mirrors the Python API wire contract */
 });
 

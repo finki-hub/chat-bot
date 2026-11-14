@@ -68,6 +68,40 @@ describe('POST /api/feedback', () => {
     vi.unstubAllGlobals();
   });
 
+  it('forwards a valid dislike reason and trimmed comment, dropping bad ones', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson());
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    await POST(
+      jsonRequest({
+        comment: '  Застарена цена  ',
+        feedbackType: 'dislike',
+        reason: 'outdated',
+        responseId: 'r-123',
+      }),
+    );
+    await POST(
+      jsonRequest({
+        comment: 42,
+        feedbackType: 'dislike',
+        reason: 'meh',
+        responseId: 'r-123',
+      }),
+    );
+
+    const bodies = fetchMock.mock.calls.map(
+      ([, init]) => JSON.parse(init?.body as string) as Record<string, unknown>,
+    );
+
+    expect(bodies[0]).toMatchObject({
+      comment: 'Застарена цена',
+      reason: 'outdated',
+    });
+    expect(bodies[1]).not.toHaveProperty('reason');
+    expect(bodies[1]).not.toHaveProperty('comment');
+  });
+
   it('injects x-api-key and forwards only server-owned feedback identifiers, returning the ack', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(okJson());
 

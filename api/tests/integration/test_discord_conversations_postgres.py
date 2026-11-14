@@ -219,6 +219,9 @@ async def _database():
         await database.execute(
             initial[initial.index("CREATE TABLE IF NOT EXISTS feedback (") :]
         )
+        await database.execute(
+            (migrations / "0015_add_feedback_reason.sql").read_text(encoding="utf-8"),
+        )
         yield database
     finally:
         await database.disconnect()

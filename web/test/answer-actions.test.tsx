@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FeedbackSelection, MyUIMessage } from '@/lib/api-types';
@@ -226,5 +232,59 @@ describe('AnswerActions feedback', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Регенерирај' }));
 
     expect(onRegenerate).toHaveBeenCalledOnce();
+  });
+});
+
+describe('AnswerActions dislike reasons', () => {
+  it('asks why after a dislike and sends the chosen reason and note', async () => {
+    render(<AnswerActions message={assistant('resp-7', 'Слаб одговор')} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Не ми се допаѓа' }));
+
+    const dialog = await screen.findByTestId('feedback-reason-dialog');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Застарено' }));
+    fireEvent.change(within(dialog).getByRole('textbox'), {
+      target: { value: 'Цената е од лани.' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Испрати' }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId('feedback-reason-dialog'),
+      ).not.toBeInTheDocument();
+    });
+
+    const fetchMock = fetch as unknown as ReturnType<
+      typeof vi.fn<typeof fetch>
+    >;
+    const last = fetchMock.mock.calls.at(-1);
+
+    expect(JSON.parse(last?.[1]?.body as string)).toStrictEqual({
+      comment: 'Цената е од лани.',
+      feedbackType: 'dislike',
+      reason: 'outdated',
+      responseId: 'resp-7',
+    });
+  });
+
+  it('keeps the plain dislike when the question is skipped', async () => {
+    render(<AnswerActions message={assistant('resp-8', 'Слаб одговор')} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Не ми се допаѓа' }));
+
+    const dialog = await screen.findByTestId('feedback-reason-dialog');
+
+    expect(
+      within(dialog).getByRole('button', { name: 'Испрати' }),
+    ).toBeDisabled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Прескокни' }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId('feedback-reason-dialog'),
+      ).not.toBeInTheDocument();
+    });
+
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });

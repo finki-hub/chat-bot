@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+FeedbackReason = Literal["wrong", "outdated", "incomplete", "off_topic", "other"]
+
 
 class FeedbackSchema(BaseModel):
     response_id: UUID = Field(
@@ -21,6 +23,16 @@ class FeedbackSchema(BaseModel):
     feedback_type: Literal["like", "dislike"] = Field(
         examples=["like"],
         description="The rating.",
+    )
+    reason: FeedbackReason | None = Field(
+        default=None,
+        examples=["outdated"],
+        description="Why a dislike was given; stored for web feedback.",
+    )
+    comment: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="Optional free-text note with the rating; stored for web feedback.",
     )
     client_ref: str | None = Field(
         default=None,

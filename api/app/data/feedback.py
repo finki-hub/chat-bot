@@ -75,7 +75,8 @@ async def upsert_web_feedback(
             INSERT INTO feedback (
                 response_id, client, user_id, feedback_type, client_ref,
                 channel_id, guild_id, question_text, answer_text,
-                inference_model, embeddings_model, query_transform_model
+                inference_model, embeddings_model, query_transform_model,
+                reason, comment
             )
             SELECT
                 $1, 'web', $2, $3, $4, $5, $6,
@@ -83,11 +84,18 @@ async def upsert_web_feedback(
                 owned_response.answer_text,
                 owned_response.inference_model,
                 $7,
-                $8
+                $8,
+                $9,
+                $10
             FROM owned_response
             JOIN updated_message ON TRUE
             ON CONFLICT (response_id, client, user_id)
-            DO UPDATE SET feedback_type = EXCLUDED.feedback_type, updated_at = NOW()
+            -- A new rating replaces the old reason, so a like never keeps a dislike's.
+            DO UPDATE SET
+                feedback_type = EXCLUDED.feedback_type,
+                reason = EXCLUDED.reason,
+                comment = EXCLUDED.comment,
+                updated_at = NOW()
             RETURNING id, response_id, feedback_type
         )
         SELECT
@@ -110,6 +118,8 @@ async def upsert_web_feedback(
         feedback.guild_id,
         feedback.embeddings_model,
         feedback.query_transform_model,
+        feedback.reason if feedback.feedback_type == "dislike" else None,
+        _optional_text((feedback.comment or "").strip()),
     )
     if row is None:
         return None

@@ -47,6 +47,8 @@ class FakeFeedbackDatabase(FakeChatDatabase):
                 guild_id,
                 embeddings_model,
                 query_transform_model,
+                reason,
+                comment,
             ) = args
             assistant = self._owned_assistant(response_id, user_id)
             owned = await super().fetchrow(
@@ -72,6 +74,7 @@ class FakeFeedbackDatabase(FakeChatDatabase):
                     "channel_id": channel_id,
                     "client": "web",
                     "client_ref": client_ref,
+                    "comment": comment,
                     "created_at": self.now,
                     "embeddings_model": embeddings_model,
                     "feedback_type": feedback_type,
@@ -80,6 +83,7 @@ class FakeFeedbackDatabase(FakeChatDatabase):
                     "inference_model": owned["inference_model"],
                     "query_transform_model": query_transform_model,
                     "question_text": owned["question_text"],
+                    "reason": reason,
                     "response_id": response_id,
                     "updated_at": self.now,
                     "user_id": user_id,
@@ -87,6 +91,8 @@ class FakeFeedbackDatabase(FakeChatDatabase):
                 self.feedback[feedback_key] = current
             else:
                 current["feedback_type"] = feedback_type
+                current["reason"] = reason
+                current["comment"] = comment
                 current["updated_at"] = self.now
             return current
 
