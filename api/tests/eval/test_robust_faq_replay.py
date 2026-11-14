@@ -212,7 +212,7 @@ def test_observer_runs_actual_mocked_production_selection(monkeypatch, score):
         ),
     )
 
-    async def render(_db, final, _model):
+    async def render(_db, final, _model, _cite=None):
         return "\n".join(c.context_text for c in final)
 
     monkeypatch.setattr(context, "_expand_and_render", render)

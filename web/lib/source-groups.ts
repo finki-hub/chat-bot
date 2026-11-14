@@ -136,6 +136,11 @@ export const sourceLinkText = (
   return labelIsUseful ? link.label : hostName(url);
 };
 
+// Numbered groups first, in citation order.
+const citationOrder = (group: SourceGroup): number =>
+  group.sources.find((source) => source.ref !== undefined)?.ref ??
+  Number.MAX_SAFE_INTEGER;
+
 // Copied answers keep their references: one line per source, with its first link.
 export const withSourceList = (
   text: string,
@@ -143,6 +148,7 @@ export const withSourceList = (
   heading: string,
 ): string => {
   const lines = groupSources(sources)
+    .toSorted((a, b) => citationOrder(a) - citationOrder(b))
     .map(({ sources: grouped }) => {
       const [first] = grouped;
 
@@ -151,10 +157,13 @@ export const withSourceList = (
       }
 
       const url = groupLinks(grouped)[0]?.url;
+      // Numbered sources keep the `[N]` the copied answer cites them by.
+      const ref = grouped.find((source) => source.ref !== undefined)?.ref;
+      const bullet = ref === undefined ? '-' : `[${ref}]`;
 
       return url === undefined
-        ? `- ${first.title}`
-        : `- ${first.title}: ${url}`;
+        ? `${bullet} ${first.title}`
+        : `${bullet} ${first.title}: ${url}`;
     })
     .filter((line) => line !== null);
 

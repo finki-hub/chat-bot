@@ -81,7 +81,7 @@ def test_actual_observer_pool_is_filtered_before_rerank(
     )
     monkeypatch.setattr(context, "_post_rerank", rerank)
 
-    async def render(_db, final, _model):
+    async def render(_db, final, _model, _cite=None):
         return "\n".join(candidate.context_text for candidate in final)
 
     monkeypatch.setattr(context, "_expand_and_render", render)
@@ -295,7 +295,7 @@ def test_actual_production_and_legacy_abstention_denial_stage_parity(
         reranks.append(rerank)
         monkeypatch.setattr(module, "_post_rerank", rerank)
 
-    async def render(_db, final, _model):
+    async def render(_db, final, _model, _cite=None):
         return "\n".join(candidate.context_text for candidate in final)
 
     monkeypatch.setattr(context, "_expand_and_render", render)

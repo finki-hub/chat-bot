@@ -15,6 +15,7 @@ from app.llms.prompts import (
 )
 from app.llms.provider_credentials import LlmProviderCredentials
 from app.llms.recommendation_tools import build_recommendation_tools
+from app.llms.retrieval_result import CitationRefs
 from app.llms.search_tools import KnowledgeSearch
 from app.llms.streams import stream_response_with_agent
 from app.llms.tools import (
@@ -86,7 +87,13 @@ async def handle_chat(
 
     tools = build_recommendation_tools(db) if db is not None else []
     search = (
-        KnowledgeSearch(db, payload.embeddings_model, retrieval_credentials)
+        KnowledgeSearch(
+            db,
+            payload.embeddings_model,
+            retrieval_credentials,
+            # Only the web client turns `[N]` markers into links to its sources.
+            CitationRefs() if payload.interface == "web" else None,
+        )
         if db is not None
         else None
     )

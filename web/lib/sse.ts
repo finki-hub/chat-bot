@@ -151,6 +151,9 @@ const toSources = (
       ...(typeof item['last_verified'] === 'string' && {
         lastVerified: item['last_verified'],
       }),
+      ...(typeof item['ref'] === 'number' &&
+        Number.isSafeInteger(item['ref']) &&
+        item['ref'] > 0 && { ref: item['ref'] }),
       ...(typeof item['section'] === 'string' && { section: item['section'] }),
       ...(typeof item['snippet'] === 'string' && { snippet: item['snippet'] }),
       ...(links.length > 0 && { links }),

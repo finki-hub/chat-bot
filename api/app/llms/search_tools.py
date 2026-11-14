@@ -10,7 +10,7 @@ from app.llms.context import get_retrieved_context_with_sources
 from app.llms.link_context import RelevantLinks
 from app.llms.models import Model
 from app.llms.provider_credentials import LlmProviderCredentials
-from app.llms.retrieval_result import RetrievalSourcePayload
+from app.llms.retrieval_result import CitationRefs, RetrievalSourcePayload
 from app.llms.tools import SEARCH_TOOL_NAME
 
 logger = logging.getLogger(__name__)
@@ -55,8 +55,11 @@ class KnowledgeSearch:
         db: Database,
         embedding_model: Model,
         credentials: LlmProviderCredentials | None,
+        citations: CitationRefs | None = None,
     ) -> None:
         self._db = db
+        # One numbering per answer, shared by all its searches.
+        self._citations = citations
         self._embedding_model = embedding_model
         self._credentials = credentials
         self._links = RelevantLinks(db)
@@ -68,6 +71,7 @@ class KnowledgeSearch:
                 query=query,
                 embedding_model=self._embedding_model,
                 credentials=self._credentials,
+                citations=self._citations,
             ),
             self._links.render(query),
         )

@@ -11,6 +11,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from '@/components/ui/hover-card';
+import { useCitations } from '@/lib/citation-context';
 import { formatThroughput } from '@/lib/diagnostics';
 import { formatDuration } from '@/lib/duration';
 import { formatSpanLabel, t } from '@/lib/i18n';
@@ -293,7 +294,11 @@ export const MessageFooter = ({
   sources: readonly RetrievedSource[];
   timing: Timing;
 }) => {
-  const [sourcesOpen, setSourcesOpen] = useState(false);
+  // Inside an answer the panel is shared with its `[N]` chips.
+  const citations = useCitations();
+  const [localOpen, setLocalOpen] = useState(false);
+  const sourcesOpen = citations?.sourcesOpen ?? localOpen;
+  const setSourcesOpen = citations?.setSourcesOpen ?? setLocalOpen;
   const panelId = useId();
   const count = sourceGroupCount(sources);
   const hasMeta = count > 0 || timing !== undefined;
@@ -335,6 +340,7 @@ export const MessageFooter = ({
       </div>
       {sourcesOpen && count > 0 ? (
         <SourcesPanel
+          focusedRef={citations?.focusedRef ?? null}
           id={panelId}
           sources={sources}
         />

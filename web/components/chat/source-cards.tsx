@@ -8,7 +8,7 @@ import {
   MessageCircleQuestion,
   TriangleAlert,
 } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import type { RetrievedSource, RetrievedSourceLink } from '@/lib/api-types';
 
@@ -16,6 +16,7 @@ import {
   MessageResponse,
   type MessageResponseProps,
 } from '@/components/ai-elements/message';
+import { groupRef } from '@/lib/citations';
 import { t } from '@/lib/i18n';
 import {
   formatDocumentDate,
@@ -69,11 +70,23 @@ const SourceKindIcon = ({
 };
 
 // Kind, document date and a warning when the corpus marks the document stale.
-const SourceMeta = ({ source }: { source: RetrievedSource }) => {
+const SourceMeta = ({
+  citeRef,
+  source,
+}: {
+  citeRef: number | undefined;
+  source: RetrievedSource;
+}) => {
   const date = formatDocumentDate(source.documentDate);
 
   return (
     <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+      {citeRef === undefined ? null : (
+        // Matches the `[N]` chips in the answer.
+        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-medium tabular-nums">
+          {citeRef}
+        </span>
+      )}
       <SourceKindIcon
         className="size-3.5 shrink-0"
         source={source}
@@ -177,7 +190,19 @@ const CARD_CLASS =
 const CARD_TOGGLE_CLASS =
   'block min-h-11 w-full rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0';
 
-const SourceCard = ({ source }: { source: RetrievedSource }) => {
+type CardCitation = {
+  citeRef: number | undefined;
+  focused: boolean;
+};
+
+const cardClass = (focused: boolean): string =>
+  focused ? `${CARD_CLASS} ring-2 ring-primary/50` : CARD_CLASS;
+
+const SourceCard = ({
+  citeRef,
+  focused,
+  source,
+}: CardCitation & { source: RetrievedSource }) => {
   const [expanded, setExpanded] = useState(false);
   const snippet = source.snippet ?? '';
   const hasSnippet = snippet.length > 0;
@@ -187,7 +212,10 @@ const SourceCard = ({ source }: { source: RetrievedSource }) => {
     : source.title;
   const heading = (
     <>
-      <SourceMeta source={source} />
+      <SourceMeta
+        citeRef={citeRef}
+        source={source}
+      />
       <SourceTitle
         expandable={hasSnippet}
         expanded={expanded}
@@ -197,7 +225,10 @@ const SourceCard = ({ source }: { source: RetrievedSource }) => {
   );
 
   return (
-    <li className={CARD_CLASS}>
+    <li
+      className={cardClass(focused)}
+      data-ref={citeRef}
+    >
       {hasSnippet ? (
         <>
           <button
@@ -296,8 +327,10 @@ const DocumentSnippets = ({
 // Several chunks of one document: the title once, its sections, and every
 // chunk's snippet on expansion.
 const SourceDocumentCard = ({
+  citeRef,
+  focused,
   sources,
-}: {
+}: CardCitation & {
   sources: readonly [RetrievedSource, ...RetrievedSource[]];
 }) => {
   const [expanded, setExpanded] = useState(false);
@@ -310,7 +343,10 @@ const SourceDocumentCard = ({
   const hasSnippets = withSnippets.length > 0;
   const heading = (
     <>
-      <SourceMeta source={first} />
+      <SourceMeta
+        citeRef={citeRef}
+        source={first}
+      />
       <SourceTitle
         expandable={hasSnippets}
         expanded={expanded}
@@ -321,7 +357,8 @@ const SourceDocumentCard = ({
 
   return (
     <li
-      className={CARD_CLASS}
+      className={cardClass(focused)}
+      data-ref={citeRef}
       data-testid="source-document"
     >
       {hasSnippets ? (
@@ -407,39 +444,71 @@ export const SourcesToggle = ({
   </button>
 );
 
+const prefersReducedMotion = (): boolean =>
+  typeof matchMedia === 'function' &&
+  matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 export const SourcesPanel = ({
+  focusedRef = null,
   id,
   sources,
 }: {
+  focusedRef?: null | number;
   id: string;
   sources: readonly RetrievedSource[];
-}) => (
-  <section
-    aria-label={t('sources.title')}
-    className="mt-2 motion-safe:animate-in motion-safe:fade-in-0"
-    data-testid="source-panel"
-    id={id}
-  >
-    <ul className="grid items-start gap-2 sm:grid-cols-2">
-      {groupSources(sources).map(({ key, sources: grouped }) => {
-        const [first, ...rest] = grouped;
+}) => {
+  const panelRef = useRef<HTMLElement>(null);
 
-        if (first === undefined) {
-          return null;
-        }
+  // A citation chip opened the panel: bring its card into view.
+  useEffect(() => {
+    if (focusedRef === null) {
+      return;
+    }
 
-        return rest.length === 0 ? (
-          <SourceCard
-            key={`${first.kind}:${first.id}`}
-            source={first}
-          />
-        ) : (
-          <SourceDocumentCard
-            key={key}
-            sources={[first, ...rest]}
-          />
-        );
-      })}
-    </ul>
-  </section>
-);
+    panelRef.current
+      ?.querySelector(`[data-ref="${CSS.escape(String(focusedRef))}"]`)
+      ?.scrollIntoView({
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+        block: 'nearest',
+      });
+  }, [focusedRef]);
+
+  return (
+    <section
+      aria-label={t('sources.title')}
+      className="mt-2 motion-safe:animate-in motion-safe:fade-in-0"
+      data-testid="source-panel"
+      id={id}
+      ref={panelRef}
+    >
+      <ul className="grid items-start gap-2 sm:grid-cols-2">
+        {groupSources(sources).map(({ key, sources: grouped }) => {
+          const [first, ...rest] = grouped;
+
+          if (first === undefined) {
+            return null;
+          }
+
+          const citeRef = groupRef(grouped);
+          const focused = citeRef !== undefined && citeRef === focusedRef;
+
+          return rest.length === 0 ? (
+            <SourceCard
+              citeRef={citeRef}
+              focused={focused}
+              key={`${first.kind}:${first.id}`}
+              source={first}
+            />
+          ) : (
+            <SourceDocumentCard
+              citeRef={citeRef}
+              focused={focused}
+              key={key}
+              sources={[first, ...rest]}
+            />
+          );
+        })}
+      </ul>
+    </section>
+  );
+};

@@ -17,6 +17,7 @@ class RetrievalSourcePayload(TypedDict):
     document_date: NotRequired[str]
     last_verified: NotRequired[str]
     links: NotRequired[list[RetrievalSourceLinkPayload]]
+    ref: NotRequired[int]
     section: NotRequired[str]
     snippet: NotRequired[str]
 
@@ -45,6 +46,8 @@ class RetrievalSource:
     snippet: str = ""
     # Model-only guidance: deliberately left out of as_payload.
     assistant_note: str | None = None
+    # Citation number the model may write as `[N]` (web answers only).
+    ref: int | None = None
 
     def as_payload(self) -> RetrievalSourcePayload:
         payload: RetrievalSourcePayload = {
@@ -64,6 +67,8 @@ class RetrievalSource:
             payload["last_verified"] = self.last_verified
         if self.links:
             payload["links"] = [link.as_payload() for link in self.links]
+        if self.ref is not None:
+            payload["ref"] = self.ref
         if self.section:
             payload["section"] = self.section
         if self.snippet:
@@ -90,3 +95,23 @@ def visible_sources(
         for source, score in scored_sources
         if score is not None and score >= source_score_floor
     )
+
+
+def citation_key(source: RetrievalSource) -> str:
+    """One citable unit per FAQ entry or per document, matching how clients group
+    source cards: every chunk of a document shares its number."""
+    return f"faq:{source.id}" if source.kind == "faq" else f"chunk:{source.title}"
+
+
+class CitationRefs:
+    """Citation numbers for one answer, stable across its searches: a source keeps
+    the number it got the first time any search returned it."""
+
+    def __init__(self) -> None:
+        self._refs: dict[str, int] = {}
+
+    def assign(self, source: RetrievalSource) -> int:
+        return self._refs.setdefault(citation_key(source), len(self._refs) + 1)
+
+    def get(self, source: RetrievalSource) -> int | None:
+        return self._refs.get(citation_key(source))
