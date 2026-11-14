@@ -27,12 +27,12 @@ class FeedbackSchema(BaseModel):
     reason: FeedbackReason | None = Field(
         default=None,
         examples=["outdated"],
-        description="Why a dislike was given; stored for web feedback.",
+        description="Why a dislike was given.",
     )
     comment: str | None = Field(
         default=None,
         max_length=1000,
-        description="Optional free-text note with the rating; stored for web feedback.",
+        description="Optional free-text note with the rating.",
     )
     client_ref: str | None = Field(
         default=None,

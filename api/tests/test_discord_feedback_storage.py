@@ -96,6 +96,32 @@ async def test_discord_other_rater_uses_stored_context_and_ordered_account_locks
 
 
 @pytest.mark.anyio
+async def test_discord_dislike_stores_its_reason_and_trimmed_comment():
+    db, conn, _, payload = _case()
+    disliked = payload.model_copy(
+        update={
+            "feedback_type": "dislike",
+            "reason": "outdated",
+            "comment": "  Стара цена.  ",
+        },
+    )
+
+    await upsert_discord_feedback(db, disliked)
+
+    insert_args = conn.fetchrow.call_args_list[-1].args
+    assert insert_args[13:15] == ("outdated", "Стара цена.")
+
+
+@pytest.mark.anyio
+async def test_discord_like_never_keeps_a_reason():
+    db, conn, _, payload = _case()
+
+    await upsert_discord_feedback(db, payload.model_copy(update={"reason": "wrong"}))
+
+    assert conn.fetchrow.call_args_list[-1].args[13] is None
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "reason",
     ["owner_epoch", "rater_epoch", "parent", "message", "missing", "ambiguous"],

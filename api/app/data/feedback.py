@@ -266,11 +266,17 @@ async def _insert_discord_feedback(
     INSERT INTO feedback (
         response_id, client, user_id, feedback_type, client_ref,
         channel_id, guild_id, question_text, answer_text,
-        inference_model, embeddings_model, query_transform_model
+        inference_model, embeddings_model, query_transform_model,
+        reason, comment
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     ON CONFLICT (response_id, client, user_id)
-    DO UPDATE SET feedback_type = EXCLUDED.feedback_type, updated_at = NOW()
+    -- A new rating replaces the old reason, so a like never keeps a dislike's.
+    DO UPDATE SET
+        feedback_type = EXCLUDED.feedback_type,
+        reason = EXCLUDED.reason,
+        comment = EXCLUDED.comment,
+        updated_at = NOW()
     RETURNING id, response_id, feedback_type
     """
     result = await connection.fetchrow(
@@ -287,6 +293,8 @@ async def _insert_discord_feedback(
         feedback.inference_model,
         feedback.embeddings_model,
         feedback.query_transform_model,
+        feedback.reason if feedback.feedback_type == "dislike" else None,
+        _optional_text((feedback.comment or "").strip()),
     )
 
     if not result:
