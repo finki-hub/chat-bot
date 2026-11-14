@@ -219,3 +219,5 @@ export const useConversationSharing = (conversationId: null | string) => {
 
   return { copyShareUrl, revoke, share, state };
 };
+
+export type ConversationSharing = ReturnType<typeof useConversationSharing>;

@@ -191,3 +191,36 @@ describe('chat sharing client', () => {
     ).rejects.toStrictEqual(new ChatStateRequestError(404));
   });
 });
+
+describe('shared conversation dates', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps when a shared conversation last changed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          conversation: {
+            title: 'Shared',
+            // eslint-disable-next-line camelcase -- the API's snake_case field.
+            updated_at: '2026-11-14T10:00:00Z',
+          },
+          messages: [],
+        }),
+      ),
+    );
+    const { createChatSharingClient } =
+      await import('@/lib/chat-sharing-client');
+
+    await expect(
+      createChatSharingClient().loadSharedConversation({
+        shareToken: SHARE_TOKEN,
+      }),
+    ).resolves.toStrictEqual({
+      conversation: { title: 'Shared', updatedAt: '2026-11-14T10:00:00Z' },
+      messages: [],
+    });
+  });
+});

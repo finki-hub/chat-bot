@@ -10,11 +10,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const SHARE_LABEL = 'Сподели разговор';
 const COPY_LINK_LABEL = 'Копирај ја врската';
 const STOP_SHARING_LABEL = 'Прекини споделување';
+const SHARED_LABEL = 'Споделен разговор';
+const CREATE_LABEL = 'Создај врска';
 const SHARE_TOKEN = '018f0f36-2b1d-7cc0-a50b-5f2d90c91d23';
 const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
 const fetchMock = vi.fn<typeof fetch>();
 const fetchCallFor = (method: 'DELETE' | 'POST') =>
   fetchMock.mock.calls.find(([, init]) => init?.method === method);
+
+// The header button stays disabled while the current share status loads.
+const enabledShareButton = async (): Promise<HTMLElement> => {
+  // Re-queried: the tooltip wrapper swaps the element once it is enabled.
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: SHARE_LABEL })).toBeEnabled();
+  });
+
+  return screen.getByRole('button', { name: SHARE_LABEL });
+};
 
 const setupSharingTests = () => {
   writeText.mockClear();
@@ -49,7 +61,7 @@ describe('ShareConversationButton', () => {
     expect(screen.getByRole('button', { name: SHARE_LABEL })).toBeDisabled();
   });
 
-  it('matches the header spacing for active share controls', async () => {
+  it('marks a shared conversation in the header without opening anything', async () => {
     fetchMock.mockResolvedValueOnce(
       Response.json({ shareToken: SHARE_TOKEN }, { status: 200 }),
     );
@@ -57,16 +69,28 @@ describe('ShareConversationButton', () => {
       await import('@/components/chat/share-conversation-button');
     render(<ShareConversationButton conversationId="conversation-1" />);
 
-    const copyButton = await screen.findByRole('button', {
-      name: COPY_LINK_LABEL,
-    });
-    const activeControls = copyButton.closest('[aria-live="polite"]');
+    await screen.findByRole('button', { name: SHARED_LABEL });
 
-    if (activeControls === null) {
-      throw new TypeError('active share controls were not rendered');
-    }
+    expect(screen.getByTestId('share-active')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
 
-    expect(activeControls).toHaveClass('gap-2');
+  it('asks before making the conversation public', async () => {
+    const { ShareConversationButton } =
+      await import('@/components/chat/share-conversation-button');
+    render(<ShareConversationButton conversationId="conversation-1" />);
+
+    fireEvent.click(await enabledShareButton());
+
+    expect(screen.getByRole('dialog', { name: SHARE_LABEL })).toHaveTextContent(
+      'Секој што ја има врската',
+    );
+    expect(fetchCallFor('POST')).toBeUndefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Откажи' }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(fetchCallFor('POST')).toBeUndefined();
   });
 
   it('creates a share and copies its absolute URL', async () => {
@@ -74,7 +98,8 @@ describe('ShareConversationButton', () => {
       await import('@/components/chat/share-conversation-button');
     render(<ShareConversationButton conversationId="conversation-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: SHARE_LABEL }));
+    fireEvent.click(await enabledShareButton());
+    fireEvent.click(screen.getByRole('button', { name: CREATE_LABEL }));
 
     await waitFor(() => {
       const fetchCall = fetchCallFor('POST');
@@ -90,6 +115,9 @@ describe('ShareConversationButton', () => {
     expect(
       screen.getByRole('button', { name: 'Врската е копирана' }),
     ).toBeEnabled();
+    expect(screen.getByTestId('share-url')).toHaveValue(
+      `http://localhost:3000/share/${SHARE_TOKEN}`,
+    );
     await expect(
       screen.findByRole(
         'button',
@@ -107,9 +135,8 @@ describe('ShareConversationButton', () => {
       await import('@/components/chat/share-conversation-button');
     render(<ShareConversationButton conversationId="conversation-1" />);
 
-    fireEvent.click(
-      await screen.findByRole('button', { name: COPY_LINK_LABEL }),
-    );
+    fireEvent.click(await screen.findByRole('button', { name: SHARED_LABEL }));
+    fireEvent.click(screen.getByRole('button', { name: COPY_LINK_LABEL }));
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(
@@ -130,9 +157,8 @@ describe('ShareConversationButton', () => {
       await import('@/components/chat/share-conversation-button');
     render(<ShareConversationButton conversationId="conversation-1" />);
 
-    fireEvent.click(
-      await screen.findByRole('button', { name: STOP_SHARING_LABEL }),
-    );
+    fireEvent.click(await screen.findByRole('button', { name: SHARED_LABEL }));
+    fireEvent.click(screen.getByRole('button', { name: STOP_SHARING_LABEL }));
 
     await waitFor(() => {
       const revokeCall = fetchCallFor('DELETE');
@@ -142,7 +168,7 @@ describe('ShareConversationButton', () => {
     });
 
     await expect(
-      screen.findByRole('button', { name: SHARE_LABEL }),
+      screen.findByRole('button', { name: CREATE_LABEL }),
     ).resolves.toBeEnabled();
   });
 
@@ -158,6 +184,7 @@ describe('ShareConversationButton', () => {
     await screen.findByRole('button', { name: SHARE_LABEL });
     fetchMock.mockReturnValueOnce(pendingResponse);
     fireEvent.click(screen.getByRole('button', { name: SHARE_LABEL }));
+    fireEvent.click(screen.getByRole('button', { name: CREATE_LABEL }));
     await waitFor(() => {
       expect(fetchCallFor('POST')).toBeDefined();
     });
@@ -171,7 +198,7 @@ describe('ShareConversationButton', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: SHARE_LABEL })).toBeEnabled();
+      expect(screen.getByRole('button', { name: CREATE_LABEL })).toBeEnabled();
     });
 
     expect(writeText).not.toHaveBeenCalled();
@@ -185,10 +212,11 @@ describe('ShareConversationButton', () => {
     await screen.findByRole('button', { name: SHARE_LABEL });
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 500 }));
     fireEvent.click(screen.getByRole('button', { name: SHARE_LABEL }));
+    fireEvent.click(screen.getByRole('button', { name: CREATE_LABEL }));
 
-    await expect(
-      screen.findByRole('button', { name: 'Споделувањето не успеа' }),
-    ).resolves.toBeEnabled();
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      'Споделувањето не успеа',
+    );
     expect(writeText).not.toHaveBeenCalled();
   });
 });
@@ -208,10 +236,11 @@ describe('ShareConversationButton failure handling', () => {
       Response.json({ unexpected: SHARE_TOKEN }, { status: 200 }),
     );
     fireEvent.click(screen.getByRole('button', { name: SHARE_LABEL }));
+    fireEvent.click(screen.getByRole('button', { name: CREATE_LABEL }));
 
-    await expect(
-      screen.findByRole('button', { name: 'Споделувањето не успеа' }),
-    ).resolves.toBeEnabled();
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      'Споделувањето не успеа',
+    );
     expect(writeText).not.toHaveBeenCalled();
     expect(
       screen.queryByRole('button', { name: STOP_SHARING_LABEL }),
@@ -224,7 +253,8 @@ describe('ShareConversationButton failure handling', () => {
       await import('@/components/chat/share-conversation-button');
     render(<ShareConversationButton conversationId="conversation-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: SHARE_LABEL }));
+    fireEvent.click(await enabledShareButton());
+    fireEvent.click(screen.getByRole('button', { name: CREATE_LABEL }));
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(

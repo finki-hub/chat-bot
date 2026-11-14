@@ -54,6 +54,7 @@ const SharedChatPage = async ({ params }: SharedChatPageProps) => {
     <SharedChatScreen
       messages={messages}
       title={shared.conversation.title ?? t('shared.untitled')}
+      updatedAt={shared.conversation.updatedAt}
     />
   );
 };
