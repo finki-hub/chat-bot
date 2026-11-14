@@ -64,7 +64,8 @@ describe('inline citations', () => {
     const panel = screen.getByTestId('source-panel');
     const card = within(panel).getByTestId('source-document');
 
-    expect(card).toHaveAttribute('data-ref', '2');
+    // The first source the answer cites is numbered 1.
+    expect(card).toHaveAttribute('data-ref', '1');
     expect(card).toHaveClass('ring-inset', 'border-primary/70');
     expect(
       screen.getByRole('button', { name: 'Сокриј извори' }),
@@ -145,7 +146,7 @@ data: ${JSON.stringify({
     ]);
     expect(capture).toHaveBeenCalledWith('citation_clicked', {
       /* eslint-disable camelcase -- PostHog event properties are snake_case. */
-      citation_ref: 2,
+      citation_ref: 1,
       source_count: 3,
       /* eslint-enable camelcase -- end of PostHog snake_case properties. */
     });

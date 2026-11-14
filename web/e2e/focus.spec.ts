@@ -157,7 +157,7 @@ test('header controls explain their actions on hover and focus', async ({
   }
 });
 
-test('sidebar conversation actions explain their actions on hover and focus', async ({
+test('the sidebar row menu shows on hover and keyboard focus', async ({
   page,
 }) => {
   await mockModels(page);
@@ -174,24 +174,24 @@ test('sidebar conversation actions explain their actions on hover and focus', as
   await page.goto('/');
 
   const item = page.getByTestId('conversation-c1');
-  const conversationTitle = item.getByRole('button', { name: 'Прв разговор' });
-  const tooltip = page.getByRole('tooltip');
-  const controls = ['Генерирај име', 'Преименувај', 'Избриши'].map((label) => ({
-    control: item.getByRole('button', { name: label }),
-    label,
-  }));
+  const trigger = item.getByRole('button', {
+    name: 'Дејства за разговорот: Прв разговор',
+  });
 
-  for (const { control, label } of controls) {
-    await tooltipTriggerFor(control).hover();
-    await expect(tooltip).toHaveText(label);
-    await conversationTitle.hover();
-    await expect(tooltip).toBeHidden();
-  }
+  await expect(trigger).toHaveCSS('opacity', '0');
 
-  for (const { control, label } of controls) {
-    await control.focus();
-    await expect(tooltip).toHaveText(label);
-    await page.keyboard.press('Escape');
-    await expect(tooltip).toBeHidden();
-  }
+  await item.hover();
+  await expect(trigger).toHaveCSS('opacity', '1');
+
+  await page.mouse.move(0, 0);
+  await item.getByRole('button', { exact: true, name: 'Прв разговор' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(trigger).toBeFocused();
+  await expect(trigger).toHaveCSS('opacity', '1');
+
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('menuitem', { name: 'Преименувај' }),
+  ).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Избриши' })).toBeVisible();
 });

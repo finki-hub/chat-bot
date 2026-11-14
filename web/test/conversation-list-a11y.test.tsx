@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -61,13 +61,12 @@ describe('ConversationList accessibility', () => {
     const actions = within(item).getByTestId('row-actions');
 
     expect(actions).toHaveClass(
-      'hidden',
-      'pointer-fine:flex',
+      'pointer-fine:opacity-0',
       'pointer-fine:group-focus-within:opacity-100',
     );
   });
 
-  it('uses one 44px mobile menu trigger with labeled actions', async () => {
+  it('uses one menu trigger per row, 44px on touch, with labeled actions', async () => {
     const user = userEvent.setup();
     render(
       <ConversationList
@@ -88,7 +87,9 @@ describe('ConversationList accessibility', () => {
     expect(
       within(item).getByRole('button', { name: 'Прв разговор' }),
     ).toHaveClass('min-h-11', 'pointer-fine:min-h-0');
-    expect(actionsTrigger).toHaveClass('size-12', 'pointer-fine:hidden');
+    expect(actionsTrigger).toHaveClass('size-12', 'pointer-fine:size-7');
+    // The trigger is the row's only control besides the title.
+    expect(within(item).getAllByRole('button')).toHaveLength(2);
 
     await user.click(actionsTrigger);
 
@@ -106,7 +107,7 @@ describe('ConversationList accessibility', () => {
     );
   });
 
-  it('disables every title generation action while one title is generating', () => {
+  it('disables title generation elsewhere while one title is generating', () => {
     render(
       <ConversationList
         activeId={null}
@@ -119,12 +120,19 @@ describe('ConversationList accessibility', () => {
       />,
     );
 
-    const buttons = screen.getAllByRole('button', { name: 'Генерирај име' });
+    const generating = within(
+      screen.getByTestId('conversation-c1'),
+    ).getByTestId('row-actions');
 
-    expect(buttons).toHaveLength(2);
+    expect(generating).toHaveAttribute('aria-busy', 'true');
 
-    for (const button of buttons) {
-      expect(button).toBeDisabled();
-    }
+    fireEvent.keyDown(
+      within(screen.getByTestId('conversation-c2')).getByTestId('row-actions'),
+      { key: 'Enter' },
+    );
+
+    expect(
+      screen.getByRole('menuitem', { name: 'Генерирај име' }),
+    ).toHaveAttribute('aria-disabled', 'true');
   });
 });

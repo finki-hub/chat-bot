@@ -297,11 +297,12 @@ export const MessageFooter = ({
 }) => {
   // Inside an answer the panel is shared with its `[N]` chips.
   const citations = useCitations();
+  const shown = citations?.sources ?? sources;
   const [localOpen, setLocalOpen] = useState(false);
   const sourcesOpen = citations?.sourcesOpen ?? localOpen;
   const setSourcesOpen = citations?.setSourcesOpen ?? setLocalOpen;
   const panelId = useId();
-  const count = sourceGroupCount(sources);
+  const count = sourceGroupCount(shown);
   const hasMeta = count > 0 || timing !== undefined;
 
   if (!hasMeta && (actions === undefined || actions === null)) {
@@ -351,7 +352,7 @@ export const MessageFooter = ({
         <SourcesPanel
           focusedRef={citations?.focusedRef ?? null}
           id={panelId}
-          sources={sources}
+          sources={shown}
         />
       ) : null}
     </div>

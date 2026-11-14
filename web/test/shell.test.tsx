@@ -32,6 +32,8 @@ import {
   ResizeObserverStub,
 } from '@/test/helpers/dom-stubs';
 
+import { chooseRowAction } from './helpers/conversation-row';
+
 beforeAll(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -203,7 +205,7 @@ describe('ConversationList', () => {
       />,
     );
     const item = screen.getByTestId('conversation-c1');
-    fireEvent.click(within(item).getByRole('button', { name: 'Избриши' }));
+    chooseRowAction(item, 'Избриши');
 
     expect(onDelete).not.toHaveBeenCalled();
 
@@ -224,7 +226,7 @@ describe('ConversationList', () => {
       />,
     );
     const item = screen.getByTestId('conversation-c1');
-    fireEvent.click(within(item).getByRole('button', { name: 'Преименувај' }));
+    chooseRowAction(item, 'Преименувај');
 
     const input = screen.getByLabelText('Ново име на разговорот');
     fireEvent.change(input, { target: { value: 'Ново име' } });
@@ -248,9 +250,7 @@ describe('ConversationList', () => {
     );
 
     const item = screen.getByTestId('conversation-c1');
-    fireEvent.click(
-      within(item).getByRole('button', { name: 'Генерирај име' }),
-    );
+    chooseRowAction(item, 'Генерирај име');
 
     expect(onGenerateTitle).toHaveBeenCalledWith('c1');
   });

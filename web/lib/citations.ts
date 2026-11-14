@@ -82,3 +82,78 @@ export const groupRef = (
   sources: readonly RetrievedSource[],
 ): number | undefined =>
   sources.find((source) => source.ref !== undefined)?.ref;
+
+// Fenced blocks and inline code keep their brackets when numbering.
+const CODE_RE = /```[\s\S]*?(?:```|$)|`[^`\n]*`/gu;
+
+const outsideCode = (text: string): string[] => text.split(CODE_RE);
+
+// Retrieval numbers become reading order: the first source the answer cites is
+// 1, the next 2, and the sources it never cites follow in their old order.
+export const citationNumbering = (
+  text: string,
+  sources: readonly RetrievedSource[],
+): ReadonlyMap<number, number> => {
+  const known = new Set(
+    sources.map((source) => source.ref).filter((ref) => ref !== undefined),
+  );
+  const order = new Map<number, number>();
+  const assign = (ref: number) => {
+    if (known.has(ref) && !order.has(ref)) {
+      order.set(ref, order.size + 1);
+    }
+  };
+
+  const cited = outsideCode(text)
+    .flatMap((chunk) => chunk.match(CITATION_RUN_RE) ?? [])
+    .flatMap((run) => run.match(CITATION_NUMBER_RE) ?? []);
+
+  for (const ref of cited) {
+    assign(Number(ref));
+  }
+
+  const uncited = [...known].toSorted((a, b) => a - b);
+
+  for (const ref of uncited) {
+    assign(ref);
+  }
+
+  return order;
+};
+
+export const renumberSources = (
+  sources: readonly RetrievedSource[],
+  numbering: ReadonlyMap<number, number>,
+): RetrievedSource[] =>
+  sources.map((source) =>
+    source.ref === undefined
+      ? source
+      : { ...source, ref: numbering.get(source.ref) ?? source.ref },
+  );
+
+// The copied answer cites the same numbers the reader saw; numbers no source
+// carries are dropped, as the chips drop them.
+export const renumberText = (
+  text: string,
+  numbering: ReadonlyMap<number, number>,
+): string => {
+  if (numbering.size === 0) {
+    return text;
+  }
+
+  const code = text.match(CODE_RE) ?? [];
+
+  return outsideCode(text)
+    .map((chunk, index) => {
+      const renumbered = chunk.replaceAll(CITATION_RUN_RE, (run) =>
+        (run.match(CITATION_NUMBER_RE) ?? [])
+          .map((ref) => numbering.get(Number(ref)))
+          .filter((ref) => ref !== undefined)
+          .map((ref) => `[${ref}]`)
+          .join(''),
+      );
+
+      return `${renumbered}${code[index] ?? ''}`;
+    })
+    .join('');
+};

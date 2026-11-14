@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { t } from '@/lib/i18n';
 import {
+  answerText,
   hasToolCalls,
   isTextPart,
   isToolCallPart,
@@ -689,7 +690,10 @@ export const AssistantMessage = ({
 
   return (
     <Message from="assistant">
-      <CitationProvider sources={sources}>
+      <CitationProvider
+        sources={sources}
+        text={answerText(message) ?? ''}
+      >
         <MessageContent>
           {/* Once the answer is visible, reasoning collapses to a toggle above it. */}
           {!withToolCalls && answerVisible ? reasoning : null}

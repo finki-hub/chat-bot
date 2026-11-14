@@ -8,7 +8,6 @@ import {
 
 import type { ConversationRow } from '@/lib/conversation-types';
 
-import { ConversationActionTooltip } from '@/components/shell/conversation-action-tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,134 +36,80 @@ export const ConversationRowActions = ({
   const isGeneratingTitle = generatingTitleId === conversation.id;
   const actionsLabel = `${t('conversation.actions')}: ${conversation.title}`;
 
+  // One control per row, so a long history stays quick to tab through. With a
+  // mouse it appears on hover or focus; a generating title keeps its spinner shown.
   return (
-    <>
-      <span
-        className="hidden items-center gap-1 opacity-0 transition-opacity duration-150 pointer-fine:flex pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100"
-        data-testid="row-actions"
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          aria-busy={isGeneratingTitle || undefined}
+          aria-label={actionsLabel}
+          className={`inline-flex size-12 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-[opacity,color] hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring pointer-fine:size-7 pointer-fine:focus-visible:opacity-100 pointer-fine:data-[state=open]:opacity-100 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100 ${
+            isGeneratingTitle ? '' : 'pointer-fine:opacity-0'
+          }`}
+          data-testid="row-actions"
+          type="button"
+        >
+          {isGeneratingTitle ? (
+            <LoaderCircle
+              aria-hidden="true"
+              className="size-4 animate-spin"
+            />
+          ) : (
+            <Ellipsis
+              aria-hidden="true"
+              className="size-5 pointer-fine:size-4"
+            />
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="min-w-48"
+        collisionPadding={12}
       >
-        {onGenerateTitle ? (
-          <ConversationActionTooltip
-            disabled={isGeneratingAnyTitle}
-            label={t('conversation.generateTitle')}
-          >
-            <button
+        <DropdownMenuGroup>
+          {onGenerateTitle ? (
+            <DropdownMenuItem
               aria-busy={isGeneratingTitle || undefined}
-              aria-label={t('conversation.generateTitle')}
-              className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-primary focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
+              className="min-h-11 pointer-fine:min-h-8"
               disabled={isGeneratingAnyTitle}
-              onClick={() => {
+              onSelect={() => {
                 onGenerateTitle(conversation.id);
               }}
-              type="button"
             >
               {isGeneratingTitle ? (
                 <LoaderCircle
                   aria-hidden="true"
-                  className="size-3.5 animate-spin"
+                  className="animate-spin"
                 />
               ) : (
-                <WandSparkles
-                  aria-hidden="true"
-                  className="size-3.5"
-                />
+                <WandSparkles aria-hidden="true" />
               )}
-            </button>
-          </ConversationActionTooltip>
-        ) : null}
-        <ConversationActionTooltip label={t('conversation.rename')}>
-          <button
-            aria-label={t('conversation.rename')}
-            className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => {
+              {t('conversation.generateTitle')}
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            className="min-h-11 pointer-fine:min-h-8"
+            onSelect={() => {
               onRenameAction(conversation);
             }}
-            type="button"
           >
-            <Pencil
-              aria-hidden="true"
-              className="size-3.5"
-            />
-          </button>
-        </ConversationActionTooltip>
-        <ConversationActionTooltip label={t('conversation.delete')}>
-          <button
-            aria-label={t('conversation.delete')}
-            className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => {
+            <Pencil aria-hidden="true" />
+            {t('conversation.rename')}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="min-h-11 pointer-fine:min-h-8"
+            onSelect={() => {
               onDeleteAction(conversation);
             }}
-            type="button"
+            variant="destructive"
           >
-            <Trash2
-              aria-hidden="true"
-              className="size-3.5"
-            />
-          </button>
-        </ConversationActionTooltip>
-      </span>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-label={actionsLabel}
-            className="inline-flex size-12 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring pointer-fine:hidden"
-            type="button"
-          >
-            <Ellipsis
-              aria-hidden="true"
-              className="size-5"
-            />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          className="min-w-48"
-          collisionPadding={12}
-        >
-          <DropdownMenuGroup>
-            {onGenerateTitle ? (
-              <DropdownMenuItem
-                aria-busy={isGeneratingTitle || undefined}
-                className="min-h-11 pointer-fine:min-h-8"
-                disabled={isGeneratingAnyTitle}
-                onSelect={() => {
-                  onGenerateTitle(conversation.id);
-                }}
-              >
-                {isGeneratingTitle ? (
-                  <LoaderCircle
-                    aria-hidden="true"
-                    className="animate-spin"
-                  />
-                ) : (
-                  <WandSparkles aria-hidden="true" />
-                )}
-                {t('conversation.generateTitle')}
-              </DropdownMenuItem>
-            ) : null}
-            <DropdownMenuItem
-              className="min-h-11 pointer-fine:min-h-8"
-              onSelect={() => {
-                onRenameAction(conversation);
-              }}
-            >
-              <Pencil aria-hidden="true" />
-              {t('conversation.rename')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="min-h-11 pointer-fine:min-h-8"
-              onSelect={() => {
-                onDeleteAction(conversation);
-              }}
-              variant="destructive"
-            >
-              <Trash2 aria-hidden="true" />
-              {t('conversation.delete')}
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+            <Trash2 aria-hidden="true" />
+            {t('conversation.delete')}
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 };
