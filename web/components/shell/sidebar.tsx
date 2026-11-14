@@ -91,7 +91,10 @@ export const Sidebar = ({
   const responsiveStateClass = getSidebarWidthClass(open, synced);
 
   const sidebarContent = (
-    <div className="flex h-full w-64 flex-col gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))]">
+    // Fixed width on desktop so the content doesn't reflow as the panel slides.
+    <div
+      className={`${mobile ? 'w-full min-w-0' : 'w-64'} flex h-full flex-col gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))]`}
+    >
       <button
         className="group inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-medium shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-200 hover:border-primary/40 hover:bg-muted hover:shadow active:scale-[0.99]"
         onClick={handleNewChat}
@@ -200,7 +203,7 @@ export const Sidebar = ({
     >
       <DialogContent
         aria-describedby={undefined}
-        className="left-0 top-0 h-dvh max-h-none w-64 max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-y-0 border-l-0 p-0"
+        className="left-0 top-0 h-dvh max-h-none w-[min(85vw,20rem)] max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-y-0 border-l-0 p-0"
         showCloseButton={false}
       >
         <DialogTitle className="sr-only">{t('sidebar.label')}</DialogTitle>

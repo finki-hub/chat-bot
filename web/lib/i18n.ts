@@ -136,6 +136,7 @@ export const messages = {
   'searchToolShort.search_knowledge_base': 'База на знаење',
   'service.unavailable':
     'Услугата е привремено недостапна. Чатот не е достапен во моментов.',
+  'settings.advanced': 'Напредно: сопствен endpoint',
   'settings.apiKey': 'API клуч',
   'settings.baseUrl': 'Base URL (опционално)',
   'settings.baseUrlHint':
