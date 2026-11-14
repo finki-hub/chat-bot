@@ -334,6 +334,12 @@ test.describe('model catalog selector (typed, mocked BFF)', () => {
     const dialog = page.getByRole('dialog', { name: 'Лични API клучеви' });
     const openaiBaseUrl = dialog.getByLabel('OpenAI Base URL (опционално)');
     await dialog.getByLabel('OpenAI API клуч').fill('sk-visual-test');
+    await dialog
+      .locator('section', {
+        has: page.getByRole('heading', { exact: true, name: 'OpenAI' }),
+      })
+      .getByText('Напредно: сопствен endpoint')
+      .click();
     await openaiBaseUrl.fill('https://blocked.example/v1');
     await dialog.getByRole('button', { name: 'Зачувај клучеви' }).click();
 

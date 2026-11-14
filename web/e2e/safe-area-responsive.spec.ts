@@ -247,6 +247,12 @@ test('safe-area reduced height keeps credential errors and actions reachable', a
   const dialog = page.getByRole('dialog', { name: 'Лични API клучеви' });
   await dialog.getByLabel('OpenAI API клуч').fill('sk-safe-area-error');
   await dialog
+    .locator('section', {
+      has: page.getByRole('heading', { exact: true, name: 'OpenAI' }),
+    })
+    .getByText('Напредно: сопствен endpoint')
+    .click();
+  await dialog
     .getByLabel('OpenAI Base URL (опционално)')
     .fill('https://blocked.example/v1');
   await dialog.getByRole('button', { name: 'Зачувај клучеви' }).click();

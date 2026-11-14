@@ -1,4 +1,5 @@
 import {
+  ChevronRight,
   Circle,
   CircleCheck,
   ExternalLink,
@@ -26,6 +27,84 @@ type CredentialProviderFormProps = {
   readonly onFieldChange: (field: keyof ProviderForm, value: string) => void;
 };
 
+// Most people only paste a key; a custom endpoint stays folded away unless
+// one is set or needs fixing.
+const BaseUrlField = ({
+  busy,
+  failed,
+  fieldId,
+  label,
+  onChange,
+  open,
+  placeholder,
+  value,
+}: {
+  readonly busy: boolean;
+  readonly failed: boolean;
+  readonly fieldId: string;
+  readonly label: string;
+  readonly onChange: (value: string) => void;
+  readonly open: boolean;
+  readonly placeholder: string;
+  readonly value: string;
+}) => {
+  const inputId = `${fieldId}-base-url`;
+  const descriptionId = `${fieldId}-base-url-description`;
+  const errorId = `${fieldId}-base-url-error`;
+
+  return (
+    <details
+      className="group/advanced"
+      data-testid="credential-advanced"
+      open={open || undefined}
+    >
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          aria-hidden="true"
+          className="size-3.5 transition-transform group-open/advanced:rotate-90"
+        />
+        {t('settings.advanced')}
+      </summary>
+      <div className="mt-2 grid gap-1.5">
+        <label
+          className="text-xs font-medium"
+          htmlFor={inputId}
+        >
+          <span className="sr-only">{label}</span> {t('settings.baseUrl')}
+        </label>
+        <Input
+          aria-describedby={
+            failed ? `${descriptionId} ${errorId}` : descriptionId
+          }
+          aria-invalid={failed || undefined}
+          disabled={busy}
+          id={inputId}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+          placeholder={placeholder}
+          type="url"
+          value={value}
+        />
+        <p
+          className="text-pretty text-xs leading-relaxed text-muted-foreground"
+          id={descriptionId}
+        >
+          {t('settings.baseUrlHint')}
+        </p>
+        {failed ? (
+          <p
+            className="text-pretty text-xs leading-relaxed text-destructive"
+            id={errorId}
+          >
+            {t('settings.credentialBaseUrlError')}
+          </p>
+        ) : null}
+      </div>
+    </details>
+  );
+};
+
 export const CredentialProviderForm = ({
   busy,
   credential,
@@ -40,14 +119,15 @@ export const CredentialProviderForm = ({
   const apiKeyId = `${fieldId}-api-key`;
   const apiKeyDescriptionId = `${fieldId}-api-key-description`;
   const apiKeyErrorId = `${fieldId}-api-key-error`;
-  const baseUrlId = `${fieldId}-base-url`;
-  const baseUrlDescriptionId = `${fieldId}-base-url-description`;
-  const baseUrlErrorId = `${fieldId}-base-url-error`;
   const hasCredential = credential !== undefined;
   /* eslint-disable @typescript-eslint/prefer-nullish-coalescing -- legacy empty URLs should use the example. */
   const baseUrlPlaceholder =
     credential?.base_url || t('settings.baseUrlPlaceholder');
   /* eslint-enable @typescript-eslint/prefer-nullish-coalescing -- end legacy empty URL exception. */
+  const showBaseUrl =
+    form.baseUrl !== '' ||
+    Boolean(credential?.base_url) ||
+    failure?.field === 'baseUrl';
 
   return (
     <section className="rounded-xl border border-border bg-card p-4">
@@ -121,7 +201,7 @@ export const CredentialProviderForm = ({
             ) : null}
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 sm:items-start">
+        <div className="grid gap-3">
           <div className="grid gap-1.5">
             <label
               className="text-xs font-medium"
@@ -146,7 +226,11 @@ export const CredentialProviderForm = ({
               value={form.apiKey}
             />
             <p
-              className="text-pretty text-xs leading-relaxed text-muted-foreground"
+              className={
+                hasCredential
+                  ? 'text-pretty text-xs leading-relaxed text-muted-foreground'
+                  : 'sr-only'
+              }
               id={apiKeyDescriptionId}
             >
               {hasCredential
@@ -162,44 +246,18 @@ export const CredentialProviderForm = ({
               </p>
             ) : null}
           </div>
-          <div className="grid gap-1.5">
-            <label
-              className="text-xs font-medium"
-              htmlFor={baseUrlId}
-            >
-              <span className="sr-only">{label}</span> {t('settings.baseUrl')}
-            </label>
-            <Input
-              aria-describedby={
-                failure?.field === 'baseUrl'
-                  ? `${baseUrlDescriptionId} ${baseUrlErrorId}`
-                  : baseUrlDescriptionId
-              }
-              aria-invalid={failure?.field === 'baseUrl' || undefined}
-              disabled={busy}
-              id={baseUrlId}
-              onChange={(event) => {
-                onFieldChange('baseUrl', event.target.value);
-              }}
-              placeholder={baseUrlPlaceholder}
-              type="url"
-              value={form.baseUrl}
-            />
-            <p
-              className="text-pretty text-xs leading-relaxed text-muted-foreground"
-              id={baseUrlDescriptionId}
-            >
-              {t('settings.baseUrlHint')}
-            </p>
-            {failure?.field === 'baseUrl' ? (
-              <p
-                className="text-pretty text-xs leading-relaxed text-destructive"
-                id={baseUrlErrorId}
-              >
-                {t('settings.credentialBaseUrlError')}
-              </p>
-            ) : null}
-          </div>
+          <BaseUrlField
+            busy={busy}
+            failed={failure?.field === 'baseUrl'}
+            fieldId={fieldId}
+            label={label}
+            onChange={(value) => {
+              onFieldChange('baseUrl', value);
+            }}
+            open={showBaseUrl}
+            placeholder={baseUrlPlaceholder}
+            value={form.baseUrl}
+          />
         </div>
       </div>
     </section>

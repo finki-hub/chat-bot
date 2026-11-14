@@ -295,6 +295,12 @@ test('credential save errors stay attributed and visible at responsive heights',
   const dialog = page.getByRole('dialog', { name: CREDENTIAL_DIALOG_LABEL });
   const openaiBaseUrl = dialog.getByLabel('OpenAI Base URL (опционално)');
   await dialog.getByLabel('OpenAI API клуч').fill('sk-visual-test');
+  await dialog
+    .locator('section', {
+      has: page.getByRole('heading', { exact: true, name: 'OpenAI' }),
+    })
+    .getByText('Напредно: сопствен endpoint')
+    .click();
   await openaiBaseUrl.fill('https://blocked.example/v1');
   await dialog.getByRole('button', { name: SAVE_CREDENTIALS_LABEL }).click();
 
@@ -391,6 +397,12 @@ test('short credential error states keep both actions inside the dialog', async 
   const dialog = page.getByRole('dialog', { name: CREDENTIAL_DIALOG_LABEL });
   await dialog.getByLabel('OpenAI API клуч').fill('sk-short-height');
   await dialog
+    .locator('section', {
+      has: page.getByRole('heading', { exact: true, name: 'OpenAI' }),
+    })
+    .getByText('Напредно: сопствен endpoint')
+    .click();
+  await dialog
     .getByLabel('OpenAI Base URL (опционално)')
     .fill('https://blocked.example/v1');
   await dialog.getByRole('button', { name: SAVE_CREDENTIALS_LABEL }).click();
@@ -467,6 +479,12 @@ test('all provider failures keep credential actions inside a constrained viewpor
     'Ollama',
   ] as const) {
     await dialog.getByLabel(`${provider} API клуч`).fill('sk-failure-test');
+    await dialog
+      .locator('section', {
+        has: page.getByRole('heading', { exact: true, name: provider }),
+      })
+      .getByText('Напредно: сопствен endpoint')
+      .click();
     await dialog
       .getByLabel(`${provider} Base URL (опционално)`)
       .fill('https://blocked.example/v1');

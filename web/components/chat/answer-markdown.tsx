@@ -30,6 +30,8 @@ export const AnswerMarkdown = ({
   <MessageResponse
     {...props}
     allowedTags={allowedTags}
+    // Streamdown pads every list item; long answers read better a bit tighter.
+    className={`[&_li]:py-0.5 ${props.className ?? ''}`}
     components={components}
     remarkPlugins={remarkPlugins}
   >
