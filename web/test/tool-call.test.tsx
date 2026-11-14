@@ -177,7 +177,10 @@ describe('AssistantMessage tool calls', () => {
 
     const row = screen.getByTestId(TOOL_CALL);
 
-    expect(row).toHaveTextContent(`${LABEL} „${QUERY}“`);
+    // The full label shows from `sm` up; narrow screens get the short one.
+    expect(within(row).getByText(LABEL)).toHaveClass('max-sm:hidden');
+    expect(within(row).getByText('База на знаење')).toHaveClass('sm:hidden');
+    expect(row).toHaveTextContent(`„${QUERY}“`);
     expect(row).not.toHaveTextContent(TITLE);
   });
 

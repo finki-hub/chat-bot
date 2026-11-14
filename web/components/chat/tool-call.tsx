@@ -14,7 +14,11 @@ import { MessageResponse } from '@/components/ai-elements/message';
 import { ActivityPulse, Elapsed } from '@/components/chat/activity-line';
 import { formatDuration } from '@/lib/duration';
 import { t } from '@/lib/i18n';
-import { toolCallIcon, toolCallLabel } from '@/lib/search-status';
+import {
+  toolCallIcon,
+  toolCallLabel,
+  toolCallShortLabel,
+} from '@/lib/search-status';
 import {
   countLabel,
   tallyToolCalls,
@@ -59,6 +63,21 @@ const StatusText = ({ status }: { status: ToolCallStatus }) => {
   );
 };
 
+// Narrow screens get the compact name, so the query after it stays readable.
+const ToolLabel = ({ tool }: { tool: string }) => {
+  const label = toolCallLabel(tool);
+  const shortLabel = toolCallShortLabel(tool);
+
+  return shortLabel === null ? (
+    label
+  ) : (
+    <>
+      <span className="max-sm:hidden">{label}</span>
+      <span className="sm:hidden">{shortLabel}</span>
+    </>
+  );
+};
+
 export const ToolCall = ({
   className = '',
   part,
@@ -72,7 +91,6 @@ export const ToolCall = ({
   const panelId = useId();
   const status = toolCallStatus(part, running);
   const ToolIcon = toolCallIcon(part.toolName);
-  const label = toolCallLabel(part.toolName);
   const query = toolCallInputText(part.input);
   const inlineQuery = toolCallQuery(part.input);
   const isRunning = status === 'running';
@@ -105,7 +123,7 @@ export const ToolCall = ({
         />
         <span className="line-clamp-2 min-w-0 break-words">
           <span className={isRunning ? 'text-shimmer' : undefined}>
-            {label}
+            <ToolLabel tool={part.toolName} />
           </span>
           {inlineQuery === null ? null : (
             <span className="text-foreground/80">{` „${inlineQuery}“`}</span>

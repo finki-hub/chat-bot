@@ -115,6 +115,10 @@ export const messages = {
   'searchTool.search_docs': 'Пребарување низ документите на ФИНКИ',
   'searchTool.search_documents': 'Пребарување низ документите на ФИНКИ',
   'searchTool.search_knowledge_base': 'Пребарување во базата на знаење',
+  'searchToolShort.faq_search': 'Чести прашања',
+  'searchToolShort.search_docs': 'Документи',
+  'searchToolShort.search_documents': 'Документи',
+  'searchToolShort.search_knowledge_base': 'База на знаење',
   'service.unavailable':
     'Услугата е привремено недостапна. Чатот не е достапен во моментов.',
   'settings.apiKey': 'API клуч',

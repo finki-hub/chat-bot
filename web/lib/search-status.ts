@@ -87,6 +87,23 @@ const DATA_TOOL_LABELS: ReadonlyArray<readonly [string, TKey]> = [
 // Tool rows outlive the call, so labels are tense-neutral noun phrases and the
 // status icon carries running/done. The API's first-person `title` is meant for
 // live status messages (Discord), so it is not shown here.
+/* eslint-disable camelcase -- keys are backend tool names, not camelCase identifiers */
+const SHORT_TOOL_LABELS: Record<string, TKey> = {
+  faq_search: 'searchToolShort.faq_search',
+  search_docs: 'searchToolShort.search_docs',
+  search_documents: 'searchToolShort.search_documents',
+  search_knowledge_base: 'searchToolShort.search_knowledge_base',
+};
+/* eslint-enable camelcase -- keys are backend tool names, not camelCase identifiers */
+
+// A compact name for narrow screens, so the query stays readable; null keeps
+// the full label.
+export const toolCallShortLabel = (tool: string): null | string => {
+  const key = SHORT_TOOL_LABELS[tool];
+
+  return key === undefined ? null : t(key);
+};
+
 export const toolCallLabel = (tool: string): string => {
   if (isSearchTool(tool)) {
     return searchToolLabel(tool);

@@ -1,5 +1,6 @@
 import type { DynamicToolUIPart } from 'ai';
 
+import { CircleSlash } from 'lucide-react';
 import { type ReactNode } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
@@ -157,6 +158,22 @@ export const MessageError = ({
   onRetry?: () => void;
   retryPending?: boolean;
 }) => {
+  // A stopped answer is not a failure: a quiet note, not a red alert box.
+  if (errorPart.code === 'interrupted') {
+    return (
+      <output
+        className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+        data-testid="message-interrupted"
+      >
+        <CircleSlash
+          aria-hidden="true"
+          className="size-3.5"
+        />
+        {t('error.interrupted')}
+      </output>
+    );
+  }
+
   let content: ReactNode;
 
   switch (errorPart.code) {
@@ -189,11 +206,6 @@ export const MessageError = ({
     case 'free_tier_unavailable':
       content = (
         <p className="text-destructive">{t('error.sponsoredUnavailable')}</p>
-      );
-      break;
-    case 'interrupted':
-      content = (
-        <p className="text-muted-foreground">{t('error.interrupted')}</p>
       );
       break;
     case 'no_answer':

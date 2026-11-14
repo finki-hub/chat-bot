@@ -11,6 +11,7 @@ import type {
 import { ControlTooltip } from '@/components/ui/icon-controls';
 import { t } from '@/lib/i18n';
 import { answerText } from '@/lib/message-parts';
+import { withSourceList } from '@/lib/source-groups';
 import { cn } from '@/lib/utils';
 
 export type AnswerActionsProps = {
@@ -43,7 +44,11 @@ export const AnswerActions = ({
     return null;
   }
 
-  const text = answerText(message) ?? '';
+  const text = withSourceList(
+    answerText(message) ?? '',
+    message.metadata?.sources ?? [],
+    t('sources.title'),
+  );
   const votingDisabled = pending || submittingFeedback;
 
   const copy = async (): Promise<void> => {
