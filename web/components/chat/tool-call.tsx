@@ -10,7 +10,9 @@ import {
 } from 'lucide-react';
 import { type ReactNode, useId, useState } from 'react';
 
+import { MessageResponse } from '@/components/ai-elements/message';
 import { ActivityPulse, Elapsed } from '@/components/chat/activity-line';
+import { formatDuration } from '@/lib/duration';
 import { t } from '@/lib/i18n';
 import { toolCallIcon, toolCallLabel } from '@/lib/search-status';
 import {
@@ -162,13 +164,30 @@ export const ToolCall = ({
   );
 };
 
+export type FinishedReasoning = {
+  durationMs?: null | number;
+  text: string;
+};
+
+const reasoningSummary = ({ durationMs }: FinishedReasoning): string => {
+  const label = t('thread.reasoning').toLocaleLowerCase('mk');
+
+  return typeof durationMs === 'number' && durationMs > 0
+    ? `${label} ${formatDuration(durationMs)}`
+    : label;
+};
+
 // A finished run of calls collapses into one row that expands to the calls.
+// Reasoning that led into the answer joins the same row, so the work behind an
+// answer is one line above it.
 export const ToolCallGroup = ({
   className = '',
   parts,
+  reasoning,
 }: {
   className?: string;
   parts: readonly DynamicToolUIPart[];
+  reasoning?: FinishedReasoning;
 }) => {
   const [open, setOpen] = useState(false);
   const panelId = useId();
@@ -187,6 +206,7 @@ export const ToolCallGroup = ({
       : null,
   ]
     .filter((label) => label !== null)
+    .concat(reasoning === undefined ? [] : [reasoningSummary(reasoning)])
     .join(' · ');
 
   return (
@@ -234,6 +254,17 @@ export const ToolCallGroup = ({
           className="flex flex-col gap-2 border-l border-border/60 pl-3"
           id={panelId}
         >
+          {reasoning === undefined ? null : (
+            <div
+              className="text-sm text-muted-foreground"
+              data-testid="reasoning-panel"
+            >
+              <p className="mb-1 text-xs font-medium text-foreground/80">
+                {t('thread.reasoning')}
+              </p>
+              <MessageResponse>{reasoning.text}</MessageResponse>
+            </div>
+          )}
           {parts.map((part) => (
             <ToolCall
               key={part.toolCallId}

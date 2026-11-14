@@ -1,7 +1,6 @@
 import type { DynamicToolUIPart } from 'ai';
 
-import { Clock3 } from 'lucide-react';
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
 
@@ -11,19 +10,16 @@ import {
   MessageResponse,
 } from '@/components/ai-elements/message';
 import { ActivityLine } from '@/components/chat/activity-line';
+import { MessageFooter } from '@/components/chat/message-footer';
 import { ReasoningDisclosure } from '@/components/chat/reasoning-disclosure';
 import { SearchStepper } from '@/components/chat/search-stepper';
-import { SourceCards } from '@/components/chat/source-cards';
-import { ToolCall, ToolCallGroup } from '@/components/chat/tool-call';
-import { Button } from '@/components/ui/button';
 import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from '@/components/ui/hover-card';
-import { formatThroughput } from '@/lib/diagnostics';
-import { formatDuration } from '@/lib/duration';
-import { formatSpanLabel, t } from '@/lib/i18n';
+  type FinishedReasoning,
+  ToolCall,
+  ToolCallGroup,
+} from '@/components/chat/tool-call';
+import { Button } from '@/components/ui/button';
+import { t } from '@/lib/i18n';
 import {
   hasToolCalls,
   isTextPart,
@@ -46,270 +42,6 @@ export type AssistantMessageProps = {
   pending?: boolean;
   retryPending?: boolean;
   statusPart?: StatusPart;
-};
-
-type Diagnostics = NonNullable<MyUIMessage['metadata']>['diagnostics'];
-type Timing = NonNullable<MyUIMessage['metadata']>['timing'];
-
-const FOOTNOTE_CLASS =
-  'inline-flex items-center gap-1 text-xs tabular-nums text-muted-foreground/70';
-
-const formatMs = (ms: null | number | undefined): string =>
-  typeof ms === 'number' ? formatDuration(ms) : '—';
-
-const DiagnosticsRow = ({
-  label,
-  value,
-  valueClassName = 'shrink-0 tabular-nums',
-}: {
-  label: string;
-  value: string;
-  valueClassName?: string;
-}) => (
-  <div className="flex items-center justify-between gap-6">
-    <span className="min-w-0 truncate text-muted-foreground">{label}</span>
-    <span className={valueClassName}>{value}</span>
-  </div>
-);
-
-const DiagnosticsGroup = ({ children }: { children: ReactNode }) => (
-  <div className="flex flex-col gap-1 border-t border-border/60 pt-2 first:border-t-0 first:pt-0">
-    {children}
-  </div>
-);
-
-const CostDiagnosticsRow = ({
-  cost,
-}: {
-  cost: NonNullable<Diagnostics>['cost'];
-}) =>
-  cost === undefined ? null : (
-    <DiagnosticsRow
-      label={t('diagnostics.cost')}
-      value={`$${cost.totalUsd.toFixed(6)}`}
-    />
-  );
-
-const DiagnosticsCard = ({
-  diagnostics,
-  inferenceModel,
-  traceId,
-}: {
-  diagnostics: NonNullable<Diagnostics>;
-  inferenceModel?: string;
-  traceId?: string;
-}) => {
-  const spans = Object.entries(diagnostics.spans ?? {});
-  const { tokens } = diagnostics;
-  const throughput = formatThroughput(diagnostics);
-  const hasRetrievalShape =
-    typeof diagnostics.candidateCount === 'number' ||
-    typeof diagnostics.topDistance === 'number';
-
-  return (
-    <div className="flex flex-col gap-2 text-xs">
-      <p className="font-medium text-foreground">{t('diagnostics.title')}</p>
-      {inferenceModel || traceId ? (
-        <DiagnosticsGroup>
-          {inferenceModel ? (
-            <DiagnosticsRow
-              label={t('diagnostics.model')}
-              value={inferenceModel}
-            />
-          ) : null}
-          {traceId ? (
-            <DiagnosticsRow
-              label={t('diagnostics.traceId')}
-              value={traceId}
-              valueClassName="max-w-44 break-all text-right font-mono text-[11px] leading-snug"
-            />
-          ) : null}
-        </DiagnosticsGroup>
-      ) : null}
-      <DiagnosticsGroup>
-        {typeof diagnostics.thinkingMs === 'number' ? (
-          <DiagnosticsRow
-            label={t('diagnostics.thinking')}
-            value={formatMs(diagnostics.thinkingMs)}
-          />
-        ) : null}
-        <DiagnosticsRow
-          label={t('diagnostics.serverTotal')}
-          value={formatMs(diagnostics.serverTotalMs)}
-        />
-        <DiagnosticsRow
-          label={t('diagnostics.serverFirstByte')}
-          value={formatMs(diagnostics.serverTtftMs)}
-        />
-      </DiagnosticsGroup>
-      {spans.length === 0 ? null : (
-        <DiagnosticsGroup>
-          <p className="text-muted-foreground/70">{t('diagnostics.stages')}</p>
-          {spans.map(([name, ms]) => (
-            <DiagnosticsRow
-              key={name}
-              label={formatSpanLabel(name)}
-              value={formatMs(ms)}
-            />
-          ))}
-        </DiagnosticsGroup>
-      )}
-      {hasRetrievalShape ? (
-        <DiagnosticsGroup>
-          <DiagnosticsRow
-            label={t('diagnostics.candidates')}
-            value={
-              typeof diagnostics.candidateCount === 'number'
-                ? String(diagnostics.candidateCount)
-                : '—'
-            }
-          />
-          <DiagnosticsRow
-            label={t('diagnostics.topDistance')}
-            value={
-              typeof diagnostics.topDistance === 'number'
-                ? diagnostics.topDistance.toFixed(4)
-                : '—'
-            }
-          />
-        </DiagnosticsGroup>
-      ) : null}
-      {tokens === undefined ? null : (
-        <DiagnosticsGroup>
-          <DiagnosticsRow
-            label={t('diagnostics.tokensTotal')}
-            value={String(tokens.total)}
-          />
-          <DiagnosticsRow
-            label={t('diagnostics.tokensInput')}
-            value={String(tokens.input)}
-          />
-          <DiagnosticsRow
-            label={t('diagnostics.tokensOutput')}
-            value={String(tokens.output)}
-          />
-          {throughput === null ? null : (
-            <DiagnosticsRow
-              label={t('diagnostics.throughput')}
-              value={throughput}
-            />
-          )}
-          <CostDiagnosticsRow cost={diagnostics.cost} />
-        </DiagnosticsGroup>
-      )}
-    </div>
-  );
-};
-
-const TimingSummary = ({ timing }: { timing: NonNullable<Timing> }) => (
-  <>
-    <Clock3
-      aria-hidden="true"
-      className="size-3"
-    />
-    <span>
-      {formatDuration(timing.totalMs)}
-      {timing.ttftMs === null
-        ? null
-        : ` · ${t('thread.firstToken')} ${formatDuration(timing.ttftMs)}`}
-    </span>
-  </>
-);
-
-const MessageTiming = ({
-  diagnostics,
-  inferenceModel,
-  responseId,
-  timing,
-}: {
-  diagnostics: Diagnostics;
-  inferenceModel?: string;
-  responseId?: string;
-  timing: Timing;
-}) => {
-  const diagnosticsContentRef = useRef<HTMLDivElement>(null);
-
-  if (timing === undefined) {
-    return null;
-  }
-
-  if (diagnostics === undefined || Object.keys(diagnostics).length === 0) {
-    return (
-      <div
-        className={FOOTNOTE_CLASS}
-        data-testid="message-timing"
-      >
-        <TimingSummary timing={timing} />
-      </div>
-    );
-  }
-
-  const ttftSuffix =
-    timing.ttftMs === null
-      ? ''
-      : `, ${t('thread.firstToken')} ${formatDuration(timing.ttftMs)}`;
-  // The HoverCard detail is pointer/focus-only, so name the trigger with purpose + summary.
-  const triggerLabel = `${t('diagnostics.title')}: ${formatDuration(timing.totalMs)}${ttftSuffix}`;
-
-  return (
-    <HoverCard
-      closeDelay={80}
-      openDelay={120}
-    >
-      <HoverCardTrigger asChild>
-        <button
-          aria-label={triggerLabel}
-          className={`${FOOTNOTE_CLASS} cursor-help rounded-md hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
-          data-testid="message-timing"
-          onKeyDown={(event) => {
-            const content = diagnosticsContentRef.current;
-            if (content === null) {
-              return;
-            }
-
-            switch (event.key) {
-              case 'ArrowDown':
-                content.scrollBy({ top: content.clientHeight / 4 });
-                break;
-              case 'ArrowUp':
-                content.scrollBy({ top: -content.clientHeight / 4 });
-                break;
-              case 'End':
-                content.scrollTo({ top: content.scrollHeight });
-                break;
-              case 'Home':
-                content.scrollTo({ top: 0 });
-                break;
-              case 'PageDown':
-                content.scrollBy({ top: content.clientHeight });
-                break;
-              case 'PageUp':
-                content.scrollBy({ top: -content.clientHeight });
-                break;
-              default:
-                return;
-            }
-            event.preventDefault();
-          }}
-          type="button"
-        >
-          <TimingSummary timing={timing} />
-        </button>
-      </HoverCardTrigger>
-      <HoverCardContent
-        align="start"
-        className="max-h-(--radix-hover-card-content-available-height) w-auto min-w-[min(14rem,var(--radix-hover-card-content-available-width))] max-w-[min(20rem,var(--radix-hover-card-content-available-width))] overflow-y-auto overscroll-contain"
-        collisionPadding={16}
-        ref={diagnosticsContentRef}
-      >
-        <DiagnosticsCard
-          diagnostics={diagnostics}
-          inferenceModel={inferenceModel}
-          traceId={responseId}
-        />
-      </HoverCardContent>
-    </HoverCard>
-  );
 };
 
 const MACEDONIAN_SHORT_MONTHS = [
@@ -679,12 +411,14 @@ const reasoningSlot = (segments: readonly RenderSegment[]): number => {
 const SegmentView = ({
   className,
   pending,
+  reasoning,
   segment,
   streamingTail,
   superseded,
 }: {
   className: string | undefined;
   pending: boolean;
+  reasoning: FinishedReasoning | undefined;
   segment: RenderSegment;
   streamingTail: boolean;
   superseded: ReadonlySet<string>;
@@ -715,6 +449,7 @@ const SegmentView = ({
     <ToolCallGroup
       className={`${className ?? ''} motion-safe:animate-in motion-safe:fade-in-0`}
       parts={segment.parts}
+      reasoning={reasoning}
     />
   );
 };
@@ -723,21 +458,45 @@ const SegmentView = ({
 // between and after the calls is all part of the answer. Runs of several calls
 // fold into one summary row (see collapseToolRuns).
 const InterleavedParts = ({
+  finishedReasoning,
   message,
   pending,
   reasoning,
 }: {
+  finishedReasoning: FinishedReasoning | undefined;
   message: MyUIMessage;
   pending: boolean;
   reasoning: ReactNode;
 }) => {
   const superseded = supersededToolCalls(message);
   const answer = answerSegments(message);
-  const segments: RenderSegment[] =
+  const folded: RenderSegment[] =
     toolCallParts(message).length > 1
       ? collapseToolRuns(answer, pending)
       : answer;
-  const slot = reasoning === null ? -1 : reasoningSlot(segments);
+  const candidate = reasoning === null ? -1 : reasoningSlot(folded);
+  const previous = folded[candidate - 1];
+  // A lone finished call before the answer folds too, so it can carry the
+  // reasoning in one row instead of two.
+  const segments =
+    finishedReasoning !== undefined &&
+    candidate > 0 &&
+    candidate < folded.length &&
+    previous?.type === 'tool'
+      ? folded.with(candidate - 1, {
+          key: `${previous.key}:group`,
+          parts: [previous.part],
+          type: 'tools',
+        })
+      : folded;
+  // Finished reasoning right after a folded run joins that run's row.
+  const mergeInto =
+    finishedReasoning !== undefined &&
+    candidate > 0 &&
+    segments[candidate - 1]?.type === 'tools'
+      ? candidate - 1
+      : -1;
+  const slot = mergeInto === -1 ? candidate : -1;
   const isText = (index: number): boolean => segments[index]?.type === 'text';
   // Extra space where tool rows give way to text (or back), so the answer does
   // not read as part of the last row; reasoning above the answer carries it.
@@ -750,6 +509,7 @@ const InterleavedParts = ({
       className={spacing(index)}
       key={segment.key}
       pending={pending}
+      reasoning={index === mergeInto ? finishedReasoning : undefined}
       segment={segment}
       streamingTail={pending && index === segments.length - 1}
       superseded={superseded}
@@ -883,6 +643,15 @@ export const AssistantMessage = ({
   });
   const reasoningText = joinReasoning(message);
   const answerVisible = Boolean(text);
+  // Answer text written between calls stays the answer while a later call runs,
+  // so sources and actions keep their place; a preamble before the first call
+  // does not count.
+  const footerVisible =
+    answerVisible ||
+    (withToolCalls &&
+      nonEmptyTexts(
+        message.parts.slice(message.parts.findIndex(isToolCallPart) + 1),
+      ).length > 0);
   const reasoningStreaming =
     Boolean(pending) && reasoningText.length > 0 && text === null;
   // Reasoning streaming right now has its own live label, so the wait line steps aside.
@@ -912,6 +681,11 @@ export const AssistantMessage = ({
         {!withToolCalls && answerVisible ? reasoning : null}
         {withToolCalls ? (
           <InterleavedParts
+            finishedReasoning={
+              !reasoningStreaming && reasoningText.length > 0
+                ? { durationMs: diagnostics?.thinkingMs, text: reasoningText }
+                : undefined
+            }
             message={message}
             pending={Boolean(pending)}
             reasoning={reasoning}
@@ -927,7 +701,6 @@ export const AssistantMessage = ({
             </MessageResponse>
           </div>
         ) : null}
-        {text === null ? null : <SourceCards sources={sources} />}
         <AssistantMessageStatus
           awaitingLabel={awaitingLabel}
           awaitingModel={awaitingModel && !reasoningLive}
@@ -949,18 +722,17 @@ export const AssistantMessage = ({
             retryPending={retryPending}
           />
         ) : null}
-        {/* Timing joins the actions row on finish instead of pushing it down;
-            MessageTiming renders nothing until `timing` arrives. */}
-        {answerVisible ? (
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 empty:hidden">
-            {actions}
-            <MessageTiming
-              diagnostics={diagnostics}
-              inferenceModel={inferenceModel}
-              responseId={responseId}
-              timing={timing}
-            />
-          </div>
+        {/* One quiet row: actions, the sources toggle and the timing, so the
+            answer is not followed by a stack of metadata. */}
+        {footerVisible ? (
+          <MessageFooter
+            actions={actions}
+            diagnostics={diagnostics}
+            inferenceModel={inferenceModel}
+            responseId={responseId}
+            sources={sources}
+            timing={timing}
+          />
         ) : null}
       </MessageContent>
     </Message>

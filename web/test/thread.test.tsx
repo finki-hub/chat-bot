@@ -381,9 +381,10 @@ describe('AssistantMessage', () => {
 
     const footnote = screen.getByTestId(TIMING_TESTID);
 
+    // The row shows the total; the first token is in the hover title.
     expect(footnote).toHaveTextContent('2.3s');
-    expect(footnote).toHaveTextContent('почеток за');
-    expect(footnote).toHaveTextContent('1.2s');
+    expect(footnote).not.toHaveTextContent('почеток за');
+    expect(footnote).toHaveAttribute('title', '2.3s, почеток за 1.2s');
   });
 
   it('omits the first-token part when ttft is unknown', () => {
@@ -469,7 +470,7 @@ describe('AssistantMessage', () => {
     expect(sources).toHaveTextContent('Извори');
     expect(sources).toHaveTextContent('2');
     expect(toggle).toHaveAttribute(ARIA_EXPANDED, 'true');
-    expect(toggle).toHaveClass('min-h-11', 'pointer-fine:min-h-0');
+    expect(toggle).toHaveClass('min-h-11', 'pointer-fine:min-h-8');
     expect(screen.getByText('Упис')).toBeInTheDocument();
     expect(screen.getByText(CHUNK_SOURCE_TITLE)).toBeInTheDocument();
 
