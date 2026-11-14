@@ -676,9 +676,6 @@ const reasoningSlot = (segments: readonly RenderSegment[]): number => {
   return answer === -1 ? segments.length : answer;
 };
 
-// Tool-call messages render every part in stream order: text written before,
-// between and after the calls is all part of the answer. Once finished, each
-// run of several calls folds into one summary row.
 const SegmentView = ({
   className,
   pending,
@@ -722,6 +719,9 @@ const SegmentView = ({
   );
 };
 
+// Tool-call messages render every part in stream order: text written before,
+// between and after the calls is all part of the answer. Runs of several calls
+// fold into one summary row (see collapseToolRuns).
 const InterleavedParts = ({
   message,
   pending,
