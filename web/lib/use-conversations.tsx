@@ -1,5 +1,6 @@
 'use client';
 
+import { posthog } from 'posthog-js';
 import { useCallback, useRef } from 'react';
 
 import type { FeedbackSelection, MyUIMessage } from '@/lib/api-types';
@@ -159,6 +160,14 @@ export const useConversations = (
       ? undefined
       : (messageId: string, text: string) => {
           setActiveError(undefined);
+          /* eslint-disable camelcase -- PostHog event properties are snake_case. */
+          posthog.capture('question_edited', {
+            message_count: visibleMessages.length,
+            message_index: visibleMessages.findIndex(
+              (message) => message.id === messageId,
+            ),
+          });
+          /* eslint-enable camelcase -- end of PostHog snake_case properties. */
           fireAndForget(editMessage(messageId, text));
         },
     onGenerateTitle: handleGenerateTitle,

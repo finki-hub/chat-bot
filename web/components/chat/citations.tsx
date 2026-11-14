@@ -1,5 +1,6 @@
 'use client';
 
+import { posthog } from 'posthog-js';
 import { type ReactNode, useMemo, useState } from 'react';
 
 import type { RetrievedSource } from '@/lib/api-types';
@@ -72,6 +73,12 @@ export const CitationRef = ({
       className="relative ml-0.5 inline-flex h-4 min-w-4 -translate-y-0.5 after:absolute after:-inset-2 after:content-[''] items-center justify-center rounded-full bg-muted px-1 align-middle text-[10px] font-medium leading-none tabular-nums text-muted-foreground transition-colors hover:bg-primary/15 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       data-testid="citation"
       onClick={() => {
+        /* eslint-disable camelcase -- PostHog event properties are snake_case. */
+        posthog.capture('citation_clicked', {
+          citation_ref: ref,
+          source_count: citations.sources.length,
+        });
+        /* eslint-enable camelcase -- end of PostHog snake_case properties. */
         citations.openSource(ref);
       }}
       title={source.title}

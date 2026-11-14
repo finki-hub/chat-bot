@@ -1,6 +1,7 @@
 'use client';
 
 import { Clock3 } from 'lucide-react';
+import { posthog } from 'posthog-js';
 import { type ReactNode, useId, useRef, useState } from 'react';
 
 import type { MyUIMessage, RetrievedSource } from '@/lib/api-types';
@@ -325,6 +326,14 @@ export const MessageFooter = ({
           <SourcesToggle
             count={count}
             onToggle={() => {
+              if (!sourcesOpen) {
+                /* eslint-disable camelcase -- PostHog event properties are snake_case. */
+                posthog.capture('sources_opened', {
+                  response_id: responseId,
+                  source_count: count,
+                });
+                /* eslint-enable camelcase -- end of PostHog snake_case properties. */
+              }
               setSourcesOpen(!sourcesOpen);
             }}
             open={sourcesOpen}
