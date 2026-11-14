@@ -259,6 +259,9 @@ export const ToolCallGroup = ({
               className="text-sm text-muted-foreground"
               data-testid="reasoning-panel"
             >
+              <p className="mb-1 text-xs font-medium text-foreground/80">
+                {t('thread.reasoning')}
+              </p>
               <MessageResponse>{reasoning.text}</MessageResponse>
             </div>
           )}
