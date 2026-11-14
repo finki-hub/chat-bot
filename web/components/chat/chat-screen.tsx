@@ -167,6 +167,7 @@ export const ChatScreen = () => {
     messages,
     onClearAll,
     onDelete,
+    onEditMessage,
     onGenerateTitle,
     onNewChat,
     onRename,
@@ -237,6 +238,9 @@ export const ChatScreen = () => {
             activeStatus={activeStatus}
             conversationId={activeId}
             messages={messages}
+            onEditMessage={
+              unavailable || !selectedModelAvailable ? undefined : onEditMessage
+            }
             onManageCredentials={openCredentialSettings}
             onPickSuggestion={
               // Suggestions bypass the composer's send gate, so hide them until the selected model is usable.

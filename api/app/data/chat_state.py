@@ -191,3 +191,74 @@ async def mark_active_stream_streaming_if_pending(
         active_stream_id,
     )
     return None if row is None else conversation_from_row(row)
+
+
+async def prune_messages_after_user_message(
+    db: Database,
+    *,
+    conversation_id: UUID,
+    message_id: UUID,
+    user_id: UUID,
+) -> bool:
+    """Delete every message after a user message that is being edited, with the
+    web feedback on the removed answers. Refused while a stream is active, since
+    that stream would write an answer into the truncated conversation."""
+    async with db.transaction() as connection:
+        await connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        conversation = await connection.fetchrow(
+            """
+            SELECT id FROM chat_conversation
+            WHERE id = $1 AND user_id = $2 AND active_stream_id IS NULL
+            FOR UPDATE
+            """,
+            conversation_id,
+            user_id,
+        )
+        if conversation is None:
+            return False
+        target = await connection.fetchrow(
+            """
+            SELECT created_at FROM chat_message
+            WHERE id = $1 AND conversation_id = $2 AND role = 'user'
+            """,
+            message_id,
+            conversation_id,
+        )
+        if target is None:
+            return False
+        # Match deletion's lock order: conversation, messages by id, feedback.
+        later = await connection.fetch(
+            """
+            SELECT id, role, response_id FROM chat_message
+            WHERE conversation_id = $1 AND created_at > $2
+            ORDER BY id
+            FOR UPDATE
+            """,
+            conversation_id,
+            target["created_at"],
+        )
+        response_ids = [
+            row["response_id"]
+            for row in later
+            if row["role"] == "assistant" and row["response_id"] is not None
+        ]
+        if response_ids:
+            await connection.execute(
+                """
+                DELETE FROM feedback
+                WHERE client = 'web' AND user_id = $1
+                  AND response_id = ANY($2::uuid[])
+                """,
+                str(user_id),
+                response_ids,
+            )
+        if later:
+            await connection.execute(
+                """
+                DELETE FROM chat_message
+                WHERE conversation_id = $1 AND id = ANY($2::uuid[])
+                """,
+                conversation_id,
+                [row["id"] for row in later],
+            )
+        return True

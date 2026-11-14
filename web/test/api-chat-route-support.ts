@@ -181,6 +181,7 @@ export const routeMocks = {
     markActiveStreamStreamingIfPending: vi.fn(
       async (_input: StateClientInput) => {},
     ),
+    pruneAfterUserMessage: vi.fn(async (_input: StateClientInput) => {}),
     replaceAssistantMessage: vi.fn(async (_input: StateClientInput) => {}),
     setActiveStream: vi.fn(async (_input: StateClientInput) => {}),
     stopActiveStreamIfCurrent: vi.fn(async (_input: StateClientInput) => {}),

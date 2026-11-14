@@ -37,6 +37,7 @@ export const useConversations = (
     activeRequest,
     activeStatus,
     convoIdRef,
+    editMessage,
     hydratingConversation,
     messages,
     modelRef,
@@ -154,6 +155,12 @@ export const useConversations = (
     messages: visibleMessages,
     onClearAll: handleClearAll,
     onDelete: handleDelete,
+    onEditMessage: disabled
+      ? undefined
+      : (messageId: string, text: string) => {
+          setActiveError(undefined);
+          fireAndForget(editMessage(messageId, text));
+        },
     onGenerateTitle: handleGenerateTitle,
     onNewChat: handleNewChat,
     onRename: handleRename,

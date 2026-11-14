@@ -25,6 +25,7 @@ from app.data.chat_persistence import (
 from app.data.chat_state import (
     mark_active_stream_stopped_if_current,
     mark_active_stream_streaming_if_pending,
+    prune_messages_after_user_message,
     replace_assistant_message_and_prune_after,
     upsert_assistant_message_by_response_id,
 )
@@ -393,6 +394,27 @@ async def replace_assistant_message_state(
     if updated is None:
         raise _not_found()
     return updated
+
+
+@router.delete(
+    "/conversations/{conversation_id}/messages/user/{message_id}/following",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="pruneChatStateMessagesAfterUserMessage",
+)
+async def prune_after_user_message_state(
+    conversation_id: UUID,
+    message_id: UUID,
+    user_id: UserIdQuery,
+    db: Database = db_dep,
+) -> None:
+    """Drop everything after a user message the user is about to edit and resend."""
+    if not await prune_messages_after_user_message(
+        db,
+        conversation_id=conversation_id,
+        message_id=message_id,
+        user_id=user_id,
+    ):
+        raise _not_found()
 
 
 @router.put(

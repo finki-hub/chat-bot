@@ -90,6 +90,13 @@ export const persistedTurns = (
   }));
 };
 
+export const storedMessageIds = (
+  messages: readonly ChatStateJsonValue[],
+): string[] =>
+  messages
+    .map((message) => persistedTurnFrom(message)?.id)
+    .filter((id) => id !== undefined);
+
 export const retainedServerMessageIdsForRegeneration = (
   messages: readonly ChatStateJsonValue[],
   messageId: string,

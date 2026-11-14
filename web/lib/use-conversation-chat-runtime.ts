@@ -233,6 +233,9 @@ export const useConversationChatRuntime = ({
     run((metadata) => regenerate({ ...options, metadata }));
   const sendMessageRef = useRef(sendCurrentMessage);
   sendMessageRef.current = sendCurrentMessage;
+  // Resends an earlier question with new text; the SDK drops what followed it.
+  const editMessage = (messageId: string, text: string) =>
+    run((metadata) => sendMessage({ messageId, text }, { metadata }));
 
   useStreamTiming({
     firstTokenAtRef,
@@ -257,6 +260,7 @@ export const useConversationChatRuntime = ({
     activeRequest,
     activeStatus,
     convoIdRef,
+    editMessage,
     hydratingConversation,
     messages,
     modelRef,
