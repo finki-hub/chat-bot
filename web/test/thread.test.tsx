@@ -277,10 +277,8 @@ describe('AssistantMessage', () => {
     expect(screen.getByTestId(ANSWER_TEXT_TESTID)).toHaveTextContent(
       'Делумен одговор',
     );
-    // A stopped answer is a quiet status note, not an alert.
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Одговорот е прекинат.',
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Одговорот е прекинат поради грешка и можеби е нецелосен.',
     );
     expect(
       screen.queryByRole('button', { name: RETRY_LABEL }),

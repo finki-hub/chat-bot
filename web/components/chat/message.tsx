@@ -1,6 +1,6 @@
 import type { DynamicToolUIPart } from 'ai';
 
-import { CircleSlash } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import { type ReactNode } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
@@ -158,19 +158,22 @@ export const MessageError = ({
   onRetry?: () => void;
   retryPending?: boolean;
 }) => {
-  // A stopped answer is not a failure: a quiet note, not a red alert box.
+  // The provider failed after part of the answer streamed: the text above is
+  // kept, so this warns that it may be incomplete rather than reporting a total
+  // failure. (A user's Stop sets no error at all.)
   if (errorPart.code === 'interrupted') {
     return (
-      <output
-        className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+      <div
+        className="mt-2 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
         data-testid="message-interrupted"
+        role="alert"
       >
-        <CircleSlash
+        <TriangleAlert
           aria-hidden="true"
-          className="size-3.5"
+          className="mt-0.5 size-4 shrink-0"
         />
         {t('error.interrupted')}
-      </output>
+      </div>
     );
   }
 

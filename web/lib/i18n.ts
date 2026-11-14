@@ -73,7 +73,8 @@ export const messages = {
   'elapsed.seconds': 'с',
   'error.credentialRequired': 'За избраниот модел е потребен API клуч.',
   'error.description': 'Се случи неочекувана грешка. Обидете се повторно.',
-  'error.interrupted': 'Одговорот е прекинат.',
+  'error.interrupted':
+    'Одговорот е прекинат поради грешка и можеби е нецелосен.',
   'error.manageCredentials': 'Додај API клуч',
   'error.noAnswer':
     'Не е пронајден одговор. Обидете се да го преформулирате прашањето.',

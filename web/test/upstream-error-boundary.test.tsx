@@ -142,10 +142,7 @@ const startScenario = async (code: ChatErrorCode, message: string) => {
 
   expect(posts()).toHaveLength(1);
   expect(screen.getByText(QUESTION)).toBeVisible();
-  // Failures raise an alert; a stopped answer leaves a quiet status note.
-  expect(
-    screen.queryByRole('alert') ?? screen.getByRole('status'),
-  ).toBeVisible();
+  expect(screen.getByRole('alert')).toBeVisible();
 
   for (const marker of PRIVATE_MARKERS) {
     expect(view.container).not.toHaveTextContent(marker);
@@ -274,10 +271,8 @@ describe('upstream SSE error boundary characterization', () => {
     const { hook, posts } = await startScenario('interrupted', RAW_DETAIL);
 
     expect(screen.getByTestId('answer-text')).toHaveTextContent(PARTIAL);
-    // A stopped answer is a quiet status note, not an alert.
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Одговорот е прекинат.',
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Одговорот е прекинат поради грешка и можеби е нецелосен.',
     );
     expect(
       screen.queryByRole('button', { name: RETRY }),
