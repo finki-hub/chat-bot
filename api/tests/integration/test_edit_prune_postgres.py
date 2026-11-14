@@ -1,45 +1,18 @@
 import asyncio
 import os
-from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
-import asyncpg
 import pytest
 
 from app.data.chat_state import prune_messages_after_user_message
 from app.data.connection import Database
+from tests.integration.embedding_postgres_test_support import database as _database
 
 DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
     DATABASE_URL is None,
     reason="set TEST_DATABASE_URL to run real-PostgreSQL edit tests",
 )
-
-
-@asynccontextmanager
-async def _database():
-    assert DATABASE_URL is not None
-    schema = f"edit_prune_test_{uuid4().hex}"
-    admin = await asyncpg.connect(DATABASE_URL, command_timeout=10)
-    database = Database(DATABASE_URL)
-    try:
-        await admin.execute(f'CREATE SCHEMA "{schema}"')
-        database.pool = await asyncpg.create_pool(
-            DATABASE_URL,
-            min_size=1,
-            max_size=4,
-            command_timeout=10,
-            server_settings={
-                "search_path": f'"{schema}"',
-                "statement_timeout": "10000",
-            },
-        )
-        await database.run_migrations()
-        yield database
-    finally:
-        await database.disconnect()
-        await admin.execute(f'DROP SCHEMA "{schema}" CASCADE')
-        await admin.close()
 
 
 async def _seed(database: Database) -> dict[str, UUID]:
@@ -107,8 +80,12 @@ async def _remaining(database: Database, ids: dict[str, UUID]) -> list[UUID]:
     return [row["id"] for row in rows]
 
 
-async def _rated(database: Database) -> set[UUID]:
-    rows = await database.fetch("SELECT response_id FROM feedback")
+async def _rated(database: Database, ids: dict[str, UUID]) -> set[UUID]:
+    # Other suites share this database, so only this conversation's rows count.
+    rows = await database.fetch(
+        "SELECT response_id FROM feedback WHERE response_id = ANY($1::uuid[])",
+        [ids["r1"], ids["r2"]],
+    )
     return {row["response_id"] for row in rows}
 
 
@@ -129,7 +106,7 @@ def test_editing_the_last_question_drops_only_its_answer() -> None:
             assert await _prune(database, ids, "q2")
 
             assert await _remaining(database, ids) == [ids["q1"], ids["a1"], ids["q2"]]
-            assert await _rated(database) == {ids["r1"]}
+            assert await _rated(database, ids) == {ids["r1"]}
 
     asyncio.run(run())
 
@@ -142,7 +119,7 @@ def test_editing_an_earlier_question_drops_everything_after_it() -> None:
             assert await _prune(database, ids, "q1")
 
             assert await _remaining(database, ids) == [ids["q1"]]
-            assert await _rated(database) == set()
+            assert await _rated(database, ids) == set()
 
     asyncio.run(run())
 
@@ -162,7 +139,7 @@ def test_refuses_an_answer_or_a_conversation_with_a_live_stream() -> None:
             assert not await _prune(database, ids, "q1")
 
             assert len(await _remaining(database, ids)) == 4
-            assert await _rated(database) == {ids["r1"], ids["r2"]}
+            assert await _rated(database, ids) == {ids["r1"], ids["r2"]}
 
     asyncio.run(run())
 
