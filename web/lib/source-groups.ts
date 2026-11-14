@@ -135,3 +135,30 @@ export const sourceLinkText = (
 
   return labelIsUseful ? link.label : hostName(url);
 };
+
+// Copied answers keep their references: one line per source, with its first link.
+export const withSourceList = (
+  text: string,
+  sources: readonly RetrievedSource[],
+  heading: string,
+): string => {
+  const lines = groupSources(sources)
+    .map(({ sources: grouped }) => {
+      const [first] = grouped;
+
+      if (first === undefined) {
+        return null;
+      }
+
+      const url = groupLinks(grouped)[0]?.url;
+
+      return url === undefined
+        ? `- ${first.title}`
+        : `- ${first.title}: ${url}`;
+    })
+    .filter((line) => line !== null);
+
+  return lines.length === 0
+    ? text
+    : `${text}\n\n${heading}:\n${lines.join('\n')}`;
+};

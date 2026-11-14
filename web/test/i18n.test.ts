@@ -7,7 +7,9 @@ describe('i18n', () => {
     expect(t('sidebar.new')).toBe('Нов разговор');
     expect(t('thread.emptyTitle')).toBe('Започни разговор');
     expect(t('error.retry')).toBe('Обиди се повторно');
-    expect(t('error.interrupted')).toBe('Одговорот е прекинат.');
+    expect(t('error.interrupted')).toBe(
+      'Одговорот е прекинат поради грешка и можеби е нецелосен.',
+    );
   });
 
   it('exposes the flat dictionary', () => {

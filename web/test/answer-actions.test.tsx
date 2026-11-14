@@ -58,6 +58,36 @@ describe('AnswerActions', () => {
       expect(writeText).toHaveBeenCalledWith('Текст за копирање');
     });
   });
+
+  it('appends the sources with their links to the copied answer', async () => {
+    const message = assistant('r1', 'Кратко');
+    render(
+      <AnswerActions
+        message={{
+          ...message,
+          metadata: {
+            ...message.metadata,
+            sources: [
+              {
+                id: 'q1',
+                kind: 'faq',
+                links: [{ label: 'Цени', url: 'https://finki.ukim.mk/ceni' }],
+                title: 'Школарина',
+              },
+              { id: 'q2', kind: 'faq', title: 'Упис' },
+            ],
+          },
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Копирај' }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        'Кратко\n\nИзвори:\n- Школарина: https://finki.ukim.mk/ceni\n- Упис',
+      );
+    });
+  });
 });
 
 describe('AnswerActions feedback', () => {

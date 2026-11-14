@@ -272,7 +272,7 @@ describe('upstream SSE error boundary characterization', () => {
 
     expect(screen.getByTestId('answer-text')).toHaveTextContent(PARTIAL);
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Одговорот е прекинат.',
+      'Одговорот е прекинат поради грешка и можеби е нецелосен.',
     );
     expect(
       screen.queryByRole('button', { name: RETRY }),

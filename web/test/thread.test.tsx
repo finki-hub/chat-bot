@@ -278,7 +278,7 @@ describe('AssistantMessage', () => {
       'Делумен одговор',
     );
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Одговорот е прекинат.',
+      'Одговорот е прекинат поради грешка и можеби е нецелосен.',
     );
     expect(
       screen.queryByRole('button', { name: RETRY_LABEL }),

@@ -1,5 +1,6 @@
 import type { DynamicToolUIPart } from 'ai';
 
+import { TriangleAlert } from 'lucide-react';
 import { type ReactNode } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
@@ -157,6 +158,25 @@ export const MessageError = ({
   onRetry?: () => void;
   retryPending?: boolean;
 }) => {
+  // The provider failed after part of the answer streamed: the text above is
+  // kept, so this warns that it may be incomplete rather than reporting a total
+  // failure. (A user's Stop sets no error at all.)
+  if (errorPart.code === 'interrupted') {
+    return (
+      <div
+        className="mt-2 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+        data-testid="message-interrupted"
+        role="alert"
+      >
+        <TriangleAlert
+          aria-hidden="true"
+          className="mt-0.5 size-4 shrink-0"
+        />
+        {t('error.interrupted')}
+      </div>
+    );
+  }
+
   let content: ReactNode;
 
   switch (errorPart.code) {
@@ -189,11 +209,6 @@ export const MessageError = ({
     case 'free_tier_unavailable':
       content = (
         <p className="text-destructive">{t('error.sponsoredUnavailable')}</p>
-      );
-      break;
-    case 'interrupted':
-      content = (
-        <p className="text-muted-foreground">{t('error.interrupted')}</p>
       );
       break;
     case 'no_answer':

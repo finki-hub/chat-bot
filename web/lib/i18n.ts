@@ -73,7 +73,8 @@ export const messages = {
   'elapsed.seconds': 'с',
   'error.credentialRequired': 'За избраниот модел е потребен API клуч.',
   'error.description': 'Се случи неочекувана грешка. Обидете се повторно.',
-  'error.interrupted': 'Одговорот е прекинат.',
+  'error.interrupted':
+    'Одговорот е прекинат поради грешка и можеби е нецелосен.',
   'error.manageCredentials': 'Додај API клуч',
   'error.noAnswer':
     'Не е пронајден одговор. Обидете се да го преформулирате прашањето.',
@@ -115,6 +116,10 @@ export const messages = {
   'searchTool.search_docs': 'Пребарување низ документите на ФИНКИ',
   'searchTool.search_documents': 'Пребарување низ документите на ФИНКИ',
   'searchTool.search_knowledge_base': 'Пребарување во базата на знаење',
+  'searchToolShort.faq_search': 'Чести прашања',
+  'searchToolShort.search_docs': 'Документи',
+  'searchToolShort.search_documents': 'Документи',
+  'searchToolShort.search_knowledge_base': 'База на знаење',
   'service.unavailable':
     'Услугата е привремено недостапна. Чатот не е достапен во моментов.',
   'settings.apiKey': 'API клуч',
