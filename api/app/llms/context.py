@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import math
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Literal, assert_never
 from uuid import UUID
@@ -33,9 +33,11 @@ from app.llms.query_variants import (
 from app.llms.reranker import post_rerank as _post_rerank
 from app.llms.retrieval_budget import retrieval_budget
 from app.llms.retrieval_result import (
+    CitationRefs,
     RetrievalSource,
     RetrievalSourceLink,
     RetrievedContext,
+    citation_key,
     visible_sources,
 )
 from app.llms.retrieval_routing import lexical_faq_expansion_allowed
@@ -387,9 +389,11 @@ async def get_retrieved_context_with_sources(
     initial_k: int = 30,
     top_k: int = 10,
     credentials: LlmProviderCredentials | None = None,
+    citations: CitationRefs | None = None,
 ) -> RetrievedContext:
     """Search FAQ and chunks with the query (plus its Cyrillic form when romanized),
-    rerank with a cross-encoder and fall back to vector order."""
+    rerank with a cross-encoder and fall back to vector order. With `citations`,
+    each block of a source the client shows is labelled with its number."""
 
     logger.info(
         "Retrieving context: query_len=%d embedding_model=%s",
@@ -849,17 +853,51 @@ async def get_retrieved_context_with_sources(
     )
     record_retrieval_ids([c.key for c in final[:_RETRIEVAL_IDS_CAP]])
 
+    cite = _assign_citations(final, sources, citations)
+    if citations is not None:
+        sources = tuple(
+            replace(source, ref=citations.get(source)) for source in sources
+        )
     with timed("retrieval.expand"):
-        text = await _expand_and_render(db, final, embedding_model)
+        text = await _expand_and_render(db, final, embedding_model, cite)
     if text and reranker_fallback_reason == "score_floor":
         text = f"{_WEAK_MATCH_NOTICE}\n\n{text}"
     return RetrievedContext(text=text, sources=sources)
+
+
+_CITATION_LABEL = "Ознака за цитат"
+
+
+def _no_citation(_source: RetrievalSource) -> int | None:
+    return None
+
+
+def _assign_citations(
+    final: list[_Candidate],
+    sources: tuple[RetrievalSource, ...],
+    citations: CitationRefs | None,
+) -> Callable[[RetrievalSource], int | None]:
+    """Number the sources the client will show, in rank order, and return the
+    lookup for labelling blocks. A hidden source gets no number unless an earlier
+    search of the same answer already showed it."""
+    if citations is None:
+        return _no_citation
+    shown = {citation_key(source) for source in sources}
+    for candidate in final:
+        if citation_key(candidate.retrieval_source) in shown:
+            citations.assign(candidate.retrieval_source)
+    return citations.get
+
+
+def _cited(text: str, ref: int | None) -> str:
+    return text if ref is None else f"{_CITATION_LABEL}: [{ref}]\n{text}"
 
 
 async def _expand_and_render(
     db: Database,
     final: list[_Candidate],
     embedding_model: Model,
+    cite: Callable[[RetrievalSource], int | None] = _no_citation,
 ) -> str:
     """Render the final candidates, stitching each retrieved chunk together with its
     immediate neighbors into a single contiguous passage so an answer that spans a chunk
@@ -888,7 +926,7 @@ async def _expand_and_render(
                 type(exc).__name__,
             )
 
-    return _render_blocks(final, window_map)
+    return _render_blocks(final, window_map, cite)
 
 
 def _contiguous_runs(indices: list[int]) -> list[list[int]]:
@@ -916,6 +954,7 @@ def _render_passage(chunks: list[ChunkSchema], source: RetrievalSource) -> str:
 def _render_blocks(
     final: list[_Candidate],
     window_map: dict[tuple[UUID, int], ChunkSchema],
+    cite: Callable[[RetrievalSource], int | None] = _no_citation,
 ) -> str:
     """Stitch each retrieved chunk together with its neighbors into a contiguous,
     chunk-ordered passage; FAQ entries (and chunks whose window couldn't be fetched)
@@ -923,7 +962,9 @@ def _render_blocks(
     Neighbors are unscored padding by design — acceptable at a ±1 window.
     """
     if not window_map:
-        return "\n\n---\n\n".join(c.context_text for c in final)
+        return "\n\n---\n\n".join(
+            _cited(c.context_text, cite(c.retrieval_source)) for c in final
+        )
 
     chunk_centers: dict[tuple[UUID, int], int] = {}
     center_sources: dict[tuple[UUID, int], RetrievalSource] = {}
@@ -936,7 +977,7 @@ def _render_blocks(
                 center_sources.setdefault(ref, c.retrieval_source)
                 continue
         # FAQ, or a chunk whose window refetch came back short: never drop it.
-        items.append((rank, c.context_text))
+        items.append((rank, _cited(c.context_text, cite(c.retrieval_source))))
 
     included: dict[UUID, set[int]] = {}
     for doc_id, idx in chunk_centers:
@@ -949,9 +990,12 @@ def _render_blocks(
             center_refs = [(doc_id, i) for i in run if (doc_id, i) in chunk_centers]
             best_ref = min(center_refs, key=chunk_centers.__getitem__)
             run_rank = chunk_centers[best_ref]
-            passage = _render_passage(
-                [window_map[(doc_id, i)] for i in run],
-                center_sources[best_ref],
+            passage = _cited(
+                _render_passage(
+                    [window_map[(doc_id, i)] for i in run],
+                    center_sources[best_ref],
+                ),
+                cite(center_sources[best_ref]),
             )
             items.append((run_rank, passage))
 

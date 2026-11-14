@@ -5,12 +5,10 @@ import { type ReactNode } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
 
-import {
-  Message,
-  MessageContent,
-  MessageResponse,
-} from '@/components/ai-elements/message';
+import { Message, MessageContent } from '@/components/ai-elements/message';
 import { ActivityLine } from '@/components/chat/activity-line';
+import { AnswerMarkdown } from '@/components/chat/answer-markdown';
+import { CitationProvider } from '@/components/chat/citations';
 import { MessageFooter } from '@/components/chat/message-footer';
 import { ReasoningDisclosure } from '@/components/chat/reasoning-disclosure';
 import { SearchStepper } from '@/components/chat/search-stepper';
@@ -444,12 +442,12 @@ const SegmentView = ({
         className={className}
         data-testid="answer-text"
       >
-        <MessageResponse
+        <AnswerMarkdown
           caret="block"
           isAnimating={streamingTail}
         >
           {segment.text}
-        </MessageResponse>
+        </AnswerMarkdown>
       </div>
     );
   }
@@ -691,65 +689,67 @@ export const AssistantMessage = ({
 
   return (
     <Message from="assistant">
-      <MessageContent>
-        {/* Once the answer is visible, reasoning collapses to a toggle above it. */}
-        {!withToolCalls && answerVisible ? reasoning : null}
-        {withToolCalls ? (
-          <InterleavedParts
-            finishedReasoning={
-              !reasoningStreaming && reasoningText.length > 0
-                ? { durationMs: diagnostics?.thinkingMs, text: reasoningText }
-                : undefined
-            }
-            message={message}
-            pending={Boolean(pending)}
-            reasoning={reasoning}
-          />
-        ) : null}
-        {!withToolCalls && text ? (
-          <div data-testid="answer-text">
-            <MessageResponse
-              caret="block"
-              isAnimating={Boolean(pending)}
-            >
-              {text}
-            </MessageResponse>
-          </div>
-        ) : null}
-        <AssistantMessageStatus
-          awaitingLabel={awaitingLabel}
-          awaitingModel={awaitingModel && !reasoningLive}
-          errorPart={errorPart}
-          pending={pending}
-          reasoningText={reasoningText}
-          statusPart={statusPart}
-          text={text}
-          toolCallsShown={withToolCalls}
-        />
-        {/* While still streaming (no answer yet), reasoning streams in BELOW the
-            step list so it grows downward instead of displacing the steps. */}
-        {withToolCalls || answerVisible ? null : reasoning}
-        {errorPart ? (
-          <MessageError
+      <CitationProvider sources={sources}>
+        <MessageContent>
+          {/* Once the answer is visible, reasoning collapses to a toggle above it. */}
+          {!withToolCalls && answerVisible ? reasoning : null}
+          {withToolCalls ? (
+            <InterleavedParts
+              finishedReasoning={
+                !reasoningStreaming && reasoningText.length > 0
+                  ? { durationMs: diagnostics?.thinkingMs, text: reasoningText }
+                  : undefined
+              }
+              message={message}
+              pending={Boolean(pending)}
+              reasoning={reasoning}
+            />
+          ) : null}
+          {!withToolCalls && text ? (
+            <div data-testid="answer-text">
+              <AnswerMarkdown
+                caret="block"
+                isAnimating={Boolean(pending)}
+              >
+                {text}
+              </AnswerMarkdown>
+            </div>
+          ) : null}
+          <AssistantMessageStatus
+            awaitingLabel={awaitingLabel}
+            awaitingModel={awaitingModel && !reasoningLive}
             errorPart={errorPart}
-            onManageCredentials={onManageCredentials}
-            onRetry={onRetry}
-            retryPending={retryPending}
+            pending={pending}
+            reasoningText={reasoningText}
+            statusPart={statusPart}
+            text={text}
+            toolCallsShown={withToolCalls}
           />
-        ) : null}
-        {/* One quiet row: actions, the sources toggle and the timing, so the
+          {/* While still streaming (no answer yet), reasoning streams in BELOW the
+            step list so it grows downward instead of displacing the steps. */}
+          {withToolCalls || answerVisible ? null : reasoning}
+          {errorPart ? (
+            <MessageError
+              errorPart={errorPart}
+              onManageCredentials={onManageCredentials}
+              onRetry={onRetry}
+              retryPending={retryPending}
+            />
+          ) : null}
+          {/* One quiet row: actions, the sources toggle and the timing, so the
             answer is not followed by a stack of metadata. */}
-        {footerVisible ? (
-          <MessageFooter
-            actions={actions}
-            diagnostics={diagnostics}
-            inferenceModel={inferenceModel}
-            responseId={responseId}
-            sources={sources}
-            timing={timing}
-          />
-        ) : null}
-      </MessageContent>
+          {footerVisible ? (
+            <MessageFooter
+              actions={actions}
+              diagnostics={diagnostics}
+              inferenceModel={inferenceModel}
+              responseId={responseId}
+              sources={sources}
+              timing={timing}
+            />
+          ) : null}
+        </MessageContent>
+      </CitationProvider>
     </Message>
   );
 };

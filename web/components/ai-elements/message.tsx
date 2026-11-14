@@ -103,7 +103,7 @@ const normalizeMarkdownLinks = (node: unknown): void => {
 
 const normalizeGeneratedMarkdownLinks = () => normalizeMarkdownLinks;
 
-const remarkPlugins = [
+export const messageRemarkPlugins = [
   ...Object.values(defaultRemarkPlugins),
   normalizeGeneratedMarkdownLinks,
 ] satisfies NonNullable<MessageResponseProps["remarkPlugins"]>;
@@ -149,7 +149,7 @@ export const MessageResponse = memo(
       )}
       plugins={streamdownPlugins}
       linkSafety={linkSafety}
-      remarkPlugins={remarkPlugins}
+      remarkPlugins={messageRemarkPlugins}
       {...props}
     />
   ),

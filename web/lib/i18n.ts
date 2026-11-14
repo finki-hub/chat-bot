@@ -171,6 +171,7 @@ export const messages = {
   'sidebar.search': 'Пребарај разговори',
   'sidebar.toggle': 'Прикажи/сокриј странична лента',
   'sources.chunk': 'Документ',
+  'sources.cite': 'Извор',
   'sources.date': 'Датум на документот',
   'sources.faq': 'Често прашање',
   'sources.hide': 'Сокриј извори',

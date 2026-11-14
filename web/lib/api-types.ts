@@ -245,6 +245,7 @@ export type ProtocolV2RetrievedSource = {
   readonly kind: RetrievedSourceKind;
   readonly last_verified?: string;
   readonly links?: readonly RetrievedSourceLink[];
+  readonly ref?: number;
   readonly section?: string;
   readonly snippet?: string;
   readonly title: string;
@@ -259,6 +260,8 @@ export type RetrievedSource = {
   readonly kind: RetrievedSourceKind;
   readonly lastVerified?: string;
   readonly links?: readonly RetrievedSourceLink[];
+  // Citation number the answer writes as `[N]`; set only for web answers.
+  readonly ref?: number;
   readonly section?: string;
   readonly snippet?: string;
   readonly title: string;
