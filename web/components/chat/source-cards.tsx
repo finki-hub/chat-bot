@@ -27,7 +27,6 @@ import {
   sourceLinkText,
 } from '@/lib/source-groups';
 
-const AUTO_EXPAND_SOURCE_LIMIT = 2;
 const PREVIEW_LIMIT = 3;
 type MarkdownComponents = NonNullable<MessageResponseProps['components']>;
 
@@ -400,24 +399,16 @@ const SourcePreview = ({ groups }: { groups: readonly SourceGroup[] }) => {
   );
 };
 
+// Closed until asked, so the message looks the same while streaming and after:
+// the preview chips already name the sources.
 export const SourceCards = ({
-  complete,
   sources,
 }: {
-  complete: boolean;
   sources: readonly RetrievedSource[];
 }) => {
   const groups = groupSources(sources);
   const sourceCount = groups.length;
-  const [disclosure, setDisclosure] = useState<'automatic' | 'closed' | 'open'>(
-    'automatic',
-  );
-  const open =
-    disclosure === 'open' ||
-    (disclosure === 'automatic' &&
-      complete &&
-      sourceCount > 0 &&
-      sourceCount <= AUTO_EXPAND_SOURCE_LIMIT);
+  const [open, setOpen] = useState(false);
   const panelId = useId();
 
   if (sourceCount === 0) {
@@ -425,7 +416,7 @@ export const SourceCards = ({
   }
 
   const toggleDisclosure = () => {
-    setDisclosure(open ? 'closed' : 'open');
+    setOpen(!open);
   };
 
   return (

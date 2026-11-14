@@ -81,9 +81,10 @@ test('renders source Markdown in collapsed and expanded cards', async ({
     0,
   );
 
+  await collapsedToggle.click();
   await expect(
     page.getByRole('button', { name: 'Сокриј извори' }),
-  ).toHaveAttribute(ARIA_EXPANDED, 'true', { timeout: 10_000 });
+  ).toHaveAttribute(ARIA_EXPANDED, 'true');
   await expect(page.getByText(sourceTitle)).toBeVisible();
   await expect(page.getByText(markdownText, { exact: true })).toBeVisible();
   await expect(page.getByText(`**${markdownText}**`)).toHaveCount(0);

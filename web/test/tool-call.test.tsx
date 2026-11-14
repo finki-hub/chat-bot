@@ -412,6 +412,71 @@ describe('AssistantMessage finished tool-call summary', () => {
     expect(toolStates()).toStrictEqual(['done', 'done', 'running']);
   });
 
+  it('folds a run as soon as the answer after it starts', () => {
+    const parts: MyUIMessage['parts'] = [
+      call('c1', DONE),
+      call('c2', DONE),
+      { text: ANSWER, type: 'text' },
+    ];
+    const view = render(
+      <AssistantMessage
+        message={assistant(parts)}
+        pending
+      />,
+    );
+
+    expect(screen.getByTestId(SUMMARY_ROW)).toHaveTextContent('2 пребарувања');
+
+    // Finishing changes nothing about the tool rows.
+    view.rerender(<AssistantMessage message={assistant(parts)} />);
+
+    expect(screen.getByTestId(SUMMARY_ROW)).toHaveTextContent('2 пребарувања');
+  });
+
+  it('keeps reasoning right above the answer, before and after it starts', () => {
+    const reasoning = {
+      state: 'done',
+      text: 'Размислувам',
+      type: 'reasoning',
+    } as const;
+    const before = assistant([reasoning, call('c1', DONE), call('c2', DONE)]);
+    const after = assistant([...before.parts, { text: ANSWER, type: 'text' }]);
+    const tracked = new Set([
+      'answer-text',
+      'reasoning',
+      SUMMARY_ROW,
+      TOOL_CALL,
+    ]);
+    const order = (): string[] =>
+      [
+        ...screen
+          .getByTestId('answer-parts')
+          .querySelectorAll<HTMLElement>('[data-testid]'),
+      ]
+        .map((node) => node.dataset['testid'] ?? '')
+        .filter((id) => tracked.has(id));
+    const view = render(
+      <AssistantMessage
+        message={before}
+        pending
+      />,
+    );
+
+    expect(order()).toStrictEqual([TOOL_CALL, TOOL_CALL, 'reasoning']);
+
+    const toggle = screen.getByTestId('reasoning');
+
+    view.rerender(
+      <AssistantMessage
+        message={after}
+        pending
+      />,
+    );
+
+    expect(order()).toStrictEqual([SUMMARY_ROW, 'reasoning', 'answer-text']);
+    expect(screen.getByTestId('reasoning')).toBe(toggle);
+  });
+
   it('keeps a single finished call as its own row', () => {
     render(
       <AssistantMessage

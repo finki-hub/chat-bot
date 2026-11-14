@@ -200,7 +200,6 @@ export const Thread = ({
                 >
                   <AssistantMessage
                     actions={renderActions ? renderActions(m) : undefined}
-                    complete={!activeAssistant}
                     errorPart={
                       isLastAssistant
                         ? (activeError ?? m.metadata?.error)
