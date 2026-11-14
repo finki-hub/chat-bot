@@ -7,26 +7,20 @@ import {
   ConversationContent,
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
-import {
-  Message,
-  MessageContent,
-  MessageResponse,
-} from '@/components/ai-elements/message';
+import { Message, MessageContent } from '@/components/ai-elements/message';
 import { ActivityLine } from '@/components/chat/activity-line';
 import { AssistantMessage, MessageError } from '@/components/chat/message';
+import { UserMessage } from '@/components/chat/user-message';
 import { t } from '@/lib/i18n';
-import {
-  hasReasoning,
-  hasText,
-  hasToolCalls,
-  joinText,
-} from '@/lib/message-parts';
+import { hasReasoning, hasText, hasToolCalls } from '@/lib/message-parts';
 
 export type ThreadProps = {
   activeError?: ErrorNotice;
   activeStatus?: StatusPart;
   conversationId?: null | string;
   messages: MyUIMessage[];
+  // Edit-and-resend for sent questions; offered only while nothing streams.
+  onEditMessage?: (messageId: string, text: string) => void;
   onManageCredentials?: (returnFocusTarget: HTMLElement) => void;
   onPickSuggestion?: (text: string) => unknown;
   onRetry?: () => void;
@@ -121,6 +115,7 @@ export const Thread = ({
   activeStatus,
   conversationId,
   messages,
+  onEditMessage,
   onManageCredentials,
   onPickSuggestion,
   onRetry,
@@ -131,6 +126,7 @@ export const Thread = ({
   const lastAssistantId = messages.findLast((m) => m.role === 'assistant')?.id;
   const streaming = status === 'streaming' || status === 'submitted';
   const lastMessage = messages.at(-1);
+  const editQuestion = streaming ? undefined : onEditMessage;
   const awaitingReply =
     streaming &&
     (lastMessage?.role !== 'assistant' ||
@@ -170,21 +166,16 @@ export const Thread = ({
 
               if (m.role === 'user') {
                 return (
-                  <Message
+                  <UserMessage
                     className={
                       streaming && m.id === lastMessage?.id
                         ? MESSAGE_ENTRANCE
                         : undefined
                     }
-                    from="user"
                     key={m.id}
-                  >
-                    <MessageContent>
-                      <MessageResponse className="text-balance">
-                        {joinText(m)}
-                      </MessageResponse>
-                    </MessageContent>
-                  </Message>
+                    message={m}
+                    onEdit={editQuestion}
+                  />
                 );
               }
 

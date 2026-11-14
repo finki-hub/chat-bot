@@ -16,9 +16,11 @@ import {
   lastUserMessageForState,
   persistedTurns,
   retainedServerMessageIdsForRegeneration,
+  storedMessageIds,
 } from '@/lib/chat-route-state';
 import {
   type ChatStateClient,
+  type ChatStateJsonValue,
   ChatStateRequestError,
   createChatStateClient,
 } from '@/lib/chat-state-client';
@@ -117,6 +119,48 @@ const regeneratedMessageId = (body: ResumableChatClientBody): null | string =>
   body.messageId.length > 0
     ? body.messageId
     : null;
+
+// Stores the question. An edited question resends an existing user message
+// (the SDK trims what followed it), so the stored answers after it are dropped
+// first; a brand-new message, or the last stored one, has nothing to prune.
+const saveQuestion = async ({
+  body,
+  chatState,
+  conversationId,
+  messages,
+  userId,
+  userMessage,
+}: {
+  body: ResumableChatClientBody;
+  chatState: ChatStateClient;
+  conversationId: string;
+  messages: readonly ChatStateJsonValue[];
+  userId: string;
+  userMessage: { content: string; id: string };
+}): Promise<void> => {
+  const userMessageId = userMessage.id;
+  const storedIds = storedMessageIds(messages);
+  const index = storedIds.indexOf(userMessageId);
+  const hasFollowing = index !== -1 && index < storedIds.length - 1;
+
+  if (
+    hasFollowing &&
+    body.trigger === 'submit-message' &&
+    body.messageId === userMessageId
+  ) {
+    await chatState.pruneAfterUserMessage({
+      conversationId,
+      messageId: userMessageId,
+      userId,
+    });
+  }
+  await chatState.upsertUserMessage({
+    content: userMessage.content,
+    conversationId,
+    messageId: userMessageId,
+    userId,
+  });
+};
 
 const regenerationReplacementFor = (
   messageId: null | string,
@@ -283,11 +327,13 @@ export const POST = async (req: Request): Promise<Response> => {
       chatBody.messages,
       regenerationReplacement,
     );
-    await chatState.upsertUserMessage({
-      content: userMessage.content,
+    await saveQuestion({
+      body: clientBody,
+      chatState,
       conversationId,
-      messageId: userMessage.id,
+      messages: loadedConversation.messages,
       userId,
+      userMessage,
     });
     const upstreamController = new AbortController();
     const streamId = crypto.randomUUID();

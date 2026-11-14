@@ -32,6 +32,10 @@ export type ChatStateClient = {
   readonly markActiveStreamStreamingIfPending: (
     input: ClearActiveStreamInput,
   ) => Promise<void>;
+  // Drops everything after a user message that is being edited and resent.
+  readonly pruneAfterUserMessage: (
+    input: PruneAfterUserMessageInput,
+  ) => Promise<void>;
   readonly replaceAssistantMessage: (
     input: ReplaceAssistantMessageInput,
   ) => Promise<void>;
@@ -117,6 +121,12 @@ type ListConversationsInput = {
 
 type LoadConversationInput = {
   readonly conversationId: string;
+  readonly userId: string;
+};
+
+type PruneAfterUserMessageInput = {
+  readonly conversationId: string;
+  readonly messageId: string;
   readonly userId: string;
 };
 
@@ -304,6 +314,12 @@ export const createChatStateClient = (): ChatStateClient => ({
         body: JSON.stringify({ user_id: userId }),
         method: 'POST',
       },
+    );
+  },
+  pruneAfterUserMessage: async ({ conversationId, messageId, userId }) => {
+    await sendStateRequest(
+      `/conversations/${conversationId}/messages/user/${messageId}/following?user_id=${encodeURIComponent(userId)}`,
+      { method: 'DELETE' },
     );
   },
   replaceAssistantMessage: async ({
