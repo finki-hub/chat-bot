@@ -1,11 +1,16 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MyUIMessage, RetrievedSource } from '@/lib/api-types';
 
 import { AssistantMessage } from '@/components/chat/message';
 import { withSourceList } from '@/lib/source-groups';
 import { parseProtocolV2 } from '@/lib/sse';
+
+const capture = vi.hoisted(() =>
+  vi.fn<(event: string, properties?: Record<string, unknown>) => void>(),
+);
+vi.mock('posthog-js', () => ({ posthog: { capture } }));
 
 const FEES = 'Школарина за редовни студенти';
 const RULES = 'Правилник за прв циклус';
@@ -27,6 +32,10 @@ const answer = (
 });
 
 describe('inline citations', () => {
+  beforeEach(() => {
+    capture.mockClear();
+  });
+
   it('turns [N] markers into chips for the numbered sources', () => {
     render(
       <AssistantMessage
@@ -121,5 +130,24 @@ data: ${JSON.stringify({
         'Извори',
       ),
     ).toBe(`Одговор [2][1].\n\nИзвори:\n[1] ${FEES}\n[2] ${RULES}`);
+  });
+
+  it('records citation clicks and opening the sources, not closing them', () => {
+    render(<AssistantMessage message={answer('Член 12 [2].', numbered)} />);
+
+    fireEvent.click(screen.getByTestId('citation'));
+    fireEvent.click(screen.getByTestId('message-sources'));
+    fireEvent.click(screen.getByTestId('message-sources'));
+
+    expect(capture.mock.calls.map(([event]) => event)).toStrictEqual([
+      'citation_clicked',
+      'sources_opened',
+    ]);
+    expect(capture).toHaveBeenCalledWith('citation_clicked', {
+      /* eslint-disable camelcase -- PostHog event properties are snake_case. */
+      citation_ref: 2,
+      source_count: 3,
+      /* eslint-enable camelcase -- end of PostHog snake_case properties. */
+    });
   });
 });

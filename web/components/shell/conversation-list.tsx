@@ -83,8 +83,14 @@ export const ConversationList = ({
       data-testid={`conversation-${c.id}`}
       key={c.id}
     >
+      {/* With a mouse the actions overlay the title and only take room from it
+          while shown, so idle titles use the full row. */}
       <button
-        className="min-h-11 flex-1 truncate rounded-md text-left outline-none before:absolute before:inset-0 before:rounded-lg before:content-[''] focus-visible:before:ring-2 focus-visible:before:ring-ring/50 pointer-fine:min-h-0"
+        className={`min-h-11 flex-1 truncate rounded-md text-left outline-none before:absolute before:inset-0 before:rounded-lg before:content-[''] focus-visible:before:ring-2 focus-visible:before:ring-ring/50 pointer-fine:min-h-0 ${
+          onGenerateTitle
+            ? 'pointer-fine:group-focus-within:pr-21 pointer-fine:group-hover:pr-21'
+            : 'pointer-fine:group-focus-within:pr-14 pointer-fine:group-hover:pr-14'
+        }`}
         onClick={() => {
           onSelect(c.id);
         }}
@@ -92,7 +98,7 @@ export const ConversationList = ({
       >
         {c.title}
       </button>
-      <div className="relative z-10 flex shrink-0">
+      <div className="relative z-10 flex shrink-0 pointer-fine:absolute pointer-fine:inset-y-0 pointer-fine:right-2.5 pointer-fine:items-center">
         <ConversationRowActions
           conversation={c}
           generatingTitleId={generatingTitleId}
