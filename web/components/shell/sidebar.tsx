@@ -161,10 +161,11 @@ export const Sidebar = ({
           ) : null}
         </InputGroup>
       ) : null}
-      <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <p className="px-2 pb-1.5 pt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
-          {t('sidebar.history')}
-        </p>
+      {/* The date groups head the list, so the section needs no visible title. */}
+      <nav
+        aria-label={t('sidebar.history')}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-1"
+      >
         {term && filtered.length === 0 ? (
           <p
             className="px-2 py-1.5 text-sm text-muted-foreground"

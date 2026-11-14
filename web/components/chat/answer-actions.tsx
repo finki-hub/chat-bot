@@ -13,6 +13,8 @@ import {
   FeedbackReasonDialog,
 } from '@/components/chat/feedback-reason-dialog';
 import { ControlTooltip } from '@/components/ui/icon-controls';
+import { useCitations } from '@/lib/citation-context';
+import { renumberText } from '@/lib/citations';
 import { t } from '@/lib/i18n';
 import { answerText } from '@/lib/message-parts';
 import { withSourceList } from '@/lib/source-groups';
@@ -61,14 +63,18 @@ export const AnswerActions = ({
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [reasonOpen, setReasonOpen] = useState(false);
   const feedbackPendingRef = useRef(false);
+  // Inside an answer, copies cite the numbers its chips show.
+  const citations = useCitations();
 
   if (!responseId) {
     return null;
   }
 
   const text = withSourceList(
-    answerText(message) ?? '',
-    message.metadata?.sources ?? [],
+    citations === null
+      ? (answerText(message) ?? '')
+      : renumberText(answerText(message) ?? '', citations.numbering),
+    citations?.sources ?? message.metadata?.sources ?? [],
     t('sources.title'),
   );
   const votingDisabled = pending || submittingFeedback;

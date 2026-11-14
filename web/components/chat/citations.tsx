@@ -10,22 +10,37 @@ import {
   type CitationState,
   useCitations,
 } from '@/lib/citation-context';
-import { sourceForRef } from '@/lib/citations';
+import {
+  citationNumbering,
+  renumberSources,
+  sourceForRef,
+} from '@/lib/citations';
 import { t } from '@/lib/i18n';
 
 // One per answer: its `[N]` chips and its footer share the sources panel.
 export const CitationProvider = ({
   children,
-  sources,
+  sources: retrieved,
+  text,
 }: {
   children: ReactNode;
   sources: readonly RetrievedSource[];
+  text: string;
 }) => {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [focusedRef, setFocusedRef] = useState<null | number>(null);
+  const numbering = useMemo(
+    () => citationNumbering(text, retrieved),
+    [retrieved, text],
+  );
+  const sources = useMemo(
+    () => renumberSources(retrieved, numbering),
+    [numbering, retrieved],
+  );
   const value = useMemo<CitationState>(
     () => ({
       focusedRef,
+      numbering,
       openSource: (ref) => {
         setSourcesOpen(true);
         setFocusedRef(ref);
@@ -39,7 +54,7 @@ export const CitationProvider = ({
       sources,
       sourcesOpen,
     }),
-    [focusedRef, sources, sourcesOpen],
+    [focusedRef, numbering, sources, sourcesOpen],
   );
 
   return <CitationContext value={value}>{children}</CitationContext>;
@@ -53,18 +68,18 @@ export const CitationRef = ({
   'data-ref'?: string;
 }) => {
   const citations = useCitations();
-  const ref = Number(rawRef);
-  const source =
-    citations === null ? undefined : sourceForRef(citations.sources, ref);
+  const retrievedRef = Number(rawRef);
 
-  if (citations === null || !Number.isSafeInteger(ref)) {
+  if (citations === null || !Number.isSafeInteger(retrievedRef)) {
     return <>{`[${rawRef ?? ''}]`}</>;
   }
 
-  if (source === undefined) {
-    const numbered = citations.sources.some((item) => item.ref !== undefined);
+  const ref = citations.numbering.get(retrievedRef);
+  const source =
+    ref === undefined ? undefined : sourceForRef(citations.sources, ref);
 
-    return <>{numbered ? null : `[${ref}]`}</>;
+  if (ref === undefined || source === undefined) {
+    return <>{citations.numbering.size > 0 ? null : `[${retrievedRef}]`}</>;
   }
 
   return (

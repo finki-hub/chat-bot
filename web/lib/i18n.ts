@@ -26,7 +26,7 @@ export const messages = {
   'composer.modelLoaded': 'Вчитан',
   'composer.modelNotLoaded': 'Не е вчитан',
   'composer.modelsError': 'Моделите се недостапни',
-  'composer.modelsLoading': 'Се вчитуваат модели…',
+  'composer.modelsLoading': 'Модели…',
   'composer.modelUnavailable': 'Не е достапен',
   'composer.placeholder': 'Напиши порака…',
   'composer.quotaRemaining': 'Преостанато',

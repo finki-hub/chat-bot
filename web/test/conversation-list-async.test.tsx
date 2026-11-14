@@ -13,6 +13,8 @@ import type { ConversationRow } from '@/lib/conversation-types';
 import { ConversationList } from '@/components/shell/conversation-list';
 import { SidebarClearDialog } from '@/components/shell/sidebar-clear-dialog';
 
+import { chooseRowAction } from './helpers/conversation-row';
+
 const conversation: ConversationRow = {
   id: 'conversation-1',
   model: 'gpt-5.4-mini',
@@ -56,7 +58,7 @@ describe('ConversationList async actions', () => {
     );
     const row = screen.getByTestId(CONVERSATION_ROW_TEST_ID);
 
-    fireEvent.click(within(row).getByRole('button', { name: 'Избриши' }));
+    chooseRowAction(row, 'Избриши');
     const dialog = await screen.findByRole('dialog', {
       name: DELETE_DIALOG_TITLE,
     });
@@ -101,7 +103,7 @@ describe('ConversationList async actions', () => {
       />,
     );
     const row = screen.getByTestId(CONVERSATION_ROW_TEST_ID);
-    fireEvent.click(within(row).getByRole('button', { name: 'Преименувај' }));
+    chooseRowAction(row, 'Преименувај');
     const input = screen.getByLabelText('Ново име на разговорот');
     fireEvent.change(input, { target: { value: 'Ново име' } });
 
@@ -145,7 +147,7 @@ describe('ConversationList async actions', () => {
       />,
     );
     const row = screen.getByTestId(CONVERSATION_ROW_TEST_ID);
-    fireEvent.click(within(row).getByRole('button', { name: 'Избриши' }));
+    chooseRowAction(row, 'Избриши');
     const dialog = await screen.findByRole('dialog', {
       name: DELETE_DIALOG_TITLE,
     });
@@ -177,7 +179,7 @@ describe('ConversationList async actions', () => {
       />,
     );
     const row = screen.getByTestId(CONVERSATION_ROW_TEST_ID);
-    fireEvent.click(within(row).getByRole('button', { name: 'Преименувај' }));
+    chooseRowAction(row, 'Преименувај');
     const input = screen.getByLabelText('Ново име на разговорот');
     fireEvent.change(input, { target: { value: 'Ново име' } });
 

@@ -67,16 +67,16 @@ test('tablet width keeps the chat sidebar in a modal drawer', async ({
   ).toBeVisible();
   await expect(page.locator('#main-content')).toHaveCSS('width', '768px');
 
-  await page.getByRole('button', { name: CONVERSATION_TITLE }).click();
+  await page
+    .getByRole('button', { exact: true, name: CONVERSATION_TITLE })
+    .click();
 
   await expect(
     page.getByRole('dialog', { name: 'Странична лента' }),
   ).toBeHidden();
 });
 
-test('narrow fine pointers retain inline conversation actions', async ({
-  page,
-}) => {
+test('narrow fine pointers get a compact row menu', async ({ page }) => {
   // Given a narrow desktop browser with a fine primary pointer.
   await page.setViewportSize({ height: 812, width: 375 });
   await page.route('**/api/health', async (route) => {
@@ -101,14 +101,17 @@ test('narrow fine pointers retain inline conversation actions', async ({
   // When the fine pointer hovers the conversation row.
   await row.hover();
 
-  // Then inline controls are available without the coarse-pointer overflow trigger.
-  await expect(row.getByTestId('row-actions')).toHaveCSS('display', 'flex');
+  // Then a compact menu trigger appears, sized for a mouse rather than touch.
+  const trigger = row.getByRole('button', {
+    name: `Дејства за разговорот: ${CONVERSATION_TITLE}`,
+  });
+
+  await expect(trigger).toHaveCSS('opacity', '1');
+  await expect(trigger).toHaveCSS('width', '28px');
+  await trigger.click();
   await expect(
-    row.getByRole('button', {
-      name: `Дејства за разговорот: ${CONVERSATION_TITLE}`,
-    }),
-  ).toHaveCount(0);
-  await expect(row.getByRole('button', { name: 'Преименувај' })).toBeVisible();
+    page.getByRole('menuitem', { name: 'Преименувај' }),
+  ).toBeVisible();
 });
 
 test('short mobile viewports preserve a readable message region', async ({
@@ -154,7 +157,9 @@ test('short mobile viewports preserve a readable message region', async ({
     page.getByRole('button', { name: 'Скролувај до најновата порака' }),
   ).toHaveCount(0);
   await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
-  await page.getByRole('button', { name: CONVERSATION_TITLE }).click();
+  await page
+    .getByRole('button', { exact: true, name: CONVERSATION_TITLE })
+    .click();
   await expect(
     page.getByText('Долга тест порака 11 со доволно текст за прелевање.'),
   ).toBeAttached();
@@ -229,7 +234,9 @@ test('narrow message bubbles wrap unbroken user and assistant content', async ({
   });
   await page.goto('/');
   await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
-  await page.getByRole('button', { name: CONVERSATION_TITLE }).click();
+  await page
+    .getByRole('button', { exact: true, name: CONVERSATION_TITLE })
+    .click();
 
   const messageText = page.getByText(LONG_UNBROKEN_TEXT, { exact: true });
   await expect(messageText).toHaveCount(2);

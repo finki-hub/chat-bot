@@ -82,12 +82,16 @@ test('switching populated conversations opens the new history at the latest mess
   });
   await page.goto('/');
   await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
-  await page.getByRole('button', { name: 'Краток разговор' }).click();
+  await page
+    .getByRole('button', { exact: true, name: 'Краток разговор' })
+    .click();
   await expect(page.getByText('Порака од разговор А')).toBeVisible();
 
   // When the user selects the longer populated conversation.
   await page.getByRole('button', { name: SIDEBAR_TOGGLE_LABEL }).click();
-  await page.getByRole('button', { name: 'Долг разговор' }).click();
+  await page
+    .getByRole('button', { exact: true, name: 'Долг разговор' })
+    .click();
   await expect(page.getByText('Порака од разговор А')).toBeVisible();
   historyGate.resolve(undefined);
   await expect(
