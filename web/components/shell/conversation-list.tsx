@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { fireAndForget } from '@/lib/async';
+import { groupConversationsByDate } from '@/lib/conversation-groups';
 import { t } from '@/lib/i18n';
 
 export type ConversationListProps = {
@@ -71,42 +72,62 @@ export const ConversationList = ({
     }
   };
 
+  const groups = groupConversationsByDate(conversations);
+
+  const renderRow = (c: ConversationRow) => (
+    <li
+      aria-current={c.id === activeId ? 'true' : undefined}
+      className={`group relative isolate flex items-center justify-between gap-1 rounded-lg px-2.5 py-1.5 text-sm text-foreground/80 transition-colors duration-150 hover:bg-muted/70 ${
+        c.id === activeId ? 'bg-muted font-medium text-foreground' : ''
+      }`}
+      data-testid={`conversation-${c.id}`}
+      key={c.id}
+    >
+      <button
+        className="min-h-11 flex-1 truncate rounded-md text-left outline-none before:absolute before:inset-0 before:rounded-lg before:content-[''] focus-visible:before:ring-2 focus-visible:before:ring-ring/50 pointer-fine:min-h-0"
+        onClick={() => {
+          onSelect(c.id);
+        }}
+        type="button"
+      >
+        {c.title}
+      </button>
+      <div className="relative z-10 flex shrink-0">
+        <ConversationRowActions
+          conversation={c}
+          generatingTitleId={generatingTitleId}
+          onDeleteAction={setPendingDelete}
+          onGenerateTitle={onGenerateTitle}
+          onRenameAction={openRename}
+        />
+      </div>
+    </li>
+  );
+
   const confirmDelete = () =>
     pendingDelete === null ? undefined : onDelete(pendingDelete.id);
 
   return (
     <>
-      <ul className="flex flex-col gap-1">
-        {conversations.map((c) => (
-          <li
-            aria-current={c.id === activeId ? 'true' : undefined}
-            className={`group relative isolate flex items-center justify-between gap-1 rounded-lg px-2.5 py-1.5 text-sm text-foreground/80 transition-colors duration-150 hover:bg-muted/70 ${
-              c.id === activeId ? 'bg-muted font-medium text-foreground' : ''
-            }`}
-            data-testid={`conversation-${c.id}`}
-            key={c.id}
-          >
-            <button
-              className="min-h-11 flex-1 truncate rounded-md text-left outline-none before:absolute before:inset-0 before:rounded-lg before:content-[''] focus-visible:before:ring-2 focus-visible:before:ring-ring/50 pointer-fine:min-h-0"
-              onClick={() => {
-                onSelect(c.id);
-              }}
-              type="button"
+      {groups === null ? (
+        <ul className="flex flex-col gap-1">{conversations.map(renderRow)}</ul>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {groups.map((group) => (
+            <section
+              aria-label={group.label}
+              key={group.key}
             >
-              {c.title}
-            </button>
-            <div className="relative z-10 flex shrink-0">
-              <ConversationRowActions
-                conversation={c}
-                generatingTitleId={generatingTitleId}
-                onDeleteAction={setPendingDelete}
-                onGenerateTitle={onGenerateTitle}
-                onRenameAction={openRename}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
+              <h3 className="px-2.5 pb-1 text-xs font-medium text-muted-foreground">
+                {group.label}
+              </h3>
+              <ul className="flex flex-col gap-1">
+                {group.conversations.map(renderRow)}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
 
       <Dialog
         onOpenChange={(open) => {
