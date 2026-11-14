@@ -1,7 +1,7 @@
 'use client';
 
 import { posthog } from 'posthog-js';
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 
 import type { FeedbackSelection, MyUIMessage } from '@/lib/api-types';
 
@@ -11,6 +11,7 @@ import {
   applyFeedback,
   previewRegeneration,
 } from '@/lib/conversation-message-state';
+import { t } from '@/lib/i18n';
 import { useUiStore } from '@/lib/ui-store';
 import { useConversationChatRuntime } from '@/lib/use-conversation-chat-runtime';
 import { useConversationList } from '@/lib/use-conversation-list';
@@ -61,8 +62,23 @@ export const useConversations = (
     refreshConversations,
     setActiveId,
   });
-  const { applyGeneratedTitle, generatingTitleId, handleGenerateTitle } =
-    useGeneratedTitle({ conversations, modelRef, refreshConversations });
+  const {
+    generatingTitleId,
+    handleGenerateTitle,
+    pendingTitleId,
+    titleNewChat,
+  } = useGeneratedTitle({ conversations, modelRef, refreshConversations });
+  const shownConversations = useMemo(
+    () =>
+      pendingTitleId === null
+        ? conversations
+        : conversations.map((conversation) =>
+            conversation.id === pendingTitleId
+              ? { ...conversation, title: t('sidebar.new'), titlePending: true }
+              : conversation,
+          ),
+    [conversations, pendingTitleId],
+  );
   const handleStop = useStopChat({ activeRequest, convoIdRef, model, stop });
   const {
     handleClearAll,
@@ -72,7 +88,6 @@ export const useConversations = (
     handleSelect,
     submitMessage,
   } = useConversationManagement({
-    applyGeneratedTitle,
     convoIdRef,
     handleStop,
     model,
@@ -83,6 +98,7 @@ export const useConversations = (
     setActiveId,
     setMessages,
     status,
+    titleNewChat,
   });
 
   const retry = useCallback(() => {
@@ -150,7 +166,7 @@ export const useConversations = (
     activeStatus,
     conversationListError,
     conversationListLoading,
-    conversations,
+    conversations: shownConversations,
     generatingTitleId,
     hydratingConversation,
     messages: visibleMessages,
