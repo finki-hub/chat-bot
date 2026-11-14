@@ -175,14 +175,16 @@ test('short mobile viewports preserve a readable message region', async ({
     throw new TypeError('Expected the conversation thread to be visible');
   }
   expect(thread.height).toBeGreaterThanOrEqual(MINIMUM_SHORT_THREAD_HEIGHT);
-  await expect(contextBar).toHaveCSS('min-height', '44px');
-  await expect
-    .poll(async () =>
-      disclaimer.evaluate(
-        (element) => getComputedStyle(element).webkitLineClamp,
-      ),
-    )
-    .toBe('1');
+  // The header carries the title and share control, so there is no second bar,
+  // and the privacy notice stays on the new-chat screen.
+  await expect(contextBar).toBeHidden();
+  await expect(page.getByTestId('header-conversation-title')).toHaveText(
+    CONVERSATION_TITLE,
+  );
+  await expect(
+    page.getByRole('banner').getByRole('button', { name: 'Сподели разговор' }),
+  ).toBeVisible();
+  await expect(disclaimer).toBeHidden();
   await expect
     .poll(async () =>
       page

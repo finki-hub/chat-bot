@@ -13,6 +13,7 @@ import { Composer } from '@/components/chat/composer';
 import { ConversationContextBar } from '@/components/chat/conversation-context-bar';
 import { ServiceBanner } from '@/components/chat/service-banner';
 import { Thread } from '@/components/chat/thread';
+import { useConversationSharing } from '@/components/chat/use-conversation-sharing';
 import { CredentialSettingsDialog } from '@/components/shell/credential-settings-dialog';
 import { Header } from '@/components/shell/header';
 import { Sidebar } from '@/components/shell/sidebar';
@@ -182,10 +183,17 @@ export const ChatScreen = () => {
   const activeConversationTitle =
     conversations.find((conversation) => conversation.id === activeId)?.title ??
     t('conversation.untitled');
+  // One share state for the header (phones) and the context bar (wider screens).
+  const sharing = useConversationSharing(activeId);
 
   return (
     <div className="flex h-dvh w-full flex-col">
       <Header
+        conversation={
+          activeId
+            ? { id: activeId, sharing, title: activeConversationTitle }
+            : undefined
+        }
         onToggleSidebar={toggleSidebar}
         sidebarTriggerRef={sidebarTriggerRef}
       />
@@ -230,6 +238,7 @@ export const ChatScreen = () => {
           {activeId ? (
             <ConversationContextBar
               conversationId={activeId}
+              sharing={sharing}
               title={activeConversationTitle}
             />
           ) : null}
@@ -267,6 +276,7 @@ export const ChatScreen = () => {
             onStop={onStop}
             onSubmit={submitMessage}
             reasoning={reasoningActive}
+            showDisclaimer={messages.length === 0}
             status={status}
           />
         </main>

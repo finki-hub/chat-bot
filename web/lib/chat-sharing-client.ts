@@ -16,6 +16,8 @@ export type ChatConversationShare = {
 export type SharedChatConversation = {
   readonly conversation: {
     readonly title: null | string;
+    // Last activity (ISO), when the API sends it.
+    readonly updatedAt?: string;
   };
   readonly messages: readonly ChatStateJsonValue[];
 };
@@ -93,8 +95,13 @@ const parseSharedConversation = (value: unknown): SharedChatConversation => {
   ) {
     throw invalidResponse();
   }
+  const updatedAt = conversation['updated_at'];
+
   return {
-    conversation: { title: title ?? null },
+    conversation: {
+      title: title ?? null,
+      ...(typeof updatedAt === 'string' && { updatedAt }),
+    },
     messages,
   };
 };

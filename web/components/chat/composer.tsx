@@ -37,8 +37,19 @@ export type ComposerProps = {
   onStop: () => void;
   onSubmit: (text: string) => Promise<boolean>;
   reasoning: boolean;
+  showDisclaimer?: boolean;
   status: ComposerStatus;
 };
+
+// Phones show the notice only on a new chat, where it costs no reading room.
+const Disclaimer = ({ shown }: { shown: boolean }) => (
+  // The wrapper hides it, since short screens give the text its own display.
+  <div className={shown ? undefined : 'max-sm:hidden'}>
+    <p className="mt-2 text-balance text-center text-xs text-muted-foreground [@media(max-height:500px)]:mt-1 [@media(max-height:500px)]:line-clamp-1">
+      {t('composer.disclaimer')}
+    </p>
+  </div>
+);
 
 export const Composer = ({
   availableProviders,
@@ -54,6 +65,7 @@ export const Composer = ({
   onStop,
   onSubmit,
   reasoning,
+  showDisclaimer = true,
   status,
 }: ComposerProps) => {
   const [value, setValue] = useState('');
@@ -231,9 +243,7 @@ export const Composer = ({
             }
           />
         </div>
-        <p className="mt-2 text-balance text-center text-xs text-muted-foreground [@media(max-height:500px)]:mt-1 [@media(max-height:500px)]:line-clamp-1">
-          {t('composer.disclaimer')}
-        </p>
+        <Disclaimer shown={showDisclaimer} />
       </div>
     </div>
   );

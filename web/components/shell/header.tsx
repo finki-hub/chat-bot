@@ -2,11 +2,20 @@ import type { Ref } from 'react';
 
 import { PanelLeft } from 'lucide-react';
 
+import type { ConversationSharing } from '@/components/chat/use-conversation-sharing';
+
+import { ShareConversationButton } from '@/components/chat/share-conversation-button';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
 import { IconButton, IconLink } from '@/components/ui/icon-controls';
 import { t } from '@/lib/i18n';
 
 export type HeaderProps = {
+  // The open conversation; phones show it here instead of in a second bar.
+  conversation?: {
+    readonly id: string;
+    readonly sharing: ConversationSharing;
+    readonly title: string;
+  };
   onToggleSidebar: () => void;
   sidebarTriggerRef?: Ref<HTMLButtonElement>;
 };
@@ -22,7 +31,11 @@ const GitHubIcon = () => (
   </svg>
 );
 
-export const Header = ({ onToggleSidebar, sidebarTriggerRef }: HeaderProps) => (
+export const Header = ({
+  conversation,
+  onToggleSidebar,
+  sidebarTriggerRef,
+}: HeaderProps) => (
   <header className="z-30 shrink-0 border-b border-border/60 bg-background pt-[env(safe-area-inset-top)]">
     <div className="flex min-h-14 flex-wrap items-center gap-2 px-3 py-1.5 sm:h-14 sm:flex-nowrap sm:gap-3 sm:px-4 sm:py-0">
       <IconButton
@@ -40,9 +53,22 @@ export const Header = ({ onToggleSidebar, sidebarTriggerRef }: HeaderProps) => (
         className="hidden h-9 w-9 shrink-0 object-contain sm:block"
         src="/logo.png"
       />
-      <h1 className="min-w-24 flex-1 truncate text-base font-bold leading-tight tracking-tight sm:min-w-0 sm:text-lg">
+      <h1
+        className={`min-w-24 flex-1 truncate text-base font-bold leading-tight tracking-tight sm:min-w-0 sm:text-lg ${
+          conversation === undefined ? '' : 'max-sm:sr-only'
+        }`}
+      >
         {t('header.title')}
       </h1>
+      {conversation === undefined ? null : (
+        <p
+          className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight sm:hidden"
+          data-testid="header-conversation-title"
+          title={conversation.title}
+        >
+          {conversation.title}
+        </p>
+      )}
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <IconLink
           className="hidden sm:inline-flex"
@@ -53,6 +79,14 @@ export const Header = ({ onToggleSidebar, sidebarTriggerRef }: HeaderProps) => (
         >
           <GitHubIcon />
         </IconLink>
+        {conversation === undefined ? null : (
+          <div className="sm:hidden">
+            <ShareConversationButton
+              conversationId={conversation.id}
+              sharing={conversation.sharing}
+            />
+          </div>
+        )}
         <ThemeToggle />
       </div>
     </div>
