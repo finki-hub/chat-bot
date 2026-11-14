@@ -92,7 +92,17 @@ export const ConversationList = ({
         }}
         type="button"
       >
-        {c.title}
+        {c.titlePending === true ? (
+          <span
+            aria-busy="true"
+            className="text-shimmer"
+            data-testid="title-pending"
+          >
+            {c.title}
+          </span>
+        ) : (
+          c.title
+        )}
       </button>
       <div className="relative z-10 flex shrink-0 pointer-fine:absolute pointer-fine:inset-y-0 pointer-fine:right-1 pointer-fine:items-center">
         <ConversationRowActions

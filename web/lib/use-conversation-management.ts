@@ -22,11 +22,6 @@ import {
 } from '@/lib/transport';
 
 type UseConversationManagementOptions = {
-  readonly applyGeneratedTitle: (
-    id: string,
-    messages: readonly MyUIMessage[],
-    expectedTitle: string,
-  ) => Promise<void>;
   readonly convoIdRef: RefObject<null | string>;
   readonly handleStop: (order?: StopOrder) => Promise<void>;
   readonly model: string;
@@ -37,10 +32,14 @@ type UseConversationManagementOptions = {
   readonly setActiveId: (id: null | string) => void;
   readonly setMessages: Dispatch<SetStateAction<MyUIMessage[]>>;
   readonly status: string;
+  readonly titleNewChat: (
+    id: string,
+    question: MyUIMessage,
+    expectedTitle: string,
+  ) => Promise<void>;
 };
 
 export const useConversationManagement = ({
-  applyGeneratedTitle,
   convoIdRef,
   handleStop,
   model,
@@ -51,6 +50,7 @@ export const useConversationManagement = ({
   setActiveId,
   setMessages,
   status,
+  titleNewChat,
 }: UseConversationManagementOptions) => {
   const resetActiveConversation = useCallback(() => {
     preserveEmptyHydrationIdRef.current = null;
@@ -126,13 +126,13 @@ export const useConversationManagement = ({
         role: 'user',
       };
       if (expectedTitle !== null) {
-        fireAndForget(applyGeneratedTitle(cid, [userMessage], expectedTitle));
+        fireAndForget(titleNewChat(cid, userMessage, expectedTitle));
       }
       fireAndForget(sendMessageRef.current(userMessage));
       return true;
     },
     [
-      applyGeneratedTitle,
+      titleNewChat,
       convoIdRef,
       model,
       preserveEmptyHydrationIdRef,

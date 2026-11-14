@@ -65,12 +65,14 @@ test('requests a generated title without coupling it to the active chat model', 
   };
   const { result } = renderHook(() => useGeneratedTitle(options));
 
+  const [question] = messages;
+
+  if (question === undefined) {
+    throw new TypeError('missing question');
+  }
+
   await act(async () => {
-    await result.current.applyGeneratedTitle(
-      CONVERSATION_ID,
-      messages,
-      OLD_TITLE,
-    );
+    await result.current.titleNewChat(CONVERSATION_ID, question, OLD_TITLE);
   });
 
   expect(generateChatTitle).toHaveBeenCalledWith({
@@ -127,4 +129,38 @@ test('loads the requested conversation before generating its title', async () =>
       title: GENERATED_TITLE,
     });
   });
+});
+
+test('marks a new chat as pending until its generated title is saved', async () => {
+  const { promise, resolve } = Promise.withResolvers<null | string>();
+  generateChatTitle.mockReturnValueOnce(promise);
+  const { result } = renderHook(() =>
+    useGeneratedTitle({
+      conversations: [],
+      modelRef: { current: MODEL_ID },
+      refreshConversations,
+    }),
+  );
+  let pending: Promise<void> = Promise.resolve();
+
+  act(() => {
+    pending = result.current.titleNewChat(
+      CONVERSATION_ID,
+      {
+        id: 'user-1',
+        parts: [{ text: 'kade e sluzba', type: 'text' }],
+        role: 'user',
+      },
+      'kade e sluzba',
+    );
+  });
+
+  expect(result.current.pendingTitleId).toBe(CONVERSATION_ID);
+
+  await act(async () => {
+    resolve(GENERATED_TITLE);
+    await pending;
+  });
+
+  expect(result.current.pendingTitleId).toBeNull();
 });

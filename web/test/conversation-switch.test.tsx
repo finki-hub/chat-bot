@@ -19,7 +19,6 @@ const ConversationSwitchHarness = () => {
   const convoIdRef = useRef<null | string>('conversation-a');
   const preserveEmptyHydrationIdRef = useRef<null | string>(null);
   const { handleSelect } = useConversationManagement({
-    applyGeneratedTitle: () => Promise.resolve(),
     convoIdRef,
     handleStop: () => Promise.resolve(),
     model: 'model-a',
@@ -30,6 +29,7 @@ const ConversationSwitchHarness = () => {
     setActiveId: () => null,
     setMessages,
     status: 'ready',
+    titleNewChat: () => Promise.resolve(),
   });
 
   return (

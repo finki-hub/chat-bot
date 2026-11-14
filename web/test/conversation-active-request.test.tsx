@@ -95,7 +95,6 @@ const setup = () => {
       stop: runtime.stop,
     });
     const management = useConversationManagement({
-      applyGeneratedTitle: async () => {},
       convoIdRef: runtime.convoIdRef,
       handleStop: stop,
       model: MODEL,
@@ -106,6 +105,7 @@ const setup = () => {
       setActiveId,
       setMessages: runtime.setMessages,
       status: runtime.status,
+      titleNewChat: async () => {},
     });
     return { activeId, management, runtime, stop };
   });

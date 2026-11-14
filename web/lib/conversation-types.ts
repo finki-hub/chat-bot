@@ -16,6 +16,8 @@ export type ConversationRow = {
   readonly id: string;
   readonly model: null | string;
   readonly title: string;
+  // A new chat whose title is still being generated; `title` is a placeholder.
+  readonly titlePending?: boolean;
   // Last activity (ISO); missing for a conversation not yet saved.
   readonly updatedAt?: string;
 };

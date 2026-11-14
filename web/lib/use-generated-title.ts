@@ -26,6 +26,9 @@ export const useGeneratedTitle = ({
   const [generatingTitleId, setGeneratingTitleId] = useState<null | string>(
     null,
   );
+  // A new chat starts named after its question; until the generated title
+  // lands it shows a placeholder rather than flashing the raw question.
+  const [pendingTitleId, setPendingTitleId] = useState<null | string>(null);
 
   const applyGeneratedTitle = useCallback(
     async (
@@ -49,9 +52,18 @@ export const useGeneratedTitle = ({
         await refreshConversations();
       } finally {
         setGeneratingTitleId((current) => (current === id ? null : current));
+        setPendingTitleId((current) => (current === id ? null : current));
       }
     },
     [modelRef, refreshConversations],
+  );
+
+  const titleNewChat = useCallback(
+    async (id: string, question: MyUIMessage, expectedTitle: string) => {
+      setPendingTitleId(id);
+      await applyGeneratedTitle(id, [question], expectedTitle);
+    },
+    [applyGeneratedTitle],
   );
 
   const handleGenerateTitle = useCallback(
@@ -74,5 +86,10 @@ export const useGeneratedTitle = ({
     [applyGeneratedTitle, conversations],
   );
 
-  return { applyGeneratedTitle, generatingTitleId, handleGenerateTitle };
+  return {
+    generatingTitleId,
+    handleGenerateTitle,
+    pendingTitleId,
+    titleNewChat,
+  };
 };
