@@ -39,7 +39,6 @@ import { useSearchStage } from '@/lib/use-search-stage';
 
 export type AssistantMessageProps = {
   actions?: ReactNode;
-  complete?: boolean;
   errorPart?: ErrorNotice;
   message: MyUIMessage;
   onManageCredentials?: (returnFocusTarget: HTMLElement) => void;
@@ -53,7 +52,7 @@ type Diagnostics = NonNullable<MyUIMessage['metadata']>['diagnostics'];
 type Timing = NonNullable<MyUIMessage['metadata']>['timing'];
 
 const FOOTNOTE_CLASS =
-  'mt-1 inline-flex items-center gap-1 text-xs tabular-nums text-muted-foreground/70';
+  'inline-flex items-center gap-1 text-xs tabular-nums text-muted-foreground/70';
 
 const formatMs = (ms: null | number | undefined): string =>
   typeof ms === 'number' ? formatDuration(ms) : '—';
@@ -622,7 +621,13 @@ const answerSegments = (message: MyUIMessage): AnswerSegment[] => {
 type RenderSegment =
   AnswerSegment | { key: string; parts: DynamicToolUIPart[]; type: 'tools' };
 
-const collapseToolRuns = (segments: AnswerSegment[]): RenderSegment[] => {
+// While streaming, the run still at the end is in progress and stays expanded;
+// a run the model has written past folds as soon as the text after it starts,
+// so finishing the message changes nothing.
+const collapseToolRuns = (
+  segments: AnswerSegment[],
+  keepTrailing: boolean,
+): RenderSegment[] => {
   const collapsed: RenderSegment[] = [];
 
   for (const segment of segments) {
@@ -643,71 +648,133 @@ const collapseToolRuns = (segments: AnswerSegment[]): RenderSegment[] => {
     }
   }
 
+  const last = collapsed.at(-1);
+
+  if (keepTrailing && last?.type === 'tools') {
+    collapsed.splice(
+      -1,
+      1,
+      ...last.parts.map((part): AnswerSegment => ({
+        key: part.toolCallId,
+        part,
+        type: 'tool',
+      })),
+    );
+  }
+
   return collapsed;
 };
 
+// The answer is the first text after the last tool row; reasoning sits right
+// above it, or at the end while there is no answer yet.
+const reasoningSlot = (segments: readonly RenderSegment[]): number => {
+  const lastTool = segments.findLastIndex((segment) => segment.type !== 'text');
+  const answer = segments.findIndex(
+    (segment, index) => index > lastTool && segment.type === 'text',
+  );
+
+  return answer === -1 ? segments.length : answer;
+};
+
+const SegmentView = ({
+  className,
+  pending,
+  segment,
+  streamingTail,
+  superseded,
+}: {
+  className: string | undefined;
+  pending: boolean;
+  segment: RenderSegment;
+  streamingTail: boolean;
+  superseded: ReadonlySet<string>;
+}) => {
+  if (segment.type === 'text') {
+    return (
+      <div
+        className={className}
+        data-testid="answer-text"
+      >
+        <MessageResponse
+          caret="block"
+          isAnimating={streamingTail}
+        >
+          {segment.text}
+        </MessageResponse>
+      </div>
+    );
+  }
+
+  return segment.type === 'tool' ? (
+    <ToolCall
+      className={className}
+      part={segment.part}
+      running={pending && !superseded.has(segment.part.toolCallId)}
+    />
+  ) : (
+    <ToolCallGroup
+      className={`${className ?? ''} motion-safe:animate-in motion-safe:fade-in-0`}
+      parts={segment.parts}
+    />
+  );
+};
+
 // Tool-call messages render every part in stream order: text written before,
-// between and after the calls is all part of the answer. Once finished, each
-// run of several calls folds into one summary row.
+// between and after the calls is all part of the answer. Runs of several calls
+// fold into one summary row (see collapseToolRuns).
 const InterleavedParts = ({
   message,
   pending,
+  reasoning,
 }: {
   message: MyUIMessage;
   pending: boolean;
+  reasoning: ReactNode;
 }) => {
   const superseded = supersededToolCalls(message);
   const answer = answerSegments(message);
   const segments: RenderSegment[] =
-    !pending && toolCallParts(message).length > 1
-      ? collapseToolRuns(answer)
+    toolCallParts(message).length > 1
+      ? collapseToolRuns(answer, pending)
       : answer;
+  const slot = reasoning === null ? -1 : reasoningSlot(segments);
   const isText = (index: number): boolean => segments[index]?.type === 'text';
   // Extra space where tool rows give way to text (or back), so the answer does
-  // not read as part of the last row.
+  // not read as part of the last row; reasoning above the answer carries it.
   const spacing = (index: number): string | undefined =>
-    index > 0 && isText(index - 1) !== isText(index) ? 'mt-2' : undefined;
+    index !== slot && index > 0 && isText(index - 1) !== isText(index)
+      ? 'mt-2'
+      : undefined;
+  const items = segments.map((segment, index) => (
+    <SegmentView
+      className={spacing(index)}
+      key={segment.key}
+      pending={pending}
+      segment={segment}
+      streamingTail={pending && index === segments.length - 1}
+      superseded={superseded}
+    />
+  ));
+
+  if (slot !== -1) {
+    items.splice(
+      slot,
+      0,
+      <div
+        className={slot > 0 && !isText(slot - 1) ? 'mt-2' : undefined}
+        key="reasoning"
+      >
+        {reasoning}
+      </div>,
+    );
+  }
 
   return (
     <div
       className="flex flex-col gap-2"
       data-testid="answer-parts"
     >
-      {segments.map((segment, index) => {
-        if (segment.type === 'text') {
-          const streamingTail = pending && index === segments.length - 1;
-
-          return (
-            <div
-              className={spacing(index)}
-              data-testid="answer-text"
-              key={segment.key}
-            >
-              <MessageResponse
-                caret="block"
-                isAnimating={streamingTail}
-              >
-                {segment.text}
-              </MessageResponse>
-            </div>
-          );
-        }
-
-        return segment.type === 'tool' ? (
-          <ToolCall
-            className={spacing(index)}
-            key={segment.key}
-            part={segment.part}
-            running={pending && !superseded.has(segment.part.toolCallId)}
-          />
-        ) : (
-          <ToolCallGroup
-            className={spacing(index)}
-            key={segment.key}
-            parts={segment.parts}
-          />
-        );
-      })}
+      {items}
     </div>
   );
 };
@@ -800,7 +867,6 @@ const awaitingActivityLabel = (message: MyUIMessage): string => {
 
 export const AssistantMessage = ({
   actions,
-  complete,
   errorPart,
   message,
   onManageCredentials,
@@ -829,23 +895,26 @@ export const AssistantMessage = ({
   const inferenceModel = message.metadata?.inferenceModel;
   const sources = message.metadata?.sources ?? [];
   const responseId = message.metadata?.responseId;
-  const answerComplete = complete ?? !pending;
+  // One instance for the whole stream, so it keeps its place and toggle state.
+  const reasoning =
+    reasoningText.length > 0 ? (
+      <ReasoningDisclosure
+        durationMs={diagnostics?.thinkingMs}
+        streaming={reasoningStreaming}
+        text={reasoningText}
+      />
+    ) : null;
 
   return (
     <Message from="assistant">
       <MessageContent>
         {/* Once the answer is visible, reasoning collapses to a toggle above it. */}
-        {answerVisible && reasoningText.length > 0 ? (
-          <ReasoningDisclosure
-            durationMs={diagnostics?.thinkingMs}
-            streaming={reasoningStreaming}
-            text={reasoningText}
-          />
-        ) : null}
+        {!withToolCalls && answerVisible ? reasoning : null}
         {withToolCalls ? (
           <InterleavedParts
             message={message}
             pending={Boolean(pending)}
+            reasoning={reasoning}
           />
         ) : null}
         {!withToolCalls && text ? (
@@ -858,22 +927,7 @@ export const AssistantMessage = ({
             </MessageResponse>
           </div>
         ) : null}
-        {text === null ? null : (
-          <SourceCards
-            complete={answerComplete}
-            sources={sources}
-          />
-        )}
-        {/* No `pending` guard: MessageTiming renders nothing until `timing` is set
-            on finish, so a still-streaming answer shows no footnote anyway. */}
-        {text === null ? null : (
-          <MessageTiming
-            diagnostics={diagnostics}
-            inferenceModel={inferenceModel}
-            responseId={responseId}
-            timing={timing}
-          />
-        )}
+        {text === null ? null : <SourceCards sources={sources} />}
         <AssistantMessageStatus
           awaitingLabel={awaitingLabel}
           awaitingModel={awaitingModel && !reasoningLive}
@@ -886,13 +940,7 @@ export const AssistantMessage = ({
         />
         {/* While still streaming (no answer yet), reasoning streams in BELOW the
             step list so it grows downward instead of displacing the steps. */}
-        {!answerVisible && reasoningText.length > 0 ? (
-          <ReasoningDisclosure
-            durationMs={diagnostics?.thinkingMs}
-            streaming={reasoningStreaming}
-            text={reasoningText}
-          />
-        ) : null}
+        {withToolCalls || answerVisible ? null : reasoning}
         {errorPart ? (
           <MessageError
             errorPart={errorPart}
@@ -901,8 +949,18 @@ export const AssistantMessage = ({
             retryPending={retryPending}
           />
         ) : null}
-        {answerVisible && actions !== undefined && actions !== null ? (
-          <div className="mt-2">{actions}</div>
+        {/* Timing joins the actions row on finish instead of pushing it down;
+            MessageTiming renders nothing until `timing` arrives. */}
+        {answerVisible ? (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 empty:hidden">
+            {actions}
+            <MessageTiming
+              diagnostics={diagnostics}
+              inferenceModel={inferenceModel}
+              responseId={responseId}
+              timing={timing}
+            />
+          </div>
         ) : null}
       </MessageContent>
     </Message>

@@ -357,7 +357,7 @@ test.describe('chat streaming (mocked BFF)', () => {
     await chatServer.close();
   });
 
-  test('keeps small source sets collapsed until the streamed answer completes', async ({
+  test('keeps sources collapsed through completion until requested', async ({
     page,
   }, testInfo) => {
     const answerId = 'txt-source-answer';
@@ -417,10 +417,22 @@ test.describe('chat streaming (mocked BFF)', () => {
       path: testInfo.outputPath('streaming-sources-collapsed.png'),
     });
 
+    // Finishing the answer leaves the sources as they were.
+    await expect
+      .poll(() => chatServer.hasSentTail(), { timeout: 10_000 })
+      .toBe(true);
+    await expect(page.getByTestId(COMPOSER_SUBMIT)).toHaveAccessibleName(
+      'Испрати',
+    );
+    await expect(collapsedToggle).toHaveAttribute('aria-expanded', 'false');
+
+    await collapsedToggle.click();
     await expect(
       page.getByRole('button', { name: 'Сокриј извори' }),
-    ).toHaveAttribute('aria-expanded', 'true', { timeout: 10_000 });
-    await expect(page.getByText(sourceTitle)).toBeVisible();
+    ).toHaveAttribute('aria-expanded', 'true');
+    await expect(
+      page.getByTestId('message-sources').getByText(sourceTitle),
+    ).toBeVisible();
     await page.screenshot({
       animations: 'disabled',
       path: testInfo.outputPath('completed-sources-open.png'),

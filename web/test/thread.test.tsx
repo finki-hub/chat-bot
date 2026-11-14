@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -422,7 +422,7 @@ describe('AssistantMessage', () => {
     expect(footnote).toHaveTextContent('2.3s');
   });
 
-  it('opens a small source set by default and keeps its links touchable', async () => {
+  it('opens a source set on request and keeps its links touchable', async () => {
     const user = userEvent.setup();
     const chunkSnippet =
       'Правилата за запишување и заверка на семестарот се наведени во овој член со повеќе детали. Вториот став содржи дополнителни детали што треба да се прикажат кога картичката е отворена.';
@@ -461,6 +461,7 @@ describe('AssistantMessage', () => {
     };
 
     render(<AssistantMessage message={msg} />);
+    await user.click(screen.getByRole('button', { name: SHOW_SOURCES_LABEL }));
 
     const sources = screen.getByTestId('message-sources');
     const toggle = screen.getByRole('button', { name: HIDE_SOURCES_LABEL });
@@ -516,7 +517,7 @@ describe('AssistantMessage', () => {
     expectSourceCardsClosed();
   });
 
-  it('waits for answer completion before automatically opening a small source set', () => {
+  it('keeps a small source set closed when the answer finishes', () => {
     const message: MyUIMessage = {
       id: 'a1',
       metadata: {
@@ -542,8 +543,10 @@ describe('AssistantMessage', () => {
     view.rerender(<AssistantMessage message={message} />);
 
     expect(
-      screen.getByRole('button', { name: HIDE_SOURCES_LABEL }),
-    ).toHaveAttribute(ARIA_EXPANDED, 'true');
+      screen.getByRole('button', { name: SHOW_SOURCES_LABEL }),
+    ).toHaveAttribute(ARIA_EXPANDED, 'false');
+
+    expectSourceCardsClosed();
   });
 
   it('keeps larger source sets collapsed until requested', () => {
@@ -597,7 +600,7 @@ describe('AssistantMessage', () => {
     expectSourceCardsClosed();
   });
 
-  it('collapses an automatically opened source set when it grows past two', () => {
+  it('keeps an opened source set open as it grows', () => {
     const smallMessage: MyUIMessage = {
       id: 'a1',
       metadata: {
@@ -621,17 +624,13 @@ describe('AssistantMessage', () => {
     };
     const view = render(<AssistantMessage message={smallMessage} />);
 
-    expect(
-      screen.getByRole('button', { name: HIDE_SOURCES_LABEL }),
-    ).toHaveAttribute(ARIA_EXPANDED, 'true');
-
+    fireEvent.click(screen.getByRole('button', { name: SHOW_SOURCES_LABEL }));
     view.rerender(<AssistantMessage message={largeMessage} />);
 
     expect(
-      screen.getByRole('button', { name: SHOW_SOURCES_LABEL }),
-    ).toHaveAttribute(ARIA_EXPANDED, 'false');
-
-    expectSourceCardsClosed();
+      screen.getByRole('button', { name: HIDE_SOURCES_LABEL }),
+    ).toHaveAttribute(ARIA_EXPANDED, 'true');
+    expect(screen.getByText(THIRD_SOURCE_TITLE)).toBeInTheDocument();
   });
 
   it('reveals the model, trace ID, and throughput rows in the diagnostics popover', async () => {
@@ -716,10 +715,29 @@ describe('AssistantMessage', () => {
 
     expect(screen.queryByTestId(TIMING_TESTID)).toBeNull();
   });
+
+  it('puts the timing on the actions row so finishing does not move it', () => {
+    const msg: MyUIMessage = {
+      id: 'a1',
+      metadata: { timing: { totalMs: 2_345, ttftMs: 1_200 } },
+      parts: [{ text: 'Готово', type: 'text' }],
+      role: 'assistant',
+    };
+    render(
+      <AssistantMessage
+        actions={<div data-testid="actions-stub" />}
+        message={msg}
+      />,
+    );
+
+    expect(screen.getByTestId(TIMING_TESTID).parentElement).toBe(
+      screen.getByTestId('actions-stub').parentElement,
+    );
+  });
 });
 
 describe('Thread source disclosure', () => {
-  it('keeps completed sources open while waiting for the next reply', () => {
+  it('keeps opened sources open while waiting for the next reply', () => {
     const messages: MyUIMessage[] = [
       userMessage('Прво прашање'),
       {
@@ -738,7 +756,15 @@ describe('Thread source disclosure', () => {
       },
     ];
 
-    render(
+    const view = render(
+      <Thread
+        messages={messages.slice(0, 2)}
+        status="ready"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: SHOW_SOURCES_LABEL }));
+    view.rerender(
       <Thread
         messages={messages}
         status="submitted"
@@ -748,7 +774,7 @@ describe('Thread source disclosure', () => {
     expect(
       screen.getByRole('button', { name: HIDE_SOURCES_LABEL }),
     ).toHaveAttribute(ARIA_EXPANDED, 'true');
-    expect(screen.getByText(FIRST_SOURCE_TITLE)).toBeInTheDocument();
+    expect(screen.getByRole('listitem')).toHaveTextContent(FIRST_SOURCE_TITLE);
   });
 });
 

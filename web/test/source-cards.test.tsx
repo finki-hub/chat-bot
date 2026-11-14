@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
@@ -22,13 +22,13 @@ const SOURCE: RetrievedSource = {
   title: SOURCE_TITLE,
 };
 
+const openSources = () => {
+  fireEvent.click(screen.getByRole('button', { name: 'Прикажи извори' }));
+};
+
 const renderSourceCards = () => {
-  render(
-    <SourceCards
-      complete
-      sources={[SOURCE]}
-    />,
-  );
+  render(<SourceCards sources={[SOURCE]} />);
+  openSources();
 };
 
 describe('SourceCards', () => {
@@ -101,7 +101,6 @@ describe('SourceCards grouping', () => {
     const user = userEvent.setup();
     render(
       <SourceCards
-        complete
         sources={[
           faq('q1'),
           chunk('c1', { chunkIndex: 30, section: 'Член 26' }),
@@ -146,10 +145,10 @@ describe('SourceCards grouping', () => {
     const user = userEvent.setup();
     render(
       <SourceCards
-        complete
         sources={[chunk('c1', { section: 'Член 26' }), chunk('c2')]}
       />,
     );
+    openSources();
 
     const card = screen.getByTestId('source-document');
     const toggle = within(card).getByRole('button');
@@ -169,7 +168,6 @@ describe('SourceCards grouping', () => {
   it('counts parts when the chunks have no sections', () => {
     render(
       <SourceCards
-        complete
         sources={[
           chunk('c1', { links: [] }),
           chunk('c2', { links: [] }),
@@ -177,6 +175,7 @@ describe('SourceCards grouping', () => {
         ]}
       />,
     );
+    openSources();
 
     const card = screen.getByTestId('source-document');
 
@@ -189,10 +188,10 @@ describe('SourceCards grouping', () => {
   it('keeps a single chunk per document as a plain card', () => {
     render(
       <SourceCards
-        complete
         sources={[chunk('c1', { section: 'Член 26' }), faq('q1')]}
       />,
     );
+    openSources();
 
     expect(screen.queryByTestId('source-document')).not.toBeInTheDocument();
     expect(screen.getByText(`${RULES} · Член 26`)).toBeInTheDocument();
@@ -245,7 +244,6 @@ describe('source metadata', () => {
   it('shows the kind, the document date and an outdated warning on the card', () => {
     render(
       <SourceCards
-        complete
         sources={[
           chunk('c1', {
             currentStatus: 'likely_superseded',
@@ -254,6 +252,7 @@ describe('source metadata', () => {
         ]}
       />,
     );
+    openSources();
 
     expect(screen.getByText('Документ')).toBeInTheDocument();
     expect(screen.getByText('17.10.2017')).toHaveAttribute(
@@ -272,7 +271,6 @@ describe('source metadata', () => {
     const user = userEvent.setup();
     render(
       <SourceCards
-        complete
         sources={[
           faq('q1'),
           chunk('c1'),
