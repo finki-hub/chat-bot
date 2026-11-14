@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { RetrievedSource } from '@/lib/api-types';
 
-import { SourceCards } from '@/components/chat/source-cards';
+import { MessageFooter } from '@/components/chat/message-footer';
 import {
   formatDocumentDate,
   isOutdatedSource,
@@ -21,6 +21,16 @@ const SOURCE: RetrievedSource = {
   snippet: SOURCE_SNIPPET,
   title: SOURCE_TITLE,
 };
+
+// The sources live in the message footer: a toggle in its row, cards below.
+const SourceCards = ({ sources }: { sources: readonly RetrievedSource[] }) => (
+  <MessageFooter
+    actions={null}
+    diagnostics={undefined}
+    sources={sources}
+    timing={undefined}
+  />
+);
 
 const openSources = () => {
   fireEvent.click(screen.getByRole('button', { name: 'Прикажи извори' }));
@@ -116,11 +126,15 @@ describe('SourceCards grouping', () => {
     expect(toggle).toHaveTextContent('3');
 
     await user.click(toggle);
-    const panel = toggle.nextElementSibling;
+    const panel = document.querySelector(
+      `#${CSS.escape(toggle.getAttribute('aria-controls') ?? '')}`,
+    );
 
-    expect(panel).toHaveAttribute('id', toggle.getAttribute('aria-controls'));
+    expect(panel).toHaveAttribute('data-testid', 'source-panel');
     expect(
-      [...(panel?.children ?? [])].map((item) => item.textContent),
+      [...(panel?.querySelector('ul')?.children ?? [])].map(
+        (item) => item.textContent,
+      ),
     ).toStrictEqual([
       expect.stringContaining('Упис'),
       expect.stringContaining(RULES),
@@ -267,30 +281,18 @@ describe('source metadata', () => {
     ).toHaveTextContent('PDF');
   });
 
-  it('previews the first source titles while collapsed', async () => {
+  it('shows only a compact count until the sources are opened', async () => {
     const user = userEvent.setup();
-    render(
-      <SourceCards
-        sources={[
-          faq('q1'),
-          chunk('c1'),
-          { ...faq('q2'), title: 'Заверка' },
-          { ...faq('q3'), title: 'Испити' },
-        ]}
-      />,
-    );
+    render(<SourceCards sources={[faq('q1'), chunk('c1'), chunk('c2')]} />);
 
-    const preview = screen.getByTestId('source-preview');
+    const toggle = screen.getByRole('button', { name: 'Прикажи извори' });
 
-    expect(preview).toHaveAttribute('aria-hidden', 'true');
-    expect(preview).toHaveTextContent('Упис');
-    expect(preview).toHaveTextContent(RULES);
-    expect(preview).toHaveTextContent('Заверка');
-    expect(preview).not.toHaveTextContent('Испити');
-    expect(preview).toHaveTextContent('+1');
+    expect(toggle).toHaveTextContent('Извори2');
+    expect(screen.queryByText(RULES)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('source-panel')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Прикажи извори' }));
+    await user.click(toggle);
 
-    expect(screen.queryByTestId('source-preview')).not.toBeInTheDocument();
+    expect(screen.getByTestId('source-panel')).toHaveTextContent(RULES);
   });
 });

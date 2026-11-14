@@ -8,7 +8,7 @@ import {
   MessageCircleQuestion,
   TriangleAlert,
 } from 'lucide-react';
-import { type ReactNode, useId, useState } from 'react';
+import { useId, useState } from 'react';
 
 import type { RetrievedSource, RetrievedSourceLink } from '@/lib/api-types';
 
@@ -23,11 +23,9 @@ import {
   groupSections,
   groupSources,
   isOutdatedSource,
-  type SourceGroup,
   sourceLinkText,
 } from '@/lib/source-groups';
 
-const PREVIEW_LIMIT = 3;
 type MarkdownComponents = NonNullable<MessageResponseProps['components']>;
 
 const sourceMarkdownComponents = {
@@ -362,119 +360,73 @@ const SourceDocumentCard = ({
   );
 };
 
-// Collapsed sources still name what the answer drew on.
-const SourcePreview = ({ groups }: { groups: readonly SourceGroup[] }) => {
-  const shown = groups.slice(0, PREVIEW_LIMIT);
-  const hidden = groups.length - shown.length;
-  const chips: ReactNode[] = shown.map(({ key, sources }) => {
-    const [first] = sources;
-
-    return first === undefined ? null : (
-      <span
-        className="inline-flex min-w-0 max-w-44 items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-normal text-muted-foreground"
-        key={key}
-      >
-        <SourceKindIcon
-          className="size-3 shrink-0"
-          source={first}
-        />
-        <span className="truncate">{first.title}</span>
-      </span>
-    );
-  });
-
-  return (
-    <span
+// A compact toggle for the message footer; the cards open below the footer.
+export const SourcesToggle = ({
+  count,
+  onToggle,
+  open,
+  panelId,
+}: {
+  count: number;
+  onToggle: () => void;
+  open: boolean;
+  panelId: string;
+}) => (
+  <button
+    aria-controls={open ? panelId : undefined}
+    aria-expanded={open}
+    aria-label={open ? t('sources.hide') : t('sources.show')}
+    className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-8"
+    data-testid="message-sources"
+    onClick={onToggle}
+    type="button"
+  >
+    <BookOpenText
       aria-hidden="true"
-      className="flex min-w-0 flex-wrap items-center gap-1"
-      data-testid="source-preview"
-    >
-      {chips}
-      {hidden > 0 ? (
-        <span className="text-[11px] tabular-nums text-muted-foreground/80">
-          {`+${hidden}`}
-        </span>
-      ) : null}
-    </span>
-  );
-};
+      className="size-3.5"
+    />
+    <span className="max-sm:hidden">{t('sources.title')}</span>
+    <span className="tabular-nums text-muted-foreground/70">{count}</span>
+    <ChevronRight
+      aria-hidden="true"
+      className={`size-3 transition-transform ${open ? 'rotate-90' : ''}`}
+    />
+  </button>
+);
 
-// Closed until asked, so the message looks the same while streaming and after:
-// the preview chips already name the sources.
-export const SourceCards = ({
+export const SourcesPanel = ({
+  id,
   sources,
 }: {
+  id: string;
   sources: readonly RetrievedSource[];
-}) => {
-  const groups = groupSources(sources);
-  const sourceCount = groups.length;
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
+}) => (
+  <section
+    aria-label={t('sources.title')}
+    className="mt-2 motion-safe:animate-in motion-safe:fade-in-0"
+    data-testid="source-panel"
+    id={id}
+  >
+    <ul className="grid items-start gap-2 sm:grid-cols-2">
+      {groupSources(sources).map(({ key, sources: grouped }) => {
+        const [first, ...rest] = grouped;
 
-  if (sourceCount === 0) {
-    return null;
-  }
+        if (first === undefined) {
+          return null;
+        }
 
-  const toggleDisclosure = () => {
-    setOpen(!open);
-  };
-
-  return (
-    <section
-      aria-label={t('sources.title')}
-      className="mt-3 space-y-2"
-      data-testid="message-sources"
-    >
-      <button
-        aria-controls={panelId}
-        aria-expanded={open}
-        aria-label={open ? t('sources.hide') : t('sources.show')}
-        className="flex min-h-11 max-w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md px-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0 pointer-fine:px-0 pointer-fine:text-xs"
-        onClick={toggleDisclosure}
-        type="button"
-      >
-        <span className="inline-flex items-center gap-1.5">
-          <ChevronRight
-            aria-hidden="true"
-            className={`size-3 transition-transform ${open ? 'rotate-90' : ''}`}
+        return rest.length === 0 ? (
+          <SourceCard
+            key={`${first.kind}:${first.id}`}
+            source={first}
           />
-          <BookOpenText
-            aria-hidden="true"
-            className="size-3.5"
+        ) : (
+          <SourceDocumentCard
+            key={key}
+            sources={[first, ...rest]}
           />
-          <span>{t('sources.title')}</span>
-          <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground/70">
-            {sourceCount}
-          </span>
-        </span>
-        {open ? null : <SourcePreview groups={groups} />}
-      </button>
-      {open ? (
-        <ul
-          className="grid items-start gap-2 sm:grid-cols-2"
-          id={panelId}
-        >
-          {groups.map(({ key, sources: grouped }) => {
-            const [first, ...rest] = grouped;
-
-            if (first === undefined) {
-              return null;
-            }
-
-            return rest.length === 0 ? (
-              <SourceCard
-                key={`${first.kind}:${first.id}`}
-                source={first}
-              />
-            ) : (
-              <SourceDocumentCard
-                key={key}
-                sources={[first, ...rest]}
-              />
-            );
-          })}
-        </ul>
-      ) : null}
-    </section>
-  );
-};
+        );
+      })}
+    </ul>
+  </section>
+);

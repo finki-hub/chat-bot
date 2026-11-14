@@ -29,6 +29,9 @@ export const groupSources = (
   return [...groups].map(([key, grouped]) => ({ key, sources: grouped }));
 };
 
+export const sourceGroupCount = (sources: readonly RetrievedSource[]): number =>
+  groupSources(sources).length;
+
 export const groupSections = (
   sources: readonly RetrievedSource[],
 ): string[] => [

@@ -75,11 +75,8 @@ test('renders source Markdown in collapsed and expanded cards', async ({
     name: 'Прикажи извори',
   });
   await expect(collapsedToggle).toHaveAttribute(ARIA_EXPANDED, 'false');
-  // Collapsed, only the title preview shows; the cards are not rendered.
-  await expect(page.getByTestId('source-preview')).toContainText(sourceTitle);
-  await expect(page.getByTestId('message-sources').locator('ul')).toHaveCount(
-    0,
-  );
+  // Collapsed, the footer shows only the toggle; the cards are not rendered.
+  await expect(page.getByTestId('source-panel')).toHaveCount(0);
 
   await collapsedToggle.click();
   await expect(

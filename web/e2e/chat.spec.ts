@@ -407,11 +407,8 @@ test.describe('chat streaming (mocked BFF)', () => {
       name: 'Прикажи извори',
     });
     await expect(collapsedToggle).toHaveAttribute('aria-expanded', 'false');
-    // Collapsed, only the title preview shows; the cards are not rendered.
-    await expect(page.getByTestId('source-preview')).toContainText(sourceTitle);
-    await expect(page.getByTestId('message-sources').locator('ul')).toHaveCount(
-      0,
-    );
+    // Collapsed, the footer shows only the toggle; the cards are not rendered.
+    await expect(page.getByTestId('source-panel')).toHaveCount(0);
     await page.screenshot({
       animations: 'disabled',
       path: testInfo.outputPath('streaming-sources-collapsed.png'),
@@ -431,7 +428,7 @@ test.describe('chat streaming (mocked BFF)', () => {
       page.getByRole('button', { name: 'Сокриј извори' }),
     ).toHaveAttribute('aria-expanded', 'true');
     await expect(
-      page.getByTestId('message-sources').getByText(sourceTitle),
+      page.getByTestId('source-panel').getByText(sourceTitle),
     ).toBeVisible();
     await page.screenshot({
       animations: 'disabled',
