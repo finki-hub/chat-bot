@@ -87,9 +87,7 @@ const startTimedStream = (
   });
 
 test.describe('reasoning streaming (mocked BFF)', () => {
-  test('streams reasoning live in an auto-expanded panel before the answer, then collapses', async ({
-    page,
-  }) => {
+  test('keeps streamed reasoning collapsed until opened', async ({ page }) => {
     const chatServer = await startTimedStream([
       {
         atMs: 0,
@@ -133,17 +131,15 @@ test.describe('reasoning streaming (mocked BFF)', () => {
       await page.getByTestId('composer-input').fill('Каде е ФИНКИ?');
       await page.getByTestId('composer-input').press('Enter');
 
-      // Reasoning is visible mid-stream, before any answer text exists.
-      await expect(page.getByTestId('reasoning-panel')).toContainText(
-        'чекор еден',
-      );
+      // Mid-stream, before any answer text, reasoning is a collapsed live toggle.
+      await expect(page.getByTestId('reasoning')).toBeVisible();
       await expect(page.getByTestId('answer-text')).toHaveCount(0);
+      await expect(page.getByTestId('reasoning-panel')).toHaveCount(0);
 
-      // Once the answer arrives the panel auto-collapses, but the toggle remains.
+      // It stays collapsed when the answer arrives, until the user opens it.
       await expect(page.getByTestId('answer-text')).toContainText(
         'ФИНКИ е во Скопје',
       );
-      await expect(page.getByTestId('reasoning')).toBeVisible();
       await expect(page.getByTestId('reasoning-panel')).toHaveCount(0);
 
       await page.getByTestId('reasoning').getByRole('button').click();
