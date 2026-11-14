@@ -883,6 +883,15 @@ export const AssistantMessage = ({
   });
   const reasoningText = joinReasoning(message);
   const answerVisible = Boolean(text);
+  // Answer text written between calls stays the answer while a later call runs,
+  // so sources and actions keep their place; a preamble before the first call
+  // does not count.
+  const footerVisible =
+    answerVisible ||
+    (withToolCalls &&
+      nonEmptyTexts(
+        message.parts.slice(message.parts.findIndex(isToolCallPart) + 1),
+      ).length > 0);
   const reasoningStreaming =
     Boolean(pending) && reasoningText.length > 0 && text === null;
   // Reasoning streaming right now has its own live label, so the wait line steps aside.
@@ -927,7 +936,7 @@ export const AssistantMessage = ({
             </MessageResponse>
           </div>
         ) : null}
-        {text === null ? null : <SourceCards sources={sources} />}
+        {footerVisible ? <SourceCards sources={sources} /> : null}
         <AssistantMessageStatus
           awaitingLabel={awaitingLabel}
           awaitingModel={awaitingModel && !reasoningLive}
@@ -951,7 +960,7 @@ export const AssistantMessage = ({
         ) : null}
         {/* Timing joins the actions row on finish instead of pushing it down;
             MessageTiming renders nothing until `timing` arrives. */}
-        {answerVisible ? (
+        {footerVisible ? (
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 empty:hidden">
             {actions}
             <MessageTiming

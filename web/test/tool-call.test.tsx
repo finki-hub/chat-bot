@@ -433,6 +433,28 @@ describe('AssistantMessage finished tool-call summary', () => {
     expect(screen.getByTestId(SUMMARY_ROW)).toHaveTextContent('2 пребарувања');
   });
 
+  it('keeps sources and actions while a later call runs after answer text', () => {
+    const message: MyUIMessage = {
+      ...assistant([
+        call('c1', DONE),
+        { text: ANSWER, type: 'text' },
+        call('c2'),
+      ]),
+      metadata: { sources: [{ id: 'q1', kind: 'faq', title: 'Упис' }] },
+    };
+    render(
+      <AssistantMessage
+        actions={ACTIONS}
+        message={message}
+        pending
+      />,
+    );
+
+    expect(screen.getByTestId('message-sources')).toBeInTheDocument();
+    expect(screen.getByTestId(ACTIONS_STUB)).toBeInTheDocument();
+    expect(toolStates()).toStrictEqual(['done', 'running']);
+  });
+
   it('keeps reasoning right above the answer, before and after it starts', () => {
     const reasoning = {
       state: 'done',
