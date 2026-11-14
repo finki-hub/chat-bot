@@ -1,6 +1,7 @@
+import logging
 from dataclasses import replace
 from html import escape
-from typing import Final
+from typing import Final, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -22,7 +23,12 @@ from app.llms.provider_credentials import has_provider_credential, provider_for_
 from app.llms.query_transform import QUERY_TRANSFORM_MAX_TOKENS, transform_query
 from app.schemas.chat_title import ChatTitleResponse, ChatTitleSchema
 from app.utils.auth import verify_api_key
+from app.utils.posthog_client import capture
 from app.utils.settings import Settings
+
+logger = logging.getLogger(__name__)
+
+TitleFallbackReason = Literal["no_model", "model_failed", "empty_output"]
 
 db_dep = Depends(get_db)
 api_key_dep = Depends(verify_api_key)
@@ -63,11 +69,40 @@ def _clip_title(text: str) -> str:
     return f"{text[: _TITLE_MAX - 1].rstrip()}…"
 
 
+def _clean_title(raw_title: str) -> str:
+    return " ".join(_first_line(raw_title).strip("'\"`“”‘’ ").split())
+
+
 def _normalize_title(raw_title: str, fallback_text: str) -> str:
-    title = " ".join(_first_line(raw_title).strip("'\"`“”‘’ ").split())
+    title = _clean_title(raw_title)
     if not title:
         title = _first_line(fallback_text) or _FALLBACK_TITLE
     return _clip_title(title)
+
+
+def _fallback_title(
+    payload: ChatTitleSchema,
+    reason: TitleFallbackReason,
+    model: ChatModel | None,
+) -> ChatTitleResponse:
+    """Name the chat after its question, and say so: otherwise a broken title
+    model just looks like titles that repeat the question."""
+    model_name = model.value if isinstance(model, Model) else model
+    logger.warning(
+        "Chat title fell back to the question (reason=%s, model=%s)",
+        reason,
+        model_name,
+    )
+    capture(
+        "chat-title",
+        "chat_title_fallback",
+        {
+            "reason": reason,
+            "model": model_name,
+            "$process_person_profile": False,
+        },
+    )
+    return ChatTitleResponse(title=_normalize_title("", payload.first_user_text))
 
 
 def _build_title_prompt(transcript: str) -> str:
@@ -142,9 +177,7 @@ async def generate_chat_title(
                 else replace(sponsored_credentials, conversation_id=conversation_id)
             )
     if selected_model is None:
-        return ChatTitleResponse(
-            title=_normalize_title("", payload.first_user_text),
-        )
+        return _fallback_title(payload, "no_model", None)
     prompt = _build_title_prompt(payload.transcript)
     raw_title = await transform_query(
         prompt,
@@ -155,8 +188,11 @@ async def generate_chat_title(
         max_tokens=QUERY_TRANSFORM_MAX_TOKENS,
         credentials=credentials,
     )
+    # transform_query hands the prompt back when the provider call fails.
     if raw_title == prompt:
-        raw_title = ""
+        return _fallback_title(payload, "model_failed", selected_model)
+    if not _clean_title(raw_title):
+        return _fallback_title(payload, "empty_output", selected_model)
     return ChatTitleResponse(
         title=_normalize_title(raw_title, payload.first_user_text),
     )
