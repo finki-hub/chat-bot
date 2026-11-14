@@ -14,15 +14,14 @@ export const ReasoningDisclosure = ({
   streaming?: boolean;
   text: string;
 }) => {
-  // null = follow the stream (open while thinking); a click pins it open or closed.
-  const [manualOpen, setManualOpen] = useState<boolean | null>(null);
+  // Closed by default, also while thinking: the shimmering label shows progress
+  // and the reasoning is one click away.
+  const [open, setOpen] = useState(false);
   const panelId = useId();
 
   if (text.length === 0) {
     return null;
   }
-
-  const open = manualOpen ?? streaming;
 
   return (
     <div
@@ -34,7 +33,7 @@ export const ReasoningDisclosure = ({
         aria-expanded={open}
         className="inline-flex items-center gap-1 rounded-md text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={() => {
-          setManualOpen(!open);
+          setOpen(!open);
         }}
         type="button"
       >
