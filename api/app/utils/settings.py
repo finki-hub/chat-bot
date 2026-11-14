@@ -105,7 +105,7 @@ class Settings(BaseSettings):
 
     GPU_API_URL: str = "http://gpu-api:8888"
     DIPLOMAS_API_URL: str = "https://bachelors-api.finki-hub.com/diplomas"
-    STAFF_API_URL: str = "https://assets.finki-hub.com/staff.json"
+    STAFF_API_URL: str = "https://data.finki-hub.com/legacy/staff.json"
     STAFF_CACHE_TTL: int = 3600
     # Minimum cross-encoder score (sentence-transformers CrossEncoder.predict applies a
     # sigmoid for num_labels=1 rerankers like bge-reranker-v2-m3, so scores are 0..1) a
