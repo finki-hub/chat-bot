@@ -109,6 +109,17 @@ const SourceMeta = ({ source }: { source: RetrievedSource }) => {
   );
 };
 
+// The badge's tooltip is hover-only, so the reason is also spelled out.
+const OutdatedNote = ({ source }: { source: RetrievedSource }) =>
+  isOutdatedSource(source) ? (
+    <p
+      className="mt-1.5 text-xs leading-snug text-amber-700 dark:text-amber-400"
+      data-testid="source-outdated-note"
+    >
+      {t('sources.outdatedHint')}
+    </p>
+  ) : null;
+
 const SourceTitle = ({
   expandable,
   expanded,
@@ -225,6 +236,7 @@ const SourceCard = ({ source }: { source: RetrievedSource }) => {
       ) : (
         <div>{heading}</div>
       )}
+      <OutdatedNote source={source} />
       <SourceLinks
         links={source.links ?? []}
         title={source.title}
@@ -352,6 +364,7 @@ const SourceDocumentCard = ({
           sources={withSnippets}
         />
       ) : null}
+      <OutdatedNote source={first} />
       <SourceLinks
         links={groupLinks(sources)}
         title={first.title}

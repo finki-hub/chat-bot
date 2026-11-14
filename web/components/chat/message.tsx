@@ -470,11 +470,25 @@ const InterleavedParts = ({
 }) => {
   const superseded = supersededToolCalls(message);
   const answer = answerSegments(message);
-  const segments: RenderSegment[] =
+  const folded: RenderSegment[] =
     toolCallParts(message).length > 1
       ? collapseToolRuns(answer, pending)
       : answer;
-  const candidate = reasoning === null ? -1 : reasoningSlot(segments);
+  const candidate = reasoning === null ? -1 : reasoningSlot(folded);
+  const previous = folded[candidate - 1];
+  // A lone finished call before the answer folds too, so it can carry the
+  // reasoning in one row instead of two.
+  const segments =
+    finishedReasoning !== undefined &&
+    candidate > 0 &&
+    candidate < folded.length &&
+    previous?.type === 'tool'
+      ? folded.with(candidate - 1, {
+          key: `${previous.key}:group`,
+          parts: [previous.part],
+          type: 'tools',
+        })
+      : folded;
   // Finished reasoning right after a folded run joins that run's row.
   const mergeInto =
     finishedReasoning !== undefined &&

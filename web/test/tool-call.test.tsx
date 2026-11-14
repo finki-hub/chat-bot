@@ -686,4 +686,32 @@ describe('AssistantMessage layout across the stream', () => {
       'Размислувам',
     );
   });
+
+  it('folds a single finished call with the reasoning into one row', () => {
+    render(
+      <AssistantMessage
+        message={assistant([
+          { state: 'done', text: 'Размислувам', type: 'reasoning' },
+          call('c1', DONE),
+          { text: ANSWER, type: 'text' },
+        ])}
+      />,
+    );
+
+    expect(screen.queryByTestId('reasoning')).not.toBeInTheDocument();
+    expect(screen.getByTestId(SUMMARY_ROW)).toHaveTextContent(
+      '1 пребарување · размислување',
+    );
+  });
+
+  it('keeps a single finished call as its row without reasoning', () => {
+    render(
+      <AssistantMessage
+        message={assistant([call('c1', DONE), { text: ANSWER, type: 'text' }])}
+      />,
+    );
+
+    expect(screen.queryByTestId(SUMMARY_ROW)).not.toBeInTheDocument();
+    expect(toolStates()).toStrictEqual(['done']);
+  });
 });

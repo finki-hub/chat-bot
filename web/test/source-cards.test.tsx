@@ -276,6 +276,9 @@ describe('source metadata', () => {
     expect(screen.getByTestId('source-outdated')).toHaveTextContent(
       'Можеби застарено',
     );
+    expect(screen.getByTestId('source-outdated-note')).toHaveTextContent(
+      'Документот можеби е заменет со понов.',
+    );
     expect(
       screen.getByRole('link', { name: `Врска: ${RULES}` }),
     ).toHaveTextContent('PDF');
