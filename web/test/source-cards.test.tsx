@@ -45,7 +45,7 @@ describe('SourceCards', () => {
   it('renders source snippets as semantic Markdown without remote images', () => {
     renderSourceCards();
 
-    expect(screen.getByRole('list')).toHaveClass('items-start');
+    expect(screen.getByRole('list')).not.toHaveClass('items-start');
     expect(screen.getByText('Important').tagName).toBe('STRONG');
     expect(screen.getByText(MERMAID_CODE_RE).closest('code')).not.toBeNull();
     expect(document.querySelectorAll('img[alt="tracking"]')).toHaveLength(0);

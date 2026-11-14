@@ -56,7 +56,7 @@ describe('inline citations', () => {
     const card = within(panel).getByTestId('source-document');
 
     expect(card).toHaveAttribute('data-ref', '2');
-    expect(card).toHaveClass('ring-2');
+    expect(card).toHaveClass('ring-inset', 'border-primary/70');
     expect(
       screen.getByRole('button', { name: 'Сокриј извори' }),
     ).toHaveAttribute('aria-expanded', 'true');

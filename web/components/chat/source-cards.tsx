@@ -163,7 +163,8 @@ const SourceLinks = ({
   title: string;
 }) =>
   links.length > 0 ? (
-    <div className="mt-2 flex flex-wrap gap-x-3">
+    // Pinned to the card's bottom, so links line up across a row.
+    <div className="mt-auto flex flex-wrap gap-x-3 pt-2">
       {links.map((link) => (
         <a
           aria-label={`${t('sources.link')}: ${link.label}`}
@@ -186,7 +187,7 @@ const SourceLinks = ({
   ) : null;
 
 const CARD_CLASS =
-  'min-w-0 rounded-lg border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/35';
+  'flex min-w-0 flex-col rounded-lg border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/35';
 const CARD_TOGGLE_CLASS =
   'block min-h-11 w-full rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:min-h-0';
 
@@ -195,8 +196,11 @@ type CardCitation = {
   focused: boolean;
 };
 
+// Drawn inside the border: an outer ring is clipped at the column's edge.
 const cardClass = (focused: boolean): string =>
-  focused ? `${CARD_CLASS} ring-2 ring-primary/50` : CARD_CLASS;
+  focused
+    ? `${CARD_CLASS} border-primary/70 ring-1 ring-inset ring-primary/70`
+    : CARD_CLASS;
 
 const SourceCard = ({
   citeRef,
@@ -481,7 +485,8 @@ export const SourcesPanel = ({
       id={id}
       ref={panelRef}
     >
-      <ul className="grid items-start gap-2 sm:grid-cols-2">
+      {/* Cards in a row share its height, so no gap opens under the shorter one. */}
+      <ul className="grid gap-2 sm:grid-cols-2">
         {groupSources(sources).map(({ key, sources: grouped }) => {
           const [first, ...rest] = grouped;
 
