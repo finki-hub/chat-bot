@@ -105,12 +105,17 @@ const parseConversations = (value: unknown): ConversationRow[] => {
       if (typeof item !== 'object' || item === null) {
         return null;
       }
-      const { id, model, title } = item as Record<string, unknown>;
+      const { id, model, title, updatedAt } = item as Record<string, unknown>;
       return typeof id !== 'string' ||
         (model !== null && typeof model !== 'string') ||
         (title !== null && typeof title !== 'string')
         ? null
-        : { id, model, title: title ?? 'New conversation' };
+        : {
+            id,
+            model,
+            title: title ?? 'New conversation',
+            ...(typeof updatedAt === 'string' && { updatedAt }),
+          };
     })
     .filter((conversation) => conversation !== null);
 };

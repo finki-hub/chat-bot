@@ -16,4 +16,6 @@ export type ConversationRow = {
   readonly id: string;
   readonly model: null | string;
   readonly title: string;
+  // Last activity (ISO); missing for a conversation not yet saved.
+  readonly updatedAt?: string;
 };

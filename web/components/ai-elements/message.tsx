@@ -2,6 +2,7 @@
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { t } from "@/lib/i18n";
+import { isTrustedLinkUrl } from "@/lib/trusted-links";
 import { cn } from "@/lib/utils";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
@@ -137,6 +138,7 @@ const LinkSafetyModal = ({
 
 const linkSafety: LinkSafetyConfig = {
   enabled: true,
+  onLinkCheck: isTrustedLinkUrl,
   renderModal: (props: LinkSafetyModalProps) => <LinkSafetyModal {...props} />,
 };
 

@@ -6,7 +6,9 @@ import { startChatStreamServer, type UiChunk } from './helpers/sse';
 
 const MODEL = 'claude-sonnet-5-5';
 const ACCOUNT_MENU_NAME_PATTERN = /Корисничко мени:/u;
-const LONG_SAFE_URL = `https://finki.ukim.mk/${'a'.repeat(3_000)}`;
+const ANSWER_TEXT = 'answer-text';
+const MORE_QUESTION = 'Каде да видам повеќе?';
+const LONG_SAFE_URL = `https://example.org/${'a'.repeat(3_000)}`;
 
 const answer = (text: string): UiChunk[] => [
   {
@@ -53,13 +55,13 @@ test('clicking a link opens the shared confirmation modal', async ({
 }) => {
   const server = await mockBackend(
     page,
-    answer('Повеќе на https://finki.ukim.mk тука.'),
+    answer('Повеќе на https://example.org тука.'),
   );
   await page.goto('/');
-  await send(page, 'Каде да видам повеќе?');
+  await send(page, MORE_QUESTION);
 
   const link = page
-    .getByTestId('answer-text')
+    .getByTestId(ANSWER_TEXT)
     .locator('[data-streamdown="link"]')
     .first();
   await link.waitFor();
@@ -68,9 +70,37 @@ test('clicking a link opens the shared confirmation modal', async ({
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Отвори надворешна врска?');
-  await expect(dialog).toContainText('finki.ukim.mk');
+  await expect(dialog).toContainText('example.org');
 
   await page.getByRole('button', { name: 'Откажи' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await server.close();
+});
+
+test('faculty links open directly, without the confirmation', async ({
+  page,
+}) => {
+  const server = await mockBackend(
+    page,
+    answer('Повеќе на https://finki.ukim.mk тука.'),
+  );
+  await page.goto('/');
+  await send(page, MORE_QUESTION);
+
+  const link = page
+    .getByTestId(ANSWER_TEXT)
+    .locator('[data-streamdown="link"]')
+    .first();
+  await link.waitFor();
+  await page.context().route('https://finki.ukim.mk/**', async (route) => {
+    await route.fulfill({ body: 'ok', status: 200 });
+  });
+  const popupEvent = page.waitForEvent('popup');
+  await link.click();
+  const popup = await popupEvent;
+
+  expect(popup.url()).toBe('https://finki.ukim.mk/');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await server.close();
@@ -82,13 +112,13 @@ test('protocol-less markdown links render as safe https links', async ({
   const server = await mockBackend(
     page,
     answer(
-      'Пример:\n\n```md\nUse [FINKI](finki.ukim.mk)\n```\n\nПовеќе на [FINKI](finki.ukim.mk) тука.',
+      'Пример:\n\n```md\nUse [FINKI](example.org)\n```\n\nПовеќе на [FINKI](example.org) тука.',
     ),
   );
   await page.goto('/');
-  await send(page, 'Каде да видам повеќе?');
+  await send(page, MORE_QUESTION);
 
-  const answerText = page.getByTestId('answer-text');
+  const answerText = page.getByTestId(ANSWER_TEXT);
   await expect(answerText).not.toContainText('[blocked]');
 
   const link = answerText.locator('[data-streamdown="link"]', {
@@ -97,16 +127,16 @@ test('protocol-less markdown links render as safe https links', async ({
   await expect(link).toBeVisible();
 
   const code = answerText.locator('code', {
-    hasText: 'Use [FINKI](finki.ukim.mk)',
+    hasText: 'Use [FINKI](example.org)',
   });
   await expect(code).toBeVisible();
-  await expect(code).not.toContainText('https://finki.ukim.mk');
+  await expect(code).not.toContainText('https://example.org');
 
   await link.click();
 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText('https://finki.ukim.mk/');
+  await expect(dialog).toContainText('https://example.org/');
 
   await server.close();
 });
@@ -125,11 +155,11 @@ test('long link confirmations scroll inside mobile safe areas', async ({
     answer(`Повеќе на [FINKI](${LONG_SAFE_URL}) тука.`),
   );
   await page.goto('/');
-  await send(page, 'Каде да видам повеќе?');
+  await send(page, MORE_QUESTION);
 
   // When the user opens the link confirmation.
   const link = page
-    .getByTestId('answer-text')
+    .getByTestId(ANSWER_TEXT)
     .locator('[data-streamdown="link"]')
     .first();
   await link.waitFor();
@@ -170,7 +200,7 @@ test('delete-all clears the entire history after confirmation', async ({
   });
   await page.goto('/');
   await send(page, 'Прашање');
-  await expect(page.getByTestId('answer-text')).toContainText('Готово');
+  await expect(page.getByTestId(ANSWER_TEXT)).toContainText('Готово');
 
   const items = page.locator('[data-testid^="conversation-"]');
   await expect(items).toHaveCount(1);

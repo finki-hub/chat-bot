@@ -60,6 +60,7 @@ type ConversationSummary = {
   readonly id: string;
   readonly model: null | string;
   readonly title: null | string;
+  readonly updatedAt?: string;
 };
 
 type RegenerationReplacement = {
@@ -97,10 +98,14 @@ const conversationSummary = (conversation: {
   readonly id: string;
   readonly model?: null | string;
   readonly title?: null | string;
+  readonly updated_at?: string;
 }): ConversationSummary => ({
   id: conversation.id,
   model: conversation.model ?? null,
   title: conversation.title ?? null,
+  ...(conversation.updated_at !== undefined && {
+    updatedAt: conversation.updated_at,
+  }),
 });
 
 const requiredText = (value: string | undefined): null | string =>
