@@ -11,13 +11,21 @@ export type SearchStepperProps = {
 
 export const SearchStepper = ({ stages }: SearchStepperProps) => {
   const activeIndex = stages.length - 1;
+  const activeStage = stages[activeIndex];
 
   return (
     <div
-      aria-live="polite"
       className="flex flex-col gap-1"
       data-testid="search-stepper"
     >
+      {activeStage ? (
+        <output
+          aria-live="polite"
+          className="sr-only"
+        >
+          {searchStageLabel(activeStage)}
+        </output>
+      ) : null}
       {stages.map((stage, index) => {
         const active = index === activeIndex;
 

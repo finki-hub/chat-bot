@@ -14,15 +14,17 @@ from app.services.recommendations import (
     NoSimilarDefensesError,
     generate_committee_recommendation,
 )
+from app.utils.auth import verify_api_key
 
 logger = logging.getLogger(__name__)
 
 db_dep = Depends(get_db)
+api_key_dep = Depends(verify_api_key)
 
 router = APIRouter(
     prefix="/recommendations",
     tags=["Recommendations"],
-    dependencies=[db_dep],
+    dependencies=[db_dep, api_key_dep],
 )
 
 
@@ -46,6 +48,11 @@ def _inactive_staff_detail(exc: InactiveStaffRequestedError) -> str:
         "grounded in similar historical defenses and professor-paper expertise."
     ),
     status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Invalid or missing API Key",
+        },
+    },
     operation_id="recommendCommittee",
 )
 async def recommend_committee(

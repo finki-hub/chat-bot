@@ -1,8 +1,13 @@
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from app.main import make_app
+from app.utils.auth import verify_api_key
 from app.utils.settings import Settings
 
 
@@ -185,3 +190,41 @@ def test_validation_errors_do_not_echo_raw_invalid_payload(monkeypatch):
     assert response.status_code == 422
     assert "private invalid title payload" not in response.text
     assert "input" not in body["detail"][0]
+
+
+def test_recommendations_require_api_key(monkeypatch):
+    monkeypatch.setattr("app.main.Database", HealthyDatabase)
+    app = make_app(
+        Settings(
+            API_KEY="test-api-key",
+            CREDENTIAL_ENCRYPTION_KEY="test-credential-key",
+            MCP_API_KEY="test-mcp-key",
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/recommendations/",
+            json={"title": "test"},
+        )
+
+    assert response.status_code == 401
+
+
+def test_non_ascii_api_key_is_rejected_without_a_server_error():
+    request = Request(
+        {
+            "app": SimpleNamespace(
+                state=SimpleNamespace(settings=Settings(API_KEY="test-api-key")),
+            ),
+            "headers": [(b"x-api-key", "клуч".encode())],
+            "method": "GET",
+            "path": "/",
+            "type": "http",
+        },
+    )
+
+    with pytest.raises(HTTPException) as error:
+        verify_api_key(request)
+
+    assert error.value.status_code == 401

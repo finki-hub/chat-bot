@@ -1,4 +1,5 @@
 export const messages = {
+  'actions.copied': 'Копирано',
   'actions.copy': 'Копирај',
   'actions.dislike': 'Не ми се допаѓа',
   'actions.like': 'Ми се допаѓа',
@@ -93,6 +94,8 @@ export const messages = {
   'feedback.reason.wrong': 'Неточно',
   'feedback.reasons': 'Причина',
   'feedback.send': 'Испрати',
+  'feedback.sendError':
+    'Не успеавме да го зачуваме одговорот. Обиди се повторно.',
   'feedback.skip': 'Прескокни',
   'feedback.title': 'Што не беше во ред?',
   'header.credentials': 'API клучеви',

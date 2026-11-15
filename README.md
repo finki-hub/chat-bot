@@ -275,7 +275,7 @@ API service (`/api` directory, default port `8880`):
 - `/links/list`, `/links/names`, `/links/name/{name}`, `/links/nth/{n}` - read stored links
 - `/links/` (POST), `/links/{name}` (PUT/DELETE) - manage links (requires `x-api-key`)
 - `/diplomas/sync`, `/diplomas/fill-embeddings` - sync defended thesis records from the upstream Diplomas API and fill their embeddings (requires `x-api-key`)
-- `/recommendations/` - recommend thesis committee alternatives from historical defenses and professor-paper expertise
+- `/recommendations/` - recommend thesis committee alternatives from historical defenses and professor-paper expertise (requires `x-api-key`)
 - `/groups/` - list precomputed professor groups by source, year, or professor
 - `/chat/` - stream chat responses; `/chat/models` lists available chat models; `/chat/feedback` records web/Discord feedback (feedback requires `x-api-key`)
 - `/health/` - liveness check; `/health/health` - detailed database health check

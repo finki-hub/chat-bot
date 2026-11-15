@@ -18,7 +18,7 @@ services:
       CHAT_HISTORY_MAX_TURNS: ${CHAT_HISTORY_MAX_TURNS:-10}
       DATABASE_POOL_MAX_SIZE: ${DATABASE_POOL_MAX_SIZE:-10}
       DATABASE_POOL_MIN_SIZE: ${DATABASE_POOL_MIN_SIZE:-1}
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?CREDENTIAL_ENCRYPTION_KEY is required}
       GPU_API_URL: ${GPU_API_URL}
       LOG_LEVEL: ${LOG_LEVEL}
@@ -70,7 +70,7 @@ services:
     environment:
       DATABASE_POOL_MAX_SIZE: ${DATABASE_POOL_MAX_SIZE:-10}
       DATABASE_POOL_MIN_SIZE: ${DATABASE_POOL_MIN_SIZE:-1}
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       GPU_API_URL: ${GPU_API_URL}
       LOG_LEVEL: ${LOG_LEVEL}
       TZ: ${TZ}
@@ -83,7 +83,6 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_PORT: ${POSTGRES_PORT}
       POSTGRES_USER: ${POSTGRES_USER}
       TZ: ${TZ}
     healthcheck:
@@ -132,21 +131,21 @@ services:
     networks:
       - finki_stack
     ports:
-      - "8888:8888"
+      - "127.0.0.1:8888:8888"
     restart: unless-stopped
     volumes:
       - ./hf_cache:/huggingface_cache
 
   pgadmin:
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:?PGADMIN_EMAIL is required}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?PGADMIN_PASSWORD is required}
       TZ: ${TZ}
-    image: dpage/pgadmin4:latest
+    image: dpage/pgadmin4:9.19.0
     networks:
       - finki_stack
     ports:
-      - "5555:80"
+      - "127.0.0.1:5555:80"
     restart: unless-stopped
     volumes:
       - ./pgadmin:/var/lib/pgadmin

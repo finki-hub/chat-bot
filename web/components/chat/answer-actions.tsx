@@ -140,9 +140,9 @@ export const AnswerActions = ({
         onSubmit={async (details) => sendDislikeDetails(responseId, details)}
         open={reasonOpen}
       />
-      <ControlTooltip label={t('actions.copy')}>
+      <ControlTooltip label={copied ? t('actions.copied') : t('actions.copy')}>
         <button
-          aria-label={t('actions.copy')}
+          aria-label={copied ? t('actions.copied') : t('actions.copy')}
           className={BTN}
           onClick={() => {
             void copy();
@@ -162,6 +162,12 @@ export const AnswerActions = ({
           )}
         </button>
       </ControlTooltip>
+      <span
+        aria-live="polite"
+        className="sr-only"
+      >
+        {copied ? t('actions.copied') : ''}
+      </span>
       {onRegenerate ? (
         <ControlTooltip
           disabled={regenerateDisabled}

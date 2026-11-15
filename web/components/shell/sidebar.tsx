@@ -167,7 +167,7 @@ export const Sidebar = ({
       {/* The date groups head the list, so the section needs no visible title. */}
       <nav
         aria-label={t('sidebar.history')}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-1"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pt-1"
       >
         {term && filtered.length === 0 ? (
           <p

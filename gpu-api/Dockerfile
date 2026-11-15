@@ -37,7 +37,7 @@ COPY --from=builder /app/gunicorn.conf.py /app/
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1
 
-HEALTHCHECK --interval=30s --timeout=3s CMD wget --quiet --tries=1 --spider http://127.0.0.1:8888/health/ || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=300s CMD wget --quiet --tries=1 --spider http://127.0.0.1:8888/health/ || exit 1
 
 EXPOSE 8888
 
