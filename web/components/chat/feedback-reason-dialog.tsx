@@ -40,6 +40,11 @@ export const FeedbackReasonDialog = ({
   const commentId = useId();
   const canSend = !sending && (reason !== null || comment.trim() !== '');
 
+  const close = (): void => {
+    setFailed(false);
+    onOpenChange(false);
+  };
+
   const send = async (): Promise<void> => {
     setSending(true);
     setFailed(false);
@@ -49,7 +54,7 @@ export const FeedbackReasonDialog = ({
         ...(comment.trim() !== '' && { comment: comment.trim() }),
       });
       if (saved) {
-        onOpenChange(false);
+        close();
       } else {
         setFailed(true);
       }
@@ -64,10 +69,11 @@ export const FeedbackReasonDialog = ({
         if (sending) {
           return;
         }
-        if (!next) {
-          setFailed(false);
+        if (next) {
+          onOpenChange(true);
+          return;
         }
-        onOpenChange(next);
+        close();
       }}
       open={open}
     >
@@ -136,9 +142,7 @@ export const FeedbackReasonDialog = ({
           <DialogFooter>
             <Button
               disabled={sending}
-              onClick={() => {
-                onOpenChange(false);
-              }}
+              onClick={close}
               type="button"
               variant="outline"
             >

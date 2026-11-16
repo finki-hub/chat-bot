@@ -27,6 +27,10 @@ _QUESTION_ALLOWED_COLUMNS: frozenset[str] = frozenset(
     {"name", "content", "user_id", "links", "assistant_note"},
 )
 
+_QUESTION_COLUMNS = (
+    "id, name, content, user_id, links, assistant_note, created_at, updated_at"
+)
+
 
 def _serialize_links(links: dict[str, HttpUrl] | None) -> str:
     serializable = (
@@ -50,10 +54,7 @@ def _question_from_row(row: Record) -> QuestionSchema:
 
 
 async def get_questions_query(db: Database) -> list[QuestionSchema]:
-    query = (
-        "SELECT id, name, content, user_id, links, assistant_note, created_at, "
-        "updated_at FROM question ORDER BY name ASC"
-    )
+    query = f"SELECT {_QUESTION_COLUMNS} FROM question ORDER BY name ASC"  # noqa: S608
     result = await db.fetch(query)
 
     return [_question_from_row(row) for row in result]
@@ -91,8 +92,8 @@ async def get_questions_without_embeddings_query(
     embedding_column = embedding_column_name(model)
     predicate = dirty_embedding_predicate(model, embedding_column)
     query = (
-        "SELECT id, name, content, user_id, links, assistant_note, created_at, "  # noqa: S608
-        f"updated_at FROM question WHERE {predicate.sql} ORDER BY name ASC"
+        f"SELECT {_QUESTION_COLUMNS} FROM question "  # noqa: S608
+        f"WHERE {predicate.sql} ORDER BY name ASC"
     )
     result = await db.fetch(query, *predicate.parameters)
 

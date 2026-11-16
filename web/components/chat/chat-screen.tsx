@@ -231,7 +231,7 @@ export const ChatScreen = () => {
           synced={sidebarSynced}
         />
         <main
-          className="flex min-w-0 flex-1 flex-col focus:outline-none focus:ring-2 focus:ring-ring focus:ring-inset"
+          className="flex min-w-0 flex-1 flex-col"
           id="main-content"
           tabIndex={-1}
         >

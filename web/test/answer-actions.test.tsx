@@ -67,14 +67,12 @@ describe('AnswerActions', () => {
     });
   });
 
-  it('announces that the answer was copied and updates the label', async () => {
+  it('announces that the answer was copied', async () => {
     render(<AnswerActions message={assistant('r1', 'Текст за копирање')} />);
     fireEvent.click(screen.getByRole('button', { name: 'Копирај' }));
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Копирано' }),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId('copy-feedback')).toHaveTextContent('Копирано');
     });
   });
 
