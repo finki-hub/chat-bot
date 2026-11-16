@@ -103,7 +103,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=1.4.9" },
     { name = "langchain-anthropic", specifier = ">=1.7.10" },
-    { name = "langchain-google-genai", specifier = ">=4.4.3" },
+    { name = "langchain-google-genai", specifier = ">=4.5.0" },
     { name = "langchain-mcp-adapters", specifier = ">=0.3.2" },
     { name = "langchain-ollama", specifier = ">=1.1.0" },
     { name = "langchain-openai", specifier = ">=1.7.4" },
@@ -624,13 +624,13 @@ requests = [
 
 [[package]]
 name = "google-genai"
-version = "2.33.0"
+version = "3.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
     { name = "distro" },
     { name = "google-auth", extra = ["requests"] },
-    { name = "httpx" },
+    { name = "httpx2" },
     { name = "pydantic" },
     { name = "requests" },
     { name = "sniffio" },
@@ -638,9 +638,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/83/a4/b83b378b4a2fbbfb300c3fde0ff9f443f049c33e2accedf06bc0ad9bf393/google_genai-2.33.0.tar.gz", hash = "sha256:fced7f746da45264b34bcf6044a6fcdb91ebad1825e95c324ee48addb6e557ae", size = 758627, upload-time = "2026-10-23T00:06:28.332Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3c/8f/f1d323f57e2eedf3900beb46f428d0fe219e93d42344a8d94fcfe6ec809b/google_genai-3.3.0.tar.gz", hash = "sha256:c0ab7bfbf13d4a24a5798ec9e4200773b2fa150eb620317db337f751a9c9576c", size = 828244, upload-time = "2026-11-12T19:57:01.02Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ba/3b/9ae8e16c5b2177bfdec1c64769a93eea9093de684e0bbb95c10c77645fef/google_genai-2.33.0-py3-none-any.whl", hash = "sha256:f3f8ab696b35caf95c222e05268740c1ccd6934257890506be73b126150d3b14", size = 1222487, upload-time = "2026-10-23T00:06:26.528Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/e4/619de4d0f985cfafc7a420339796279716aba5c6cac362ab4f97b856279f/google_genai-3.3.0-py3-none-any.whl", hash = "sha256:86bd1830fec4b12e474237414fa52383aa0f49458910f6c9c938c207715559b5", size = 1365721, upload-time = "2026-11-12T19:56:59.174Z" },
 ]
 
 [[package]]
@@ -944,7 +944,7 @@ wheels = [
 
 [[package]]
 name = "langchain-core"
-version = "1.7.6"
+version = "1.8.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -959,14 +959,14 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uuid-utils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1e/13/eef86ab444e9e797bb0e41f583904510fb36416571f6fbb93b9255e1e125/langchain_core-1.7.6.tar.gz", hash = "sha256:0833781e3a8e6fe83073c8412c21180a0545d5ccdf3437889951caf9589ece6c", size = 1037637, upload-time = "2026-11-05T00:21:56.343Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/70/22/b8823f7cad862d07aec9fe41d1bd61c1129fcde0879fcde4de5482c31896/langchain_core-1.8.1.tar.gz", hash = "sha256:778b9bf1d18d4b7a716311defa230db190006ef75fe175930e00012d82df603b", size = 1019016, upload-time = "2026-11-15T14:57:00.031Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9d/a2/34c24dfc27ebd5002580deffe82975c507bb96af2540849aaa02c66027af/langchain_core-1.7.6-py3-none-any.whl", hash = "sha256:f61908be526fbeb5da8cc1ffd9d24bce3b50cf45b3a2f1737c1a7a2958046ce6", size = 580547, upload-time = "2026-11-05T00:21:54.883Z" },
+    { url = "https://files.pythonhosted.org/packages/02/5b/fc60734441d0d9816e10598bb71a5a322494b4e3d393e75b37af0578b327/langchain_core-1.8.1-py3-none-any.whl", hash = "sha256:e093de87371e648af23517f1e98cefc316f8be7c72a137b0e0f94d3e8e8cc421", size = 588127, upload-time = "2026-11-15T14:56:58.714Z" },
 ]
 
 [[package]]
 name = "langchain-google-genai"
-version = "4.4.3"
+version = "4.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filetype" },
@@ -974,9 +974,9 @@ dependencies = [
     { name = "langchain-core" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2a/fb/2e54776985a875277d24280c7241d65ab6307fdf1be8465fe0500879a32b/langchain_google_genai-4.4.3.tar.gz", hash = "sha256:171ca3a9a7707359def977004b99a84a963193e70e8b2c420ad2109e02ddc8ae", size = 393905, upload-time = "2026-11-04T19:09:27.166Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3e/b5/735a935a72ee93538035efea8893e7782041e03b9f6f1b28271e94b5e000/langchain_google_genai-4.5.0.tar.gz", hash = "sha256:54f2d887b454ff94635af13c5edca7ec4d1b8f4ad77cb51f63d3443ce4a83514", size = 370586, upload-time = "2026-11-11T19:20:20.991Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/63/2b/4dfadaecae860de0bc06b01bdbde09f4c462cf2542bac3d63974e5215507/langchain_google_genai-4.4.3-py3-none-any.whl", hash = "sha256:a3906f1813aee36e9e67e384b6d7bf6cacd6cd44610beef35ec1ae4fb23dd2a2", size = 82444, upload-time = "2026-11-04T19:09:25.822Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/6f/7e95c6c06cdcf6f13ac42a65b39c36d4483498a352342582782daa2049b0/langchain_google_genai-4.5.0-py3-none-any.whl", hash = "sha256:0b04ca96696b41dba1e1fa29e4dd7132afab9cb6ae7d8fc173fd0b3858bdaf72", size = 89965, upload-time = "2026-11-11T19:20:19.652Z" },
 ]
 
 [[package]]
