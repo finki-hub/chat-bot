@@ -6,7 +6,8 @@ bind = f"{host}:{port}"
 
 workers = int(os.getenv("WORKERS", "4"))
 
-worker_class = "uvicorn.workers.UvicornWorker"
+# uvicorn.workers is deprecated; uvicorn-worker is the maintained package.
+worker_class = "uvicorn_worker.UvicornWorker"
 
 accesslog = "-"
 errorlog = "-"
