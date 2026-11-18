@@ -162,6 +162,13 @@ export const AnswerActions = ({
           )}
         </button>
       </ControlTooltip>
+      <span
+        aria-live="polite"
+        className="sr-only"
+        data-testid="copy-feedback"
+      >
+        {copied ? t('actions.copied') : ''}
+      </span>
       {onRegenerate ? (
         <ControlTooltip
           disabled={regenerateDisabled}

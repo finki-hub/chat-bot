@@ -33,6 +33,8 @@ const ack = Response.json(
 );
 
 const PRESSED = 'aria-pressed';
+const DISLIKE_LABEL = 'Не ми се допаѓа';
+const FEEDBACK_DIALOG = 'feedback-reason-dialog';
 const LIKE_LABEL = 'Ми се допаѓа';
 
 const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
@@ -62,6 +64,15 @@ describe('AnswerActions', () => {
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith('Текст за копирање');
+    });
+  });
+
+  it('announces that the answer was copied', async () => {
+    render(<AnswerActions message={assistant('r1', 'Текст за копирање')} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Копирај' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('copy-feedback')).toHaveTextContent('Копирано');
     });
   });
 
@@ -120,7 +131,7 @@ describe('AnswerActions feedback', () => {
 
   it('posts a dislike and marks it as pressed', async () => {
     render(<AnswerActions message={assistant('resp-9')} />);
-    const dislike = screen.getByRole('button', { name: 'Не ми се допаѓа' });
+    const dislike = screen.getByRole('button', { name: DISLIKE_LABEL });
     fireEvent.click(dislike);
 
     await waitFor(() => {
@@ -238,9 +249,9 @@ describe('AnswerActions feedback', () => {
 describe('AnswerActions dislike reasons', () => {
   it('asks why after a dislike and sends the chosen reason and note', async () => {
     render(<AnswerActions message={assistant('resp-7', 'Слаб одговор')} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Не ми се допаѓа' }));
+    fireEvent.click(screen.getByRole('button', { name: DISLIKE_LABEL }));
 
-    const dialog = await screen.findByTestId('feedback-reason-dialog');
+    const dialog = await screen.findByTestId(FEEDBACK_DIALOG);
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Застарено' }));
     fireEvent.change(within(dialog).getByRole('textbox'), {
@@ -249,9 +260,7 @@ describe('AnswerActions dislike reasons', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Испрати' }));
 
     await waitFor(() => {
-      expect(
-        screen.queryByTestId('feedback-reason-dialog'),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByTestId(FEEDBACK_DIALOG)).not.toBeInTheDocument();
     });
 
     const fetchMock = fetch as unknown as ReturnType<
@@ -267,11 +276,31 @@ describe('AnswerActions dislike reasons', () => {
     });
   });
 
+  it('shows an error when saving the dislike details fails', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(ack.clone())
+      .mockResolvedValueOnce(new Response('{}', { status: 500 }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<AnswerActions message={assistant('resp-10', 'Слаб одговор')} />);
+    fireEvent.click(screen.getByRole('button', { name: DISLIKE_LABEL }));
+
+    const dialog = await screen.findByTestId(FEEDBACK_DIALOG);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Застарено' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Испрати' }));
+
+    const alert = await screen.findByRole('alert');
+
+    expect(alert).toHaveTextContent(
+      'Не успеавме да го зачуваме одговорот. Обиди се повторно.',
+    );
+  });
+
   it('keeps the plain dislike when the question is skipped', async () => {
     render(<AnswerActions message={assistant('resp-8', 'Слаб одговор')} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Не ми се допаѓа' }));
+    fireEvent.click(screen.getByRole('button', { name: DISLIKE_LABEL }));
 
-    const dialog = await screen.findByTestId('feedback-reason-dialog');
+    const dialog = await screen.findByTestId(FEEDBACK_DIALOG);
 
     expect(
       within(dialog).getByRole('button', { name: 'Испрати' }),
@@ -280,9 +309,7 @@ describe('AnswerActions dislike reasons', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Прескокни' }));
 
     await waitFor(() => {
-      expect(
-        screen.queryByTestId('feedback-reason-dialog'),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByTestId(FEEDBACK_DIALOG)).not.toBeInTheDocument();
     });
 
     expect(fetch).toHaveBeenCalledOnce();

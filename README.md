@@ -27,7 +27,7 @@ To run the chat bot:
    cp .env.sample .env
    cat production-release-pins.sample >> .env
    ```
-   Replace all placeholders in `.env` with the approved values before running Compose. At minimum, set a non-default `API_KEY` before exposing the service. The sponsored model remains disabled unless its separate rollout settings are deliberately configured; never use `API_KEY` as its provider credential. If you configure MCP servers, set non-default per-server `api_key` values in `MCP_SERVERS`.
+   Replace all placeholders in `.env` with the approved values before running Compose. At minimum, set a non-default `API_KEY` and replace `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` before exposing the service. The sponsored model remains disabled unless its separate rollout settings are deliberately configured; never use `API_KEY` as its provider credential. If you configure MCP servers, set non-default per-server `api_key` values in `MCP_SERVERS`.
 3. Run `docker compose -f compose.prod.yaml up -d`
 
 The API runs on port `8880`, the GPU API on `8888`, and the web front-end on `3000`. This also brings up a `pgAdmin` instance on port `5555` by default.
@@ -72,12 +72,13 @@ then replace all placeholders before using `compose.prod.yaml`:
 - `CREDENTIAL_ENCRYPTION_KEY` - required secret used to encrypt per-user BYOK provider keys at rest; rotate only with a re-encryption plan for stored credentials
 
 - `BYOK_ALLOWED_BASE_URLS` - optional comma-separated allowlist of HTTPS provider endpoints users may select with their own credentials
-- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT` - used by the database service and by the API `DATABASE_URL`
+- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` - database credentials. `POSTGRES_PORT` controls the host port mapped to the database container's `5432`; the API and worker connect to `db:5432` internally.
+- `PGADMIN_EMAIL`, `PGADMIN_PASSWORD` - required by the production Compose pgAdmin service.
 - `DATABASE_POOL_MIN_SIZE`, `DATABASE_POOL_MAX_SIZE` - asyncpg pool sizing per API worker
 - `GPU_API_URL` - API-to-GPU-API base URL; Docker defaults to `http://gpu-api:8888`
 - OpenAI, Google, Anthropic, Ollama, and OpenRouter models are BYOK-only and do not use deployment credentials, except for the explicitly isolated sponsored model path below. Ollama defaults to `https://ollama.com`; custom Ollama endpoints must be HTTPS and allowed by `BYOK_ALLOWED_BASE_URLS`.
 - `RESUMABLE_STREAM_REDIS_URL` - server-only Redis/Valkey URL used by the web BFF for resumable chat streams
-- `RERANKER_MIN_SCORE`, `SOURCE_RERANKER_MIN_SCORE`, `CHAT_HISTORY_MAX_TURNS` - retrieval and chat tuning
+- `RERANKER_MIN_SCORE`, `SOURCE_RERANKER_MIN_SCORE`, `DIPLOMA_RERANKER_MIN_SCORE`, `CHAT_HISTORY_MAX_TURNS` - retrieval and chat tuning
 - `AGENT_STREAM_TOOL_OUTPUT` - default `false`; adds each tool's output to its `tool_result` chat event, for benchmark containers only
 
 ## Trusted RAG corpus synchronization
@@ -275,7 +276,7 @@ API service (`/api` directory, default port `8880`):
 - `/links/list`, `/links/names`, `/links/name/{name}`, `/links/nth/{n}` - read stored links
 - `/links/` (POST), `/links/{name}` (PUT/DELETE) - manage links (requires `x-api-key`)
 - `/diplomas/sync`, `/diplomas/fill-embeddings` - sync defended thesis records from the upstream Diplomas API and fill their embeddings (requires `x-api-key`)
-- `/recommendations/` - recommend thesis committee alternatives from historical defenses and professor-paper expertise
+- `/recommendations/` - recommend thesis committee alternatives from historical defenses and professor-paper expertise (requires `x-api-key`)
 - `/groups/` - list precomputed professor groups by source, year, or professor
 - `/chat/` - stream chat responses; `/chat/models` lists available chat models; `/chat/feedback` records web/Discord feedback (feedback requires `x-api-key`)
 - `/health/` - liveness check; `/health/health` - detailed database health check

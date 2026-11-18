@@ -36,18 +36,27 @@ export const FeedbackReasonDialog = ({
   const [reason, setReason] = useState<FeedbackReason | null>(null);
   const [comment, setComment] = useState('');
   const [sending, setSending] = useState(false);
+  const [failed, setFailed] = useState(false);
   const commentId = useId();
   const canSend = !sending && (reason !== null || comment.trim() !== '');
 
+  const close = (): void => {
+    setFailed(false);
+    onOpenChange(false);
+  };
+
   const send = async (): Promise<void> => {
     setSending(true);
+    setFailed(false);
     try {
       const saved = await onSubmit({
         ...(reason !== null && { reason }),
         ...(comment.trim() !== '' && { comment: comment.trim() }),
       });
       if (saved) {
-        onOpenChange(false);
+        close();
+      } else {
+        setFailed(true);
       }
     } finally {
       setSending(false);
@@ -57,9 +66,14 @@ export const FeedbackReasonDialog = ({
   return (
     <Dialog
       onOpenChange={(next) => {
-        if (!sending) {
-          onOpenChange(next);
+        if (sending) {
+          return;
         }
+        if (next) {
+          onOpenChange(true);
+          return;
+        }
+        close();
       }}
       open={open}
     >
@@ -117,12 +131,18 @@ export const FeedbackReasonDialog = ({
               value={comment}
             />
           </div>
+          {failed ? (
+            <p
+              className="text-sm text-destructive"
+              role="alert"
+            >
+              {t('feedback.sendError')}
+            </p>
+          ) : null}
           <DialogFooter>
             <Button
               disabled={sending}
-              onClick={() => {
-                onOpenChange(false);
-              }}
+              onClick={close}
               type="button"
               variant="outline"
             >

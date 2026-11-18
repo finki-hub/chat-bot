@@ -14,3 +14,23 @@ updates:
     directory: '/web'
     schedule:
       interval: 'daily'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'daily'
+
+  - package-ecosystem: 'docker'
+    directory: '/api'
+    schedule:
+      interval: 'daily'
+
+  - package-ecosystem: 'docker'
+    directory: '/gpu-api'
+    schedule:
+      interval: 'daily'
+
+  - package-ecosystem: 'docker'
+    directory: '/web'
+    schedule:
+      interval: 'daily'

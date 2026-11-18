@@ -17,7 +17,7 @@ def verify_api_key(request: Request) -> None:
             detail="Missing API Key",
         )
 
-    if not hmac.compare_digest(key, api_key):
+    if not hmac.compare_digest(key.encode(), api_key.encode()):
         raise HTTPException(
             status_code=401,
             detail="Invalid API Key",

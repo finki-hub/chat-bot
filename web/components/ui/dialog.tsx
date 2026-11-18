@@ -40,7 +40,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
+        "fixed inset-0 z-50 bg-black/50 motion-safe:data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-safe:data-[state=open]:animate-in data-[state=open]:fade-in-0",
         className
       )}
       {...props}
@@ -62,7 +62,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-[calc(env(safe-area-inset-top)_+_(100dvh_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))/2)] left-[calc(env(safe-area-inset-left)_+_(100dvw_-_env(safe-area-inset-left)_-_env(safe-area-inset-right))/2)] z-50 grid w-[calc(100dvw_-_env(safe-area-inset-left)_-_env(safe-area-inset-right)_-_2rem)] max-w-lg max-h-[calc(100dvh_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          "fixed top-[calc(env(safe-area-inset-top)_+_(100dvh_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))/2)] left-[calc(env(safe-area-inset-left)_+_(100dvw_-_env(safe-area-inset-left)_-_env(safe-area-inset-right))/2)] z-50 grid w-[calc(100dvw_-_env(safe-area-inset-left)_-_env(safe-area-inset-right)_-_2rem)] max-w-lg max-h-[calc(100dvh_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overscroll-contain rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none motion-safe:data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 motion-safe:data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
           className
         )}
         {...props}

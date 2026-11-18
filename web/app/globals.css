@@ -124,6 +124,11 @@
     background: hsl(var(--muted-foreground) / 0.5);
   }
 
+  #main-content:focus {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: -2px;
+  }
+
   html {
     scroll-behavior: smooth;
   }
