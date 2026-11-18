@@ -141,7 +141,7 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:?PGADMIN_EMAIL is required}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?PGADMIN_PASSWORD is required}
       TZ: ${TZ}
-    image: dpage/pgadmin4:9.19.0
+    image: dpage/pgadmin4:latest
     networks:
       - finki_stack
     ports:
