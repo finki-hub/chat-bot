@@ -30,7 +30,7 @@ To run the chat bot:
    Replace all placeholders in `.env` with the approved values before running Compose. At minimum, set a non-default `API_KEY` and replace `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` before exposing the service. The sponsored model remains disabled unless its separate rollout settings are deliberately configured; never use `API_KEY` as its provider credential. If you configure MCP servers, set non-default per-server `api_key` values in `MCP_SERVERS`.
 3. Run `docker compose -f compose.prod.yaml up -d`
 
-The API runs on port `8880`, the GPU API on `8888`, and the web front-end on `3000`. In production the GPU API and `pgAdmin` bind to `127.0.0.1`; reach them through a reverse proxy or SSH tunnel. `pgAdmin` listens on port `5555`.
+The API runs on port `8880`, the GPU API on `8888`, and the web front-end on `3000`. This also brings up a `pgAdmin` instance on port `5555` by default.
 
 ## Quick Setup (Development)
 
@@ -73,7 +73,7 @@ then replace all placeholders before using `compose.prod.yaml`:
 
 - `BYOK_ALLOWED_BASE_URLS` - optional comma-separated allowlist of HTTPS provider endpoints users may select with their own credentials
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` - database credentials. `POSTGRES_PORT` controls the host port mapped to the database container's `5432`; the API and worker connect to `db:5432` internally.
-- `PGADMIN_EMAIL`, `PGADMIN_PASSWORD` - required by the production Compose pgAdmin service; pgAdmin binds to `127.0.0.1:5555`.
+- `PGADMIN_EMAIL`, `PGADMIN_PASSWORD` - required by the production Compose pgAdmin service.
 - `DATABASE_POOL_MIN_SIZE`, `DATABASE_POOL_MAX_SIZE` - asyncpg pool sizing per API worker
 - `GPU_API_URL` - API-to-GPU-API base URL; Docker defaults to `http://gpu-api:8888`
 - OpenAI, Google, Anthropic, Ollama, and OpenRouter models are BYOK-only and do not use deployment credentials, except for the explicitly isolated sponsored model path below. Ollama defaults to `https://ollama.com`; custom Ollama endpoints must be HTTPS and allowed by `BYOK_ALLOWED_BASE_URLS`.

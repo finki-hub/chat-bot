@@ -131,7 +131,7 @@ services:
     networks:
       - finki_stack
     ports:
-      - "127.0.0.1:8888:8888"
+      - "8888:8888"
     restart: unless-stopped
     volumes:
       - ./hf_cache:/huggingface_cache
@@ -145,7 +145,7 @@ services:
     networks:
       - finki_stack
     ports:
-      - "127.0.0.1:5555:80"
+      - "5555:80"
     restart: unless-stopped
     volumes:
       - ./pgadmin:/var/lib/pgadmin
