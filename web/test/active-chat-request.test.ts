@@ -77,21 +77,33 @@ describe('active request response identity', () => {
     await current.cancel();
   });
 
-  it('does not revive an epoch stopped before its transport starts', async () => {
+  it('rejects an epoch stopped before its transport starts', async () => {
     const active = new ActiveChatRequest('conversation');
     const epoch = active.begin();
+    let sendStarted = false;
 
     expect(active.takeSnapshot()).toStrictEqual({ responseId: undefined });
 
-    const stopped = await openRequest(active, epoch);
-    await stopped.write({
-      messageMetadata: { responseId: 'late-response' },
-      type: 'start',
+    const transport = active.transport({
+      reconnectToStream: () => Promise.resolve(null),
+      sendMessages: () => {
+        sendStarted = true;
+        return Promise.resolve(new ReadableStream<UIMessageChunk>());
+      },
     });
 
+    await expect(
+      transport.sendMessages({
+        abortSignal: undefined,
+        chatId: 'conversation',
+        messageId: undefined,
+        messages: [],
+        metadata: epoch,
+        trigger: 'submit-message',
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(sendStarted).toBe(false);
     expect(active.takeSnapshot()).toBeUndefined();
-
-    await stopped.cancel();
   });
 
   it.each<UIMessageChunk>([

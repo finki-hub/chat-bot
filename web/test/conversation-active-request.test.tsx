@@ -191,6 +191,12 @@ describe('current request stop linkage with the installed AI SDK', () => {
         await pending;
       });
 
+      expect(
+        result.current.runtime.messages.some(
+          (message) =>
+            message.role === 'assistant' && message.parts.length === 0,
+        ),
+      ).toBe(false);
       expect(capture.mock.calls[0]?.[1]).not.toHaveProperty('response_id');
       expect(request).toHaveBeenCalledWith('/api/chat/conversation/stop', {
         method: 'POST',

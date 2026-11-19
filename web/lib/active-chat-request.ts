@@ -57,6 +57,15 @@ export class ActiveChatRequest {
           options.metadata instanceof RequestEpoch
             ? options.metadata
             : this.begin();
+        // A stop can land before the SDK starts the request (regenerate awaits
+        // its queue cleanup first). Reject as an abort so the SDK does not
+        // finalize an empty assistant message for a request that never started.
+        if (this.current !== request) {
+          throw new DOMException(
+            'Request stopped before transport start',
+            'AbortError',
+          );
+        }
         const stream = await this.track(
           request,
           () => base.sendMessages(options),
