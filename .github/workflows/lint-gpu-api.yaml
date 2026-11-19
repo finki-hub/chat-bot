@@ -10,15 +10,68 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: lint-gpu-api-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ruff:
-    uses: finki-hub/.github/.github/workflows/ruff.yaml@main
-    with:
-      working-directory: ./gpu-api
-    secrets: inherit
+    name: Ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ./gpu-api
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install
+
+      # PyYAML and zstandard do not publish cp315 wheels yet. Allow their
+      # pinned sdists to build until that changes.
+      - name: Install dependencies
+        run: uv sync --locked --dev --no-install-project  # NOSONAR: pyyaml and zstandard have no cp315 wheels
+
+      - name: Run Ruff linter
+        run: uv run --locked --no-sync ruff check --output-format=github .
+
+      - name: Run Ruff formatter
+        run: uv run --locked --no-sync ruff format --check --diff .
 
   mypy:
-    uses: finki-hub/.github/.github/workflows/mypy.yaml@main
-    with:
-      working-directory: ./gpu-api
-    secrets: inherit
+    name: MyPy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ./gpu-api
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Register MyPy problem matcher
+        uses: finki-hub/.github/.github/actions/problem-matchers@main
+        with:
+          tool: mypy
+
+      - name: Install dependencies
+        run: uv sync --locked --dev --no-install-project  # NOSONAR: pyyaml and zstandard have no cp315 wheels
+
+      - name: Run MyPy
+        run: uv run --locked --no-sync mypy --show-column-numbers --no-color-output .
+

@@ -53,11 +53,13 @@ def test_invalid_or_spoofed_revision_is_omitted(analytics, revision):
 
 def test_exception_is_redacted_and_gpu_revision_is_trusted(analytics):
     analytics.init_analytics(Settings(APP_REVISION="a" * 40, POSTHOG_KEY=""))
-    sentinel = "sk-secret person@example.test prompt answer https://private?key=secret"
-    request = Request(
-        {"type": "http", "method": "POST", "path": sentinel, "headers": []}
+    redaction_probe = (
+        "sk-secret person@example.test prompt answer https://private?key=secret"
     )
-    analytics.capture_request_exception(request, RuntimeError(sentinel))
+    request = Request(
+        {"type": "http", "method": "POST", "path": redaction_probe, "headers": []}
+    )
+    analytics.capture_request_exception(request, RuntimeError(redaction_probe))
     client = analytics._state.client
     client.capture_exception.assert_not_called()
     call = client.capture.call_args.kwargs
@@ -67,7 +69,7 @@ def test_exception_is_redacted_and_gpu_revision_is_trusted(analytics):
     assert call["properties"]["$exception_list"] == [
         {"type": "RuntimeError", "value": "Redacted"}
     ]
-    assert sentinel not in repr(call)
+    assert redaction_probe not in repr(call)
 
 
 def test_inference_trace_is_preserved_and_failures_are_nonblocking(analytics):
