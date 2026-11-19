@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm AS builder
+FROM ghcr.io/astral-sh/uv:python3.15-trixie AS builder
 
 ENV UV_VENV_PATH=/app/.venv \
     UV_PYTHON_DOWNLOADS=0 \
@@ -18,9 +18,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 RUN find /app/.venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true && \
     find /app/.venv -type d \( -name "tests" -o -name "test" \) -exec rm -rf {} + 2>/dev/null || true && \
-    rm -rf /app/.venv/lib/python3.14/site-packages/torch/test 2>/dev/null || true
+    rm -rf /app/.venv/lib/python3.15/site-packages/torch/test 2>/dev/null || true
 
-FROM python:3.15-slim-bookworm AS final
+FROM python:3.15-slim-trixie AS final
 
 ARG APP_REVISION=""
 ENV APP_REVISION=${APP_REVISION}

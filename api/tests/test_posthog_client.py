@@ -21,24 +21,24 @@ def client(monkeypatch):
 
 
 def test_exception_payload_is_metadata_only(client):
-    sentinel = "sk-secret person@example.test private prompt answer https://host/path?key=secret"
+    redaction_probe = "sk-secret person@example.test private prompt answer https://host/path?key=secret"
     request = Request(
         {
             "type": "http",
             "method": "POST",
-            "path": sentinel,
+            "path": redaction_probe,
             "headers": [],
             "route": SimpleNamespace(path="/chat/{id}"),
         }
     )
 
     def fail():
-        raise ValueError(sentinel)
+        raise ValueError(redaction_probe)
 
     try:
         fail()
     except ValueError as cause:
-        exception = RuntimeError(sentinel)
+        exception = RuntimeError(redaction_probe)
         exception.__cause__ = cause
         posthog_client.capture_request_exception(request, exception)
     client.capture_exception.assert_not_called()
@@ -48,7 +48,7 @@ def test_exception_payload_is_metadata_only(client):
         {"type": "RuntimeError", "value": "Redacted"}
     ]
     assert call["properties"]["path"] == "/chat/{id}"
-    assert sentinel not in repr(call)
+    assert redaction_probe not in repr(call)
     assert "stacktrace" not in repr(call)
 
 

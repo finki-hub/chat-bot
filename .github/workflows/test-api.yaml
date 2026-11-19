@@ -19,6 +19,45 @@ jobs:
       pytest-args: -q
 
   postgres-integration:
-    uses: finki-hub/.github/.github/workflows/pytest-postgres.yaml@main
-    with:
-      working-directory: ./api
+    name: Pytest with PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: api_test
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d api_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    defaults:
+      run:
+        working-directory: ./api
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install
+
+      # PyYAML and zstandard do not publish cp315 wheels yet. Allow their
+      # pinned sdists to build until that changes.
+      - name: Install dependencies
+        run: uv sync --locked  # NOSONAR: pyyaml and zstandard have no cp315 wheels
+
+      - name: Run integration tests
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/api_test
+        run: uv run --locked --no-sync pytest tests/integration -q
+
