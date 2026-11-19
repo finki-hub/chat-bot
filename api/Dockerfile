@@ -17,7 +17,7 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-FROM python:3.15-bookworm AS final
+FROM python:3.14-bookworm AS final
 
 ARG APP_REVISION=""
 ENV APP_REVISION=${APP_REVISION}

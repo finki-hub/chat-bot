@@ -24,11 +24,31 @@ updates:
     directory: '/api'
     schedule:
       interval: 'daily'
+    ignore:
+      # Keep the builder and final image on Python 3.14; bump manually.
+      - dependency-name: 'ghcr.io/astral-sh/uv'
+        update-types:
+          - 'version-update:semver-major'
+          - 'version-update:semver-minor'
+      - dependency-name: 'python'
+        update-types:
+          - 'version-update:semver-major'
+          - 'version-update:semver-minor'
 
   - package-ecosystem: 'docker'
     directory: '/gpu-api'
     schedule:
       interval: 'daily'
+    ignore:
+      # Keep the builder and final image on Python 3.14; bump manually.
+      - dependency-name: 'ghcr.io/astral-sh/uv'
+        update-types:
+          - 'version-update:semver-major'
+          - 'version-update:semver-minor'
+      - dependency-name: 'python'
+        update-types:
+          - 'version-update:semver-major'
+          - 'version-update:semver-minor'
 
   - package-ecosystem: 'docker'
     directory: '/web'

@@ -20,7 +20,7 @@ RUN find /app/.venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null ||
     find /app/.venv -type d \( -name "tests" -o -name "test" \) -exec rm -rf {} + 2>/dev/null || true && \
     rm -rf /app/.venv/lib/python3.14/site-packages/torch/test 2>/dev/null || true
 
-FROM python:3.15-slim-bookworm AS final
+FROM python:3.14-slim-bookworm AS final
 
 ARG APP_REVISION=""
 ENV APP_REVISION=${APP_REVISION}
