@@ -160,27 +160,36 @@ def write_refresh_outputs(
                 )
         raise
     finally:
-        cleanup_errors: list[BaseException] = []
-        for staged in (staged_snapshot, staged_provenance):
-            if staged is None:
-                continue
-            try:
-                staged.unlink(missing_ok=True)
-            except OSError as cleanup_exception:
-                cleanup_errors.append(cleanup_exception)
-        if cleanup_errors:
-            if primary_error is not None:
-                for cleanup_failure in cleanup_errors:
-                    primary_error.add_note(
-                        f"Failed to clean up staged catalog file: {cleanup_failure!r}"
-                    )
-            else:
-                first_cleanup_error, *remaining_cleanup_errors = cleanup_errors
-                for cleanup_failure in remaining_cleanup_errors:
-                    first_cleanup_error.add_note(
-                        f"Additional staged-file cleanup failure: {cleanup_failure!r}"
-                    )
-                raise first_cleanup_error
+        _clean_up_staged((staged_snapshot, staged_provenance), primary_error)
+
+
+def _clean_up_staged(
+    staged_files: tuple[Path | None, ...],
+    primary_error: BaseException | None,
+) -> None:
+    """Remove the staged files; a failure is a note on the primary error, if any."""
+    cleanup_errors: list[BaseException] = []
+    for staged in staged_files:
+        if staged is None:
+            continue
+        try:
+            staged.unlink(missing_ok=True)
+        except OSError as cleanup_exception:
+            cleanup_errors.append(cleanup_exception)
+    if not cleanup_errors:
+        return
+    if primary_error is not None:
+        for cleanup_failure in cleanup_errors:
+            primary_error.add_note(
+                f"Failed to clean up staged catalog file: {cleanup_failure!r}"
+            )
+        return
+    first_cleanup_error, *remaining_cleanup_errors = cleanup_errors
+    for cleanup_failure in remaining_cleanup_errors:
+        first_cleanup_error.add_note(
+            f"Additional staged-file cleanup failure: {cleanup_failure!r}"
+        )
+    raise first_cleanup_error
 
 
 def main() -> None:

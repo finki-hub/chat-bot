@@ -411,11 +411,10 @@ def stream_sync_gen_as_sse(
                 "Sync token streaming failed error_type=%s",
                 type(exc).__name__,
             )
-            yield (
-                error_event("interrupted", _INTERRUPTED_MSG)
-                if streamed
-                else error_event("agent_error", _ERROR_MSG)
-            )
+            if streamed:
+                yield error_event("interrupted", _INTERRUPTED_MSG)
+            else:
+                yield error_event("agent_error", _ERROR_MSG)
             yield DONE_EVENT
 
     return StreamingResponse(async_token_gen(), media_type="text/event-stream")
@@ -623,15 +622,15 @@ async def create_agent_token_generator[ResponseT](
                             if isinstance(context_chars, int):
                                 observation.context_chars += context_chars
                         summary = artifact.get("summary")
+                        if not succeeded:
+                            summary = _TOOL_FAILED_SUMMARY
+                        elif not isinstance(summary, str):
+                            summary = ""
                         yield tool_result_event(
                             call_id=event["run_id"],
                             name=name,
                             ok=succeeded,
-                            summary=(
-                                summary
-                                if succeeded and isinstance(summary, str)
-                                else ("" if succeeded else _TOOL_FAILED_SUMMARY)
-                            ),
+                            summary=summary,
                             output=(
                                 _tool_output_text(output)
                                 if settings.AGENT_STREAM_TOOL_OUTPUT

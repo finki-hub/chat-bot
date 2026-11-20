@@ -19,7 +19,11 @@ from app.data.chat_credentials import ChatCredentialDatabase
 from app.data.db import get_db
 from app.llms.models import ChatModel, Model
 from app.llms.pricing import HOSTED_PRICING
-from app.llms.provider_credentials import has_provider_credential, provider_for_model
+from app.llms.provider_credentials import (
+    LlmProviderCredentials,
+    has_provider_credential,
+    provider_for_model,
+)
 from app.llms.query_transform import QUERY_TRANSFORM_MAX_TOKENS, transform_query
 from app.schemas.chat_title import ChatTitleResponse, ChatTitleSchema
 from app.utils.auth import verify_api_key
@@ -112,6 +116,69 @@ def _build_title_prompt(transcript: str) -> str:
 </conversation_transcript>"""
 
 
+def _title_candidate_models(payload: ChatTitleSchema) -> tuple[ChatModel, ...]:
+    """The models that may write the title, cheapest first."""
+    if payload.query_transform_model is not None:
+        return (payload.query_transform_model,)
+    if not isinstance(payload.provider_model, Model):
+        return (payload.provider_model,)
+    provider = provider_for_model(payload.provider_model)
+    if provider in {"openrouter", "opencode-go"}:
+        return (payload.provider_model,)
+    return tuple(
+        model
+        for model in _TITLE_MODELS_BY_COST
+        if provider_for_model(model) == provider
+    )
+
+
+async def _title_credentials(
+    payload: ChatTitleSchema,
+    db: ChatCredentialDatabase | None,
+    settings: Settings | None,
+    candidate_models: tuple[ChatModel, ...],
+) -> LlmProviderCredentials | None:
+    """The user's own provider credentials for the candidate models."""
+    if payload.user_id is None:
+        return None
+    if db is None:
+        msg = "db is required when user_id is present"
+        raise TypeError(msg)
+    if settings is None:
+        msg = "settings is required when user_id is present"
+        raise TypeError(msg)
+    return await resolve_provider_credentials(
+        db,
+        user_id=payload.user_id,
+        providers=credential_providers_for_models(*candidate_models),
+        settings=settings,
+    )
+
+
+def _sponsored_title_model(
+    candidate_models: tuple[ChatModel, ...],
+    credentials: LlmProviderCredentials | None,
+    settings: Settings,
+    conversation_id: str | None,
+) -> tuple[ChatModel, LlmProviderCredentials | None] | None:
+    """The sponsored model and credentials, when sponsorship covers the title."""
+    sponsored_model, sponsored_credentials = sponsored_query_transform(
+        candidate_models[0] if candidate_models else DEFAULT_QUERY_TRANSFORM_MODEL,
+        credentials,
+        SponsoredInferenceResolution(credential=None, sponsored=False),
+        settings.SPONSORED_MODEL_ID,
+        settings,
+        conversation_id=conversation_id,
+    )
+    if not has_provider_credential(sponsored_credentials, sponsored_model):
+        return None
+    if conversation_id is None or sponsored_credentials is None:
+        return sponsored_model, sponsored_credentials
+    return sponsored_model, replace(
+        sponsored_credentials, conversation_id=conversation_id
+    )
+
+
 async def generate_chat_title(
     payload: ChatTitleSchema,
     db: ChatCredentialDatabase | None = None,
@@ -119,37 +186,8 @@ async def generate_chat_title(
     *,
     conversation_id: str | None = None,
 ) -> ChatTitleResponse:
-    candidate_models: tuple[ChatModel, ...]
-    if payload.query_transform_model is not None:
-        candidate_models = (payload.query_transform_model,)
-    elif not isinstance(payload.provider_model, Model):
-        candidate_models = (payload.provider_model,)
-    else:
-        provider = provider_for_model(payload.provider_model)
-        candidate_models = (
-            (payload.provider_model,)
-            if provider in {"openrouter", "opencode-go"}
-            else tuple(
-                model
-                for model in _TITLE_MODELS_BY_COST
-                if provider_for_model(model) == provider
-            )
-        )
-    if payload.user_id is None:
-        credentials = None
-    elif db is None:
-        msg = "db is required when user_id is present"
-        raise TypeError(msg)
-    elif settings is None:
-        msg = "settings is required when user_id is present"
-        raise TypeError(msg)
-    else:
-        credentials = await resolve_provider_credentials(
-            db,
-            user_id=payload.user_id,
-            providers=credential_providers_for_models(*candidate_models),
-            settings=settings,
-        )
+    candidate_models = _title_candidate_models(payload)
+    credentials = await _title_credentials(payload, db, settings, candidate_models)
     if credentials is not None and conversation_id is not None:
         credentials = replace(credentials, conversation_id=conversation_id)
     selected_model = next(
@@ -161,21 +199,11 @@ async def generate_chat_title(
         None,
     )
     if selected_model is None and settings is not None:
-        sponsored_model, sponsored_credentials = sponsored_query_transform(
-            candidate_models[0] if candidate_models else DEFAULT_QUERY_TRANSFORM_MODEL,
-            credentials,
-            SponsoredInferenceResolution(credential=None, sponsored=False),
-            settings.SPONSORED_MODEL_ID,
-            settings,
-            conversation_id=conversation_id,
+        sponsored = _sponsored_title_model(
+            candidate_models, credentials, settings, conversation_id
         )
-        if has_provider_credential(sponsored_credentials, sponsored_model):
-            selected_model = sponsored_model
-            credentials = (
-                sponsored_credentials
-                if conversation_id is None or sponsored_credentials is None
-                else replace(sponsored_credentials, conversation_id=conversation_id)
-            )
+        if sponsored is not None:
+            selected_model, credentials = sponsored
     if selected_model is None:
         return _fallback_title(payload, "no_model", None)
     prompt = _build_title_prompt(payload.transcript)

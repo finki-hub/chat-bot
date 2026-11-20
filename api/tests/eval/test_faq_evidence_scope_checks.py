@@ -207,10 +207,12 @@ def test_incomplete_or_fabricated_ledgers_fail_closed(mutation):
 
 
 def test_passive_filter_capture_rejects_replaced_objects():
+    before, after = [_candidate("office", "Office")], [_candidate("office", "Office")]
     with pytest.raises(ValueError, match="replaced"):
-        _observe([_candidate("office", "Office")], [_candidate("office", "Office")])
+        _observe(before, after)
 
 
 def test_baseline_without_hook_cannot_claim_exclusion():
+    before = [_candidate("office", "Office")]
     with pytest.raises(ValueError, match="without hook"):
-        _observe([_candidate("office", "Office")], [], hook=False)
+        _observe(before, [], hook=False)

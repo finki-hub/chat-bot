@@ -51,7 +51,7 @@ from app.llms.model_access import (
 )
 from app.llms.model_catalog import model_catalog_service
 from app.llms.model_catalog_types import ModelCatalogResponse, OllamaCatalogModel
-from app.llms.models import model_id
+from app.llms.models import ChatModel, model_id
 from app.llms.ollama import fetch_ollama_catalog
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.llms.provider_credentials import provider_for_model
@@ -132,15 +132,19 @@ _META_PREFIX = "event: meta"
 _META_PREFIX_BYTES = _META_PREFIX.encode()
 
 
-def _sniff_tokens(chunk: bytes | str | memoryview) -> dict[str, int] | None:
+def _meta_text(chunk: bytes | str | memoryview) -> str | None:
+    """The text of a `meta` SSE event; None for any other chunk."""
     if isinstance(chunk, str):
-        if not chunk.startswith(_META_PREFIX):
-            return None
-        text = chunk
-    else:
-        if bytes(chunk[: len(_META_PREFIX_BYTES)]) != _META_PREFIX_BYTES:
-            return None
-        text = bytes(chunk).decode(errors="ignore")
+        return chunk if chunk.startswith(_META_PREFIX) else None
+    if bytes(chunk[: len(_META_PREFIX_BYTES)]) != _META_PREFIX_BYTES:
+        return None
+    return bytes(chunk).decode(errors="ignore")
+
+
+def _sniff_tokens(chunk: bytes | str | memoryview) -> dict[str, int] | None:
+    text = _meta_text(chunk)
+    if text is None:
+        return None
     for line in text.split("\n"):
         if not line.startswith(_SSE_DATA_PREFIX):
             continue
@@ -290,31 +294,41 @@ def _capture_chat_response(
         props["chunks_above_threshold"] = timings.reranker_above_threshold
 
     if usage is not None:
-        input_tokens = usage["input"]
-        output_tokens = usage["output"]
-        props["$ai_input_tokens"] = input_tokens
-        props["$ai_output_tokens"] = output_tokens
-        if usage.get("cache_read"):
-            props["$ai_cache_read_input_tokens"] = usage["cache_read"]
-        if usage.get("reasoning"):
-            props["$ai_reasoning_tokens"] = usage["reasoning"]
-        if generation_ms and output_tokens:
-            props["output_tokens_per_sec"] = round(
-                output_tokens / (generation_ms / 1000.0),
-                1,
-            )
-        costs = cost_usd(model, input_tokens, output_tokens)
-        if costs is not None:
-            props["$ai_input_cost_usd"] = round(costs[0], 6)
-            props["$ai_output_cost_usd"] = round(costs[1], 6)
-            props["$ai_total_cost_usd"] = round(costs[2], 6)
-            props["cost_known"] = True
-        else:
-            props["cost_known"] = False
+        props.update(_usage_props(model, usage, generation_ms))
     else:
         props["cost_known"] = False
 
     capture(distinct_id, "$ai_generation", props)
+
+
+def _usage_props(
+    model: ChatModel,
+    usage: dict[str, int],
+    generation_ms: float | None,
+) -> dict[str, object]:
+    """The token counts, throughput and cost of one generation."""
+    input_tokens = usage["input"]
+    output_tokens = usage["output"]
+    props: dict[str, object] = {
+        "$ai_input_tokens": input_tokens,
+        "$ai_output_tokens": output_tokens,
+    }
+    if usage.get("cache_read"):
+        props["$ai_cache_read_input_tokens"] = usage["cache_read"]
+    if usage.get("reasoning"):
+        props["$ai_reasoning_tokens"] = usage["reasoning"]
+    if generation_ms and output_tokens:
+        props["output_tokens_per_sec"] = round(
+            output_tokens / (generation_ms / 1000.0),
+            1,
+        )
+    costs = cost_usd(model, input_tokens, output_tokens)
+    if costs is not None:
+        props["$ai_input_cost_usd"] = round(costs[0], 6)
+        props["$ai_output_cost_usd"] = round(costs[1], 6)
+        props["$ai_total_cost_usd"] = round(costs[2], 6)
+    props["cost_known"] = costs is not None
+    return props
 
 
 def _sniff_token_text(chunk: bytes | str | memoryview) -> str | None:

@@ -7,6 +7,10 @@ from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.llms.models import Model
 from app.utils.discord_content import contains_unresolved_discord_token
 
+_ANSWER_REASON_EXAMPLE = (
+    "The statute counts only regular sessions, so both limits match."
+)
+
 
 def _reject_unresolved_discord_token(value: str) -> str:
     if contains_unresolved_discord_token(value):
@@ -50,7 +54,7 @@ class QuestionSchema(BaseModel):
     )
     assistant_note: str | None = Field(
         default=None,
-        examples=["The statute counts only regular sessions, so both limits match."],
+        examples=[_ANSWER_REASON_EXAMPLE],
         description="Internal guidance for the assistant; never shown to students",
     )
     created_at: datetime = Field(
@@ -89,7 +93,7 @@ class CreateQuestionSchema(BaseModel):
     )
     assistant_note: str | None = Field(
         default=None,
-        examples=["The statute counts only regular sessions, so both limits match."],
+        examples=[_ANSWER_REASON_EXAMPLE],
         description="Internal guidance for the assistant; never shown to students",
     )
 
@@ -135,7 +139,7 @@ class UpdateQuestionSchema(BaseModel):
     )
     assistant_note: str | None = Field(
         default=None,
-        examples=["The statute counts only regular sessions, so both limits match."],
+        examples=[_ANSWER_REASON_EXAMPLE],
         description="Updated internal guidance for the assistant; null clears it",
     )
 

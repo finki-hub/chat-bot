@@ -42,9 +42,10 @@ def test_refresh_requires_complete_valid_remote_coverage_without_writes() -> Non
     del payload[provider]["models"][next(iter(payload[provider]["models"]))]
     original = _snapshot_payload()
 
+    raw = json.dumps(payload).encode()
     with pytest.raises(CatalogMetadataError, match="coverage is incomplete"):
         refresh.build_refresh_outputs(
-            json.dumps(payload).encode(),
+            raw,
             original,
             refreshed_at="2026-09-14T00:00:00Z",
         )

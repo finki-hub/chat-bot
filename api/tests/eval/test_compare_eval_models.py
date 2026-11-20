@@ -82,15 +82,17 @@ def test_null_effective_config_is_incomparable():
 def test_malformed_effective_config_is_rejected(
     effective_config: dict[str, JsonValue],
 ):
+    malformed, baseline = _run([_result(**effective_config)]), _run([_result()])
     with pytest.raises(EvalJsonError):
-        compare_runs(_run([_result(**effective_config)]), _run([_result()]))
+        compare_runs(malformed, baseline)
 
 
 def test_duplicate_case_ids_are_rejected():
     duplicate = _run([_result(), _result()])
+    baseline = _run([_result()])
 
     with pytest.raises(EvalJsonError, match="duplicate case id: case-1"):
-        compare_runs(duplicate, _run([_result()]))
+        compare_runs(duplicate, baseline)
 
 
 def test_prior_requested_only_schema_derives_nominal_budget():
@@ -128,9 +130,10 @@ def test_partial_nominal_run_config_is_rejected(missing_key: str):
     config = malformed["config"]
     assert isinstance(config, dict)
     del config[missing_key]
+    baseline = _run([_result()])
 
     with pytest.raises(EvalJsonError, match="requested retrieval configuration"):
-        compare_runs(malformed, _run([_result()]))
+        compare_runs(malformed, baseline)
 
 
 @pytest.mark.parametrize("null_key", ["initial_k", "per_query_k"])
@@ -139,9 +142,10 @@ def test_null_nominal_run_budget_is_rejected(null_key: str):
     config = malformed["config"]
     assert isinstance(config, dict)
     config[null_key] = None
+    baseline = _run([_result()])
 
     with pytest.raises(EvalJsonError):
-        compare_runs(malformed, _run([_result()]))
+        compare_runs(malformed, baseline)
 
 
 @pytest.mark.parametrize(

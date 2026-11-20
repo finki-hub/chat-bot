@@ -331,8 +331,9 @@ async def test_ordinary_upsert_cannot_change_message_identity(mutation):
         if mutation == "role"
         else {"response_id": uuid4()}
     )
+    changed = message.model_copy(update=changes)
     with pytest.raises(ChatMessageConflictError):
-        await upsert_message(db, message.model_copy(update=changes))
+        await upsert_message(db, changed)
     assert await upsert_message(db, message) == original
 
 

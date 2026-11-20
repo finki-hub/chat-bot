@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.chat_persistence import ActiveStreamStatus, JsonValue
 
+_BLANK_MESSAGE = "must not be blank or whitespace-only"
+
 
 class UserScopedRequest(BaseModel):
     user_id: UUID
@@ -28,7 +30,7 @@ class ConversationUpdateRequest(UserScopedRequest):
             return None
         stripped = value.strip()
         if not stripped:
-            raise ValueError("must not be blank or whitespace-only")
+            raise ValueError(_BLANK_MESSAGE)
         return stripped
 
 
@@ -43,7 +45,7 @@ class UserMessageUpsertRequest(UserScopedRequest):
     def _strip_content(cls, value: str) -> str:
         stripped = value.strip()
         if not stripped:
-            raise ValueError("must not be blank or whitespace-only")
+            raise ValueError(_BLANK_MESSAGE)
         return stripped
 
 
@@ -63,7 +65,7 @@ class AssistantMessageReplacementRequest(UserScopedRequest):
     def _strip_content(cls, value: str) -> str:
         stripped = value.strip()
         if not stripped:
-            raise ValueError("must not be blank or whitespace-only")
+            raise ValueError(_BLANK_MESSAGE)
         return stripped
 
 

@@ -135,7 +135,8 @@ def test_replacement_rejects_invalid_requests_without_touching_feedback(
         },
     )
     assert response.status_code == expected_status
-    assert (db.messages, db.feedback) == before
+    after = (db.messages, db.feedback)
+    assert after == before
 
 
 def test_chat_state_upserts_provider_user() -> None:

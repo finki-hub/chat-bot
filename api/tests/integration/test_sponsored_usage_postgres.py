@@ -160,15 +160,17 @@ def test_real_postgres_lease_blocks_active_request_and_expires_after_crash() -> 
                 now=start,
             )
 
+            busy_request_id = uuid4()
+            busy_at = start + timedelta(seconds=1)
             with pytest.raises(SponsoredRequestInProgressError):
                 await admit_sponsored_request(
                     database,
                     user_id=user_id,
-                    request_id=uuid4(),
+                    request_id=busy_request_id,
                     user_limit=5,
                     global_limit=100,
                     lease_ttl=timedelta(seconds=10),
-                    now=start + timedelta(seconds=1),
+                    now=busy_at,
                 )
 
             second = await admit_sponsored_request(

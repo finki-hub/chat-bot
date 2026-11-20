@@ -88,8 +88,11 @@ async def test_gpu_lifespan_shuts_down_analytics_after_body_failure(
     monkeypatch.setattr(main, "init_reranker", lambda _model: None)
     monkeypatch.setattr(main, "init_bge_m3_embedder", lambda: None)
 
-    with pytest.raises(RuntimeError, match="body failed"):
+    async def run_failing_body() -> None:
         async with main.lifespan(FastAPI()):
             raise RuntimeError("body failed")
+
+    with pytest.raises(RuntimeError, match="body failed"):
+        await run_failing_body()
 
     assert events == ["init", "shutdown"]

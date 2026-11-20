@@ -378,10 +378,9 @@ def test_history_deletion_rolls_back_epoch_feedback_and_messages_together():
                 ):
                     raise RuntimeError("synthetic rollback")
 
+            intercepted = cast("Database", _InterceptDatabase(db, fail))
             with pytest.raises(RuntimeError, match="synthetic rollback"):
-                await delete_chat_history(
-                    cast("Database", _InterceptDatabase(db, fail)), user_id=user
-                )
+                await delete_chat_history(intercepted, user_id=user)
             assert (
                 await db.fetchval(
                     "SELECT history_generation FROM chat_user WHERE id=$1", user

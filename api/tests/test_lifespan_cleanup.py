@@ -52,9 +52,12 @@ async def test_api_lifespan_cleans_up_after_body_failure(
     monkeypatch.setattr(main, "close_http_client", close_http_client)
     app = main.make_app(Settings())
 
-    with pytest.raises(RuntimeError, match="body failed"):
+    async def run_failing_body() -> None:
         async with main.lifespan(app):
             raise RuntimeError("body failed")
+
+    with pytest.raises(RuntimeError, match="body failed"):
+        await run_failing_body()
 
     assert http_events == ["http_init", "http_close"]
     assert database().events == ["database_init", "database_disconnect"]

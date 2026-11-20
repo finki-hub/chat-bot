@@ -68,16 +68,17 @@ _INSTITUTION_SUBJECT_BLOCKERS = frozenset(
 _INSTITUTION_PREPOSITIONS = frozenset(
     {"od", "vo", "v", "na", "at", "in", "on", "of", "za"},
 )
+_CONTACT_TITLE = "Контакт и локација"
 _DIRECT_FACT_SOURCES_BY_EXCLUDED_TITLE = {
-    "Студентска служба": ("Контакт и локација",),
-    "Деканат": ("Контакт и локација",),
+    "Студентска служба": (_CONTACT_TITLE,),
+    "Деканат": (_CONTACT_TITLE,),
 }
 _OFFICE_TITLES = (
     "Студентска служба",
     "Деканат",
     "Компјутерски центар",
     "Архива",
-    "Контакт и локација",
+    _CONTACT_TITLE,
 )
 _FINKI_NAMES = (
     ("finki",),
@@ -241,11 +242,12 @@ def _unquoted_exclusion_matches(
     return matches
 
 
-def _exclusion_constraint(
-    query: str,
-    titles: tuple[str, ...],
-    office_titles: tuple[str, ...],
-) -> FaqConstraints | None:
+def _split_exclusion(query: str) -> tuple[str, str] | None:
+    """The request clause and the excluded phrase of an exclusion query.
+
+    None unless the exclusion opens its clause and leaves exactly one request
+    clause beside it.
+    """
     matches = _unquoted_exclusion_matches(query)
     if matches is None:
         return None
@@ -267,31 +269,31 @@ def _exclusion_constraint(
     request_clauses = [clause.strip() for clause in request_clauses if clause.strip()]
     if not excluded_phrase or len(request_clauses) != 1:
         return None
+    return request_clauses[0].strip().strip("?!.;,: "), excluded_phrase
 
-    request_clause = request_clauses[0].strip().strip("?!.;,: ")
-    institution_scope = _institution_constraint(
-        request_clause, _OFFICE_TITLES, _OFFICE_TITLES
-    )
-    recognized_request = (
-        _is_reviewed_definition(request_clause) or institution_scope is not None
-    )
-    if not recognized_request:
-        recognized_request = bool(
-            faq_query_entity_forms(
-                f"{request_clause}?",
-                max_query_length=_MAX_QUERY_LENGTH,
-                max_query_tokens=_MAX_TOKENS,
-            )
+
+def _is_recognized_request(
+    request_clause: str, institution_scope: FaqConstraints | None
+) -> bool:
+    """Whether the clause beside the exclusion is a request the FAQ can answer."""
+    if _is_reviewed_definition(request_clause) or institution_scope is not None:
+        return True
+    return bool(
+        faq_query_entity_forms(
+            f"{request_clause}?",
+            max_query_length=_MAX_QUERY_LENGTH,
+            max_query_tokens=_MAX_TOKENS,
         )
-    if not recognized_request:
-        return None
+    )
 
-    excluded_title = match_faq_entity(excluded_phrase, titles)
-    if excluded_title is None or excluded_title not in office_titles:
-        return None
-    canonical_excluded_title = match_faq_entity(excluded_title, _OFFICE_TITLES)
-    if canonical_excluded_title is None:
-        return None
+
+def _direct_fact_sources(
+    canonical_excluded_title: str, titles: tuple[str, ...]
+) -> list[str] | None:
+    """The catalog titles that still state the excluded office's direct facts.
+
+    None when one of them is ambiguous in the catalog.
+    """
     direct_fact_sources: list[str] = []
     for source_title in _DIRECT_FACT_SOURCES_BY_EXCLUDED_TITLE.get(
         canonical_excluded_title, ()
@@ -303,6 +305,33 @@ def _exclusion_constraint(
             return None
         if resolved_source is not None and resolved_source not in direct_fact_sources:
             direct_fact_sources.append(resolved_source)
+    return direct_fact_sources
+
+
+def _exclusion_constraint(
+    query: str,
+    titles: tuple[str, ...],
+    office_titles: tuple[str, ...],
+) -> FaqConstraints | None:
+    split = _split_exclusion(query)
+    if split is None:
+        return None
+    request_clause, excluded_phrase = split
+    institution_scope = _institution_constraint(
+        request_clause, _OFFICE_TITLES, _OFFICE_TITLES
+    )
+    if not _is_recognized_request(request_clause, institution_scope):
+        return None
+
+    excluded_title = match_faq_entity(excluded_phrase, titles)
+    if excluded_title is None or excluded_title not in office_titles:
+        return None
+    canonical_excluded_title = match_faq_entity(excluded_title, _OFFICE_TITLES)
+    if canonical_excluded_title is None:
+        return None
+    direct_fact_sources = _direct_fact_sources(canonical_excluded_title, titles)
+    if direct_fact_sources is None:
+        return None
 
     # Reuse the same institution parser for the request left beside the exclusion.
     # A live catalog must not silently drop a scope recognized with reviewed titles.
@@ -343,7 +372,7 @@ def _institution_contact_constraint(
     for _intent, institution, contact_kind in forms:
         if contact_kind != "email" or not _is_supported_institution(institution):
             continue
-        target_title = match_faq_entity("Контакт и локација", catalog)
+        target_title = match_faq_entity(_CONTACT_TITLE, catalog)
         if target_title is None or target_title not in office_titles:
             return None
         return FaqConstraints(
@@ -438,24 +467,36 @@ def _institution_constraint(
     if not forms:
         return None
     for _intent, entity_tokens, _contact_kind in forms:
-        folded = _folded(entity_tokens)
-        for separator_index, separator in enumerate(folded):
-            if separator not in {"na", "at"} or separator_index == 0:
-                continue
-            entity = entity_tokens[:separator_index]
-            institution = entity_tokens[separator_index + 1 :]
-            if not _is_supported_institution(institution):
-                continue
-            target_title = match_faq_entity(entity, catalog)
-            if target_title is None or target_title not in office_titles:
-                continue
-            return FaqConstraints(
-                kind="institution",
-                reason="institution_scope",
-                office_titles=office_titles,
-                institution_is_finki=_is_finki(institution),
-                target_title=target_title,
-            )
+        constraint = _scoped_office(entity_tokens, catalog, office_titles)
+        if constraint is not None:
+            return constraint
+    return None
+
+
+def _scoped_office(
+    entity_tokens: tuple[str, ...],
+    catalog: tuple[str, ...],
+    office_titles: tuple[str, ...],
+) -> FaqConstraints | None:
+    """An office named with its institution ("<office> на <institution>")."""
+    folded = _folded(entity_tokens)
+    for separator_index, separator in enumerate(folded):
+        if separator not in {"na", "at"} or separator_index == 0:
+            continue
+        entity = entity_tokens[:separator_index]
+        institution = entity_tokens[separator_index + 1 :]
+        if not _is_supported_institution(institution):
+            continue
+        target_title = match_faq_entity(entity, catalog)
+        if target_title is None or target_title not in office_titles:
+            continue
+        return FaqConstraints(
+            kind="institution",
+            reason="institution_scope",
+            office_titles=office_titles,
+            institution_is_finki=_is_finki(institution),
+            target_title=target_title,
+        )
     return None
 
 
