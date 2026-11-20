@@ -25,8 +25,10 @@ _APPLIED_MIGRATIONS_SQL = "SELECT version FROM schema_migrations ORDER BY versio
 _RECORD_MIGRATION_SQL = "INSERT INTO schema_migrations (version) VALUES ($1)"
 
 _MIGRATION_ADVISORY_LOCK_KEY: Final[int] = 0x46494E4B4D494752
-_MIGRATION_ADVISORY_LOCK_SQL: Final[str] = "SELECT pg_advisory_lock($1)"
-_MIGRATION_ADVISORY_UNLOCK_SQL: Final[str] = "SELECT pg_advisory_unlock($1)"
+_ADVISORY_LOCK_SQL: Final[str] = "SELECT pg_advisory_lock($1)"
+_ADVISORY_UNLOCK_SQL: Final[str] = "SELECT pg_advisory_unlock($1)"
+_MIGRATION_ADVISORY_LOCK_SQL: Final[str] = _ADVISORY_LOCK_SQL
+_MIGRATION_ADVISORY_UNLOCK_SQL: Final[str] = _ADVISORY_UNLOCK_SQL
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,11 +95,11 @@ class Database:
             raise RuntimeError("synchronizer requires a database pool of at least two")
         pool = await self._ensure_pool()
         async with pool.acquire() as connection:
-            await connection.execute("SELECT pg_advisory_lock($1)", key)
+            await connection.execute(_ADVISORY_LOCK_SQL, key)
             try:
                 yield
             finally:
-                await connection.execute("SELECT pg_advisory_unlock($1)", key)
+                await connection.execute(_ADVISORY_UNLOCK_SQL, key)
 
     @asynccontextmanager
     async def try_advisory_lock(self, key: int) -> AsyncGenerator[bool]:
@@ -115,7 +117,7 @@ class Database:
             try:
                 yield True
             finally:
-                await connection.execute("SELECT pg_advisory_unlock($1)", key)
+                await connection.execute(_ADVISORY_UNLOCK_SQL, key)
 
     async def _ensure_pool(self) -> Pool:
         """

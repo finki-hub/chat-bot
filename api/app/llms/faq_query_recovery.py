@@ -78,11 +78,13 @@ _CYRILLIC_TO_LATIN = str.maketrans(
 )
 
 # Reviewed full forms only; there is no generic suffix-stripping or stemming.
+_SERVICE = "служба"
+_STUDENT_SERVICE = ("студентска", _SERVICE)
 _REVIEWED_ALIASES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
-    (("служба",), ("студентска", "служба")),
-    (("службата",), ("студентска", "служба")),
-    (("студентската", "служба"), ("студентска", "служба")),
-    (("студентската", "службата"), ("студентска", "служба")),
+    ((_SERVICE,), _STUDENT_SERVICE),
+    (("службата",), _STUDENT_SERVICE),
+    (("студентската", _SERVICE), _STUDENT_SERVICE),
+    (("студентската", "службата"), _STUDENT_SERVICE),
     (("деканатот",), ("деканат",)),
     (("компјутерскиот", "центар"), ("компјутерски", "центар")),
     (("архивата",), ("архива",)),
@@ -98,15 +100,17 @@ class _QueryForm:
     entity_kind: _QueryEntityKind = "office"
 
 
+# The verb of the opening-hours questions ("до колку работи").
+_WORKS = "работи"
 _QUERY_FORMS: tuple[_QueryForm, ...] = (
     _QueryForm(("каде", "е"), "location"),
     _QueryForm(("каде", "се", "наоѓа"), "location"),
     _QueryForm(("каде", "се", "наоѓа"), "location", position="suffix"),
     _QueryForm(("кое", "е", "работното", "време", "на"), "hours"),
     _QueryForm(("работно", "време", "на"), "hours"),
-    _QueryForm(("до", "колку", "работи"), "hours"),
-    _QueryForm(("во", "колку", "часот", "работи"), "hours"),
-    _QueryForm(("кога", "работи"), "hours"),
+    _QueryForm(("до", "колку", _WORKS), "hours"),
+    _QueryForm(("во", "колку", "часот", _WORKS), "hours"),
+    _QueryForm(("кога", _WORKS), "hours"),
     _QueryForm(
         ("која", "е", "е", "поштата", "на"),
         "contact",
@@ -356,6 +360,36 @@ def _title_match_with_qualifier(
     return title, match_kind, institution_qualified
 
 
+def _titles_by_key(
+    titles: list[str] | tuple[str, ...],
+) -> dict[tuple[str, ...], list[str]]:
+    """The FAQ titles short enough to match, by their phrase key."""
+    titles_by_key: dict[tuple[str, ...], list[str]] = {}
+    for faq_title in titles:
+        title_tokens = _tokens(faq_title)
+        if not title_tokens or len(title_tokens) > _MAX_QUERY_TOKENS:
+            continue
+        titles_by_key.setdefault(_phrase_key(title_tokens), []).append(faq_title)
+    return titles_by_key
+
+
+def _canonical_query(
+    intent: FaqQueryIntent,
+    contact_kind: FaqContactKind | None,
+    entity: str,
+) -> str | None:
+    """The reviewed question for an intent about one office."""
+    if intent == "location":
+        return f"Каде се наоѓа {entity}?"
+    if intent == "hours":
+        return f"Кое е работното време на {entity}?"
+    if contact_kind == "phone":
+        return f"Кој е телефонскиот број на {entity}?"
+    if contact_kind == "email":
+        return f"Која е е-поштата на {entity}?"
+    return None
+
+
 def resolve_faq_query(
     query: str,
     titles: list[str] | tuple[str, ...],
@@ -364,13 +398,7 @@ def resolve_faq_query(
     if query_tokens is None:
         return None
 
-    titles_by_key: dict[tuple[str, ...], list[str]] = {}
-    for faq_title in titles:
-        title_tokens = _tokens(faq_title)
-        if not title_tokens or len(title_tokens) > _MAX_QUERY_TOKENS:
-            continue
-        titles_by_key.setdefault(_phrase_key(title_tokens), []).append(faq_title)
-
+    titles_by_key = _titles_by_key(titles)
     matches: set[
         tuple[FaqQueryIntent, str, FaqQueryMatchKind, FaqContactKind | None, bool]
     ] = set()
@@ -392,16 +420,8 @@ def resolve_faq_query(
         return None
     intent, title, match_kind, contact_kind, institution_qualified = next(iter(matches))
     entity_suffix = " на ФИНКИ" if institution_qualified else ""
-
-    if intent == "location":
-        canonical_query = f"Каде се наоѓа {title}{entity_suffix}?"
-    elif intent == "hours":
-        canonical_query = f"Кое е работното време на {title}{entity_suffix}?"
-    elif contact_kind == "phone":
-        canonical_query = f"Кој е телефонскиот број на {title}{entity_suffix}?"
-    elif contact_kind == "email":
-        canonical_query = f"Која е е-поштата на {title}{entity_suffix}?"
-    else:
+    canonical_query = _canonical_query(intent, contact_kind, f"{title}{entity_suffix}")
+    if canonical_query is None:
         return None
 
     return FaqQueryRecovery(

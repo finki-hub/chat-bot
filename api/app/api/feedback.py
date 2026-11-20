@@ -86,6 +86,9 @@ async def submit_feedback(
 ) -> FeedbackAckSchema:
     feedback = payload
     ack: FeedbackAckSchema | None
+    generation = (
+        int(x_feedback_generation) if x_feedback_generation is not None else None
+    )
     try:
         stored = (
             await upsert_web_feedback(db, payload)
@@ -93,9 +96,7 @@ async def submit_feedback(
             else await upsert_discord_feedback(
                 db,
                 payload,
-                generation=int(x_feedback_generation)
-                if x_feedback_generation is not None
-                else None,
+                generation=generation,
             )
         )
     except DiscordFeedbackStaleError:

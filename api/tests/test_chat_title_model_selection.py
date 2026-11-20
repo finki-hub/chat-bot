@@ -16,18 +16,17 @@ from tests.chat_persistence_fake import FakeChatDatabase
 
 
 def test_provider_model_validation_names_the_invalid_field() -> None:
+    payload = {
+        "messages": [
+            ConversationTurn(role="user", content="Кога е јунската сесија?"),
+        ],
+        "provider_model": Model.BGE_M3_LOCAL,
+    }
     with pytest.raises(
         ValidationError,
         match="provider_model must be a chat-capable model",
     ):
-        ChatTitleSchema.model_validate(
-            {
-                "messages": [
-                    ConversationTurn(role="user", content="Кога е јунската сесија?"),
-                ],
-                "provider_model": Model.BGE_M3_LOCAL,
-            },
-        )
+        ChatTitleSchema.model_validate(payload)
 
 
 def test_chat_title_uses_cheapest_priced_model_for_active_provider(monkeypatch):

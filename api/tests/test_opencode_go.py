@@ -216,11 +216,9 @@ def test_go_requires_own_user_key_and_session(model, monkeypatch):
 @pytest.mark.parametrize("unknown", ["opencode-go:unknown", "opencode-go:gpt-5.6-luna"])
 def test_unknown_go_models_are_not_ollama(unknown):
     assert not is_ollama_model_tag(unknown)
+    messages = [ConversationTurn(role="user", content="test")]
     with pytest.raises(ValidationError):
-        ChatSchema(
-            messages=[ConversationTurn(role="user", content="test")],
-            inference_model=unknown,
-        )
+        ChatSchema(messages=messages, inference_model=unknown)
     with pytest.raises(ValueError, match="Unsupported"):
         provider_for_model(unknown)
 
@@ -1193,12 +1191,13 @@ def test_go_qwen_incompatible_reasoning_budget_rejected_before_sdk(
     model = Model.OPENCODE_GO_QWEN3_8_MAX
     constructor = Mock()
     monkeypatch.setattr(ChatAnthropic, "model_validate", constructor)
+    messages = [ConversationTurn(role="user", content="test")]
     with pytest.raises(ValidationError, match="requires max_tokens greater than 1024"):
         ChatSchema(
             inference_model=model,
             reasoning=True,
             max_tokens=max_tokens,
-            messages=[ConversationTurn(role="user", content="test")],
+            messages=messages,
         )
     with pytest.raises(ValueError, match="requires max_tokens greater than 1024"):
         opencode_go.get_opencode_go_llm(

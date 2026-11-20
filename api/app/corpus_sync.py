@@ -32,7 +32,9 @@ from app.llms.embedding_generation import generate_embeddings
 from app.llms.models import BGE_M3_EMBEDDING_SPEC_VERSION, Model
 from app.schemas.documents import DocumentSchema, IngestDocumentSchema
 
-OWNED_PREFIXES: tuple[str, ...] = ("legal/", "website/")
+_LEGAL_PREFIX = "legal/"
+_WEBSITE_PREFIX = "website/"
+OWNED_PREFIXES: tuple[str, ...] = (_LEGAL_PREFIX, _WEBSITE_PREFIX)
 DEFAULT_EMBEDDING_TIMEOUT_SECONDS = 1800
 DEFAULT_MAX_DELETIONS = 0
 RELEASE_SCHEMA_VERSION = 2
@@ -384,9 +386,9 @@ def _legacy_names(
     documents: Sequence[InventoryEntry], desired: Mapping[str, CorpusEntry]
 ) -> frozenset[str]:
     legal_entries = {
-        name.removeprefix("legal/"): entry
+        name.removeprefix(_LEGAL_PREFIX): entry
         for name, entry in desired.items()
-        if name.startswith("legal/")
+        if name.startswith(_LEGAL_PREFIX)
     }
     proven: set[str] = set()
     for document in documents:
@@ -707,7 +709,7 @@ async def retrieval_citation_smoke(
     """Require one legal and one website result with the expected citation URL."""
     entries = {entry.name: entry for entry in bundle.entries}
     selected: list[CorpusEntry] = []
-    for prefix in ("legal/", "website/"):
+    for prefix in OWNED_PREFIXES:
         entry = next(
             (entry for entry in entries.values() if entry.name.startswith(prefix)),
             None,

@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+_BLANK_MESSAGE = "must not be blank or whitespace-only"
+
 type JsonValue = (
     str | int | float | bool | list[JsonValue] | dict[str, JsonValue] | None
 )
@@ -40,7 +42,7 @@ class ChatConversationCreate(BaseModel):
             return None
         stripped = value.strip()
         if not stripped:
-            raise ValueError("must not be blank or whitespace-only")
+            raise ValueError(_BLANK_MESSAGE)
         return stripped
 
 
@@ -59,7 +61,7 @@ class ChatConversationUpdate(BaseModel):
             return None
         stripped = value.strip()
         if not stripped:
-            raise ValueError("must not be blank or whitespace-only")
+            raise ValueError(_BLANK_MESSAGE)
         return stripped
 
 
@@ -94,7 +96,7 @@ class ChatMessageUpsert(BaseModel):
     def _strip_content(cls, value: str) -> str:
         stripped = value.strip()
         if not stripped:
-            raise ValueError("must not be blank or whitespace-only")
+            raise ValueError(_BLANK_MESSAGE)
         return stripped
 
 

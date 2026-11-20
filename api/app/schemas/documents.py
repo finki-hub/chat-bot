@@ -9,6 +9,7 @@ from app.llms.models import Model
 from app.schemas.document_sources import parse_document_source_url
 
 _SOURCE_URL_METADATA_KEYS: Final = ("authority_url", "source_url")
+_STATUTE_TITLE: Final = "Статут на ФИНКИ"
 
 
 class DocumentSchema(BaseModel):
@@ -21,7 +22,7 @@ class DocumentSchema(BaseModel):
         description="Unique key or slug of the document",
     )
     title: str = Field(
-        examples=["Статут на ФИНКИ"],
+        examples=[_STATUTE_TITLE],
         description="Human-readable document title",
     )
     source_type: str | None = Field(
@@ -55,7 +56,7 @@ class ChunkSchema(BaseModel):
     id: UUID = Field(examples=["3fa85f64-5717-4562-b3fc-2c963f66afa6"])
     document_id: UUID = Field(examples=["3fa85f64-5717-4562-b3fc-2c963f66afa6"])
     document_name: str = Field(examples=["statut-finki-2019"])
-    document_title: str = Field(examples=["Статут на ФИНКИ"])
+    document_title: str = Field(examples=[_STATUTE_TITLE])
     document_url: HttpUrl | None = Field(
         default=None,
         description="Canonical URL for the original document",
@@ -106,7 +107,7 @@ class IngestDocumentSchema(BaseModel):
     )
     title: str = Field(
         min_length=1,
-        examples=["Статут на ФИНКИ"],
+        examples=[_STATUTE_TITLE],
         description="Human-readable document title",
     )
     content: str = Field(

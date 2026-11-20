@@ -1,5 +1,16 @@
 import json
 import sys
+from pathlib import Path
+
+SCRIPTS_DIR = Path("./scripts").resolve()
+
+
+def script_file(name: str, suffix: str) -> Path:
+    """A file directly inside ./scripts; any other path is refused."""
+    path = (SCRIPTS_DIR / f"{name}{suffix}").resolve()
+    if path.parent != SCRIPTS_DIR:
+        raise SystemExit(f"{name!r} must name a file in {SCRIPTS_DIR}")
+    return path
 
 
 def convert_data(table: str, data: list) -> str:
@@ -22,8 +33,8 @@ if __name__ == "__main__":
     table_name = sys.argv[1]
     file = sys.argv[2]
 
-    with open(f"./scripts/{file}.json", encoding="utf-8") as f:
+    with script_file(file, ".json").open(encoding="utf-8") as f:
         data = json.load(f)
 
-    with open(f"./scripts/{file}.sql", "w", encoding="utf-8") as f:
+    with script_file(file, ".sql").open("w", encoding="utf-8") as f:
         f.write(convert_data(table_name, data))

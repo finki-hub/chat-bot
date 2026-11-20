@@ -41,6 +41,7 @@ async def transform_query(
         len(query),
     )
 
+    creds = credentials if credentials is not None else LlmProviderCredentials()
     if not isinstance(model, Model):
         if model.startswith("opencode-go:"):
             raise ValueError("Unsupported OpenCode Go model")
@@ -51,7 +52,7 @@ async def transform_query(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
-            credential=None if credentials is None else credentials.ollama,
+            credential=creds.ollama,
         )
 
     match model:
@@ -63,10 +64,8 @@ async def transform_query(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
-                credential=None if credentials is None else credentials.opencode_go,
-                conversation_id=None
-                if credentials is None
-                else credentials.conversation_id,
+                credential=creds.opencode_go,
+                conversation_id=creds.conversation_id,
             )
         case model if model in OPENAI_QUERY_TRANSFORM_MODELS:
             return await transform_query_with_openai(
@@ -76,12 +75,10 @@ async def transform_query(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
-                credential=None if credentials is None else credentials.openai,
+                credential=creds.openai,
                 # The sponsored OpenAI-compatible credential may target OpenCode Go,
                 # which needs the conversation session header.
-                conversation_id=None
-                if credentials is None
-                else credentials.conversation_id,
+                conversation_id=creds.conversation_id,
             )
 
         case model if model in GOOGLE_QUERY_TRANSFORM_MODELS:
@@ -92,7 +89,7 @@ async def transform_query(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
-                credential=None if credentials is None else credentials.google,
+                credential=creds.google,
             )
 
         case model if model in ANTHROPIC_QUERY_TRANSFORM_MODELS:
@@ -103,7 +100,7 @@ async def transform_query(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
-                credential=None if credentials is None else credentials.anthropic,
+                credential=creds.anthropic,
             )
 
         case model if model in OLLAMA_QUERY_TRANSFORM_MODELS:
@@ -114,7 +111,7 @@ async def transform_query(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
-                credential=None if credentials is None else credentials.ollama,
+                credential=creds.ollama,
             )
 
         case model if model in OPENROUTER_QUERY_TRANSFORM_MODELS:
@@ -125,7 +122,7 @@ async def transform_query(
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
-                credential=None if credentials is None else credentials.openrouter,
+                credential=creds.openrouter,
             )
 
         case _:

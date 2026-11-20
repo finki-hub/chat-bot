@@ -980,7 +980,8 @@ def _render_blocks(
         items.append((rank, _cited(c.context_text, cite(c.retrieval_source))))
 
     included: dict[UUID, set[int]] = {}
-    for doc_id, idx in chunk_centers:
+    for center in chunk_centers:
+        doc_id, idx = center
         for delta in range(-_NEIGHBOR_WINDOW, _NEIGHBOR_WINDOW + 1):
             if (doc_id, idx + delta) in window_map:
                 included.setdefault(doc_id, set()).add(idx + delta)

@@ -148,24 +148,24 @@ def test_openrouter_deepseek_is_a_supported_openrouter_chat_model() -> None:
 
 
 def test_reasoning_provider_parameter_policies_cover_current_model_lanes() -> None:
-    assert {
+    assert set(OPENAI_NO_SAMPLING_MODELS) == {
         Model.GPT_6_ASTRA,
         Model.GPT_6_1_SOL,
         Model.GPT_5_6_TERRA,
         Model.GPT_6_LUNA,
         Model.GPT_5_4_MINI,
         Model.GPT_5_4_NANO,
-    } == OPENAI_NO_SAMPLING_MODELS
-    assert {
+    }
+    assert set(ANTHROPIC_NO_SAMPLING_MODELS) == {
         Model.CLAUDE_FABLE_5_1,
         Model.CLAUDE_OPUS_5_5,
         Model.CLAUDE_SONNET_5_5,
         Model.CLAUDE_HAIKU_5_5,
-    } == ANTHROPIC_NO_SAMPLING_MODELS
-    assert {
+    }
+    assert set(ANTHROPIC_MANDATORY_REASONING_MODELS) == {
         Model.CLAUDE_FABLE_5_1,
         Model.CLAUDE_OPUS_5_5,
-    } == ANTHROPIC_MANDATORY_REASONING_MODELS
+    }
 
 
 def test_openrouter_inference_defaults_query_transform_to_same_model() -> None:

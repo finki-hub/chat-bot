@@ -138,19 +138,10 @@ def get_opencode_go_llm(
     conversation_id: str | None = None,
 ) -> ChatOpenAI | ChatAnthropic:
     credential = require_provider_credential("opencode-go", credential)
-    if credential.provider != "opencode-go":
-        raise ValueError("OpenCode Go requires its own provider credential")
-    if not credential.api_key.strip():
-        raise ValueError("OpenCode Go requires a nonblank user key")
-    if model not in OPENCODE_GO_QUERY_TRANSFORM_MODELS:
-        raise ValueError("Unsupported OpenCode Go model")
-    if not conversation_id:
-        raise ValueError("OpenCode Go requires a conversation ID")
-    if model == Model.OPENCODE_GO_QWEN3_8_MAX and reasoning and max_tokens <= 1024:
-        raise ValueError(
-            "OpenCode Go Qwen reasoning requires max_tokens greater than 1024"
-        )
-    headers = {"User-Agent": "finki-hub/1.0", "x-opencode-session": conversation_id}
+    session_id = _go_session_id(
+        credential, model, conversation_id, reasoning, max_tokens
+    )
+    headers = {"User-Agent": "finki-hub/1.0", "x-opencode-session": session_id}
     base_url = (credential.base_url or OPENCODE_GO_DEFAULT_BASE_URL).rstrip("/")
     # Store one OpenAI-compatible base. Anthropic appends /v1/messages itself.
     root_url = base_url.removesuffix("/v1")
@@ -168,66 +159,104 @@ def get_opencode_go_llm(
     else:
         options["temperature"] = None
     if model in _MESSAGES_MODELS:
-        # Messages compatibility does not imply identical model-specific knobs.
-        # Never send OpenRouter's reasoning envelope.
-        if model == Model.OPENCODE_GO_CLAUDE_HAIKU_5_5:
-            options["thinking"] = (
-                {"type": "adaptive", "display": "summarized"}
-                if reasoning
-                else {"type": "disabled"}
-            )
-            options["effort"] = "medium"
-        elif model == Model.OPENCODE_GO_MINIMAX_M3:
-            # https://platform.minimax.io/docs/api-reference/text-anthropic-api
-            # M3 uses adaptive (not enabled/budget_tokens) and supports both
-            # temperature and top_p, including when thinking is requested.
-            options["thinking"] = {"type": "adaptive" if reasoning else "disabled"}
-            options["top_p"] = top_p
-        elif reasoning:
-            options["thinking"] = {
-                "type": "enabled",
-                "budget_tokens": min(4096, max_tokens - 1),
-            }
-            options["temperature"] = None
-        else:
-            options["thinking"] = {"type": "disabled"}
+        _set_messages_thinking(options, model, reasoning, top_p, max_tokens)
         return ChatAnthropic.model_validate(options)
     options["use_responses_api"] = model in _RESPONSES_MODELS
     options["stream_usage"] = True
     if model in _RESPONSES_MODELS:
         options["store"] = False
-        if reasoning:
-            options["reasoning"] = (
-                {"effort": "medium", "summary": "auto"}
-                if model == Model.OPENCODE_GO_GPT_6_LUNA
-                else {"effort": "high"}
-            )
-        elif model == Model.OPENCODE_GO_GPT_6_LUNA:
-            options["reasoning"] = {"effort": "none"}
-        else:
-            # https://docs.x.ai/developers/model-capabilities/text/reasoning
-            # Grok 4.7 cannot disable reasoning.
-            # An off request selects the lowest documented effort instead.
-            options["reasoning"] = {"effort": "low"}
+        options["reasoning"] = _responses_reasoning(model, reasoning)
         return ChatOpenAI.model_validate(options)
     if model not in OPENCODE_GO_NO_SAMPLING_MODELS:
         options["top_p"] = top_p
-    if reasoning:
-        options["reasoning_effort"] = (
-            "max" if model == Model.OPENCODE_GO_KIMI_K3 else "high"
+    options["reasoning_effort"] = _completions_reasoning_effort(model, reasoning)
+    return GoChatCompletions.model_validate(options)
+
+
+def _go_session_id(
+    credential: ChatCredentialSecret,
+    model: Model,
+    conversation_id: str | None,
+    reasoning: bool,
+    max_tokens: int,
+) -> str:
+    """The session of a request OpenCode Go can serve; refuses any other."""
+    if credential.provider != "opencode-go":
+        raise ValueError("OpenCode Go requires its own provider credential")
+    if not credential.api_key.strip():
+        raise ValueError("OpenCode Go requires a nonblank user key")
+    if model not in OPENCODE_GO_QUERY_TRANSFORM_MODELS:
+        raise ValueError("Unsupported OpenCode Go model")
+    if not conversation_id:
+        raise ValueError("OpenCode Go requires a conversation ID")
+    if model == Model.OPENCODE_GO_QWEN3_8_MAX and reasoning and max_tokens <= 1024:
+        raise ValueError(
+            "OpenCode Go Qwen reasoning requires max_tokens greater than 1024"
         )
-    elif model in _DEEPSEEK_MODELS:
+    return conversation_id
+
+
+def _set_messages_thinking(
+    options: dict[str, object],
+    model: Model,
+    reasoning: bool,
+    top_p: float,
+    max_tokens: int,
+) -> None:
+    """The thinking options of a model served through the Messages API."""
+    # Messages compatibility does not imply identical model-specific knobs.
+    # Never send OpenRouter's reasoning envelope.
+    if model == Model.OPENCODE_GO_CLAUDE_HAIKU_5_5:
+        options["thinking"] = (
+            {"type": "adaptive", "display": "summarized"}
+            if reasoning
+            else {"type": "disabled"}
+        )
+        options["effort"] = "medium"
+    elif model == Model.OPENCODE_GO_MINIMAX_M3:
+        # https://platform.minimax.io/docs/api-reference/text-anthropic-api
+        # M3 uses adaptive (not enabled/budget_tokens) and supports both
+        # temperature and top_p, including when thinking is requested.
+        options["thinking"] = {"type": "adaptive" if reasoning else "disabled"}
+        options["top_p"] = top_p
+    elif reasoning:
+        options["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": min(4096, max_tokens - 1),
+        }
+        options["temperature"] = None
+    else:
+        options["thinking"] = {"type": "disabled"}
+
+
+def _responses_reasoning(model: Model, reasoning: bool) -> dict[str, str]:
+    """The reasoning option of a model served through the Responses API."""
+    if reasoning:
+        if model == Model.OPENCODE_GO_GPT_6_LUNA:
+            return {"effort": "medium", "summary": "auto"}
+        return {"effort": "high"}
+    if model == Model.OPENCODE_GO_GPT_6_LUNA:
+        return {"effort": "none"}
+    # https://docs.x.ai/developers/model-capabilities/text/reasoning
+    # Grok 4.7 cannot disable reasoning.
+    # An off request selects the lowest documented effort instead.
+    return {"effort": "low"}
+
+
+def _completions_reasoning_effort(model: Model, reasoning: bool) -> str:
+    """The reasoning effort of a model served through Chat Completions."""
+    if reasoning:
+        return "max" if model == Model.OPENCODE_GO_KIMI_K3 else "high"
+    if model in _DEEPSEEK_MODELS:
         # https://api-docs.deepseek.com/api/create-chat-completion
         # DeepSeek defaults to enabled/high when effort is omitted. Go's
         # compatible route accepts the same explicit none disable contract.
-        options["reasoning_effort"] = "none"
-    else:
-        # https://docs.z.ai/guides/capabilities/thinking-mode
-        # https://platform.kimi.ai/docs/guide/kimi-k3-quickstart
-        # GLM-5.3 and Kimi K3 always think per their current vendor guides.
-        # Omission would retain default high/max thinking, not disable it.
-        options["reasoning_effort"] = "low"
-    return GoChatCompletions.model_validate(options)
+        return "none"
+    # https://docs.z.ai/guides/capabilities/thinking-mode
+    # https://platform.kimi.ai/docs/guide/kimi-k3-quickstart
+    # GLM-5.3 and Kimi K3 always think per their current vendor guides.
+    # Omission would retain default high/max thinking, not disable it.
+    return "low"
 
 
 async def stream_opencode_go_agent_response(

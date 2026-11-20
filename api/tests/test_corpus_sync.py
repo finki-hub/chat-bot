@@ -188,20 +188,19 @@ def test_documents_exporter_schema_v2_loads_exact_top_level_shape() -> None:
 
 
 def test_bundle_rejects_unowned_namespace() -> None:
-    entry = _entry("faq/not-owned")
+    bundle = _bundle(_entry("faq/not-owned"))
     with pytest.raises(sync.BundleValidationError):
-        sync.validate_bundle(_bundle(entry))
+        sync.validate_bundle(bundle)
 
 
 def test_release_bundle_rejects_worktree_revision() -> None:
+    bundle = sync.CorpusBundle(
+        "WORKTREE-" + "a" * 64,
+        SOURCE_TREE_HASH,
+        (_entry(),),
+    )
     with pytest.raises(sync.BundleValidationError):
-        sync.validate_bundle(
-            sync.CorpusBundle(
-                "WORKTREE-" + "a" * 64,
-                SOURCE_TREE_HASH,
-                (_entry(),),
-            ),
-        )
+        sync.validate_bundle(bundle)
 
 
 def test_raw_bundle_sha_is_verified_independently(tmp_path) -> None:
@@ -228,10 +227,11 @@ def test_raw_bundle_sha_is_verified_independently(tmp_path) -> None:
 async def test_apply_requires_the_verified_raw_bundle_sha() -> None:
     entry = _entry()
     plan = sync.SyncPlan((entry,), (), (), (), frozenset({entry.name}))
+    db, bundle = _db(), _bundle(entry)
     with pytest.raises(sync.BundleValidationError, match="bundle SHA-256"):
         await sync.apply_plan(
-            _db(),
-            _bundle(entry),
+            db,
+            bundle,
             plan,
             apply=True,
             expected_source_commit=SOURCE_COMMIT,
@@ -322,9 +322,10 @@ async def test_replace_all_refuses_delete_when_inventory_precondition_changes(
     monkeypatch.setattr(sync, "list_documents_query", list_documents)
     monkeypatch.setattr(sync, "delete_all_documents_query", delete_all)
     monkeypatch.setattr(sync, "single_writer_lock", _no_lock)
+    database = cast(Database, _ReplaceDatabase())
     with pytest.raises(sync.ConcurrentInventoryError):
         await sync.synchronize(
-            cast(Database, _ReplaceDatabase()),
+            database,
             bundle,
             apply=True,
             replace_all=True,
@@ -361,9 +362,10 @@ async def test_replace_all_rechecks_and_deletes_inside_table_lock(monkeypatch) -
     monkeypatch.setattr(sync, "list_documents_query", list_documents)
     monkeypatch.setattr(sync, "delete_all_documents_query", delete_all)
     monkeypatch.setattr(sync, "single_writer_lock", _no_lock)
+    database = cast(Database, LockedDatabase())
     with pytest.raises(sync.ConcurrentInventoryError):
         await sync.synchronize(
-            cast(Database, LockedDatabase()),
+            database,
             bundle,
             apply=True,
             replace_all=True,
@@ -386,8 +388,9 @@ async def test_apply_requires_matching_release_pins_before_lock(monkeypatch) -> 
         yield
 
     monkeypatch.setattr(sync, "single_writer_lock", lock)
+    db, bundle = _db(), _bundle(entry)
     with pytest.raises(sync.BundleValidationError, match="pins"):
-        await sync.apply_plan(_db(), _bundle(entry), plan, apply=True)
+        await sync.apply_plan(db, bundle, plan, apply=True)
     assert locked is False
 
 
@@ -444,8 +447,9 @@ async def test_exact_mirror_rejects_a_recognized_legacy_name(monkeypatch) -> Non
         return [_document(desired), _proven_legacy(desired)]
 
     monkeypatch.setattr(sync, "list_documents_query", list_documents)
+    db, bundle = _db(), _bundle(desired)
     with pytest.raises(RuntimeError, match="legacy"):
-        await sync.assert_exact_target_metadata(_db(), _bundle(desired))
+        await sync.assert_exact_target_metadata(db, bundle)
 
 
 @pytest.mark.anyio
@@ -477,10 +481,11 @@ async def test_concurrent_apply_is_rejected_before_plan_inventory_read(
 
     monkeypatch.setattr(sync, "single_writer_lock", busy_lock)
     monkeypatch.setattr(sync, "list_documents_query", unexpected_inventory)
+    db, bundle = _db(), _bundle(_entry())
     with pytest.raises(sync.ConcurrentSyncRunError):
         await sync.synchronize(
-            _db(),
-            _bundle(_entry()),
+            db,
+            bundle,
             apply=True,
             max_deletions=0,
             expected_source_commit=SOURCE_COMMIT,
@@ -627,10 +632,11 @@ async def test_apply_fails_closed_when_planned_delete_changes(monkeypatch) -> No
     monkeypatch.setattr(sync, "wait_for_current_embeddings", embeddings)
     monkeypatch.setattr(sync, "single_writer_lock", _no_lock)
     monkeypatch.setattr(sync, "delete_document_compare_and_set_query", delete)
+    db, bundle = _db(), _bundle(entry)
     with pytest.raises(sync.ConcurrentInventoryError):
         await sync.apply_plan(
-            _db(),
-            _bundle(entry),
+            db,
+            bundle,
             plan,
             apply=True,
             max_deletions=1,
@@ -678,9 +684,10 @@ async def test_apply_never_deletes_when_upload_or_embedding_fails(monkeypatch) -
         raise RuntimeError("upload failed")
 
     monkeypatch.setattr(sync, "upsert_document_from_entry", upload_failure)
+    db = _db()
     with pytest.raises(RuntimeError, match="upload failed"):
         await sync.apply_plan(
-            _db(),
+            db,
             bundle,
             plan,
             apply=True,
@@ -701,9 +708,10 @@ async def test_apply_never_deletes_when_upload_or_embedding_fails(monkeypatch) -
 
     monkeypatch.setattr(sync, "upsert_document_from_entry", upload)
     monkeypatch.setattr(sync, "wait_for_current_embeddings", embedding_failure)
+    db = _db()
     with pytest.raises(sync.EmbeddingNotReadyError):
         await sync.apply_plan(
-            _db(),
+            db,
             bundle,
             plan,
             apply=True,
@@ -741,10 +749,11 @@ async def test_deletion_cap_is_checked_before_upload(monkeypatch) -> None:
 
     monkeypatch.setattr(sync, "build_plan", planned)
     monkeypatch.setattr(sync, "single_writer_lock", _no_lock)
+    db, bundle = _db(), _bundle(entry)
     with pytest.raises(sync.DeletionCapExceededError):
         await sync.apply_plan(
-            _db(),
-            _bundle(entry),
+            db,
+            bundle,
             plan,
             apply=True,
             max_deletions=1,
@@ -797,12 +806,9 @@ async def test_wait_requires_every_document_to_have_a_chunk(monkeypatch) -> None
         return next(responses)
 
     monkeypatch.setattr(sync, "embedding_verification", verification)
+    db, names = _db(), frozenset({"legal/a", "website/home"})
     with pytest.raises(sync.EmbeddingNotReadyError):
-        await sync.wait_for_current_embeddings(
-            _db(),
-            frozenset({"legal/a", "website/home"}),
-            0,
-        )
+        await sync.wait_for_current_embeddings(db, names, 0)
 
 
 @pytest.mark.anyio
@@ -821,5 +827,6 @@ async def test_retrieval_smoke_fails_closed_for_a_bad_citation(monkeypatch) -> N
 
     monkeypatch.setattr(sync, "generate_embeddings", embeddings)
     monkeypatch.setattr(sync, "get_closest_chunks", chunks)
+    db, bundle = _db(), _bundle_with_website()
     with pytest.raises(sync.RetrievalSmokeError):
-        await sync.retrieval_citation_smoke(_db(), _bundle_with_website())
+        await sync.retrieval_citation_smoke(db, bundle)

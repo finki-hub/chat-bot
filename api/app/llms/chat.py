@@ -91,13 +91,14 @@ async def handle_chat(
     )
 
     tools = build_recommendation_tools(db) if db is not None else []
+    # Only the web client turns `[N]` markers into links to its sources.
+    citations = CitationRefs() if payload.interface == "web" else None
     search = (
         KnowledgeSearch(
             db,
             payload.embeddings_model,
             retrieval_credentials,
-            # Only the web client turns `[N]` markers into links to its sources.
-            CitationRefs() if payload.interface == "web" else None,
+            citations,
         )
         if db is not None
         else None

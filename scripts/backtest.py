@@ -309,26 +309,21 @@ def report(
 ) -> str:
     n = len(results)
     cold = [r for r in results if r.is_cold_start]
-    lines: list[str] = []
-    lines.append("=" * 72)
-    lines.append("COMMITTEE-RECOMMENDER BACKTEST — GATE A (defenses-only)")
-    lines.append("=" * 72)
-    lines.append(
+    lines: list[str] = [
+        "=" * 72,
+        "COMMITTEE-RECOMMENDER BACKTEST — GATE A (defenses-only)",
+        "=" * 72,
         f"model={model_value}  population={population_size}  evaluated={n}  "
         f"cold_start={len(cold)}",
-    )
-    lines.append(
         f"initial_k={initial_k}  top_k={top_k}  mentor_topk={mentor_topk}  "
         f"reranker_min={settings.RERANKER_MIN_SCORE}",
-    )
-    lines.append(
         f"weights: sim={weights.similarity_weight} rerank={weights.rerank_weight} "
         f"recency_hl_days={weights.recency_half_life_days} "
         f"pair_affinity={weights.pair_affinity_weight} "
         f"mentor_prior={weights.mentor_prior_weight} "
         f"coauthor_prior={weights.coauthor_prior_weight} "
         f"expertise={weights.expertise_weight} coauthor={weights.coauthor_weight}",
-    )
+    ]
 
     def metric_block(title: str, subset: list[CaseResult]) -> None:
         if not subset:
@@ -406,7 +401,8 @@ async def main_async(ns: argparse.Namespace) -> int:
     weights = weights_from_args(ns)
     run_full = ns.mode in ("full", "both")
     run_members = ns.mode in ("members", "both")
-    rng = random.Random(ns.seed)  # noqa: S311 - sample selection, not cryptography
+    # Sample selection, not cryptography.
+    rng = random.Random(ns.seed)  # noqa: S311
 
     init_http_client()
     db = Database(dsn=settings.DATABASE_URL)
