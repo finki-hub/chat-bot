@@ -1,5 +1,5 @@
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import cast
 from uuid import uuid4
 
@@ -30,7 +30,7 @@ def test_chat_search_matches_cyrillic_messages_and_scopes_by_user() -> None:
         other_conversation = uuid4()
         owner_message = uuid4()
         title_only_conversation = uuid4()
-        now = datetime(2026, 11, 2, 12, 0, tzinfo=UTC)
+        now = datetime.fromisoformat("2026-11-02T12:00:00")
 
         try:
             await database.execute(
@@ -135,7 +135,7 @@ def test_chat_search_orders_best_message_and_paginates() -> None:
         owner_id = uuid4()
         first_conversation = uuid4()
         second_conversation = uuid4()
-        now = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
+        now = datetime.fromisoformat("2026-11-03T12:00:00")
 
         try:
             await database.execute(

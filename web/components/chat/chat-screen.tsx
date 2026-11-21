@@ -60,6 +60,11 @@ export const ChatScreen = () => {
     conversationId: string;
     messageId: string;
   }>(null);
+  const [selectedConversationTitle, setSelectedConversationTitle] =
+    useState<null | {
+      conversationId: string;
+      title: string;
+    }>(null);
   const credentialReturnFocusRef = useRef<HTMLElement | null>(null);
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -184,23 +189,40 @@ export const ChatScreen = () => {
     status,
     submitMessage,
   } = useConversations(model, unavailable, reasoningActive);
+  const selectedConversationTitleValue =
+    selectedConversationTitle !== null &&
+    selectedConversationTitle.conversationId === activeId
+      ? selectedConversationTitle.title
+      : null;
   const activeConversationTitle =
     conversations.find((conversation) => conversation.id === activeId)?.title ??
+    selectedConversationTitleValue ??
     t('conversation.untitled');
   const handleSelectConversation = useCallback(
     (id: string) => {
       setPendingJump(null);
+      setSelectedConversationTitle(null);
       onSelect(id);
     },
     [onSelect],
   );
   const handleNewChat = useCallback(() => {
     setPendingJump(null);
+    setSelectedConversationTitle(null);
     onNewChat();
   }, [onNewChat]);
   const handleSelectSearchResult = useCallback(
-    (conversationId: string, messageId: null | string) => {
+    (
+      conversationId: string,
+      messageId: null | string,
+      conversationTitle: null | string,
+    ) => {
       setPendingJump(messageId === null ? null : { conversationId, messageId });
+      setSelectedConversationTitle(
+        conversationTitle === null
+          ? null
+          : { conversationId, title: conversationTitle },
+      );
       onSelect(conversationId);
     },
     [onSelect],

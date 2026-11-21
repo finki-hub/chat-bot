@@ -20,6 +20,9 @@ const parseInteger = (
   minimum: number,
   maximum: number,
 ): number => {
+  if (value === null || value.trim() === '') {
+    return fallback;
+  }
   const parsed = Number(value);
   return Number.isSafeInteger(parsed)
     ? Math.min(Math.max(parsed, minimum), maximum)

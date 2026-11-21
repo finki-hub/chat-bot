@@ -46,7 +46,11 @@ const searchBody = {
 
 const renderSidebar = (
   onSelectMessage = vi.fn<
-    (conversationId: string, messageId: null | string) => void
+    (
+      conversationId: string,
+      messageId: null | string,
+      conversationTitle: null | string,
+    ) => void
   >(),
 ) =>
   render(
@@ -77,7 +81,13 @@ describe('Sidebar conversation search', () => {
 
   it('renders message snippets, highlights matches, and opens the message', async () => {
     const onSelectMessage =
-      vi.fn<(conversationId: string, messageId: null | string) => void>();
+      vi.fn<
+        (
+          conversationId: string,
+          messageId: null | string,
+          conversationTitle: null | string,
+        ) => void
+      >();
     renderSidebar(onSelectMessage);
 
     fireEvent.change(screen.getByRole('searchbox'), {
@@ -93,12 +103,18 @@ describe('Sidebar conversation search', () => {
 
     fireEvent.click(firstResult);
 
-    expect(onSelectMessage).toHaveBeenCalledWith('c1', 'm1');
+    expect(onSelectMessage).toHaveBeenCalledWith('c1', 'm1', 'Испити');
   });
 
   it('renders title-only matches without a message jump', async () => {
     const onSelectMessage =
-      vi.fn<(conversationId: string, messageId: null | string) => void>();
+      vi.fn<
+        (
+          conversationId: string,
+          messageId: null | string,
+          conversationTitle: null | string,
+        ) => void
+      >();
     renderSidebar(onSelectMessage);
 
     fireEvent.change(screen.getByRole('searchbox'), {
@@ -114,7 +130,37 @@ describe('Sidebar conversation search', () => {
 
     fireEvent.click(titleOnly);
 
-    expect(onSelectMessage).toHaveBeenCalledWith('c2', null);
+    expect(onSelectMessage).toHaveBeenCalledWith('c2', null, 'Упис');
+  });
+
+  it('keeps local title matches when the server has no results', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      Response.json({ query: 'исп', results: [] }),
+    );
+    const onSelectMessage =
+      vi.fn<
+        (
+          conversationId: string,
+          messageId: null | string,
+          conversationTitle: null | string,
+        ) => void
+      >();
+    renderSidebar(onSelectMessage);
+
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'исп' },
+    });
+
+    const results = await screen.findByTestId('conversation-search-results');
+    const localMatch = within(results).getByRole('button', {
+      name: FIRST_TITLE_PATTERN,
+    });
+
+    expect(within(localMatch).getByText('Наслов')).toBeInTheDocument();
+
+    fireEvent.click(localMatch);
+
+    expect(onSelectMessage).toHaveBeenCalledWith('c1', null, 'Испити');
   });
 
   it('shows the search error and can retry', async () => {

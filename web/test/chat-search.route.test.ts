@@ -75,10 +75,13 @@ describe('GET /api/chat/search', () => {
     );
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const upstream = new URL(url);
 
-    expect(url).toContain('/chat/state/search?');
-    expect(url).toContain(`user_id=${USER_ID}`);
-    expect(url).toContain('q=%D0%B8%D1%81%D0%BF%D0%B8%D1%82%D0%B8');
+    expect(upstream.pathname).toBe('/chat/state/search');
+    expect(upstream.searchParams.get('user_id')).toBe(USER_ID);
+    expect(upstream.searchParams.get('q')).toBe('испити');
+    expect(upstream.searchParams.get('limit')).toBe('20');
+    expect(upstream.searchParams.get('offset')).toBe('0');
     expect(new Headers(init.headers).get('x-api-key')).toBe('super-secret-key');
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toStrictEqual({
@@ -97,6 +100,44 @@ describe('GET /api/chat/search', () => {
         },
       ],
     });
+  });
+
+  it('clamps explicit paging parameters', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json(searchResponse, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { GET } = await importRoute();
+
+    await GET(
+      new Request(
+        'https://localhost/api/chat/search?q=test&limit=999&offset=-5',
+      ),
+    );
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const upstream = new URL(url);
+
+    expect(upstream.searchParams.get('limit')).toBe('50');
+    expect(upstream.searchParams.get('offset')).toBe('0');
+  });
+
+  it('falls back when paging parameters are malformed', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json(searchResponse, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { GET } = await importRoute();
+
+    await GET(
+      new Request('https://localhost/api/chat/search?q=test&limit=abc&offset='),
+    );
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const upstream = new URL(url);
+
+    expect(upstream.searchParams.get('limit')).toBe('20');
+    expect(upstream.searchParams.get('offset')).toBe('0');
   });
 
   it('rejects a query shorter than two characters', async () => {

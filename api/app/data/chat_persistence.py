@@ -204,7 +204,7 @@ async def search_conversations(
             message_created_at,
             snippet
         FROM ranked
-        ORDER BY score DESC, conversation_updated_at DESC
+        ORDER BY score DESC, conversation_updated_at DESC, conversation_id DESC
         LIMIT $4 OFFSET $5
         """,
         user_id,

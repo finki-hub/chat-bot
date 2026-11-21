@@ -46,7 +46,11 @@ export const ConversationSearchResults = ({
   onSelect,
   results,
 }: {
-  onSelect: (conversationId: string, messageId: null | string) => void;
+  onSelect: (
+    conversationId: string,
+    messageId: null | string,
+    conversationTitle: null | string,
+  ) => void;
   results: readonly ChatSearchResult[];
 }) => (
   <ul
@@ -59,7 +63,11 @@ export const ConversationSearchResults = ({
         <button
           className="flex min-h-11 w-full flex-col gap-1 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => {
-            onSelect(result.conversationId, result.message?.id ?? null);
+            onSelect(
+              result.conversationId,
+              result.message?.id ?? null,
+              result.conversationTitle,
+            );
           }}
           type="button"
         >

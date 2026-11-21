@@ -70,6 +70,7 @@ async def test_search_conversations_maps_messages_and_scopes_the_query() -> None
 
     assert db.calls == 1
     assert "to_tsvector('simple', m.content)" in db.query
+    assert "conversation_id DESC" in db.query
     assert db.args[0] == USER_ID
     assert db.args[1] == "испити"
     assert "StartSel=" in str(db.args[2])

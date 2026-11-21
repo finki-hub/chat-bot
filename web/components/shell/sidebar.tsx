@@ -42,12 +42,35 @@ export type SidebarProps = {
   onRename: MaybeAsyncAction<[id: string, title: string]>;
   onRetryList?: () => Promise<void>;
   onSelect: (id: string) => void;
-  onSelectMessage?: (conversationId: string, messageId: null | string) => void;
+  onSelectMessage?: (
+    conversationId: string,
+    messageId: null | string,
+    conversationTitle: null | string,
+  ) => void;
   open: boolean;
   synced?: boolean;
 };
 
 /* eslint-disable sonarjs/cognitive-complexity -- responsive drawer, filtering, and confirmation form one navigation state machine */
+const mergeLocalTitleMatches = (
+  results: readonly ChatSearchResult[],
+  localMatches: readonly ConversationRow[],
+): ChatSearchResult[] => {
+  const matchedIds = new Set(results.map((result) => result.conversationId));
+  return [
+    ...results,
+    ...localMatches
+      .filter((conversation) => !matchedIds.has(conversation.id))
+      .map((conversation) => ({
+        conversationId: conversation.id,
+        conversationTitle: conversation.title,
+        conversationUpdatedAt: conversation.updatedAt ?? '',
+        message: null,
+        snippet: null,
+      })),
+  ];
+};
+
 export const Sidebar = ({
   activeId,
   conversations,
@@ -167,8 +190,9 @@ export const Sidebar = ({
   const handleSearchSelect = (
     conversationId: string,
     messageId: null | string,
+    conversationTitle: null | string,
   ) => {
-    onSelectMessage?.(conversationId, messageId);
+    onSelectMessage?.(conversationId, messageId, conversationTitle);
     closeSidebarOnMobile(onClose);
   };
 
@@ -184,6 +208,7 @@ export const Sidebar = ({
 
   const { filtered, term } = getConversationFilter(conversations, query);
   const responsiveStateClass = getSidebarWidthClass(open, synced);
+  const visibleSearchResults = mergeLocalTitleMatches(searchResults, filtered);
 
   const renderLocalConversations = (): ReactNode =>
     term && filtered.length === 0 ? (
@@ -244,7 +269,7 @@ export const Sidebar = ({
           </>
         );
       }
-      if (searchResults.length === 0) {
+      if (visibleSearchResults.length === 0) {
         return (
           <p
             className="px-2 py-1.5 text-sm text-muted-foreground"
@@ -257,7 +282,7 @@ export const Sidebar = ({
       return (
         <ConversationSearchResults
           onSelect={handleSearchSelect}
-          results={searchResults}
+          results={visibleSearchResults}
         />
       );
     }
