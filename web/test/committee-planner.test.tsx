@@ -258,6 +258,10 @@ describe('CommitteePlanner', () => {
       'aria-invalid',
       'true',
     );
+    expect(screen.getByText(t('committee.error.mentorRequired'))).toBeVisible();
+    expect(
+      screen.queryByText(t('committee.error.unknownMentor')),
+    ).not.toBeInTheDocument();
     expect(vi.mocked(fetch)).not.toHaveBeenCalledWith(
       expect.stringContaining(URL_COMMITTEE),
       expect.anything(),

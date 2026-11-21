@@ -148,7 +148,11 @@ export const MentorPicker = ({
           className="text-xs text-destructive"
           id={`${selectId}-error`}
         >
-          {t('committee.error.unknownMentor')}
+          {t(
+            mentor
+              ? 'committee.error.unknownMentor'
+              : 'committee.error.mentorRequired',
+          )}
         </p>
       ) : null}
     </>
