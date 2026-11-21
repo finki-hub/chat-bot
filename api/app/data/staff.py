@@ -55,7 +55,7 @@ class StaffMember(BaseModel):
     @field_validator("active", mode="before")
     @classmethod
     def _parse_active(cls, value: object) -> bool:
-        # Directus returns a boolean; the legacy export uses "0"/"1".
+        # Directus returns a boolean; accept the legacy "0"/"1" shape too.
         return value in (True, 1, "1")
 
 

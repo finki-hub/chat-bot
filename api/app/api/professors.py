@@ -22,8 +22,7 @@ router = APIRouter(
     summary="List active faculty staff",
     description=(
         "Return active staff from the Directus directory with the public profile "
-        "fields the committee planner needs. Falls back to the legacy staff export "
-        "when Directus is unavailable."
+        "fields the committee planner needs."
     ),
     status_code=status.HTTP_200_OK,
     responses={
