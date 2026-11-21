@@ -40,6 +40,7 @@ export const messages = {
     'Не можевме да составиме комисија со тие ограничувања. Пробај со помалку критериуми или без избран ментор.',
   'committee.error.invalidRequest':
     'Провери ги внесените податоци и обиди се повторно.',
+  'committee.error.mentorRequired': 'Избери ментор.',
   'committee.error.networkError':
     'Се случи грешка при поврзувањето. Обиди се повторно.',
   'committee.error.noEligibleMentors':
