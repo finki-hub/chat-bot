@@ -60,6 +60,13 @@ class RecommendationRequestSchema(BaseModel):
         le=10,
         description="Number of committee alternatives to return, including the selected one.",
     )
+    include_prior: bool = Field(
+        default=True,
+        description=(
+            "Whether to include historical mentor co-membership and pair-affinity "
+            "signals. The committee planner sends false; chat keeps the default."
+        ),
+    )
 
     @field_validator("title", "mentor", "abstract", "study_program", "research_area")
     @classmethod

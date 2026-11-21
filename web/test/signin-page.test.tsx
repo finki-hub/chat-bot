@@ -1,6 +1,10 @@
+import type { ReactNode } from 'react';
+
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { t } from '@/lib/i18n';
 
 const {
   authMock,
@@ -38,6 +42,24 @@ vi.mock('next-auth/react', () => ({
 
 vi.mock('next/navigation', () => ({
   redirect: redirectMock,
+}));
+
+vi.mock('next/link', () => ({
+  default: ({
+    children,
+    href,
+    ...props
+  }: {
+    readonly children: ReactNode;
+    readonly href: string;
+  }) => (
+    <a
+      href={href}
+      {...props}
+    >
+      {children}
+    </a>
+  ),
 }));
 
 const defaultSearchParams = Promise.resolve({});
@@ -78,6 +100,17 @@ describe('SignInPage', () => {
     expect(
       screen.getByRole('button', { name: GOOGLE_SIGN_IN_LABEL }),
     ).toBeVisible();
+  });
+
+  it('offers a public committee planner entry below the auth actions', async () => {
+    await renderSignInPage();
+
+    const link = screen.getByRole('link', {
+      name: t('committee.openPlanner'),
+    });
+
+    expect(link).toBeVisible();
+    expect(link).toHaveAttribute('href', '/committee');
   });
 
   it('keeps sign-in content within vertical safe areas', async () => {
