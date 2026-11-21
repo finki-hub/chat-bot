@@ -19,9 +19,9 @@ class StaffDirectoryUnavailableError(Exception):
 
 
 # FINKI's diploma procedure allows a mentor who is a teacher elected to a
-# teaching-scientific title at the Faculty. Only the core titles are
-# unambiguously covered; visiting and titled professors require faculty
-# confirmation before they are added here.
+# teaching-scientific title at the Faculty. The confirmed mentor-eligible
+# titles are regular professor, associate professor, and docent. Visiting
+# and titled professors are not mentors; they may still serve on committees.
 MENTOR_ELIGIBLE_POSITIONS: Final[frozenset[str]] = frozenset(
     {
         "Редовен професор",
