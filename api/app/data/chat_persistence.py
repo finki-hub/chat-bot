@@ -135,14 +135,51 @@ async def search_conversations(
 
     rows = await db.fetch(
         """
-        WITH lexical_query AS (
-            SELECT websearch_to_tsquery(
-                'simple',
-                array_to_string(
-                    tsvector_to_array(to_tsvector('simple', $2)),
-                    ' OR '
-                )
-            ) AS value
+        -- Lexemes are reduced to letters and digits so they are safe inside
+        -- to_tsquery; prefix matching covers Macedonian inflection.
+        WITH lexemes AS (
+            SELECT lexeme
+            FROM unnest(tsvector_to_array(to_tsvector('simple', $2))) AS lexeme
+            WHERE lexeme ~ '^[[:alnum:]]+$'
+        ), terms AS (
+            SELECT
+                lexeme || CASE WHEN char_length(lexeme) >= 3 THEN ':*' ELSE '' END
+                    AS term
+            FROM lexemes
+            WHERE char_length(lexeme) >= 2
+               OR NOT EXISTS (
+                   SELECT 1 FROM lexemes WHERE char_length(lexeme) >= 2
+               )
+        ), candidate_queries AS (
+            SELECT
+                to_tsquery('simple', string_agg(term, ' & ')) AS all_terms,
+                to_tsquery('simple', string_agg(term, ' | ')) AS any_terms
+            FROM terms
+            HAVING count(*) > 0
+        ), lexical_query AS (
+            -- Require every word, and fall back to any word only when nothing
+            -- matches them all, so pagination stays on one query.
+            SELECT
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM chat_conversation c
+                        WHERE c.user_id = $1
+                          AND (
+                              to_tsvector('simple', coalesce(c.title, ''))
+                                  @@ cq.all_terms
+                              OR EXISTS (
+                                  SELECT 1
+                                  FROM chat_message m
+                                  WHERE m.conversation_id = c.id
+                                    AND to_tsvector('simple', m.content)
+                                        @@ cq.all_terms
+                              )
+                          )
+                    ) THEN cq.all_terms
+                    ELSE cq.any_terms
+                END AS value
+            FROM candidate_queries cq
         ), ranked AS (
             SELECT
                 c.id AS conversation_id,
@@ -151,10 +188,7 @@ async def search_conversations(
                 best.id AS message_id,
                 best.role AS message_role,
                 best.created_at AS message_created_at,
-                CASE
-                    WHEN best.id IS NOT NULL THEN
-                        ts_headline('simple', best.content, q.value, $3)
-                END AS snippet,
+                best.content AS message_content,
                 COALESCE(
                     best.message_rank,
                     ts_rank_cd(
@@ -194,18 +228,27 @@ async def search_conversations(
                   best.id IS NOT NULL
                   OR to_tsvector('simple', coalesce(c.title, '')) @@ q.value
               )
+        ), page AS (
+            SELECT *
+            FROM ranked
+            ORDER BY score DESC, conversation_updated_at DESC, conversation_id DESC
+            LIMIT $4 OFFSET $5
         )
+        -- Headlines are expensive, so build them only for the returned page.
         SELECT
-            conversation_id,
-            conversation_title,
-            conversation_updated_at,
-            message_id,
-            message_role,
-            message_created_at,
-            snippet
-        FROM ranked
-        ORDER BY score DESC, conversation_updated_at DESC, conversation_id DESC
-        LIMIT $4 OFFSET $5
+            p.conversation_id,
+            p.conversation_title,
+            p.conversation_updated_at,
+            p.message_id,
+            p.message_role,
+            p.message_created_at,
+            CASE
+                WHEN p.message_id IS NOT NULL THEN
+                    ts_headline('simple', p.message_content, q.value, $3)
+            END AS snippet
+        FROM page p
+        CROSS JOIN lexical_query q
+        ORDER BY p.score DESC, p.conversation_updated_at DESC, p.conversation_id DESC
         """,
         user_id,
         query,

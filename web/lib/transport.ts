@@ -229,14 +229,21 @@ const parseSearchResults = (value: unknown): ChatSearchResult[] =>
         .filter((result): result is ChatSearchResult => result !== null)
     : [];
 
+export const SEARCH_PAGE_SIZE = 20;
+
 export const searchChatConversations = async (
   query: string,
   signal?: AbortSignal,
+  offset = 0,
 ): Promise<ChatSearchResult[]> => {
-  const response = await fetch(
-    `/api/chat/search?q=${encodeURIComponent(query)}`,
-    { signal },
-  );
+  const params = new URLSearchParams({
+    limit: String(SEARCH_PAGE_SIZE),
+    offset: String(offset),
+    q: query,
+  });
+  const response = await fetch(`/api/chat/search?${params.toString()}`, {
+    signal,
+  });
 
   if (!response.ok) {
     throw new ChatConversationRequestError(response.status);

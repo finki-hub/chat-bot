@@ -124,6 +124,82 @@ def test_chat_search_matches_cyrillic_messages_and_scopes_by_user() -> None:
     anyio.run(run)
 
 
+def test_chat_search_requires_all_words_matches_prefixes_and_falls_back() -> None:
+    async def run() -> None:
+        assert DATABASE_URL is not None
+        database = Database(DATABASE_URL, min_size=1, max_size=2)
+        await database.init()
+        await database.run_migrations()
+        db = cast(ChatPersistenceDatabase, database)
+
+        owner_id = uuid4()
+        both_words = uuid4()
+        one_word = uuid4()
+        now = datetime.fromisoformat("2026-11-04T12:00:00")
+
+        try:
+            await database.execute(
+                """
+                INSERT INTO chat_user (id, provider, provider_subject)
+                VALUES ($1, 'google', $2)
+                """,
+                owner_id,
+                f"search-terms-{owner_id}",
+            )
+            await database.execute(
+                """
+                INSERT INTO chat_conversation (id, user_id, title, updated_at)
+                VALUES ($1, $3, 'Прв', $4), ($2, $3, 'Втор', $4)
+                """,
+                both_words,
+                one_word,
+                owner_id,
+                now,
+            )
+            await database.execute(
+                """
+                INSERT INTO chat_message
+                    (id, conversation_id, role, content, created_at)
+                VALUES
+                    ($1, $2, 'assistant', 'Менторот го закажа испитот.', $4),
+                    ($3, $5, 'assistant', 'Испитот е утре.', $4)
+                """,
+                uuid4(),
+                both_words,
+                uuid4(),
+                now,
+                one_word,
+            )
+
+            all_words = await search_conversations(
+                db,
+                user_id=owner_id,
+                query="ментор испит",
+            )
+            fallback = await search_conversations(
+                db,
+                user_id=owner_id,
+                query="ментор рокови",
+            )
+            short_words_only = await search_conversations(
+                db,
+                user_id=owner_id,
+                query="е",
+            )
+        finally:
+            await database.execute(
+                "DELETE FROM chat_user WHERE id = $1",
+                owner_id,
+            )
+            await database.disconnect()
+
+        assert [result.conversation_id for result in all_words] == [both_words]
+        assert [result.conversation_id for result in fallback] == [both_words]
+        assert [result.conversation_id for result in short_words_only] == [one_word]
+
+    anyio.run(run)
+
+
 def test_chat_search_orders_best_message_and_paginates() -> None:
     async def run() -> None:
         assert DATABASE_URL is not None

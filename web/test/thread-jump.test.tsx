@@ -60,9 +60,57 @@ describe('Thread message jump', () => {
       />,
     );
 
-    await waitFor(() => {
-      expect(onJumpHandled).toHaveBeenCalledOnce();
+    await waitFor(
+      () => {
+        expect(onJumpHandled).toHaveBeenCalledOnce();
+      },
+      { timeout: 3_000 },
+    );
+  });
+
+  it('keeps the jump while the previous conversation is still shown', async () => {
+    const onJumpHandled = vi.fn<() => void>();
+    const previous: MyUIMessage[] = [
+      {
+        id: 'old',
+        metadata: {},
+        parts: [{ text: 'Старо', type: 'text' }],
+        role: 'user',
+      },
+    ];
+    const { rerender } = render(
+      <Thread
+        jumpToMessageId="m2"
+        messages={previous}
+        onJumpHandled={onJumpHandled}
+        status="ready"
+      />,
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
     });
+
+    expect(onJumpHandled).not.toHaveBeenCalled();
+
+    rerender(
+      <Thread
+        jumpToMessageId="m2"
+        messages={MESSAGES}
+        onJumpHandled={onJumpHandled}
+        status="ready"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-message-id="m2"]')).toHaveClass(
+        'ring-primary/50',
+      );
+    });
+
+    expect(onJumpHandled).toHaveBeenCalledOnce();
   });
 
   it('waits for hydration before resolving the jump', async () => {

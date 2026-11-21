@@ -42,6 +42,35 @@ const renderSnippet = (snippet: string): ReactNode[] => {
   return nodes;
 };
 
+// Numeric on purpose: browsers often lack Macedonian month names.
+const formatMatchDate = (value: string): null | string => {
+  // eslint-disable-next-line unicorn/prefer-temporal -- browser support is required here.
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  // eslint-disable-next-line unicorn/prefer-temporal -- browser support is required here.
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  const dayMonth = `${date.getDate()}.${date.getMonth() + 1}.`;
+  return sameYear ? dayMonth : `${dayMonth}${date.getFullYear()}`;
+};
+
+const MatchContext = ({
+  message,
+}: {
+  message: NonNullable<ChatSearchResult['message']>;
+}) => {
+  const date = formatMatchDate(message.createdAt);
+
+  return (
+    <span className="text-[11px] text-muted-foreground/80">
+      {message.role === 'user'
+        ? t('search.roleUser')
+        : t('search.roleAssistant')}
+      {date ? ` · ${date}` : null}
+    </span>
+  );
+};
+
 export const ConversationSearchResults = ({
   onSelect,
   results,
@@ -86,6 +115,9 @@ export const ConversationSearchResults = ({
               {renderSnippet(result.snippet)}
             </span>
           ) : null}
+          {result.message === null ? null : (
+            <MatchContext message={result.message} />
+          )}
         </button>
       </li>
     ))}

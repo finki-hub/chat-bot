@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
 import { t } from '@/lib/i18n';
-import { searchChatConversations } from '@/lib/transport';
+import { SEARCH_PAGE_SIZE, searchChatConversations } from '@/lib/transport';
 import { cn } from '@/lib/utils';
 
 export type SidebarProps = {
@@ -53,6 +53,9 @@ export type SidebarProps = {
 };
 
 /* eslint-disable sonarjs/cognitive-complexity -- responsive drawer, filtering, and confirmation form one navigation state machine */
+// Matches the API's query length limit.
+const MAX_SEARCH_LENGTH = 200;
+
 const mergeLocalTitleMatches = (
   results: readonly ChatSearchResult[],
   localMatches: readonly ConversationRow[],
@@ -97,10 +100,22 @@ export const Sidebar = ({
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchNonce, setSearchNonce] = useState(0);
   const [searchResults, setSearchResults] = useState<ChatSearchResult[]>([]);
+  const [searchHasMore, setSearchHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const mobileTriggerRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchControllerRef = useRef<AbortController | null>(null);
+  const pendingSearchFocusRef = useRef(false);
+  const openRef = useRef(open);
+  const onOpenRef = useRef(onOpen);
   const trimmedQuery = query.trim();
   const serverSearch = trimmedQuery.length >= 2;
+
+  useEffect(() => {
+    openRef.current = open;
+    onOpenRef.current = onOpen;
+  });
 
   useEffect(() => {
     if (!mobile) {
@@ -118,47 +133,59 @@ export const Sidebar = ({
     mobileTriggerRef.current = null;
   }, [mobile, open]);
 
+  const focusSearchInput = () => {
+    searchInputRef.current?.focus();
+    searchInputRef.current?.select();
+  };
+
+  // One stable listener; opening the sidebar must not cancel the focus.
   useEffect(() => {
-    let focusTimer: null | ReturnType<typeof setTimeout> = null;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!(
-        (event.metaKey || event.ctrlKey) &&
-        event.key.toLowerCase() === 'k'
-      )) {
+      if (
+        !(event.metaKey || event.ctrlKey) ||
+        event.key.toLowerCase() !== 'k'
+      ) {
         return;
       }
 
       event.preventDefault();
-      if (!open) {
-        onOpen?.();
+      if (openRef.current) {
+        focusSearchInput();
+        return;
       }
-      focusTimer = setTimeout(() => {
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      }, 0);
+      pendingSearchFocusRef.current = true;
+      onOpenRef.current?.();
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      if (focusTimer !== null) {
-        clearTimeout(focusTimer);
-      }
     };
-  }, [onOpen, open]);
+  }, []);
 
   useEffect(() => {
+    if (!open || !pendingSearchFocusRef.current) return;
+    pendingSearchFocusRef.current = false;
+    focusSearchInput();
+  }, [open]);
+
+  useEffect(() => {
+    searchControllerRef.current?.abort();
+    setLoadingMore(false);
+    setLoadMoreError(false);
+
     if (!serverSearch) {
       setSearchError(false);
       setSearchLoading(false);
       setSearchResults([]);
+      setSearchHasMore(false);
       return () => {};
     }
 
     const controller = new AbortController();
+    searchControllerRef.current = controller;
     setSearchError(false);
     setSearchLoading(true);
-    setSearchResults([]);
 
     const timer = setTimeout(() => {
       void (async () => {
@@ -171,11 +198,14 @@ export const Sidebar = ({
             return;
           }
           setSearchResults(results);
+          setSearchHasMore(results.length === SEARCH_PAGE_SIZE);
           setSearchLoading(false);
         } catch {
           if (controller.signal.aborted) {
             return;
           }
+          setSearchResults([]);
+          setSearchHasMore(false);
           setSearchError(true);
           setSearchLoading(false);
         }
@@ -187,6 +217,35 @@ export const Sidebar = ({
       controller.abort();
     };
   }, [searchNonce, serverSearch, trimmedQuery]);
+
+  const handleLoadMore = async () => {
+    const controller = searchControllerRef.current;
+    if (controller === null || loadingMore) return;
+
+    setLoadingMore(true);
+    setLoadMoreError(false);
+    try {
+      const more = await searchChatConversations(
+        trimmedQuery,
+        controller.signal,
+        searchResults.length,
+      );
+      if (controller.signal.aborted) return;
+      setSearchResults((previous) => {
+        const seen = new Set(previous.map((result) => result.conversationId));
+        return [
+          ...previous,
+          ...more.filter((result) => !seen.has(result.conversationId)),
+        ];
+      });
+      setSearchHasMore(more.length === SEARCH_PAGE_SIZE);
+    } catch {
+      if (controller.signal.aborted) return;
+      setLoadMoreError(true);
+    } finally {
+      if (!controller.signal.aborted) setLoadingMore(false);
+    }
+  };
 
   const handleSearchSelect = (
     conversationId: string,
@@ -234,6 +293,20 @@ export const Sidebar = ({
   // eslint-disable-next-line sonarjs/function-return-type -- JSX branches render different elements
   const renderConversationBody = (): ReactNode => {
     if (serverSearch) {
+      // Keep earlier results on screen while a new query loads.
+      if (searchLoading && searchResults.length > 0) {
+        return (
+          <div
+            aria-busy="true"
+            className="opacity-60 transition-opacity"
+          >
+            <ConversationSearchResults
+              onSelect={handleSearchSelect}
+              results={visibleSearchResults}
+            />
+          </div>
+        );
+      }
       if (searchLoading) {
         return (
           <>
@@ -281,10 +354,34 @@ export const Sidebar = ({
         );
       }
       return (
-        <ConversationSearchResults
-          onSelect={handleSearchSelect}
-          results={visibleSearchResults}
-        />
+        <>
+          <ConversationSearchResults
+            onSelect={handleSearchSelect}
+            results={visibleSearchResults}
+          />
+          {loadMoreError ? (
+            <p
+              className="px-2 py-1.5 text-xs text-destructive"
+              role="alert"
+            >
+              {t('search.loadMoreError')}
+            </p>
+          ) : null}
+          {searchHasMore ? (
+            <button
+              aria-busy={loadingMore}
+              className="mt-1 inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 pointer-coarse:min-h-11"
+              disabled={loadingMore}
+              onClick={() => {
+                void handleLoadMore();
+              }}
+              type="button"
+            >
+              {loadingMore ? <Spinner className="size-3.5" /> : null}
+              {t('search.loadMore')}
+            </button>
+          ) : null}
+        </>
       );
     }
 
@@ -353,6 +450,7 @@ export const Sidebar = ({
             aria-label={t('sidebar.search')}
             className="[&::-webkit-search-cancel-button]:appearance-none"
             data-testid="search-conversations"
+            maxLength={MAX_SEARCH_LENGTH}
             onChange={(e) => {
               setQuery(e.target.value);
             }}
