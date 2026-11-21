@@ -38,7 +38,7 @@ Requires Python 3.14 (`>=3.14,<3.15`) and [`uv`](https://github.com/astral-sh/uv
 
 1. Clone the repository: `git clone https://github.com/finki-hub/chat-bot.git`
 2. Install dependencies: in each directory (`api` and `gpu-api`), run `uv sync`
-3. Prepare env. variables by copying `.env.sample` to `.env`. The sample database values work for local Docker, but set `API_KEY` to use authenticated write/feedback endpoints. OpenAI, Google, Anthropic, Ollama, and OpenRouter models use per-user credentials saved from the web settings dialog; the sponsored model is a separate, disabled-by-default server feature.
+3. Prepare env. variables by copying `.env.sample` to `.env`. The sample database values work for local Docker, but set `API_KEY` to use authenticated write/feedback endpoints. OpenAI, Google, Anthropic, Ollama, and OpenRouter models can use per-user credentials saved from the web settings dialog; Discord requests use only the sponsored pool and never read BYOK credentials. The sponsored model is a separate, disabled-by-default server feature.
 4. Run it: `docker compose up -d`. Unlike production, the dev compose builds the `api`, `gpu-api` and `web` images locally from source (it does not pull from ghcr), so the first run builds the containers. The per-directory `uv sync` from step 2 is for local/IDE tooling only — the containers build their own environment.
 
 This also brings up the API Swagger UI (OpenAPI docs) at `localhost:8880/docs`, the GPU API docs at `localhost:8888/docs`, and pgAdmin at `localhost:5550`.
@@ -76,7 +76,7 @@ then replace all placeholders before using `compose.prod.yaml`:
 - `PGADMIN_EMAIL`, `PGADMIN_PASSWORD` - required by the production Compose pgAdmin service.
 - `DATABASE_POOL_MIN_SIZE`, `DATABASE_POOL_MAX_SIZE` - asyncpg pool sizing per API worker
 - `GPU_API_URL` - API-to-GPU-API base URL; Docker defaults to `http://gpu-api:8888`
-- OpenAI, Google, Anthropic, Ollama, and OpenRouter models are BYOK-only and do not use deployment credentials, except for the explicitly isolated sponsored model path below. Ollama defaults to `https://ollama.com`; custom Ollama endpoints must be HTTPS and allowed by `BYOK_ALLOWED_BASE_URLS`.
+- OpenAI, Google, Anthropic, Ollama, and OpenRouter models are BYOK-only for web requests and do not use deployment credentials, except for the explicitly isolated sponsored model path below. Discord requests ignore saved BYOK credentials and use only the sponsored pool. Ollama defaults to `https://ollama.com`; custom Ollama endpoints must be HTTPS and allowed by `BYOK_ALLOWED_BASE_URLS`.
 - `RESUMABLE_STREAM_REDIS_URL` - server-only Redis/Valkey URL used by the web BFF for resumable chat streams
 - `RERANKER_MIN_SCORE`, `SOURCE_RERANKER_MIN_SCORE`, `DIPLOMA_RERANKER_MIN_SCORE`, `CHAT_HISTORY_MAX_TURNS` - retrieval and chat tuning
 - `DIRECTUS_STAFF_URL` - staff directory endpoint used by `GET /professors/` and the committee planner.
@@ -167,10 +167,11 @@ The standalone web app reads `API_BASE_URL`, `CHAT_API_KEY`, `RESUMABLE_STREAM_R
 ### Sponsored model rollout
 
 The sponsored model is an API-only, server-side fallback for users who do not
-have a personal BYOK credential. A user's BYOK credential always wins and does
-not consume sponsored quota. The feature is disabled by default; when disabled,
-no sponsored provider request or quota admission is attempted and BYOK behavior
-is unchanged.
+have a personal BYOK credential. For web requests, a user's BYOK credential
+always wins and does not consume sponsored quota. Discord requests ignore saved
+BYOK credentials entirely and use only the sponsored pool. The feature is
+disabled by default; when disabled, no sponsored provider request or quota
+admission is attempted and web BYOK behavior is unchanged.
 
 | Setting | Default | Meaning and security requirement |
 | --- | --- | --- |

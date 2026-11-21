@@ -55,7 +55,7 @@ from app.llms.models import ChatModel, model_id
 from app.llms.ollama import fetch_ollama_catalog
 from app.llms.pricing import cost_usd, is_self_hosted
 from app.llms.provider_credentials import provider_for_model
-from app.schemas.chat import ChatSchema
+from app.schemas.chat import ChatInterface, ChatSchema
 from app.schemas.sponsored_access import SponsoredQuotaSnapshot
 from app.utils.async_iterators import closing_stream
 from app.utils.auth import verify_api_key
@@ -692,14 +692,18 @@ async def _prepare_chat_response_stream(
         preparation.capture("denied", "missing_conversation_id")
         yield error_event("missing_conversation_id", "MissingConversationID")
         return
-    credentials = await resolve_provider_credentials(
-        db,
-        user_id=payload.user_id,
-        providers=credential_providers_for_models(
-            payload.embeddings_model,
-            payload.inference_model,
-        ),
-        settings=settings,
+    credentials = (
+        None
+        if payload.interface == "discord"
+        else await resolve_provider_credentials(
+            db,
+            user_id=payload.user_id,
+            providers=credential_providers_for_models(
+                payload.embeddings_model,
+                payload.inference_model,
+            ),
+            settings=settings,
+        )
     )
     if credentials is not None and conversation_id is not None:
         credentials = replace(credentials, conversation_id=conversation_id)
@@ -750,9 +754,14 @@ async def _prepare_chat_response_stream(
             return
         provider_label = _CREDENTIAL_PROVIDER_LABELS[missing_credential.provider]
         preparation.capture("denied", "credential_required")
+        message = (
+            "Овој модел е достапен само преку веб-апликацијата. Изберете бесплатен модел."
+            if payload.interface == "discord"
+            else f"Потребен е ваш {provider_label} API клуч. Додајте го во поставките за провајдери."
+        )
         yield error_event(
             "credential_required",
-            f"Потребен е ваш {provider_label} API клуч. Додајте го во поставките за провајдери.",
+            message,
             provider=missing_credential.provider,
             stage=missing_credential.stage,
         )
@@ -1057,16 +1066,28 @@ async def chat(
 async def list_models(
     request: Request,
     user_id: UUID | None = None,
+    interface: ChatInterface = "web",
     db: Database = db_dep,
 ) -> ModelCatalogResponse:
     settings: Settings = request.app.state.settings
-    credentials = await resolve_provider_credentials(
-        db,
-        user_id=user_id,
-        providers=frozenset(
-            {"openai", "google", "anthropic", "ollama", "openrouter", "opencode-go"},
-        ),
-        settings=settings,
+    credentials = (
+        None
+        if interface == "discord"
+        else await resolve_provider_credentials(
+            db,
+            user_id=user_id,
+            providers=frozenset(
+                {
+                    "openai",
+                    "google",
+                    "anthropic",
+                    "ollama",
+                    "openrouter",
+                    "opencode-go",
+                },
+            ),
+            settings=settings,
+        )
     )
     ollama_models: tuple[OllamaCatalogModel, ...] = ()
     if credentials is not None and credentials.ollama is not None:
