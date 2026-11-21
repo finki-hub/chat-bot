@@ -9,6 +9,11 @@ from app.recommenders.types import (
     RankedPeople,
     SelectionConstraints,
 )
+from app.schemas.recommendations import RecommendationRequestSchema
+from app.services.recommendations import (
+    InactiveStaffRequestedError,
+    _check_active_staff,
+)
 
 
 class FakeStaffClient:
@@ -23,20 +28,18 @@ class FakeStaffClient:
 async def test_active_staff_names_include_only_active_entries(monkeypatch) -> None:
     monkeypatch.setattr("app.data.staff._active_staff_cache", None)
     monkeypatch.setattr(
-        "app.data.staff.settings.STAFF_API_URL",
-        "https://staff.example.test",
-    )
-    monkeypatch.setattr(
         "app.data.staff.get_http_client",
         lambda: FakeStaffClient(
             httpx.Response(
                 200,
                 request=httpx.Request("GET", "https://staff.example.test"),
-                content=(
-                    b'[{"name":"Active Professor","active":"1"},'
-                    b'{"name":"Inactive Professor","active":"0"},'
-                    b'{"name":"  Spaced Active  ","active":"1"}]'
-                ),
+                json={
+                    "data": [
+                        {"name": "Active Professor", "active": "1"},
+                        {"name": "Inactive Professor", "active": "0"},
+                        {"name": "  Spaced Active  ", "active": "1"},
+                    ],
+                },
             ),
         ),
     )
@@ -50,16 +53,12 @@ async def test_active_staff_names_include_only_active_entries(monkeypatch) -> No
 async def test_active_staff_names_reject_empty_active_directory(monkeypatch) -> None:
     monkeypatch.setattr("app.data.staff._active_staff_cache", None)
     monkeypatch.setattr(
-        "app.data.staff.settings.STAFF_API_URL",
-        "https://staff.example.test",
-    )
-    monkeypatch.setattr(
         "app.data.staff.get_http_client",
         lambda: FakeStaffClient(
             httpx.Response(
                 200,
                 request=httpx.Request("GET", "https://staff.example.test"),
-                content=b'[{"name":"Inactive Professor","active":"0"}]',
+                json={"data": [{"name": "Inactive Professor", "active": "0"}]},
             ),
         ),
     )
@@ -133,3 +132,25 @@ def test_select_committee_filters_inactive_mentor_candidates() -> None:
 
     assert rec.mentor == "Active Mentor"
     assert rec.members == ("Active Member One", "Active Member Two")
+
+
+def test_check_staff_rejects_active_but_ineligible_mentor() -> None:
+    payload = RecommendationRequestSchema(title="Test", mentor="Secretary")
+    active_staff = frozenset({"Professor", "Secretary"})
+    mentor_eligible = frozenset({"Professor"})
+
+    with pytest.raises(InactiveStaffRequestedError) as exc_info:
+        _check_active_staff(payload, active_staff, mentor_eligible)
+
+    assert exc_info.value.field == "mentor"
+    assert exc_info.value.names == ("Secretary",)
+
+
+def test_check_staff_accepts_mentor_eligible_name() -> None:
+    payload = RecommendationRequestSchema(title="Test", mentor="Professor")
+
+    _check_active_staff(
+        payload,
+        frozenset({"Professor", "Secretary"}),
+        frozenset({"Professor"}),
+    )

@@ -1,4 +1,5 @@
-import { Plus, Search, X } from 'lucide-react';
+import { GraduationCap, Plus, Search, X } from 'lucide-react';
+import Link from 'next/link';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import type { MaybeAsyncAction } from '@/lib/action-result';
@@ -106,6 +107,19 @@ export const Sidebar = ({
         />
         {t('sidebar.new')}
       </button>
+      <Link
+        className="group inline-flex min-h-11 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        href="/committee"
+        onClick={() => {
+          closeSidebarOnMobile(onClose);
+        }}
+      >
+        <GraduationCap
+          aria-hidden="true"
+          className="size-4"
+        />
+        {t('committee.sidebarLabel')}
+      </Link>
       {listError ? (
         <div
           className="rounded-lg border border-destructive/40 bg-destructive/10 p-2 text-sm"

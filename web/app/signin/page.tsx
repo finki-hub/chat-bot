@@ -1,9 +1,11 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { ProviderButtons } from '@/app/signin/provider-buttons';
 import { auth, isAuthConfigured, providerMap } from '@/auth';
 import { ChatShowcase } from '@/components/auth/chat-showcase';
 import { getSafeCallbackUrl } from '@/lib/callback-url';
+import { t } from '@/lib/i18n';
 
 type SignInPageProps = {
   readonly searchParams: Promise<{
@@ -76,6 +78,18 @@ const SignInPage = async ({ searchParams }: SignInPageProps) => {
                   providers={providerMap}
                 />
               )}
+
+              <div className="border-t border-border/60 pt-3">
+                <p className="text-pretty text-sm text-muted-foreground">
+                  {t('committee.signInDescription')}{' '}
+                  <Link
+                    className="font-medium text-primary underline-offset-2 hover:underline"
+                    href="/committee"
+                  >
+                    {t('committee.openPlanner')}
+                  </Link>
+                </p>
+              </div>
             </div>
           </section>
 
