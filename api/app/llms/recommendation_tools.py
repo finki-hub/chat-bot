@@ -50,6 +50,7 @@ def build_recommendation_tools(db: Database) -> list[BaseTool]:
         exclude_professors: list[str] | None = None,
         include_professors: list[str] | None = None,
         alternatives: int = 3,
+        include_prior: bool = True,
     ) -> str:
         payload = RecommendationRequestSchema(
             title=title,
@@ -62,6 +63,7 @@ def build_recommendation_tools(db: Database) -> list[BaseTool]:
             exclude_professors=exclude_professors or [],
             include_professors=include_professors or [],
             alternatives=alternatives,
+            include_prior=include_prior,
         )
         try:
             response = await generate_committee_recommendation(payload, db)

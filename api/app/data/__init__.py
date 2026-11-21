@@ -1,3 +1,13 @@
-from .staff import StaffDirectoryUnavailableError, get_active_staff_names
+from .staff import (
+    StaffDirectoryUnavailableError,
+    StaffMember,
+    get_active_staff_names,
+    get_staff_directory,
+)
 
-__all__ = ["StaffDirectoryUnavailableError", "get_active_staff_names"]
+__all__ = [
+    "StaffDirectoryUnavailableError",
+    "StaffMember",
+    "get_active_staff_names",
+    "get_staff_directory",
+]
