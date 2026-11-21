@@ -1,6 +1,7 @@
 export type CommitteeAlternative = {
   members: string[];
   mentor: null | string;
+  mentor_basis?: 'defenses' | 'papers';
   score: number;
   supporting_diploma_ids: string[];
 };

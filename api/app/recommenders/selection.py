@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import itertools
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import replace
 from typing import assert_never
 from uuid import UUID
 
@@ -154,6 +155,38 @@ def _candidates_for_mentor(
     )
 
 
+def _can_mentor(name: str, constraints: SelectionConstraints) -> bool:
+    return (
+        name not in constraints.exclude
+        and (constraints.allowed is None or name in constraints.allowed)
+        and (constraints.mentor_allowed is None or name in constraints.mentor_allowed)
+        and not (constraints.include_as_members and name in constraints.include)
+    )
+
+
+def _paper_mentor_alternatives(
+    ranked: RankedPeople,
+    slots: int,
+    taken: frozenset[str],
+    constraints: SelectionConstraints,
+    committees_for: Callable[[str], list[CommitteeAlternative]],
+) -> list[CommitteeAlternative]:
+    alternatives: list[CommitteeAlternative] = []
+    for mentor, _score in sorted(
+        ranked.paper_mentors.items(),
+        key=lambda item: item[1],
+        reverse=True,
+    ):
+        if len(alternatives) >= slots:
+            break
+        if mentor in taken or not _can_mentor(mentor, constraints):
+            continue
+        committees = committees_for(mentor)
+        if committees:
+            alternatives.append(replace(committees[0], mentor_basis="papers"))
+    return alternatives
+
+
 def _full_alternatives(
     ranked: RankedPeople,
     mentor_topk: int,
@@ -169,10 +202,7 @@ def _full_alternatives(
             key=lambda item: item[1],
             reverse=True,
         )
-        if name not in constraints.exclude
-        and (constraints.allowed is None or name in constraints.allowed)
-        and (constraints.mentor_allowed is None or name in constraints.mentor_allowed)
-        and not (constraints.include_as_members and name in constraints.include)
+        if _can_mentor(name, constraints)
     ][:mentor_topk]
     alternatives: list[CommitteeAlternative] = []
     selected_member_scores: dict[str, float] = {}
@@ -198,6 +228,29 @@ def _full_alternatives(
             selected_member_scores = candidates
 
     alternatives.sort(key=lambda alt: alt.score, reverse=True)
+    if constraints.distinct_mentors:
+        # Appended after sorting so defense-backed mentors always rank first.
+        alternatives.extend(
+            _paper_mentor_alternatives(
+                ranked,
+                mentor_topk - len(mentors),
+                frozenset(mentors),
+                constraints,
+                lambda mentor: _member_alternatives(
+                    _candidates_for_mentor(
+                        ranked,
+                        mentor,
+                        mentor_prior,
+                        coauthor_prior,
+                        constraints,
+                    ),
+                    ranked,
+                    constraints,
+                    mentor,
+                    0.0,
+                ),
+            ),
+        )
     if alternatives:
         best_mentor = alternatives[0].mentor
         selected_member_scores = _candidates_for_mentor(

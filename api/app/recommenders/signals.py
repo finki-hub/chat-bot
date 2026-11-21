@@ -154,22 +154,48 @@ def build_expertise_index(
     canonical = set(canonical_set) if canonical_set is not None else None
     sims: dict[str, list[float]] = {}
     supporting: dict[str, list[str]] = {}
+    best_similarity: dict[str, float] = {}
     for paper in papers:
         similarity = _paper_similarity(
             paper,
             weights.expertise_recency_half_life_days,
             now_year,
         )
+        topical_similarity = 1.0 - paper.distance
         for author in paper.coauthors:
             if canonical is not None and author not in canonical:
                 continue
             sims.setdefault(author, []).append(similarity)
             supporting.setdefault(author, []).append(paper.title)
+            best_similarity[author] = max(
+                best_similarity.get(author, topical_similarity),
+                topical_similarity,
+            )
     by_professor = {
         name: sum(sorted(values, reverse=True)[: weights.expertise_top_papers])
         for name, values in sims.items()
     }
-    return ExpertiseIndex(by_professor=by_professor, supporting=supporting)
+    return ExpertiseIndex(
+        by_professor=by_professor,
+        supporting=supporting,
+        best_similarity=best_similarity,
+    )
+
+
+def _paper_backed_mentors(
+    expertise: ExpertiseIndex,
+    weights: ScoringWeights,
+) -> dict[str, float]:
+    top = max(expertise.by_professor.values(), default=0.0)
+    if top <= 0.0:
+        return {}
+    return {
+        name: score / top
+        for name, score in expertise.by_professor.items()
+        if score / top >= weights.paper_mentor_min_relative
+        and expertise.best_similarity.get(name, 0.0)
+        >= weights.paper_mentor_min_similarity
+    }
 
 
 def _accumulate_coauthor_edges(
@@ -253,4 +279,5 @@ def score_people(
         coauthor_weight=weights.coauthor_weight,
         mentor_prior_weight=weights.mentor_prior_weight,
         coauthor_prior_weight=weights.coauthor_prior_weight,
+        paper_mentors=_paper_backed_mentors(expertise, weights),
     )
