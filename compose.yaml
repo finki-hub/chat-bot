@@ -22,6 +22,7 @@ services:
       DATABASE_POOL_MAX_SIZE: ${DATABASE_POOL_MAX_SIZE:-10}
       DATABASE_POOL_MIN_SIZE: ${DATABASE_POOL_MIN_SIZE:-1}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DIRECTUS_STAFF_URL: ${DIRECTUS_STAFF_URL:-https://data.finki-hub.com/items/staff}
       GPU_API_URL: ${GPU_API_URL}
       LOG_LEVEL: ${LOG_LEVEL}
       MCP_API_KEY: ${MCP_API_KEY:-}
@@ -177,6 +178,7 @@ services:
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_URL: ${AUTH_URL:-http://localhost:3000}
       CHAT_API_KEY: ${API_KEY}
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-}
       RESUMABLE_STREAM_REDIS_URL: ${RESUMABLE_STREAM_REDIS_URL:-redis://stream-store:6379}
       TZ: ${TZ}
     image: finki-hub/chat-bot-web:latest

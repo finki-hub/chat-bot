@@ -11,6 +11,7 @@ from app.schemas.recommendations import (
     PersonScoreSchema,
     RecommendationEvidenceSchema,
     RecommendationResponseSchema,
+    RecommendationToolRequestSchema,
 )
 
 
@@ -42,6 +43,7 @@ async def test_recommendation_tool_invokes_internal_service(monkeypatch) -> None
     async def fake_generate_committee_recommendation(payload, actual_db):
         captured["title"] = payload.title
         captured["db"] = actual_db
+        captured["include_prior"] = payload.include_prior
         return _response()
 
     monkeypatch.setattr(
@@ -54,8 +56,16 @@ async def test_recommendation_tool_invokes_internal_service(monkeypatch) -> None
 
     result = await tool.ainvoke({"title": "AI систем за дипломска"})
 
-    assert captured == {"title": "AI систем за дипломска", "db": db}
+    assert captured == {
+        "db": db,
+        "include_prior": True,
+        "title": "AI систем за дипломска",
+    }
     assert json.loads(result)["mentor"]["name"] == "Active Professor"
+
+
+def test_recommendation_tool_schema_hides_the_planner_switch() -> None:
+    assert "include_prior" not in RecommendationToolRequestSchema.model_fields
 
 
 @pytest.mark.anyio

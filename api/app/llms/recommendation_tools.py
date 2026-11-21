@@ -3,7 +3,10 @@ import json
 from langchain_core.tools import BaseTool, StructuredTool
 
 from app.data.connection import Database
-from app.schemas.recommendations import RecommendationRequestSchema
+from app.schemas.recommendations import (
+    RecommendationRequestSchema,
+    RecommendationToolRequestSchema,
+)
 from app.services.recommendations import (
     ActiveStaffDirectoryUnavailableError,
     InactiveStaffRequestedError,
@@ -29,7 +32,9 @@ def _error_json(message: str, **extra: list[str]) -> str:
 def _inactive_staff_error(exc: InactiveStaffRequestedError) -> str:
     match exc.field:
         case "mentor":
-            return _error_json("mentor must be an active staff member")
+            return _error_json(
+                "mentor must be an active staff member eligible to mentor",
+            )
         case "include_professors":
             return _error_json(
                 "include_professors must contain only active staff members",
@@ -62,6 +67,7 @@ def build_recommendation_tools(db: Database) -> list[BaseTool]:
             exclude_professors=exclude_professors or [],
             include_professors=include_professors or [],
             alternatives=alternatives,
+            include_prior=True,
         )
         try:
             response = await generate_committee_recommendation(payload, db)
@@ -82,6 +88,6 @@ def build_recommendation_tools(db: Database) -> list[BaseTool]:
             coroutine=recommend_diploma_committee,
             name=_RECOMMENDATION_TOOL_NAME,
             description=_RECOMMENDATION_TOOL_DESCRIPTION,
-            args_schema=RecommendationRequestSchema,
+            args_schema=RecommendationToolRequestSchema,
         ),
     ]

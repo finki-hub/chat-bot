@@ -21,6 +21,7 @@ from app.api.feedback import router as feedback_router
 from app.api.groups import router as groups_router
 from app.api.health import router as health_router
 from app.api.links import router as links_router
+from app.api.professors import router as professors_router
 from app.api.questions import router as questions_router
 from app.api.recommendations import router as recommendations_router
 from app.data.connection import Database
@@ -107,6 +108,10 @@ def make_app(settings: Settings) -> FastAPI:
                 "description": "Recommend thesis committees",
             },
             {
+                "name": "Professors",
+                "description": "Public faculty directory for the committee planner",
+            },
+            {
                 "name": "Groups",
                 "description": "Temporal staff groups (who works together, by era)",
             },
@@ -139,6 +144,7 @@ def make_app(settings: Settings) -> FastAPI:
     app.include_router(embedding_administration_router)
     app.include_router(diplomas_router)
     app.include_router(recommendations_router)
+    app.include_router(professors_router)
     app.include_router(groups_router)
     app.include_router(links_router)
     app.include_router(chat_router)

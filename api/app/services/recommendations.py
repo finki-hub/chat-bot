@@ -13,7 +13,11 @@ from app.api.recommendation_presenters import (
     recommendation_evidence,
 )
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
-from app.data import StaffDirectoryUnavailableError, get_active_staff_names
+from app.data import (
+    StaffDirectoryUnavailableError,
+    get_active_staff_names,
+    get_mentor_eligible_names,
+)
 from app.data.connection import Database
 from app.data.diplomas import get_defended_committees
 from app.data.professor_documents import get_all_paper_authors
@@ -97,11 +101,19 @@ async def _active_staff_names() -> frozenset[str]:
         raise ActiveStaffDirectoryUnavailableError from exc
 
 
+async def _mentor_eligible_names() -> frozenset[str]:
+    try:
+        return await get_mentor_eligible_names()
+    except StaffDirectoryUnavailableError as exc:
+        raise ActiveStaffDirectoryUnavailableError from exc
+
+
 def _check_active_staff(
     payload: RecommendationRequestSchema,
     active_staff: frozenset[str],
+    mentor_eligible: frozenset[str],
 ) -> None:
-    if payload.mentor is not None and payload.mentor not in active_staff:
+    if payload.mentor is not None and payload.mentor not in mentor_eligible:
         raise InactiveStaffRequestedError("mentor", (payload.mentor,))
 
     inactive_includes = _inactive_requested_names(
@@ -126,20 +138,30 @@ async def _cancel_background_tasks(
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
+def _scoring_weights(payload: RecommendationRequestSchema) -> ScoringWeights:
+    if payload.include_prior:
+        return ScoringWeights()
+    return ScoringWeights(
+        mentor_prior_weight=0.0,
+        pair_affinity_weight=0.0,
+    )
+
+
 async def generate_committee_recommendation(
     payload: RecommendationRequestSchema,
     db: Database,
 ) -> RecommendationResponseSchema:
     mode = Mode.MEMBERS_ONLY if payload.mentor else Mode.FULL
     active_staff = await _active_staff_names()
-    _check_active_staff(payload, active_staff)
+    mentor_eligible = await _mentor_eligible_names()
+    _check_active_staff(payload, active_staff, mentor_eligible)
 
     text = proposal_text(payload)
     query_embedding = await generate_embeddings(
         _prepare_text_for_embedding(text, DEFAULT_EMBEDDINGS_MODEL, is_document=False),
         DEFAULT_EMBEDDINGS_MODEL,
     )
-    weights = ScoringWeights()
+    weights = _scoring_weights(payload)
     use_papers = (
         weights.expertise_weight > 0
         or weights.coauthor_weight > 0
@@ -169,13 +191,19 @@ async def generate_committee_recommendation(
         if use_papers
         else None
     )
-    mentor_prior_task = asyncio.create_task(_get_mentor_prior(db))
+    mentor_prior_task = (
+        asyncio.create_task(_get_mentor_prior(db))
+        if weights.mentor_prior_weight > 0
+        else None
+    )
     coauthor_prior_task = (
         asyncio.create_task(_get_coauthor_prior(db))
         if weights.coauthor_prior_weight > 0
         else None
     )
-    background_tasks: list[RecommendationBackgroundTask] = [mentor_prior_task]
+    background_tasks: list[RecommendationBackgroundTask] = []
+    if mentor_prior_task is not None:
+        background_tasks.append(mentor_prior_task)
     if paper_task is not None:
         background_tasks.append(paper_task)
     if coauthor_prior_task is not None:
@@ -196,7 +224,9 @@ async def generate_committee_recommendation(
 
     try:
         papers = await paper_task if paper_task is not None else []
-        mentor_prior = await mentor_prior_task
+        mentor_prior = (
+            await mentor_prior_task if mentor_prior_task is not None else None
+        )
         coauthor_prior = await coauthor_prior_task if coauthor_prior_task else None
     except asyncio.CancelledError:
         await _cancel_background_tasks(background_tasks)
