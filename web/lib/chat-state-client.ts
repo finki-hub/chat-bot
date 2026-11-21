@@ -39,6 +39,9 @@ export type ChatStateClient = {
   readonly replaceAssistantMessage: (
     input: ReplaceAssistantMessageInput,
   ) => Promise<void>;
+  readonly searchConversations: (
+    input: SearchConversationsInput,
+  ) => Promise<ChatStateSearchResponse>;
   readonly setActiveStream: (input: SetActiveStreamInput) => Promise<void>;
   readonly stopActiveStreamIfCurrent: (
     input: ClearActiveStreamInput,
@@ -91,6 +94,25 @@ export type ChatStateJsonValue =
 
 export type ChatStateMetadata = Readonly<Record<string, ChatStateJsonValue>>;
 
+export type ChatStateSearchMessage = {
+  readonly created_at: string;
+  readonly id: string;
+  readonly role: 'assistant' | 'user';
+};
+
+export type ChatStateSearchResponse = {
+  readonly query: string;
+  readonly results: readonly ChatStateSearchResult[];
+};
+
+export type ChatStateSearchResult = {
+  readonly conversation_id: string;
+  readonly conversation_title: null | string;
+  readonly conversation_updated_at: string;
+  readonly message: ChatStateSearchMessage | null;
+  readonly snippet: null | string;
+};
+
 export type ChatUser = {
   readonly avatar_url: null | string;
   readonly created_at?: string;
@@ -139,6 +161,13 @@ type ReplaceAssistantMessageInput = {
   readonly responseId: string;
   readonly retainedMessageIds: readonly string[];
   readonly streamId: string;
+  readonly userId: string;
+};
+
+type SearchConversationsInput = {
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly query: string;
   readonly userId: string;
 };
 
@@ -348,6 +377,14 @@ export const createChatStateClient = (): ChatStateClient => ({
       },
     );
   },
+  searchConversations: async ({ limit = 20, offset = 0, query, userId }) =>
+    readStateJson<ChatStateSearchResponse>(
+      `/search?user_id=${encodeURIComponent(userId)}&q=${encodeURIComponent(
+        query,
+      )}&limit=${encodeURIComponent(String(limit))}&offset=${encodeURIComponent(
+        String(offset),
+      )}`,
+    ),
   setActiveStream: async ({
     activeResponseId,
     activeStatus,

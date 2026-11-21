@@ -1,7 +1,7 @@
 import json
 from collections.abc import Mapping, Sequence
 from datetime import datetime
-from typing import Protocol
+from typing import Final, Protocol, cast
 from uuid import UUID
 
 from app.data.chat_rows import conversation_from_row, message_from_row
@@ -12,7 +12,10 @@ from app.schemas.chat_persistence import (
     ChatConversationUpdate,
     ChatConversationWithMessages,
     ChatMessage,
+    ChatMessageRole,
     ChatMessageUpsert,
+    ChatSearchMessage,
+    ChatSearchResult,
 )
 
 
@@ -111,6 +114,128 @@ async def list_conversations(
         limit,
     )
     return [conversation_from_row(row) for row in rows]
+
+
+_SEARCH_HEADLINE_OPTIONS: Final = (
+    "StartSel=\x01, StopSel=\x02, MaxWords=28, MinWords=12, MaxFragments=2"
+)
+
+
+async def search_conversations(
+    db: ChatPersistenceDatabase,
+    *,
+    user_id: UUID,
+    query: str,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[ChatSearchResult]:
+    """Search one user's conversations and messages with safe lexical matching."""
+    if not query.strip():
+        return []
+
+    rows = await db.fetch(
+        """
+        WITH lexical_query AS (
+            SELECT websearch_to_tsquery(
+                'simple',
+                array_to_string(
+                    tsvector_to_array(to_tsvector('simple', $2)),
+                    ' OR '
+                )
+            ) AS value
+        ), ranked AS (
+            SELECT
+                c.id AS conversation_id,
+                c.title AS conversation_title,
+                c.updated_at AS conversation_updated_at,
+                best.id AS message_id,
+                best.role AS message_role,
+                best.created_at AS message_created_at,
+                CASE
+                    WHEN best.id IS NOT NULL THEN
+                        ts_headline('simple', best.content, q.value, $3)
+                END AS snippet,
+                COALESCE(
+                    best.message_rank,
+                    ts_rank_cd(
+                        setweight(
+                            to_tsvector('simple', coalesce(c.title, '')),
+                            'A'
+                        ),
+                        q.value,
+                        32
+                    )
+                ) AS score
+            FROM chat_conversation c
+            CROSS JOIN lexical_query q
+            LEFT JOIN LATERAL (
+                SELECT
+                    m.id,
+                    m.role,
+                    m.created_at,
+                    m.content,
+                    ts_rank_cd(
+                        setweight(
+                            to_tsvector('simple', coalesce(c.title, '')),
+                            'A'
+                        ) ||
+                        setweight(to_tsvector('simple', m.content), 'B'),
+                        q.value,
+                        32
+                    ) AS message_rank
+                FROM chat_message m
+                WHERE m.conversation_id = c.id
+                  AND to_tsvector('simple', m.content) @@ q.value
+                ORDER BY message_rank DESC, m.created_at ASC
+                LIMIT 1
+            ) best ON TRUE
+            WHERE c.user_id = $1
+              AND (
+                  best.id IS NOT NULL
+                  OR to_tsvector('simple', coalesce(c.title, '')) @@ q.value
+              )
+        )
+        SELECT
+            conversation_id,
+            conversation_title,
+            conversation_updated_at,
+            message_id,
+            message_role,
+            message_created_at,
+            snippet
+        FROM ranked
+        ORDER BY score DESC, conversation_updated_at DESC
+        LIMIT $4 OFFSET $5
+        """,
+        user_id,
+        query,
+        _SEARCH_HEADLINE_OPTIONS,
+        limit,
+        offset,
+    )
+
+    results: list[ChatSearchResult] = []
+    for row in rows:
+        message: ChatSearchMessage | None = None
+        if row["message_id"] is not None:
+            message = ChatSearchMessage(
+                id=cast(UUID, row["message_id"]),
+                role=cast(ChatMessageRole, row["message_role"]),
+                created_at=cast(datetime, row["message_created_at"]),
+            )
+        results.append(
+            ChatSearchResult(
+                conversation_id=cast(UUID, row["conversation_id"]),
+                conversation_title=cast(str | None, row["conversation_title"]),
+                conversation_updated_at=cast(
+                    datetime,
+                    row["conversation_updated_at"],
+                ),
+                message=message,
+                snippet=cast(str | None, row["snippet"]),
+            ),
+        )
+    return results
 
 
 async def load_conversation(

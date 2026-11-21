@@ -18,10 +18,12 @@ import { joinText } from '@/lib/message-parts';
 // everything after it; the control shows on hover or focus.
 export const UserMessage = ({
   className,
+  highlighted = false,
   message,
   onEdit,
 }: {
   className?: string;
+  highlighted?: boolean;
   message: MyUIMessage;
   onEdit?: (messageId: string, text: string) => void;
 }) => {
@@ -31,6 +33,9 @@ export const UserMessage = ({
   const canSend = next !== '' && next !== text.trim();
   const editing = draft !== null;
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const anchorClassName = highlighted
+    ? 'rounded-xl outline-none ring-2 ring-primary/50 ring-offset-2 ring-offset-background'
+    : 'rounded-xl outline-none';
 
   // Opening the editor puts the cursor after the existing text.
   useEffect(() => {
@@ -47,8 +52,11 @@ export const UserMessage = ({
   if (draft !== null && onEdit !== undefined) {
     return (
       <Message
-        className={className}
+        className={[anchorClassName, className].filter(Boolean).join(' ')}
+        data-message-id={message.id}
         from="user"
+        id={`message-${message.id}`}
+        tabIndex={-1}
       >
         <form
           className="flex w-full min-w-72 flex-col gap-2"
@@ -103,8 +111,11 @@ export const UserMessage = ({
 
   return (
     <Message
-      className={className}
+      className={[anchorClassName, className].filter(Boolean).join(' ')}
+      data-message-id={message.id}
       from="user"
+      id={`message-${message.id}`}
+      tabIndex={-1}
     >
       {/* The control sits beside the bubble, so it adds no height to the thread. */}
       <div className="flex max-w-full items-start justify-end gap-1">

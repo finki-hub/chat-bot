@@ -5,6 +5,8 @@ import type { ModelId, MyUIMessage } from '@/lib/api-types';
 import type {
   ActiveConversationStream,
   ChatConversationHistory,
+  ChatSearchMessage,
+  ChatSearchResult,
   ConversationRow,
 } from '@/lib/conversation-types';
 
@@ -177,6 +179,70 @@ export const listChatConversations = async (): Promise<ConversationRow[]> => {
   }
 
   return parseConversations(await parseJsonOrNull(response));
+};
+
+const parseSearchMessage = (value: unknown): ChatSearchMessage | null => {
+  if (!isRecord(value)) return null;
+  const { createdAt, id, role } = value;
+  if (typeof id !== 'string' || typeof createdAt !== 'string') {
+    return null;
+  }
+  if (role !== 'assistant' && role !== 'user') {
+    return null;
+  }
+  return { createdAt, id, role };
+};
+
+const parseSearchResult = (value: unknown): ChatSearchResult | null => {
+  if (!isRecord(value)) return null;
+  const {
+    conversationId,
+    conversationTitle,
+    conversationUpdatedAt,
+    message,
+    snippet,
+  } = value;
+  if (
+    typeof conversationId !== 'string' ||
+    typeof conversationUpdatedAt !== 'string' ||
+    (conversationTitle !== null && typeof conversationTitle !== 'string') ||
+    (snippet !== null && typeof snippet !== 'string')
+  ) {
+    return null;
+  }
+  const parsedMessage = message === null ? null : parseSearchMessage(message);
+  return message !== null && parsedMessage === null
+    ? null
+    : {
+        conversationId,
+        conversationTitle,
+        conversationUpdatedAt,
+        message: parsedMessage,
+        snippet,
+      };
+};
+
+const parseSearchResults = (value: unknown): ChatSearchResult[] =>
+  isRecord(value) && Array.isArray(value['results'])
+    ? value['results']
+        .map(parseSearchResult)
+        .filter((result): result is ChatSearchResult => result !== null)
+    : [];
+
+export const searchChatConversations = async (
+  query: string,
+  signal?: AbortSignal,
+): Promise<ChatSearchResult[]> => {
+  const response = await fetch(
+    `/api/chat/search?q=${encodeURIComponent(query)}`,
+    { signal },
+  );
+
+  if (!response.ok) {
+    throw new ChatConversationRequestError(response.status);
+  }
+
+  return parseSearchResults(await parseJsonOrNull(response));
 };
 
 export type SaveChatConversationInput = {

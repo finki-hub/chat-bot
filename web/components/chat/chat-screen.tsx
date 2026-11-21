@@ -56,6 +56,10 @@ export const ChatScreen = () => {
   const [sidebarSynced, setSidebarSynced] = useState(false);
   const [desktopSidebar, setDesktopSidebar] = useState(false);
   const [credentialSettingsOpen, setCredentialSettingsOpen] = useState(false);
+  const [pendingJump, setPendingJump] = useState<null | {
+    conversationId: string;
+    messageId: string;
+  }>(null);
   const credentialReturnFocusRef = useRef<HTMLElement | null>(null);
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -183,6 +187,31 @@ export const ChatScreen = () => {
   const activeConversationTitle =
     conversations.find((conversation) => conversation.id === activeId)?.title ??
     t('conversation.untitled');
+  const handleSelectConversation = useCallback(
+    (id: string) => {
+      setPendingJump(null);
+      onSelect(id);
+    },
+    [onSelect],
+  );
+  const handleNewChat = useCallback(() => {
+    setPendingJump(null);
+    onNewChat();
+  }, [onNewChat]);
+  const handleSelectSearchResult = useCallback(
+    (conversationId: string, messageId: null | string) => {
+      setPendingJump(messageId === null ? null : { conversationId, messageId });
+      onSelect(conversationId);
+    },
+    [onSelect],
+  );
+  const handleJumpHandled = useCallback(() => {
+    setPendingJump(null);
+  }, []);
+  const jumpToMessageId =
+    pendingJump !== null && pendingJump.conversationId === activeId
+      ? pendingJump.messageId
+      : undefined;
   // One share state for the header (phones) and the context bar (wider screens).
   const sharing = useConversationSharing(activeId);
 
@@ -223,10 +252,14 @@ export const ChatScreen = () => {
           }}
           onDelete={onDelete}
           onGenerateTitle={onGenerateTitle}
-          onNewChat={onNewChat}
+          onNewChat={handleNewChat}
+          onOpen={() => {
+            setSidebarOpen(true);
+          }}
           onRename={onRename}
           onRetryList={onRetryConversationList}
-          onSelect={onSelect}
+          onSelect={handleSelectConversation}
+          onSelectMessage={handleSelectSearchResult}
           open={sidebarSynced && sidebarOpen}
           synced={sidebarSynced}
         />
@@ -246,10 +279,13 @@ export const ChatScreen = () => {
             activeError={activeError}
             activeStatus={activeStatus}
             conversationId={activeId}
+            hydrating={hydratingConversation}
+            jumpToMessageId={jumpToMessageId}
             messages={messages}
             onEditMessage={
               unavailable || !selectedModelAvailable ? undefined : onEditMessage
             }
+            onJumpHandled={handleJumpHandled}
             onManageCredentials={openCredentialSettings}
             onPickSuggestion={
               // Suggestions bypass the composer's send gate, so hide them until the selected model is usable.

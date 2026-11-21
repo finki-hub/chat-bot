@@ -2,9 +2,13 @@ import { Plus, Search, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import type { MaybeAsyncAction } from '@/lib/action-result';
-import type { ConversationRow } from '@/lib/conversation-types';
+import type {
+  ChatSearchResult,
+  ConversationRow,
+} from '@/lib/conversation-types';
 
 import { ConversationList } from '@/components/shell/conversation-list';
+import { ConversationSearchResults } from '@/components/shell/conversation-search-results';
 import {
   closeSidebarOnMobile,
   getConversationFilter,
@@ -17,7 +21,9 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group';
+import { Spinner } from '@/components/ui/spinner';
 import { t } from '@/lib/i18n';
+import { searchChatConversations } from '@/lib/transport';
 import { cn } from '@/lib/utils';
 
 export type SidebarProps = {
@@ -32,9 +38,11 @@ export type SidebarProps = {
   onDelete: MaybeAsyncAction<[id: string]>;
   onGenerateTitle?: (id: string) => void;
   onNewChat: () => void;
+  onOpen?: () => void;
   onRename: MaybeAsyncAction<[id: string, title: string]>;
   onRetryList?: () => Promise<void>;
   onSelect: (id: string) => void;
+  onSelectMessage?: (conversationId: string, messageId: null | string) => void;
   open: boolean;
   synced?: boolean;
 };
@@ -52,14 +60,23 @@ export const Sidebar = ({
   onDelete,
   onGenerateTitle,
   onNewChat,
+  onOpen,
   onRename,
   onRetryList,
   onSelect,
+  onSelectMessage,
   open,
   synced = true,
 }: SidebarProps) => {
   const [query, setQuery] = useState('');
+  const [searchError, setSearchError] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchNonce, setSearchNonce] = useState(0);
+  const [searchResults, setSearchResults] = useState<ChatSearchResult[]>([]);
   const mobileTriggerRef = useRef<HTMLElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const trimmedQuery = query.trim();
+  const serverSearch = trimmedQuery.length >= 2;
 
   useEffect(() => {
     if (!mobile) {
@@ -77,6 +94,84 @@ export const Sidebar = ({
     mobileTriggerRef.current = null;
   }, [mobile, open]);
 
+  useEffect(() => {
+    let focusTimer: null | ReturnType<typeof setTimeout> = null;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === 'k'
+      )) {
+        return;
+      }
+
+      event.preventDefault();
+      if (!open) {
+        onOpen?.();
+      }
+      focusTimer = setTimeout(() => {
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }, 0);
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (focusTimer !== null) {
+        clearTimeout(focusTimer);
+      }
+    };
+  }, [onOpen, open]);
+
+  useEffect(() => {
+    if (!serverSearch) {
+      setSearchError(false);
+      setSearchLoading(false);
+      setSearchResults([]);
+      return () => {};
+    }
+
+    const controller = new AbortController();
+    setSearchError(false);
+    setSearchLoading(true);
+    setSearchResults([]);
+
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const results = await searchChatConversations(
+            trimmedQuery,
+            controller.signal,
+          );
+          if (controller.signal.aborted) {
+            return;
+          }
+          setSearchResults(results);
+          setSearchLoading(false);
+        } catch {
+          if (controller.signal.aborted) {
+            return;
+          }
+          setSearchError(true);
+          setSearchLoading(false);
+        }
+      })();
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchNonce, serverSearch, trimmedQuery]);
+
+  const handleSearchSelect = (
+    conversationId: string,
+    messageId: null | string,
+  ) => {
+    onSelectMessage?.(conversationId, messageId);
+    closeSidebarOnMobile(onClose);
+  };
+
   const handleSelect = (id: string) => {
     onSelect(id);
     closeSidebarOnMobile(onClose);
@@ -89,6 +184,86 @@ export const Sidebar = ({
 
   const { filtered, term } = getConversationFilter(conversations, query);
   const responsiveStateClass = getSidebarWidthClass(open, synced);
+
+  const renderLocalConversations = (): ReactNode =>
+    term && filtered.length === 0 ? (
+      <p
+        className="px-2 py-1.5 text-sm text-muted-foreground"
+        data-testid="no-results"
+      >
+        {t('sidebar.noResults')}
+      </p>
+    ) : (
+      <ConversationList
+        activeId={activeId}
+        conversations={filtered}
+        generatingTitleId={generatingTitleId}
+        onDelete={onDelete}
+        onGenerateTitle={onGenerateTitle}
+        onRename={onRename}
+        onSelect={handleSelect}
+      />
+    );
+
+  // eslint-disable-next-line sonarjs/function-return-type -- JSX branches render different elements
+  const renderConversationBody = (): ReactNode => {
+    if (serverSearch) {
+      if (searchLoading) {
+        return (
+          <>
+            <output
+              className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground"
+              data-testid="search-loading"
+            >
+              <Spinner className="size-4" />
+              {t('search.loading')}
+            </output>
+            {renderLocalConversations()}
+          </>
+        );
+      }
+      if (searchError) {
+        return (
+          <>
+            <div
+              className="rounded-lg border border-destructive/40 bg-destructive/10 p-2 text-sm"
+              role="alert"
+            >
+              <p className="text-destructive">{t('search.error')}</p>
+              <button
+                className="mt-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11"
+                onClick={() => {
+                  setSearchNonce((nonce) => nonce + 1);
+                }}
+                type="button"
+              >
+                {t('error.retry')}
+              </button>
+            </div>
+            {renderLocalConversations()}
+          </>
+        );
+      }
+      if (searchResults.length === 0) {
+        return (
+          <p
+            className="px-2 py-1.5 text-sm text-muted-foreground"
+            data-testid="no-results"
+          >
+            {t('sidebar.noResults')}
+          </p>
+        );
+      }
+      return (
+        <ConversationSearchResults
+          onSelect={handleSearchSelect}
+          results={searchResults}
+        />
+      );
+    }
+
+    return renderLocalConversations();
+  };
 
   const sidebarContent = (
     // Fixed width on desktop so the content doesn't reflow as the panel slides.
@@ -143,6 +318,7 @@ export const Sidebar = ({
               setQuery(e.target.value);
             }}
             placeholder={t('sidebar.search')}
+            ref={searchInputRef}
             type="search"
             value={query}
           />
@@ -166,27 +342,10 @@ export const Sidebar = ({
       ) : null}
       {/* The date groups head the list, so the section needs no visible title. */}
       <nav
-        aria-label={t('sidebar.history')}
+        aria-label={serverSearch ? t('search.results') : t('sidebar.history')}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pt-1"
       >
-        {term && filtered.length === 0 ? (
-          <p
-            className="px-2 py-1.5 text-sm text-muted-foreground"
-            data-testid="no-results"
-          >
-            {t('sidebar.noResults')}
-          </p>
-        ) : (
-          <ConversationList
-            activeId={activeId}
-            conversations={filtered}
-            generatingTitleId={generatingTitleId}
-            onDelete={onDelete}
-            onGenerateTitle={onGenerateTitle}
-            onRename={onRename}
-            onSelect={handleSelect}
-          />
-        )}
+        {renderConversationBody()}
       </nav>
       {footer}
     </div>

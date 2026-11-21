@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
 
@@ -18,9 +18,12 @@ export type ThreadProps = {
   activeError?: ErrorNotice;
   activeStatus?: StatusPart;
   conversationId?: null | string;
+  hydrating?: boolean;
+  jumpToMessageId?: string;
   messages: MyUIMessage[];
   // Edit-and-resend for sent questions; offered only while nothing streams.
   onEditMessage?: (messageId: string, text: string) => void;
+  onJumpHandled?: () => void;
   onManageCredentials?: (returnFocusTarget: HTMLElement) => void;
   onPickSuggestion?: (text: string) => unknown;
   onRetry?: () => void;
@@ -115,8 +118,11 @@ export const Thread = ({
   activeError,
   activeStatus,
   conversationId,
+  hydrating = false,
+  jumpToMessageId,
   messages,
   onEditMessage,
+  onJumpHandled,
   onManageCredentials,
   onPickSuggestion,
   onRetry,
@@ -124,6 +130,8 @@ export const Thread = ({
   retryPending,
   status,
 }: ThreadProps) => {
+  const [highlightedId, setHighlightedId] = useState<null | string>(null);
+  const [suppressInitialScroll] = useState(jumpToMessageId !== undefined);
   const lastAssistantId = messages.findLast((m) => m.role === 'assistant')?.id;
   const streaming = status === 'streaming' || status === 'submitted';
   const lastMessage = messages.at(-1);
@@ -135,10 +143,57 @@ export const Thread = ({
         !hasText(lastMessage) &&
         !hasReasoning(lastMessage) &&
         !hasToolCalls(lastMessage)));
+
+  useEffect(() => {
+    if (jumpToMessageId === undefined || hydrating) {
+      return () => {};
+    }
+    const element = document.querySelector<HTMLElement>(
+      `[data-message-id="${CSS.escape(jumpToMessageId)}"]`,
+    );
+    if (element === null) {
+      if (messages.length > 0) {
+        onJumpHandled?.();
+      }
+      return () => {};
+    }
+
+    const timer = setTimeout(() => {
+      element.scrollIntoView({ block: 'center' });
+      element.focus({ preventScroll: true });
+      setHighlightedId(jumpToMessageId);
+      onJumpHandled?.();
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [hydrating, jumpToMessageId, messages, onJumpHandled]);
+
+  useEffect(() => {
+    if (highlightedId === null) {
+      return () => {};
+    }
+    const timer = setTimeout(() => {
+      setHighlightedId(null);
+    }, 2_000);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [highlightedId]);
+
+  const messageAnchorClass = (id: string): string =>
+    highlightedId === id
+      ? 'rounded-xl outline-none ring-2 ring-primary/50 ring-offset-2 ring-offset-background'
+      : 'rounded-xl outline-none';
+  const conversationInitial =
+    !suppressInitialScroll && messages.length > 0 ? 'instant' : false;
+
   return (
     <Conversation
       className="flex-1"
-      initial={messages.length === 0 ? false : 'instant'}
+      initial={conversationInitial}
       key={`${messages.at(0)?.id ?? conversationId ?? 'unscoped'}:${messages.length === 0 ? 'welcome' : 'messages'}`}
     >
       <ConversationContent>
@@ -173,6 +228,7 @@ export const Thread = ({
                         ? MESSAGE_ENTRANCE
                         : undefined
                     }
+                    highlighted={highlightedId === m.id}
                     key={m.id}
                     message={m}
                     onEdit={editQuestion}
@@ -187,8 +243,16 @@ export const Thread = ({
                 (streaming || activeStatus !== undefined);
               return (
                 <div
-                  className={activeAssistant ? MESSAGE_ENTRANCE : undefined}
+                  className={[
+                    messageAnchorClass(m.id),
+                    activeAssistant ? MESSAGE_ENTRANCE : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  data-message-id={m.id}
+                  id={`message-${m.id}`}
                   key={m.id}
+                  tabIndex={-1}
                 >
                   <AssistantMessage
                     actions={renderActions ? renderActions(m) : undefined}
