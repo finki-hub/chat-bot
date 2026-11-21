@@ -1,12 +1,20 @@
+from dataclasses import replace
+from uuid import uuid4
+
 import httpx
 import pytest
 
+from app.api.recommendation_presenters import mentor_score
 from app.data import StaffDirectoryUnavailableError, get_active_staff_names
-from app.recommenders.selection import select_committee
+from app.recommenders.config import ScoringWeights
+from app.recommenders.selection import _eligible_paper_mentors, select_committee
+from app.recommenders.signals import build_expertise_index, score_people
 from app.recommenders.types import (
     MentorPriorIndex,
     Mode,
     RankedPeople,
+    Recommendation,
+    RetrievedPaper,
     SelectionConstraints,
 )
 from app.schemas.recommendations import RecommendationRequestSchema
@@ -132,6 +140,191 @@ def test_select_committee_filters_inactive_mentor_candidates() -> None:
 
     assert rec.mentor == "Active Mentor"
     assert rec.members == ("Active Member One", "Active Member Two")
+
+
+def _shortlist_ranked() -> RankedPeople:
+    return RankedPeople(
+        blended={"Member One": 0.9, "Member Two": 0.8, "Member Three": 0.7},
+        defense={},
+        expertise={},
+        coauthor={},
+        mentor_score={"Assistant": 9.0, "Mentor A": 3.0, "Mentor B": 2.0},
+        pair_score={},
+        supporting={},
+        expertise_supporting={},
+    )
+
+
+def test_select_committee_never_recommends_an_ineligible_mentor() -> None:
+    rec = select_committee(
+        _shortlist_ranked(),
+        Mode.FULL,
+        given_mentor=None,
+        mentor_topk=3,
+        constraints=SelectionConstraints(
+            mentor_allowed=frozenset({"Mentor A", "Mentor B"}),
+            alternative_count=10,
+        ),
+    )
+
+    assert rec.mentor == "Mentor A"
+    assert {alternative.mentor for alternative in rec.alternatives} == {
+        "Mentor A",
+        "Mentor B",
+    }
+
+
+def test_select_committee_can_shortlist_distinct_mentors() -> None:
+    rec = select_committee(
+        _shortlist_ranked(),
+        Mode.FULL,
+        given_mentor=None,
+        mentor_topk=3,
+        constraints=SelectionConstraints(
+            mentor_allowed=frozenset({"Mentor A", "Mentor B"}),
+            alternative_count=5,
+            distinct_mentors=True,
+        ),
+    )
+
+    assert [alternative.mentor for alternative in rec.alternatives] == [
+        "Mentor A",
+        "Mentor B",
+    ]
+    assert rec.alternatives[0].members == ("Member One", "Member Two")
+
+
+def test_select_committee_keeps_required_member_without_evidence() -> None:
+    rec = select_committee(
+        _shortlist_ranked(),
+        Mode.MEMBERS_ONLY,
+        given_mentor="Mentor A",
+        mentor_topk=3,
+        constraints=SelectionConstraints(include=frozenset({"No Evidence"})),
+    )
+
+    assert "No Evidence" in rec.members
+    assert "Member One" in rec.members
+
+
+def test_select_committee_can_seat_required_person_as_member_only() -> None:
+    rec = select_committee(
+        _shortlist_ranked(),
+        Mode.FULL,
+        given_mentor=None,
+        mentor_topk=3,
+        constraints=SelectionConstraints(
+            include=frozenset({"Mentor A"}),
+            mentor_allowed=frozenset({"Mentor A", "Mentor B"}),
+            include_as_members=True,
+        ),
+    )
+
+    assert rec.mentor == "Mentor B"
+    assert "Mentor A" in rec.members
+
+
+def test_shortlist_fills_with_paper_backed_mentors_after_defense_mentors() -> None:
+    ranked = replace(
+        _shortlist_ranked(),
+        paper_scores={"Paper Mentor": 1.0, "Assistant": 0.9, "Mentor A": 0.8},
+    )
+
+    rec = select_committee(
+        ranked,
+        Mode.FULL,
+        given_mentor=None,
+        mentor_topk=3,
+        constraints=SelectionConstraints(
+            mentor_allowed=frozenset({"Mentor A", "Mentor B", "Paper Mentor"}),
+            alternative_count=5,
+            distinct_mentors=True,
+        ),
+    )
+
+    assert rec.mentor == "Mentor A"
+    assert [(alt.mentor, alt.mentor_basis) for alt in rec.alternatives] == [
+        ("Mentor A", "defenses"),
+        ("Mentor B", "defenses"),
+        ("Paper Mentor", "papers"),
+    ]
+    scores = [alternative.score for alternative in rec.alternatives]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_ineligible_expert_does_not_suppress_paper_mentors() -> None:
+    ranked = replace(
+        _shortlist_ranked(),
+        paper_scores={"Secretary": 10.0, "Paper Mentor": 2.0, "Weak Mentor": 0.5},
+        paper_similarity={"Secretary": 0.9, "Paper Mentor": 0.6, "Weak Mentor": 0.6},
+        paper_mentor_min_similarity=0.55,
+        paper_mentor_min_relative=0.4,
+    )
+
+    eligible = _eligible_paper_mentors(
+        ranked,
+        SelectionConstraints(mentor_allowed=frozenset({"Paper Mentor", "Weak Mentor"})),
+    )
+
+    assert eligible == ["Paper Mentor"]
+
+
+def test_paper_mentors_are_ignored_without_shortlist_mode() -> None:
+    ranked = replace(_shortlist_ranked(), paper_scores={"Paper Mentor": 1.0})
+
+    rec = select_committee(
+        ranked,
+        Mode.FULL,
+        given_mentor=None,
+        mentor_topk=5,
+        constraints=SelectionConstraints(alternative_count=20),
+    )
+
+    assert "Paper Mentor" not in {alt.mentor for alt in rec.alternatives}
+
+
+def test_paper_backed_mentors_require_topical_and_relative_strength() -> None:
+    weights = ScoringWeights(
+        expertise_recency_half_life_days=0.0,
+        paper_mentor_min_relative=0.4,
+    )
+    expertise = build_expertise_index(
+        [
+            RetrievedPaper("1", "Strong", ("Strong Fit",), distance=0.3),
+            RetrievedPaper("2", "Strong 2", ("Strong Fit",), distance=0.35),
+            RetrievedPaper("3", "Off topic", ("Weak Match",), distance=0.5),
+            RetrievedPaper("4", "Off topic 2", ("Weak Match",), distance=0.5),
+            RetrievedPaper("5", "Close", ("Minor Author",), distance=0.42),
+            RetrievedPaper("6", "Far", ("Far Author",), distance=0.46),
+        ],
+        weights,
+    )
+    ranked = score_people([], expertise, None, weights, Mode.FULL)
+
+    assert set(_eligible_paper_mentors(ranked, SelectionConstraints())) == {
+        "Strong Fit",
+        "Minor Author",
+    }
+
+    strict = replace(weights, paper_mentor_min_similarity=0.6)
+    strict_ranked = score_people([], expertise, None, strict, Mode.FULL)
+
+    assert _eligible_paper_mentors(strict_ranked, SelectionConstraints()) == [
+        "Strong Fit",
+    ]
+
+
+def test_given_mentor_keeps_defense_evidence() -> None:
+    diploma_id = uuid4()
+    ranked = replace(_shortlist_ranked(), supporting={"Mentor A": [diploma_id]})
+    rec = Recommendation(
+        mode=Mode.MEMBERS_ONLY,
+        mentor="Mentor A",
+        members=("Member One", "Member Two"),
+        mentor_is_given=True,
+    )
+
+    assert mentor_score(rec, ranked).supporting_diploma_ids == [diploma_id]
 
 
 def test_check_staff_rejects_active_but_ineligible_mentor() -> None:

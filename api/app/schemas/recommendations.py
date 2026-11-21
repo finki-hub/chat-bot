@@ -104,6 +104,17 @@ class RecommendationRequestSchema(RecommendationToolRequestSchema):
             "signals. The committee planner sends false; chat never exposes this field."
         ),
     )
+    distinct_mentors: bool = Field(
+        default=False,
+        description=(
+            "FULL mode only: return the best committee per mentor, so alternatives "
+            "form a shortlist of different mentors."
+        ),
+    )
+    include_as_members: bool = Field(
+        default=False,
+        description="FULL mode only: seat include_professors as members, never as mentor.",
+    )
 
 
 class PersonScoreSchema(BaseModel):
@@ -167,6 +178,10 @@ class CommitteeAlternativeSchema(BaseModel):
     supporting_diploma_ids: list[UUID] = Field(
         default_factory=list,
         description="Diploma ids supporting this alternative",
+    )
+    mentor_basis: Literal["defenses", "papers"] = Field(
+        default="defenses",
+        description="Whether the mentor comes from similar defenses or topical papers.",
     )
 
 

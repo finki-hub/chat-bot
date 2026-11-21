@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  ArrowLeft,
-  Check,
-  Copy,
-  GraduationCap,
-  RefreshCw,
-  Users,
-} from 'lucide-react';
+import { ArrowLeft, GraduationCap, RefreshCw, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -18,67 +11,150 @@ import type {
 } from '@/lib/committee-types';
 
 import { AlternativesSection } from '@/components/committee/committee-alternatives';
+import { CopyButton } from '@/components/committee/committee-copy-button';
 import { EvidenceBlock } from '@/components/committee/committee-evidence';
 import { CommitteeForm } from '@/components/committee/committee-form';
+import { NextSteps } from '@/components/committee/committee-next-steps';
 import { PersonCard } from '@/components/committee/committee-person-card';
+import {
+  type CommitteeRefinements,
+  MAX_PINNED_MEMBERS,
+  PersonActions,
+  RefinementBar,
+} from '@/components/committee/committee-refinements';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  clearCommitteeDraft,
+  type CommitteeFormState as FormState,
+  readCommitteeDraft,
+  writeCommitteeDraft,
+} from '@/lib/committee-draft';
 import { t } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 
-const COMMITTEE_OPTIONS = 3;
-const COPY_FEEDBACK_MS = 2_000;
+const MEMBER_OPTIONS = 3;
+const MENTOR_SHORTLIST = 5;
 
-type FormState = {
-  abstract: string;
-  hasMentor: boolean;
-  keywords: string[];
-  mentor: string;
-  researchArea: string;
-  studyProgram: string;
-  title: string;
+const EMPTY_FORM: FormState = {
+  abstract: '',
+  hasMentor: false,
+  keywords: [],
+  mentor: '',
+  researchArea: '',
+  studyProgram: '',
+  title: '',
 };
 
-const CONFIDENCE_REASON_LABELS: Record<string, string> = {
-  'enough similar defenses': t('committee.confidence.enoughSimilarDefenses'),
-  'incomplete committee': t('committee.confidence.incompleteCommittee'),
-  'limited similar defenses': t('committee.confidence.limitedSimilarDefenses'),
-  'moderate topic match': t('committee.confidence.moderateTopicMatch'),
-  'review manually': t('committee.confidence.reviewManually'),
-  'strong topic match': t('committee.confidence.strongTopicMatch'),
-  'weak topic match': t('committee.confidence.weakTopicMatch'),
+const EMPTY_REFINEMENTS: CommitteeRefinements = { excluded: [], pinned: [] };
+
+const confidenceLevel = (reasons: string[]): 'high' | 'low' | 'medium' => {
+  if (
+    reasons.includes('weak_topic_match') ||
+    reasons.includes('incomplete_committee') ||
+    reasons.includes('review_manually')
+  ) {
+    return 'low';
+  }
+
+  return reasons.includes('strong_topic_match') &&
+    reasons.includes('enough_similar_defenses')
+    ? 'high'
+    : 'medium';
 };
 
-const mapConfidenceReason = (reason: string): null | string => {
-  const normalized = reason.toLowerCase().trim().replaceAll('_', ' ');
-  return CONFIDENCE_REASON_LABELS[normalized] ?? null;
+const CONFIDENCE_MESSAGES = {
+  high: t('committee.confidence.high'),
+  low: t('committee.confidence.low'),
+  medium: t('committee.confidence.medium'),
 };
 
-const ConfidenceSection = ({ reasons }: { reasons: string[] }) => {
-  const labels = reasons.map(mapConfidenceReason).filter(Boolean);
-  if (labels.length === 0) return null;
+const ConfidenceNote = ({ reasons }: { reasons: string[] }) => {
+  const level = confidenceLevel(reasons);
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {labels.map((label) => (
-        <span
-          className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
-          key={label}
-        >
-          {label}
-        </span>
-      ))}
-    </div>
+    <p
+      className={cn(
+        'mt-2 rounded-lg px-3 py-2 text-sm',
+        level === 'high' && 'bg-primary/10 text-foreground',
+        level === 'medium' && 'bg-muted text-foreground',
+        level === 'low' && 'bg-destructive/10 text-foreground',
+      )}
+      data-testid="committee-confidence"
+    >
+      {CONFIDENCE_MESSAGES[level]}
+    </p>
   );
 };
 
-const buildRequestBody = (form: FormState, keywords: string[]) => {
+const buildMentorMessage = (form: FormState, mentor: string): string => {
+  const abstract = form.abstract.trim();
+
+  return [
+    `${t('committee.message.greeting')} ${mentor},`,
+    `${t('committee.message.body')} „${form.title.trim()}“.`,
+    ...(abstract ? [`${t('committee.message.abstract')}: ${abstract}`] : []),
+    t('committee.message.closing'),
+    t('committee.message.signature'),
+  ].join('\n\n');
+};
+
+const buildSummary = (form: FormState, response: CommitteeResponse): string => {
+  const mentorLabel = response.mentor_is_given
+    ? t('committee.result.yourMentor')
+    : t('committee.result.mentorLabel');
+  const members = response.members.map((member) => member.name).join(', ');
+
+  return [
+    form.title.trim(),
+    `${mentorLabel}: ${response.mentor.name}`,
+    `${t('committee.result.membersLabel')}: ${members}`,
+    t('committee.disclaimer'),
+  ].join('\n');
+};
+
+const mergeKeywords = (existing: string[], draft: string): string[] => {
+  const keywords = [...existing];
+  for (const part of draft.split(',')) {
+    const keyword = part.trim().toLowerCase();
+    if (keyword && !keywords.includes(keyword)) keywords.push(keyword);
+  }
+  return keywords;
+};
+
+const buildRequestBody = (
+  form: FormState,
+  keywords: string[],
+  refinements: CommitteeRefinements,
+) => {
+  const hasGivenMentor = form.hasMentor && form.mentor !== '';
   const body: Record<string, unknown> = {
-    alternatives: COMMITTEE_OPTIONS,
+    alternatives: hasGivenMentor ? MEMBER_OPTIONS : MENTOR_SHORTLIST,
     title: form.title.trim(),
   };
 
   const includePriorKey = 'include_prior';
   body[includePriorKey] = false;
+
+  if (!hasGivenMentor) {
+    const distinctMentorsKey = 'distinct_mentors';
+    const mentorTopKKey = 'mentor_topk';
+    body[distinctMentorsKey] = true;
+    body[mentorTopKKey] = MENTOR_SHORTLIST;
+  }
+  const givenMentor = hasGivenMentor ? form.mentor : null;
+  const pinned = refinements.pinned.filter((name) => name !== givenMentor);
+  const excluded = refinements.excluded.filter((name) => name !== givenMentor);
+  if (pinned.length > 0) {
+    const includeKey = 'include_professors';
+    const includeAsMembersKey = 'include_as_members';
+    body[includeKey] = pinned;
+    body[includeAsMembersKey] = true;
+  }
+  if (excluded.length > 0) {
+    const excludeKey = 'exclude_professors';
+    body[excludeKey] = excluded;
+  }
 
   if (form.abstract.trim()) body['abstract'] = form.abstract.trim();
   if (keywords.length > 0) body['keywords'] = keywords;
@@ -95,10 +171,10 @@ const isMentorError = (detail: string): boolean =>
   detail.toLowerCase().includes('mentor must');
 
 type SubmissionState =
+  | { form: FormState; kind: 'success'; response: CommitteeResponse }
   | { kind: 'error'; message: string; status?: number }
   | { kind: 'idle' }
-  | { kind: 'loading' }
-  | { kind: 'success'; response: CommitteeResponse };
+  | { kind: 'loading' };
 
 const errorState = (message: string, status?: number): SubmissionState => ({
   kind: 'error',
@@ -127,22 +203,17 @@ const isDegenerateResponse = (response: CommitteeResponse): boolean =>
   (!response.mentor_is_given && response.mentor.name === '');
 
 export const CommitteePlanner = () => {
-  type CopyState = 'copied' | 'failed' | 'idle';
   const resultRef = useRef<HTMLDivElement>(null);
+  const activeRequestRef = useRef<AbortController | null>(null);
 
   const [professors, setProfessors] = useState<Professor[]>([]);
   const [professorsLoading, setProfessorsLoading] = useState(true);
   const [professorsError, setProfessorsError] = useState(false);
 
-  const [form, setForm] = useState<FormState>({
-    abstract: '',
-    hasMentor: false,
-    keywords: [],
-    mentor: '',
-    researchArea: '',
-    studyProgram: '',
-    title: '',
-  });
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [refinements, setRefinements] =
+    useState<CommitteeRefinements>(EMPTY_REFINEMENTS);
+  const [draftReady, setDraftReady] = useState(false);
 
   const [keywordDraft, setKeywordDraft] = useState('');
   const [submission, setSubmission] = useState<SubmissionState>({
@@ -150,16 +221,27 @@ export const CommitteePlanner = () => {
   });
   const [titleError, setTitleError] = useState(false);
   const [mentorError, setMentorError] = useState(false);
-  const [copyState, setCopyState] = useState<CopyState>('idle');
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setCopyState('idle');
-    }, COPY_FEEDBACK_MS);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [copyState]);
+    const draft = readCommitteeDraft();
+    if (draft !== null) {
+      setForm(draft.form);
+      setKeywordDraft(draft.keywordDraft);
+    }
+    setDraftReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (draftReady) writeCommitteeDraft({ form, keywordDraft });
+  }, [draftReady, form, keywordDraft]);
+
+  useEffect(
+    () => () => {
+      activeRequestRef.current?.abort();
+      activeRequestRef.current = null;
+    },
+    [],
+  );
 
   const professorCollator = useMemo(
     () => new Intl.Collator('mk', { sensitivity: 'base' }),
@@ -191,9 +273,9 @@ export const CommitteePlanner = () => {
     void loadProfessors();
   }, [loadProfessors]);
 
-  const validate = (): boolean => {
-    const isTitleValid = form.title.trim().length > 0;
-    const isMentorValid = !form.hasMentor || form.mentor !== '';
+  const validate = (candidate: FormState): boolean => {
+    const isTitleValid = candidate.title.trim().length > 0;
+    const isMentorValid = !candidate.hasMentor || candidate.mentor !== '';
     setTitleError(!isTitleValid);
     setMentorError(!isMentorValid);
     if (!isTitleValid) {
@@ -204,27 +286,29 @@ export const CommitteePlanner = () => {
     return isTitleValid && isMentorValid;
   };
 
-  const handleSubmit = async () => {
-    if (!validate()) return;
+  const requestCommittee = async (
+    nextForm: FormState,
+    nextRefinements: CommitteeRefinements,
+  ) => {
+    const keywords = mergeKeywords(nextForm.keywords, keywordDraft);
 
-    const pendingKeywords = keywordDraft
-      .split(',')
-      .map((part) => part.trim().toLowerCase())
-      .filter((part) => part.length > 0);
-    const keywords = [...form.keywords];
-    for (const keyword of pendingKeywords) {
-      if (!keywords.includes(keyword)) keywords.push(keyword);
-    }
-
-    setCopyState('idle');
+    activeRequestRef.current?.abort();
+    const controller = new AbortController();
+    activeRequestRef.current = controller;
+    const isStale = () => activeRequestRef.current !== controller;
     setSubmission({ kind: 'loading' });
 
     try {
       const response = await fetch('/api/committee', {
-        body: JSON.stringify(buildRequestBody(form, keywords)),
+        body: JSON.stringify(
+          buildRequestBody(nextForm, keywords, nextRefinements),
+        ),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
+        signal: controller.signal,
       });
+
+      if (isStale()) return;
 
       if (response.status === 400) {
         setSubmission(errorState(t('committee.error.invalidRequest'), 400));
@@ -243,6 +327,7 @@ export const CommitteePlanner = () => {
 
       if (response.status === 422) {
         const validation = await parseValidationError(response);
+        if (isStale()) return;
         setSubmission(errorState(validation.message, 422));
         if (validation.mentorError) setMentorError(true);
         return;
@@ -254,15 +339,85 @@ export const CommitteePlanner = () => {
       }
 
       const responseData = (await response.json()) as CommitteeResponse;
+      if (isStale()) return;
 
       if (isDegenerateResponse(responseData)) {
         setSubmission(errorState(t('committee.error.emptyCommittee')));
         return;
       }
 
-      setSubmission({ kind: 'success', response: responseData });
+      setSubmission({
+        form: nextForm,
+        kind: 'success',
+        response: responseData,
+      });
     } catch {
+      if (isStale()) return;
       setSubmission(errorState(t('committee.error.networkError')));
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!validate(form)) return;
+    await requestCommittee(form, refinements);
+  };
+
+  const refine = (
+    nextRefinements: CommitteeRefinements,
+    nextForm: FormState = form,
+  ) => {
+    if (!validate(nextForm)) return;
+    setForm(nextForm);
+    setRefinements(nextRefinements);
+    void requestCommittee(nextForm, nextRefinements);
+  };
+
+  const handleChooseMentor = (name: string) => {
+    refine(
+      {
+        excluded: refinements.excluded.filter((item) => item !== name),
+        pinned: refinements.pinned.filter((item) => item !== name),
+      },
+      { ...form, hasMentor: true, mentor: name },
+    );
+  };
+
+  const handleExclude = (name: string) => {
+    refine({
+      excluded: [...refinements.excluded, name],
+      pinned: refinements.pinned.filter((item) => item !== name),
+    });
+  };
+
+  const handleTogglePin = (name: string) => {
+    const isPinned = refinements.pinned.includes(name);
+    refine({
+      ...refinements,
+      pinned: isPinned
+        ? refinements.pinned.filter((item) => item !== name)
+        : [...refinements.pinned, name],
+    });
+  };
+
+  const handleRemoveRefinement = (name: string) => {
+    refine({
+      excluded: refinements.excluded.filter((item) => item !== name),
+      pinned: refinements.pinned.filter((item) => item !== name),
+    });
+  };
+
+  const handleChooseAlternative = (alternative: CommitteeAlternative) => {
+    if (submission.kind !== 'success') return;
+
+    if (submission.response.mentor_is_given) {
+      refine({
+        excluded: refinements.excluded.filter(
+          (item) => !alternative.members.includes(item),
+        ),
+        pinned: alternative.members,
+      });
+    } else if (alternative.mentor !== null) {
+      handleChooseMentor(alternative.mentor);
     }
   };
 
@@ -272,42 +427,16 @@ export const CommitteePlanner = () => {
     }
   }, [submission]);
 
-  const handleCopySummary = async () => {
-    if (submission.kind !== 'success') return;
-
-    const { response } = submission;
-    const mentorLine = response.mentor_is_given
-      ? `${t('committee.result.yourMentor')}: ${response.mentor.name}`
-      : `${t('committee.result.mentorLabel')}: ${response.mentor.name}`;
-    const membersLine = `${t('committee.result.membersLabel')}: ${response.members
-      .map((member) => member.name)
-      .join(', ')}`;
-    const disclaimer = t('committee.disclaimer');
-
-    try {
-      await navigator.clipboard.writeText(
-        [form.title.trim(), mentorLine, membersLine, disclaimer].join('\n'),
-      );
-      setCopyState('copied');
-    } catch {
-      setCopyState('failed');
-    }
-  };
-
   const handleRestart = () => {
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
     setSubmission({ kind: 'idle' });
-    setForm((previous) => ({
-      ...previous,
-      abstract: '',
-      keywords: [],
-      researchArea: '',
-      studyProgram: '',
-      title: '',
-    }));
+    setForm(EMPTY_FORM);
+    setRefinements(EMPTY_REFINEMENTS);
     setKeywordDraft('');
     setTitleError(false);
     setMentorError(false);
-    setCopyState('idle');
+    clearCommitteeDraft();
     document.querySelector<HTMLElement>('#committee-title')?.focus();
   };
 
@@ -395,6 +524,13 @@ export const CommitteePlanner = () => {
         ref={resultRef}
         tabIndex={-1}
       >
+        {submission.kind === 'idle' ? null : (
+          <RefinementBar
+            onRemove={handleRemoveRefinement}
+            refinements={refinements}
+          />
+        )}
+
         {submission.kind === 'loading' ? (
           <div
             className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-sm"
@@ -430,16 +566,25 @@ export const CommitteePlanner = () => {
                   <p className="text-sm text-muted-foreground">
                     {t('committee.disclaimer')}
                   </p>
-                  <div className="mt-2">
-                    <ConfidenceSection
-                      reasons={submission.response.confidence_reasons}
-                    />
-                  </div>
+                  <ConfidenceNote
+                    reasons={submission.response.confidence_reasons}
+                  />
                 </div>
               </div>
 
               <div className="space-y-3">
                 <PersonCard
+                  actions={
+                    submission.response.mentor_is_given ? null : (
+                      <PersonActions
+                        canPin={false}
+                        isPinned={false}
+                        name={submission.response.mentor.name}
+                        onChooseMentor={handleChooseMentor}
+                        onExclude={handleExclude}
+                      />
+                    )
+                  }
                   featured
                   label={
                     submission.response.mentor_is_given
@@ -452,6 +597,17 @@ export const CommitteePlanner = () => {
                 <div className="grid gap-3 sm:grid-cols-2">
                   {submission.response.members.map((member) => (
                     <PersonCard
+                      actions={
+                        <PersonActions
+                          canPin={
+                            refinements.pinned.length < MAX_PINNED_MEMBERS
+                          }
+                          isPinned={refinements.pinned.includes(member.name)}
+                          name={member.name}
+                          onExclude={handleExclude}
+                          onTogglePin={handleTogglePin}
+                        />
+                      }
                       key={member.name}
                       label={t('committee.result.memberLabel')}
                       person={member}
@@ -461,26 +617,22 @@ export const CommitteePlanner = () => {
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <Button
-                  className="pointer-coarse:min-h-11"
-                  onClick={() => {
-                    void handleCopySummary();
-                  }}
-                  type="button"
-                  variant="outline"
-                >
-                  {copyState === 'copied' ? (
-                    <Check className="size-4" />
-                  ) : (
-                    <Copy className="size-4" />
-                  )}
-                  <output>
-                    {copyState === 'copied' ? t('committee.copied') : null}
-                    {copyState === 'failed' ? t('committee.copyFailed') : null}
-                    {copyState === 'idle' ? t('committee.copySummary') : null}
-                  </output>
-                </Button>
+              <div className="mt-4 flex flex-col flex-wrap gap-2 sm:flex-row">
+                <CopyButton
+                  getText={() =>
+                    buildMentorMessage(
+                      submission.form,
+                      submission.response.mentor.name,
+                    )
+                  }
+                  label={t('committee.copyMessage')}
+                />
+                <CopyButton
+                  getText={() =>
+                    buildSummary(submission.form, submission.response)
+                  }
+                  label={t('committee.copySummary')}
+                />
                 <Button
                   className="pointer-coarse:min-h-11"
                   onClick={handleRestart}
@@ -495,8 +647,13 @@ export const CommitteePlanner = () => {
 
             <AlternativesSection
               alternatives={filteredAlternatives}
+              mentorIsGiven={submission.response.mentor_is_given}
+              onChoose={handleChooseAlternative}
               professors={professors}
+              selectedMentor={submission.response.mentor.name}
             />
+
+            <NextSteps />
 
             <EvidenceBlock
               diplomas={submission.response.evidence.similar_diplomas}

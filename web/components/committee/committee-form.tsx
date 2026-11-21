@@ -2,6 +2,7 @@ import type { ChangeEvent, KeyboardEvent } from 'react';
 
 import { X } from 'lucide-react';
 
+import type { CommitteeFormState as FormState } from '@/lib/committee-draft';
 import type { Professor } from '@/lib/committee-types';
 
 import { MentorPicker } from '@/components/committee/committee-mentor-picker';
@@ -27,16 +28,6 @@ type CommitteeFormProps = {
   setTitleError: (value: boolean) => void;
   submitting: boolean;
   titleError: boolean;
-};
-
-type FormState = {
-  abstract: string;
-  hasMentor: boolean;
-  keywords: string[];
-  mentor: string;
-  researchArea: string;
-  studyProgram: string;
-  title: string;
 };
 
 const keywordInputId = 'committee-keywords';
@@ -376,6 +367,9 @@ export const CommitteeForm = ({
           t('committee.submit')
         )}
       </Button>
+      <p className="text-xs text-muted-foreground">
+        {t('committee.draftNote')}
+      </p>
     </form>
   );
 };

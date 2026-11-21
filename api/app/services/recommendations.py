@@ -262,7 +262,10 @@ async def generate_committee_recommendation(
             exclude=frozenset(payload.exclude_professors),
             include=frozenset(payload.include_professors),
             allowed=active_staff,
+            mentor_allowed=mentor_eligible,
             alternative_count=payload.alternatives,
+            distinct_mentors=payload.distinct_mentors,
+            include_as_members=payload.include_as_members,
         ),
     )
     confidence_score, confidence_reasons = confidence(retrieved, rec, _TOP_K)
