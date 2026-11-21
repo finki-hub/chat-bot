@@ -55,15 +55,13 @@ const isRateLimited = (request: Request): boolean => {
 
   const current = rateLimits.get(key);
 
-  if (current === undefined) {
+  if (current === undefined || current.resetAt <= now) {
+    // Re-insert so Map order stays oldest-window-first for eviction.
+    rateLimits.delete(key);
     if (rateLimits.size >= RATE_LIMIT_MAX_KEYS) {
-      return true;
+      const oldest = rateLimits.keys().next().value;
+      if (oldest !== undefined) rateLimits.delete(oldest);
     }
-    rateLimits.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return false;
-  }
-
-  if (current.resetAt <= now) {
     rateLimits.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
     return false;
   }
@@ -76,18 +74,39 @@ const isRateLimited = (request: Request): boolean => {
   return false;
 };
 
+// Chunked uploads have no content-length, so enforce the cap while streaming.
+const readBoundedBody = async (request: Request): Promise<null | string> => {
+  if (request.body === null) return '';
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+
+  return Buffer.concat(chunks).toString('utf8');
+};
+
 const parsePayload = async (request: Request): Promise<null | object> => {
   const contentLength = request.headers.get('content-length');
   if (contentLength !== null && Number(contentLength) > MAX_BODY_BYTES) {
     return null;
   }
 
-  const raw = await request.text();
-  if (raw.length > MAX_BODY_BYTES) {
-    return null;
-  }
-
   try {
+    const raw = await readBoundedBody(request);
+    if (raw === null) return null;
+
     const payload: unknown = JSON.parse(raw);
     return typeof payload === 'object' &&
       payload !== null &&

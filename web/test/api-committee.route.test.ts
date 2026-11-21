@@ -211,3 +211,64 @@ describe('POST /api/committee', () => {
     expect(limited.status).toBe(429);
   });
 });
+
+describe('POST /api/committee abuse limits', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('evicts the oldest client instead of rejecting new ones at capacity', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { POST } = await importRoute();
+
+    for (let attempt = 0; attempt < 5_000; attempt += 1) {
+      await POST(
+        committeeRequest({ title: 'Test' }, { 'x-real-ip': `key-${attempt}` }),
+      );
+    }
+
+    const newcomer = await POST(
+      committeeRequest({ title: 'Test' }, { 'x-real-ip': '203.0.113.9' }),
+    );
+
+    expect(newcomer.status).toBe(200);
+  });
+
+  it('stops reading a chunked body once it exceeds the size cap', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
+    const { POST } = await importRoute();
+    let pulls = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      cancel: () => {
+        cancelled = true;
+      },
+      pull: (controller) => {
+        pulls += 1;
+        controller.enqueue(new Uint8Array(8_000));
+      },
+    });
+
+    const response = await POST(
+      new Request('https://localhost/api/committee', {
+        body,
+        duplex: 'half',
+        method: 'POST',
+      } as RequestInit),
+    );
+
+    expect(response.status).toBe(400);
+    expect(cancelled).toBe(true);
+    expect(pulls).toBeLessThan(10);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
