@@ -21,10 +21,16 @@ const normalizeIp = (value: null | string): null | string => {
   return trimmed && trimmed.length > 0 ? trimmed : null;
 };
 
-// The reverse proxy is expected to set X-Real-IP or overwrite X-Forwarded-For.
-// Prefer the proxy-set header and use the last forwarded hop, so a
-// client-supplied prefix cannot rotate the rate-limit key.
+// Which header holds the real client IP depends on the deployment's proxy chain,
+// so CLIENT_IP_HEADER names it. When set, there is deliberately no fallback:
+// the other headers may be client-controlled. Without it, assume a single proxy
+// that sets X-Real-IP or appends to X-Forwarded-For.
 const clientKey = (request: Request): string => {
+  const trustedHeader = process.env['CLIENT_IP_HEADER']?.trim();
+  if (trustedHeader) {
+    return normalizeIp(request.headers.get(trustedHeader)) ?? 'unknown';
+  }
+
   const realIp = normalizeIp(request.headers.get('x-real-ip'));
   if (realIp) return realIp;
 

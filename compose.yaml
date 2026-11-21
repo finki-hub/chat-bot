@@ -178,6 +178,7 @@ services:
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_URL: ${AUTH_URL:-http://localhost:3000}
       CHAT_API_KEY: ${API_KEY}
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-}
       RESUMABLE_STREAM_REDIS_URL: ${RESUMABLE_STREAM_REDIS_URL:-redis://stream-store:6379}
       TZ: ${TZ}
     image: finki-hub/chat-bot-web:latest

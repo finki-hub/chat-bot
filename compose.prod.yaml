@@ -167,6 +167,7 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
       AUTH_URL: ${AUTH_URL:?AUTH_URL is required}
       CHAT_API_KEY: ${API_KEY:?API_KEY is required}
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-}
       RESUMABLE_STREAM_REDIS_URL: ${RESUMABLE_STREAM_REDIS_URL:-redis://stream-store:6379}
       TZ: ${TZ}
     image: ghcr.io/finki-hub/chat-bot-web:latest

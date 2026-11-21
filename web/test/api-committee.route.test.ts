@@ -6,6 +6,8 @@ vi.mock('@/lib/env', () => ({
   CHAT_API_KEY: 'super-secret-key',
 }));
 
+const CLIENT_IP = '203.0.113.7';
+
 const committeeRequest = (
   body: unknown,
   headers: Record<string, string> = {},
@@ -14,7 +16,7 @@ const committeeRequest = (
     body: JSON.stringify(body),
     headers: {
       'content-type': 'application/json',
-      'x-forwarded-for': '203.0.113.7',
+      'x-forwarded-for': CLIENT_IP,
       ...headers,
     },
     method: 'POST',
@@ -162,7 +164,7 @@ describe('POST /api/committee', () => {
           { title: `Test ${attempt}` },
           {
             'x-forwarded-for': `client-${attempt}`,
-            'x-real-ip': '203.0.113.7',
+            'x-real-ip': CLIENT_IP,
           },
         ),
       );
@@ -175,7 +177,7 @@ describe('POST /api/committee', () => {
         { title: 'Test 7' },
         {
           'x-forwarded-for': 'client-99',
-          'x-real-ip': '203.0.113.7',
+          'x-real-ip': CLIENT_IP,
         },
       ),
     );
@@ -219,7 +221,64 @@ describe('POST /api/committee abuse limits', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+  });
+
+  it('keys on the configured client IP header despite rotated proxy headers', async () => {
+    vi.stubEnv('CLIENT_IP_HEADER', 'cf-connecting-ip');
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { POST } = await importRoute();
+    const send = async (attempt: number, clientIp: string) =>
+      POST(
+        committeeRequest(
+          { title: 'Test' },
+          {
+            'cf-connecting-ip': clientIp,
+            'x-forwarded-for': `edge-${attempt}`,
+            'x-real-ip': `spoofed-${attempt}`,
+          },
+        ),
+      );
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const response = await send(attempt, CLIENT_IP);
+
+      expect(response.status).toBe(200);
+    }
+
+    const limited = await send(6, CLIENT_IP);
+    const otherClient = await send(7, '203.0.113.8');
+
+    expect(limited.status).toBe(429);
+    expect(otherClient.status).toBe(200);
+  });
+
+  it('does not fall back to spoofable headers when the configured one is missing', async () => {
+    vi.stubEnv('CLIENT_IP_HEADER', 'cf-connecting-ip');
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { POST } = await importRoute();
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      await POST(
+        committeeRequest(
+          { title: 'Test' },
+          { 'x-real-ip': `spoofed-${attempt}` },
+        ),
+      );
+    }
+
+    const limited = await POST(
+      committeeRequest({ title: 'Test' }, { 'x-real-ip': 'spoofed-99' }),
+    );
+
+    expect(limited.status).toBe(429);
   });
 
   it('evicts the oldest client instead of rejecting new ones at capacity', async () => {
