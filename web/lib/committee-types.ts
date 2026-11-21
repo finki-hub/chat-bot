@@ -45,8 +45,6 @@ export type CommitteeResponse = {
 export type Professor = {
   cabinet: null | string;
   consultations: null | string;
-  courses: null | string;
-  email: null | string;
   id: null | number;
   mentor_eligible: boolean;
   name: string;

@@ -72,8 +72,6 @@ const PROFESSORS: Professor[] = [
   {
     cabinet: '226',
     consultations: 'https://consultations.finki.ukim.mk/display/ana',
-    courses: null,
-    email: 'ana@example.com',
     id: 1,
     mentor_eligible: true,
     name: PROFESSOR_NAME,
@@ -85,8 +83,6 @@ const PROFESSORS: Professor[] = [
   {
     cabinet: null,
     consultations: null,
-    courses: null,
-    email: null,
     id: 2,
     mentor_eligible: true,
     name: MENTOR_BOJAN,
@@ -98,8 +94,6 @@ const PROFESSORS: Professor[] = [
   {
     cabinet: null,
     consultations: null,
-    courses: null,
-    email: null,
     id: 3,
     mentor_eligible: true,
     name: MENTOR_VLADIMIR,
@@ -593,8 +587,6 @@ describe('CommitteePlanner', () => {
     const ineligible: Professor = {
       cabinet: null,
       consultations: null,
-      courses: null,
-      email: null,
       id: 99,
       mentor_eligible: false,
       name: 'Секретар Тест',

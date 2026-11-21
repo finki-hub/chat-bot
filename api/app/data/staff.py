@@ -43,10 +43,8 @@ class StaffMember(BaseModel):
     active: bool
     title: str | None = None
     position: str | None = None
-    email: str | None = None
     cabinet: str | None = None
     profile: str | None = None
-    courses: str | None = None
     consultations: str | None = None
     photo: str | None = None
 
@@ -71,7 +69,7 @@ _DIRECTUS_ADAPTER: Final = TypeAdapter(_DirectusStaffResponse)
 settings = Settings()
 
 _DIRECTUS_FIELDS: Final = (
-    "id,name,active,title,position,email,cabinet,profile,courses,consultations,photo"
+    "id,name,active,title,position,cabinet,profile,consultations,photo"
 )
 
 _active_staff_cache: tuple[float, tuple[StaffMember, ...]] | None = None

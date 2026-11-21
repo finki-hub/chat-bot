@@ -24,10 +24,6 @@ class ProfessorSchema(BaseModel):
         examples=["Доцент"],
         description="Current position at the faculty.",
     )
-    email: str | None = Field(
-        default=None,
-        description="Public faculty email address.",
-    )
     cabinet: str | None = Field(
         default=None,
         description="Office/cabinet location.",
@@ -35,10 +31,6 @@ class ProfessorSchema(BaseModel):
     profile: str | None = Field(
         default=None,
         description="Public faculty profile page.",
-    )
-    courses: str | None = Field(
-        default=None,
-        description="Public courses profile page.",
     )
     consultations: str | None = Field(
         default=None,
