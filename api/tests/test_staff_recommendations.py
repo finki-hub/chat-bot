@@ -33,9 +33,9 @@ async def test_active_staff_names_include_only_active_entries(monkeypatch) -> No
                 200,
                 request=httpx.Request("GET", "https://staff.example.test"),
                 content=(
-                    b'[{"name":"Active Professor","active":"1"},'
-                    b'{"name":"Inactive Professor","active":"0"},'
-                    b'{"name":"  Spaced Active  ","active":"1"}]'
+                    b'{"data":[{"name":"Active Professor","active":true},'
+                    b'{"name":"Inactive Professor","active":false},'
+                    b'{"name":"  Spaced Active  ","active":true}]}'
                 ),
             ),
         ),
@@ -59,7 +59,7 @@ async def test_active_staff_names_reject_empty_active_directory(monkeypatch) -> 
             httpx.Response(
                 200,
                 request=httpx.Request("GET", "https://staff.example.test"),
-                content=b'[{"name":"Inactive Professor","active":"0"}]',
+                content=b'{"data":[{"name":"Inactive Professor","active":false}]}',
             ),
         ),
     )

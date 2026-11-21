@@ -1,5 +1,5 @@
 import time
-from typing import Final, Literal
+from typing import Final
 
 import httpx
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
@@ -16,10 +16,16 @@ class StaffMember(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     name: str
-    active: Literal["0", "1"]
+    active: bool
 
 
-_STAFF_ADAPTER: Final = TypeAdapter(list[StaffMember])
+class StaffDirectory(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    data: list[StaffMember]
+
+
+_STAFF_ADAPTER: Final = TypeAdapter(StaffDirectory)
 
 settings = Settings()
 
@@ -38,7 +44,7 @@ async def get_active_staff_names() -> frozenset[str]:
     try:
         response = await client.get(settings.STAFF_API_URL)
         response.raise_for_status()
-        staff = _STAFF_ADAPTER.validate_json(response.content)
+        staff = _STAFF_ADAPTER.validate_json(response.content).data
     except httpx.HTTPStatusError as exc:
         if cached is not None:
             return cached[1]
@@ -56,9 +62,7 @@ async def get_active_staff_names() -> frozenset[str]:
         raise StaffDirectoryUnavailableError(msg) from exc
 
     active_names = frozenset(
-        member.name.strip()
-        for member in staff
-        if member.active == "1" and member.name.strip()
+        member.name.strip() for member in staff if member.active and member.name.strip()
     )
     if not active_names:
         if cached is not None:
