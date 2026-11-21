@@ -164,6 +164,30 @@ def _can_mentor(name: str, constraints: SelectionConstraints) -> bool:
     )
 
 
+def _eligible_paper_mentors(
+    ranked: RankedPeople,
+    constraints: SelectionConstraints,
+) -> list[str]:
+    scores = {
+        name: score
+        for name, score in ranked.paper_scores.items()
+        if _can_mentor(name, constraints)
+    }
+    top = max(scores.values(), default=0.0)
+    if top <= 0.0:
+        return []
+    return [
+        name
+        for name, score in sorted(
+            scores.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+        if score / top >= ranked.paper_mentor_min_relative
+        and ranked.paper_similarity.get(name, 0.0) >= ranked.paper_mentor_min_similarity
+    ]
+
+
 def _paper_mentor_alternatives(
     ranked: RankedPeople,
     slots: int,
@@ -172,14 +196,10 @@ def _paper_mentor_alternatives(
     committees_for: Callable[[str], list[CommitteeAlternative]],
 ) -> list[CommitteeAlternative]:
     alternatives: list[CommitteeAlternative] = []
-    for mentor, _score in sorted(
-        ranked.paper_mentors.items(),
-        key=lambda item: item[1],
-        reverse=True,
-    ):
+    for mentor in _eligible_paper_mentors(ranked, constraints):
         if len(alternatives) >= slots:
             break
-        if mentor in taken or not _can_mentor(mentor, constraints):
+        if mentor in taken:
             continue
         committees = committees_for(mentor)
         if committees:
@@ -229,28 +249,30 @@ def _full_alternatives(
 
     alternatives.sort(key=lambda alt: alt.score, reverse=True)
     if constraints.distinct_mentors:
-        # Appended after sorting so defense-backed mentors always rank first.
-        alternatives.extend(
-            _paper_mentor_alternatives(
-                ranked,
-                mentor_topk - len(mentors),
-                frozenset(mentors),
-                constraints,
-                lambda mentor: _member_alternatives(
-                    _candidates_for_mentor(
-                        ranked,
-                        mentor,
-                        mentor_prior,
-                        coauthor_prior,
-                        constraints,
-                    ),
+        paper_alternatives = _paper_mentor_alternatives(
+            ranked,
+            mentor_topk - len(mentors),
+            frozenset(mentors),
+            constraints,
+            lambda mentor: _member_alternatives(
+                _candidates_for_mentor(
                     ranked,
-                    constraints,
                     mentor,
-                    0.0,
+                    mentor_prior,
+                    coauthor_prior,
+                    constraints,
                 ),
+                ranked,
+                constraints,
+                mentor,
+                0.0,
             ),
         )
+        # Cap scores so defense-backed mentors stay first for any consumer.
+        ceiling = alternatives[-1].score if alternatives else float("inf")
+        for alternative in paper_alternatives:
+            ceiling = min(ceiling, alternative.score)
+            alternatives.append(replace(alternative, score=ceiling))
     if alternatives:
         best_mentor = alternatives[0].mentor
         selected_member_scores = _candidates_for_mentor(

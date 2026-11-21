@@ -67,7 +67,10 @@ class RankedPeople:
     coauthor_weight: float = 0.0
     mentor_prior_weight: float = 0.0
     coauthor_prior_weight: float = 0.0
-    paper_mentors: dict[str, float] = field(default_factory=dict)
+    paper_scores: dict[str, float] = field(default_factory=dict)
+    paper_similarity: dict[str, float] = field(default_factory=dict)
+    paper_mentor_min_similarity: float = 0.0
+    paper_mentor_min_relative: float = 0.0
 
 
 @dataclass(frozen=True)

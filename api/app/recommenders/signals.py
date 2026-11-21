@@ -182,22 +182,6 @@ def build_expertise_index(
     )
 
 
-def _paper_backed_mentors(
-    expertise: ExpertiseIndex,
-    weights: ScoringWeights,
-) -> dict[str, float]:
-    top = max(expertise.by_professor.values(), default=0.0)
-    if top <= 0.0:
-        return {}
-    return {
-        name: score / top
-        for name, score in expertise.by_professor.items()
-        if score / top >= weights.paper_mentor_min_relative
-        and expertise.best_similarity.get(name, 0.0)
-        >= weights.paper_mentor_min_similarity
-    }
-
-
 def _accumulate_coauthor_edges(
     papers: Sequence[RetrievedPaper],
     weights: ScoringWeights,
@@ -279,5 +263,8 @@ def score_people(
         coauthor_weight=weights.coauthor_weight,
         mentor_prior_weight=weights.mentor_prior_weight,
         coauthor_prior_weight=weights.coauthor_prior_weight,
-        paper_mentors=_paper_backed_mentors(expertise, weights),
+        paper_scores=expertise.by_professor,
+        paper_similarity=expertise.best_similarity,
+        paper_mentor_min_similarity=weights.paper_mentor_min_similarity,
+        paper_mentor_min_relative=weights.paper_mentor_min_relative,
     )

@@ -7,7 +7,7 @@ import pytest
 from app.api.recommendation_presenters import mentor_score
 from app.data import StaffDirectoryUnavailableError, get_active_staff_names
 from app.recommenders.config import ScoringWeights
-from app.recommenders.selection import select_committee
+from app.recommenders.selection import _eligible_paper_mentors, select_committee
 from app.recommenders.signals import build_expertise_index, score_people
 from app.recommenders.types import (
     MentorPriorIndex,
@@ -227,7 +227,7 @@ def test_select_committee_can_seat_required_person_as_member_only() -> None:
 def test_shortlist_fills_with_paper_backed_mentors_after_defense_mentors() -> None:
     ranked = replace(
         _shortlist_ranked(),
-        paper_mentors={"Paper Mentor": 1.0, "Assistant": 0.9, "Mentor A": 0.8},
+        paper_scores={"Paper Mentor": 1.0, "Assistant": 0.9, "Mentor A": 0.8},
     )
 
     rec = select_committee(
@@ -248,10 +248,29 @@ def test_shortlist_fills_with_paper_backed_mentors_after_defense_mentors() -> No
         ("Mentor B", "defenses"),
         ("Paper Mentor", "papers"),
     ]
+    scores = [alternative.score for alternative in rec.alternatives]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_ineligible_expert_does_not_suppress_paper_mentors() -> None:
+    ranked = replace(
+        _shortlist_ranked(),
+        paper_scores={"Secretary": 10.0, "Paper Mentor": 2.0, "Weak Mentor": 0.5},
+        paper_similarity={"Secretary": 0.9, "Paper Mentor": 0.6, "Weak Mentor": 0.6},
+        paper_mentor_min_similarity=0.55,
+        paper_mentor_min_relative=0.4,
+    )
+
+    eligible = _eligible_paper_mentors(
+        ranked,
+        SelectionConstraints(mentor_allowed=frozenset({"Paper Mentor", "Weak Mentor"})),
+    )
+
+    assert eligible == ["Paper Mentor"]
 
 
 def test_paper_mentors_are_ignored_without_shortlist_mode() -> None:
-    ranked = replace(_shortlist_ranked(), paper_mentors={"Paper Mentor": 1.0})
+    ranked = replace(_shortlist_ranked(), paper_scores={"Paper Mentor": 1.0})
 
     rec = select_committee(
         ranked,
@@ -265,7 +284,10 @@ def test_paper_mentors_are_ignored_without_shortlist_mode() -> None:
 
 
 def test_paper_backed_mentors_require_topical_and_relative_strength() -> None:
-    weights = ScoringWeights(expertise_recency_half_life_days=0.0)
+    weights = ScoringWeights(
+        expertise_recency_half_life_days=0.0,
+        paper_mentor_min_relative=0.4,
+    )
     expertise = build_expertise_index(
         [
             RetrievedPaper("1", "Strong", ("Strong Fit",), distance=0.3),
@@ -279,12 +301,17 @@ def test_paper_backed_mentors_require_topical_and_relative_strength() -> None:
     )
     ranked = score_people([], expertise, None, weights, Mode.FULL)
 
-    assert set(ranked.paper_mentors) == {"Strong Fit", "Minor Author"}
+    assert set(_eligible_paper_mentors(ranked, SelectionConstraints())) == {
+        "Strong Fit",
+        "Minor Author",
+    }
 
     strict = replace(weights, paper_mentor_min_similarity=0.6)
     strict_ranked = score_people([], expertise, None, strict, Mode.FULL)
 
-    assert set(strict_ranked.paper_mentors) == {"Strong Fit"}
+    assert _eligible_paper_mentors(strict_ranked, SelectionConstraints()) == [
+        "Strong Fit",
+    ]
 
 
 def test_given_mentor_keeps_defense_evidence() -> None:

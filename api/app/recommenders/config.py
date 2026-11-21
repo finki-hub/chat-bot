@@ -24,4 +24,4 @@ class ScoringWeights:
     mentor_match_boost: float = 0.0
     # Calibrated on live topics; lower floors admitted off-topic professors.
     paper_mentor_min_similarity: float = 0.55
-    paper_mentor_min_relative: float = 0.4
+    paper_mentor_min_relative: float = 0.5
