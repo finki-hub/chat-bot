@@ -72,7 +72,10 @@ class SelectionConstraints:
     exclude: frozenset[str] = frozenset()
     include: frozenset[str] = frozenset()
     allowed: frozenset[str] | None = None
+    mentor_allowed: frozenset[str] | None = None
     alternative_count: int = 3
+    distinct_mentors: bool = False
+    include_as_members: bool = False
 
 
 @dataclass(frozen=True)

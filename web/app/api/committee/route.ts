@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 const MAX_BODY_BYTES = 20_000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 6;
+const RATE_LIMIT_MAX = 12;
 const RATE_LIMIT_MAX_KEYS = 5_000;
 const RATE_LIMIT_PRUNE_THRESHOLD = 1_000;
 

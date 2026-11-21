@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { BookOpen, ChevronDown, FileText } from 'lucide-react';
 
 import type { CommitteePerson, Professor } from '@/lib/committee-types';
@@ -33,6 +35,8 @@ const ProfessorAvatar = ({
       <img
         alt=""
         className="size-full object-cover"
+        decoding="async"
+        loading="lazy"
         src={photo}
       />
     ) : (
@@ -117,7 +121,16 @@ const PersonSignals = ({ person }: { person: CommitteePerson }) => {
           </summary>
           <ul className="mt-2 list-disc space-y-1 pl-10">
             {papers.slice(0, 3).map((title) => (
-              <li key={title}>{title}</li>
+              <li key={title}>
+                <a
+                  className="underline-offset-2 hover:text-foreground hover:underline"
+                  href={`https://scholar.google.com/scholar?q=${encodeURIComponent(title)}`}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {title}
+                </a>
+              </li>
             ))}
           </ul>
         </details>
@@ -127,11 +140,13 @@ const PersonSignals = ({ person }: { person: CommitteePerson }) => {
 };
 
 export const PersonCard = ({
+  actions,
   featured = false,
   label,
   person,
   professors,
 }: {
+  actions?: ReactNode;
   featured?: boolean;
   label: string;
   person: CommitteePerson;
@@ -172,6 +187,7 @@ export const PersonCard = ({
       </div>
       <div className="mt-3 border-t border-border/60 pt-3">
         <PersonSignals person={person} />
+        {actions}
       </div>
     </div>
   );

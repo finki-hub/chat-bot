@@ -134,6 +134,88 @@ def test_select_committee_filters_inactive_mentor_candidates() -> None:
     assert rec.members == ("Active Member One", "Active Member Two")
 
 
+def _shortlist_ranked() -> RankedPeople:
+    return RankedPeople(
+        blended={"Member One": 0.9, "Member Two": 0.8, "Member Three": 0.7},
+        defense={},
+        expertise={},
+        coauthor={},
+        mentor_score={"Assistant": 9.0, "Mentor A": 3.0, "Mentor B": 2.0},
+        pair_score={},
+        supporting={},
+        expertise_supporting={},
+    )
+
+
+def test_select_committee_never_recommends_an_ineligible_mentor() -> None:
+    rec = select_committee(
+        _shortlist_ranked(),
+        Mode.FULL,
+        given_mentor=None,
+        mentor_topk=3,
+        constraints=SelectionConstraints(
+            mentor_allowed=frozenset({"Mentor A", "Mentor B"}),
+            alternative_count=10,
+        ),
+    )
+
+    assert rec.mentor == "Mentor A"
+    assert {alternative.mentor for alternative in rec.alternatives} == {
+        "Mentor A",
+        "Mentor B",
+    }
+
+
+def test_select_committee_can_shortlist_distinct_mentors() -> None:
+    rec = select_committee(
+        _shortlist_ranked(),
+        Mode.FULL,
+        given_mentor=None,
+        mentor_topk=3,
+        constraints=SelectionConstraints(
+            mentor_allowed=frozenset({"Mentor A", "Mentor B"}),
+            alternative_count=5,
+            distinct_mentors=True,
+        ),
+    )
+
+    assert [alternative.mentor for alternative in rec.alternatives] == [
+        "Mentor A",
+        "Mentor B",
+    ]
+    assert rec.alternatives[0].members == ("Member One", "Member Two")
+
+
+def test_select_committee_keeps_required_member_without_evidence() -> None:
+    rec = select_committee(
+        _shortlist_ranked(),
+        Mode.MEMBERS_ONLY,
+        given_mentor="Mentor A",
+        mentor_topk=3,
+        constraints=SelectionConstraints(include=frozenset({"No Evidence"})),
+    )
+
+    assert "No Evidence" in rec.members
+    assert "Member One" in rec.members
+
+
+def test_select_committee_can_seat_required_person_as_member_only() -> None:
+    rec = select_committee(
+        _shortlist_ranked(),
+        Mode.FULL,
+        given_mentor=None,
+        mentor_topk=3,
+        constraints=SelectionConstraints(
+            include=frozenset({"Mentor A"}),
+            mentor_allowed=frozenset({"Mentor A", "Mentor B"}),
+            include_as_members=True,
+        ),
+    )
+
+    assert rec.mentor == "Mentor B"
+    assert "Mentor A" in rec.members
+
+
 def test_check_staff_rejects_active_but_ineligible_mentor() -> None:
     payload = RecommendationRequestSchema(title="Test", mentor="Secretary")
     active_staff = frozenset({"Professor", "Secretary"})
