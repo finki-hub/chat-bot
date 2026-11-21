@@ -17,23 +17,28 @@ export const messages = {
     'Опиши ја темата со свои зборови за подобра препорака.',
   'committee.abstractPlaceholder':
     'Опиши ја темата, целите и очекуваните резултати…',
+  'committee.action.chooseMentor': 'Избери за ментор',
+  'committee.action.exclude': 'Исклучи',
+  'committee.action.keep': 'Задржи',
+  'committee.action.kept': 'Задржано',
+  'committee.action.useMembers': 'Користи ги овие членови',
   'committee.backToChat': 'Назад кон разговорот',
   'committee.cabinet': 'Кабинет',
-  'committee.confidence.enoughSimilarDefenses': 'Доволно слични одбранети теми',
-  'committee.confidence.incompleteCommittee': 'Комисијата е нецелосна',
-  'committee.confidence.limitedSimilarDefenses':
-    'Ограничен број слични одбранети теми',
-  'committee.confidence.moderateTopicMatch': 'Умерено совпаѓање на темата',
-  'committee.confidence.reviewManually': 'Прегледај рачно',
-  'committee.confidence.strongTopicMatch': 'Силно совпаѓање на темата',
-  'committee.confidence.weakTopicMatch': 'Слабо совпаѓање на темата',
+  'committee.confidence.high':
+    'Темата добро се совпаѓа со претходно одбранети теми.',
+  'committee.confidence.low':
+    'Има малку слични одбранети теми, па земи го ова како почетна точка. Апстрактот и клучните зборови можат да помогнат.',
+  'committee.confidence.medium':
+    'Темата делумно се совпаѓа со претходно одбранети теми. Провери го предлогот со менторот.',
   'committee.consultations': 'Консултации',
   'committee.copied': 'Копирано',
   'committee.copyFailed': 'Копирањето не успеа',
+  'committee.copyMessage': 'Копирај порака до менторот',
   'committee.copySummary': 'Копирај резиме',
   'committee.diplomasLink': 'Дипломски систем',
   'committee.disclaimer':
     'Ова е предлог за разговор со менторот, не официјална одлука. Комисијата ја предлага менторот, а ја одобрува продеканот за настава.',
+  'committee.draftNote': 'Нацртот се чува само на овој уред.',
   'committee.error.directoryUnavailable':
     'Каталогот на вработени е привремено недостапен. Обиди се повторно за миг.',
   'committee.error.emptyCommittee':
@@ -66,10 +71,27 @@ export const messages = {
   'committee.mentorPicker': 'Избери ментор',
   'committee.mentorSearch': 'Пребарај по име или звање…',
   'committee.mentorSearchEmpty': 'Нема ментор со тоа име.',
+  'committee.message.abstract': 'Краток опис',
+  'committee.message.body':
+    'Сум студент/ка на ФИНКИ и би сакал/а да Ве прашам дали би можеле да ми бидете ментор за дипломската работа на тема',
+  'committee.message.closing':
+    'Може да дојдам на консултации во термин што Ви одговара.',
+  'committee.message.greeting': 'Почитувани',
+  'committee.message.signature': 'Со почит,\n[Име и презиме, број на индекс]',
+  'committee.nextSteps.agree':
+    'Договорете ја темата и кои членови да бидат во комисијата.',
+  'committee.nextSteps.approve':
+    'Менторот ја предлага комисијата, а ја одобрува продеканот за настава.',
+  'committee.nextSteps.contact':
+    'Испрати порака до менторот или појди на консултации.',
+  'committee.nextSteps.title': 'Следни чекори',
   'committee.openPlanner': 'Отвори планерот',
   'committee.optional': 'опционално',
   'committee.pageTitle': 'Планер за ментор и комисија',
   'committee.profile': 'Профил',
+  'committee.refine.excluded': 'Исклучено',
+  'committee.refine.remove': 'Отстрани',
+  'committee.refine.title': 'Твои прилагодувања',
   'committee.removeKeyword': 'Отстрани',
   'committee.required': 'Задолжително.',
   'committee.researchArea': 'Истражувачка област',
@@ -80,6 +102,9 @@ export const messages = {
   'committee.result.membersLabel': 'Членови на комисија',
   'committee.result.mentorLabel': 'Ментор',
   'committee.result.noMatches': 'Нема дополнителни информации во каталогот.',
+  'committee.result.shortlist': 'Други можни ментори',
+  'committee.result.shortlistHint':
+    'Секој ментор е прикажан со комисијата што најдобро одговара на темата.',
   'committee.result.title': 'Предлог за разговор',
   'committee.result.yourMentor': 'Твојот ментор',
   'committee.sidebarLabel': 'Комисија за дипломска',

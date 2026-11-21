@@ -7,6 +7,7 @@ vi.mock('@/lib/env', () => ({
 }));
 
 const CLIENT_IP = '203.0.113.7';
+const RATE_LIMIT = 12;
 
 const committeeRequest = (
   body: unknown,
@@ -136,7 +137,7 @@ describe('POST /api/committee', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { POST } = await importRoute();
 
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    for (let attempt = 0; attempt < RATE_LIMIT; attempt += 1) {
       const response = await POST(
         committeeRequest({ title: `Test ${attempt}` }),
       );
@@ -148,7 +149,7 @@ describe('POST /api/committee', () => {
 
     expect(limited.status).toBe(429);
     expect(limited.headers.get('retry-after')).toBe('60');
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(RATE_LIMIT);
   });
 
   it('prefers the proxy-set X-Real-IP over a rotated forwarded prefix', async () => {
@@ -158,7 +159,7 @@ describe('POST /api/committee', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { POST } = await importRoute();
 
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    for (let attempt = 0; attempt < RATE_LIMIT; attempt += 1) {
       const response = await POST(
         committeeRequest(
           { title: `Test ${attempt}` },
@@ -192,7 +193,7 @@ describe('POST /api/committee', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { POST } = await importRoute();
 
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    for (let attempt = 0; attempt < RATE_LIMIT; attempt += 1) {
       const response = await POST(
         committeeRequest(
           { title: `Test ${attempt}` },
@@ -244,14 +245,14 @@ describe('POST /api/committee abuse limits', () => {
         ),
       );
 
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    for (let attempt = 0; attempt < RATE_LIMIT; attempt += 1) {
       const response = await send(attempt, CLIENT_IP);
 
       expect(response.status).toBe(200);
     }
 
-    const limited = await send(6, CLIENT_IP);
-    const otherClient = await send(7, '203.0.113.8');
+    const limited = await send(RATE_LIMIT, CLIENT_IP);
+    const otherClient = await send(RATE_LIMIT + 1, '203.0.113.8');
 
     expect(limited.status).toBe(429);
     expect(otherClient.status).toBe(200);
@@ -265,7 +266,7 @@ describe('POST /api/committee abuse limits', () => {
     vi.stubGlobal('fetch', fetchMock);
     const { POST } = await importRoute();
 
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    for (let attempt = 0; attempt < RATE_LIMIT; attempt += 1) {
       await POST(
         committeeRequest(
           { title: 'Test' },

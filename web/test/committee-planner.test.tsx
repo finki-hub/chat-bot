@@ -32,6 +32,7 @@ const LOADING_TEXT = t('committee.loadingStaff');
 
 const MENTOR_BOJAN = 'Бојан Илиевски';
 const MENTOR_VLADIMIR = 'Владимир Трајковиќ';
+const OTHER_MENTOR = 'Друг Професор';
 const PROFESSOR_NAME = 'Ана Богоевска';
 const PROFESSOR_NAME_PATTERN = new RegExp(PROFESSOR_NAME, 'u');
 const SECRETARY_NAME_PATTERN = /Секретар Тест/u;
@@ -222,6 +223,7 @@ describe('CommitteePlanner', () => {
 
   afterEach(() => {
     cleanup();
+    localStorage.clear();
     vi.unstubAllGlobals();
   });
 
@@ -370,7 +372,7 @@ describe('CommitteePlanner', () => {
     expect(result).not.toHaveTextContent('0.82');
   });
 
-  it('maps confidence reasons to Macedonian labels', async () => {
+  it('summarizes confidence in one plain message', async () => {
     setupFetchMock(createSuccessResponse());
     const user = userEvent.setup();
     render(<CommitteePlanner />);
@@ -383,12 +385,9 @@ describe('CommitteePlanner', () => {
       expect(screen.getByTestId(TESTID_RESULT)).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByText(t('committee.confidence.strongTopicMatch')),
-    ).toBeVisible();
-    expect(
-      screen.getByText(t('committee.confidence.enoughSimilarDefenses')),
-    ).toBeVisible();
+    expect(screen.getByTestId('committee-confidence')).toHaveTextContent(
+      t('committee.confidence.high'),
+    );
   });
 
   it('shows a 404 state when there are not enough similar defenses', async () => {
@@ -653,6 +652,170 @@ describe('CommitteePlanner', () => {
   });
 });
 
+const committeeBodies = (fetchMock: Mock<typeof fetch>) =>
+  fetchMock.mock.calls
+    .filter(([url]) => url === URL_COMMITTEE)
+    .map(
+      ([, init]) => JSON.parse(init?.body as string) as Record<string, unknown>,
+    );
+
+const createShortlistResponse = (): CommitteeResponse => ({
+  ...createSuccessResponse(),
+  alternatives: [
+    {
+      members: [MENTOR_BOJAN, MENTOR_VLADIMIR],
+      mentor: OTHER_MENTOR,
+      score: 0.5,
+      supporting_diploma_ids: ['d1'],
+    },
+  ],
+  mentor_is_given: false,
+  mode: 'full',
+});
+
+describe('CommitteePlanner shortlist and refinement', () => {
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+  });
+
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it('requests a shortlist of distinct mentors without a chosen mentor', async () => {
+    const fetchMock = setupFetchMock(createShortlistResponse());
+    const user = userEvent.setup();
+    render(<CommitteePlanner />);
+
+    await submitTitle(user);
+
+    expect(committeeBodies(fetchMock)[0]).toMatchObject({
+      alternatives: 5,
+      distinct_mentors: true,
+      mentor_topk: 5,
+    });
+    expect(screen.getByText(t('committee.result.shortlist'))).toBeVisible();
+  });
+
+  it('refines around a mentor chosen from the shortlist', async () => {
+    const fetchMock = setupFetchMock(createShortlistResponse());
+    const user = userEvent.setup();
+    render(<CommitteePlanner />);
+
+    await submitTitle(user);
+    await user.click(
+      screen.getByRole('button', {
+        name: `${t('committee.action.chooseMentor')}: ${OTHER_MENTOR}`,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(committeeBodies(fetchMock)).toHaveLength(2);
+    });
+
+    const refined = committeeBodies(fetchMock)[1];
+
+    expect(refined).toMatchObject({ alternatives: 3, mentor: OTHER_MENTOR });
+    expect(refined).not.toHaveProperty('distinct_mentors');
+  });
+
+  it('excludes a person and lets the student undo it', async () => {
+    const fetchMock = setupFetchMock(createShortlistResponse());
+    const user = userEvent.setup();
+    render(<CommitteePlanner />);
+
+    await submitTitle(user);
+    await user.click(
+      screen.getByRole('button', {
+        name: `${t('committee.action.exclude')}: ${MENTOR_BOJAN}`,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(committeeBodies(fetchMock)[1]).toMatchObject({
+        exclude_professors: [MENTOR_BOJAN],
+      });
+    });
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: `${t('committee.refine.remove')}: ${MENTOR_BOJAN}`,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(committeeBodies(fetchMock)).toHaveLength(3);
+    });
+
+    expect(committeeBodies(fetchMock)[2]).not.toHaveProperty(
+      'exclude_professors',
+    );
+  });
+
+  it('keeps a pinned member in the next request', async () => {
+    const fetchMock = setupFetchMock(createShortlistResponse());
+    const user = userEvent.setup();
+    render(<CommitteePlanner />);
+
+    await submitTitle(user);
+    await user.click(
+      screen.getByRole('button', {
+        name: `${t('committee.action.keep')}: ${MENTOR_VLADIMIR}`,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(committeeBodies(fetchMock)[1]).toMatchObject({
+        include_professors: [MENTOR_VLADIMIR],
+      });
+    });
+  });
+
+  it('restores a saved draft and clears it on start over', async () => {
+    setupFetchMock();
+    const user = userEvent.setup();
+    const { unmount } = render(<CommitteePlanner />);
+
+    await waitForProfessors();
+    await user.type(screen.getByLabelText(TITLE_LABEL), TITLE_THESIS);
+    unmount();
+    render(<CommitteePlanner />);
+    await waitForProfessors();
+
+    expect(screen.getByLabelText(TITLE_LABEL)).toHaveValue(TITLE_THESIS);
+
+    await user.click(screen.getByTestId(TESTID_SUBMIT));
+    await screen.findByTestId(TESTID_RESULT);
+    await user.click(
+      screen.getByRole('button', { name: t('committee.startOver') }),
+    );
+
+    expect(screen.getByLabelText(TITLE_LABEL)).toHaveValue('');
+    expect(localStorage).toHaveLength(0);
+  });
+
+  it('copies a draft message for the mentor', async () => {
+    setupFetchMock(createShortlistResponse());
+    const user = userEvent.setup();
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue();
+    render(<CommitteePlanner />);
+
+    await submitTitle(user);
+    await user.click(
+      screen.getByRole('button', { name: t('committee.copyMessage') }),
+    );
+
+    const message = writeText.mock.calls[0]?.[0];
+
+    expect(message).toContain(PROFESSOR_NAME);
+    expect(message).toContain(TITLE_SIMPLE);
+  });
+});
+
 describe('CommitteePlanner interactions', () => {
   beforeEach(() => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
@@ -660,6 +823,7 @@ describe('CommitteePlanner interactions', () => {
 
   afterEach(() => {
     cleanup();
+    localStorage.clear();
     vi.unstubAllGlobals();
   });
 

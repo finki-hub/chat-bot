@@ -130,6 +130,14 @@ def _candidates_for_mentor(
         and name not in constraints.exclude
         and (constraints.allowed is None or name in constraints.allowed)
     }
+    # A required person may have no retrieval evidence for this topic.
+    for name in constraints.include:
+        if (
+            name != mentor
+            and name not in constraints.exclude
+            and (constraints.allowed is None or name in constraints.allowed)
+        ):
+            candidates.setdefault(name, 0.0)
     candidates = _apply_prior(
         candidates,
         mentor_prior,
@@ -163,6 +171,7 @@ def _full_alternatives(
         )
         if name not in constraints.exclude
         and (constraints.allowed is None or name in constraints.allowed)
+        and (constraints.mentor_allowed is None or name in constraints.mentor_allowed)
     ][:mentor_topk]
     alternatives: list[CommitteeAlternative] = []
     selected_member_scores: dict[str, float] = {}
@@ -224,6 +233,15 @@ def _members_only_alternatives(
     return alternatives, candidates
 
 
+def _best_per_mentor(
+    alternatives: Sequence[CommitteeAlternative],
+) -> list[CommitteeAlternative]:
+    best: dict[str | None, CommitteeAlternative] = {}
+    for alternative in alternatives:
+        best.setdefault(alternative.mentor, alternative)
+    return list(best.values())
+
+
 def select_committee(
     ranked: RankedPeople,
     mode: Mode,
@@ -260,7 +278,12 @@ def select_committee(
             assert_never(unreachable)
 
     selected = alternatives[0] if alternatives else CommitteeAlternative(None, (), 0.0)
-    selected_alternatives = tuple(alternatives[: active_constraints.alternative_count])
+    shortlist = (
+        _best_per_mentor(alternatives)
+        if active_constraints.distinct_mentors and mode is Mode.FULL
+        else alternatives
+    )
+    selected_alternatives = tuple(shortlist[: active_constraints.alternative_count])
     mentor = given_mentor if mode is Mode.MEMBERS_ONLY else selected.mentor
     members = selected.members
 
