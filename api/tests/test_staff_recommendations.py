@@ -199,6 +199,23 @@ def test_select_committee_keeps_required_member_without_evidence() -> None:
     assert "Member One" in rec.members
 
 
+def test_select_committee_can_seat_required_person_as_member_only() -> None:
+    rec = select_committee(
+        _shortlist_ranked(),
+        Mode.FULL,
+        given_mentor=None,
+        mentor_topk=3,
+        constraints=SelectionConstraints(
+            include=frozenset({"Mentor A"}),
+            mentor_allowed=frozenset({"Mentor A", "Mentor B"}),
+            include_as_members=True,
+        ),
+    )
+
+    assert rec.mentor == "Mentor B"
+    assert "Mentor A" in rec.members
+
+
 def test_check_staff_rejects_active_but_ineligible_mentor() -> None:
     payload = RecommendationRequestSchema(title="Test", mentor="Secretary")
     active_staff = frozenset({"Professor", "Secretary"})

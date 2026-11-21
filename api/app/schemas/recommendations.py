@@ -111,6 +111,10 @@ class RecommendationRequestSchema(RecommendationToolRequestSchema):
             "form a shortlist of different mentors."
         ),
     )
+    include_as_members: bool = Field(
+        default=False,
+        description="FULL mode only: seat include_professors as members, never as mentor.",
+    )
 
 
 class PersonScoreSchema(BaseModel):

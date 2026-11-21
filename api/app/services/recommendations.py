@@ -265,6 +265,7 @@ async def generate_committee_recommendation(
             mentor_allowed=mentor_eligible,
             alternative_count=payload.alternatives,
             distinct_mentors=payload.distinct_mentors,
+            include_as_members=payload.include_as_members,
         ),
     )
     confidence_score, confidence_reasons = confidence(retrieved, rec, _TOP_K)

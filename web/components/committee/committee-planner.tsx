@@ -147,7 +147,9 @@ const buildRequestBody = (
   const excluded = refinements.excluded.filter((name) => name !== givenMentor);
   if (pinned.length > 0) {
     const includeKey = 'include_professors';
+    const includeAsMembersKey = 'include_as_members';
     body[includeKey] = pinned;
+    body[includeAsMembersKey] = true;
   }
   if (excluded.length > 0) {
     const excludeKey = 'exclude_professors';
@@ -169,10 +171,10 @@ const isMentorError = (detail: string): boolean =>
   detail.toLowerCase().includes('mentor must');
 
 type SubmissionState =
+  | { form: FormState; kind: 'success'; response: CommitteeResponse }
   | { kind: 'error'; message: string; status?: number }
   | { kind: 'idle' }
-  | { kind: 'loading' }
-  | { kind: 'success'; response: CommitteeResponse };
+  | { kind: 'loading' };
 
 const errorState = (message: string, status?: number): SubmissionState => ({
   kind: 'error',
@@ -202,6 +204,7 @@ const isDegenerateResponse = (response: CommitteeResponse): boolean =>
 
 export const CommitteePlanner = () => {
   const resultRef = useRef<HTMLDivElement>(null);
+  const activeRequestRef = useRef<AbortController | null>(null);
 
   const [professors, setProfessors] = useState<Professor[]>([]);
   const [professorsLoading, setProfessorsLoading] = useState(true);
@@ -231,6 +234,14 @@ export const CommitteePlanner = () => {
   useEffect(() => {
     if (draftReady) writeCommitteeDraft({ form, keywordDraft });
   }, [draftReady, form, keywordDraft]);
+
+  useEffect(
+    () => () => {
+      activeRequestRef.current?.abort();
+      activeRequestRef.current = null;
+    },
+    [],
+  );
 
   const professorCollator = useMemo(
     () => new Intl.Collator('mk', { sensitivity: 'base' }),
@@ -262,9 +273,9 @@ export const CommitteePlanner = () => {
     void loadProfessors();
   }, [loadProfessors]);
 
-  const validate = (): boolean => {
-    const isTitleValid = form.title.trim().length > 0;
-    const isMentorValid = !form.hasMentor || form.mentor !== '';
+  const validate = (candidate: FormState): boolean => {
+    const isTitleValid = candidate.title.trim().length > 0;
+    const isMentorValid = !candidate.hasMentor || candidate.mentor !== '';
     setTitleError(!isTitleValid);
     setMentorError(!isMentorValid);
     if (!isTitleValid) {
@@ -281,6 +292,10 @@ export const CommitteePlanner = () => {
   ) => {
     const keywords = mergeKeywords(nextForm.keywords, keywordDraft);
 
+    activeRequestRef.current?.abort();
+    const controller = new AbortController();
+    activeRequestRef.current = controller;
+    const isStale = () => activeRequestRef.current !== controller;
     setSubmission({ kind: 'loading' });
 
     try {
@@ -290,7 +305,10 @@ export const CommitteePlanner = () => {
         ),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
+        signal: controller.signal,
       });
+
+      if (isStale()) return;
 
       if (response.status === 400) {
         setSubmission(errorState(t('committee.error.invalidRequest'), 400));
@@ -309,6 +327,7 @@ export const CommitteePlanner = () => {
 
       if (response.status === 422) {
         const validation = await parseValidationError(response);
+        if (isStale()) return;
         setSubmission(errorState(validation.message, 422));
         if (validation.mentorError) setMentorError(true);
         return;
@@ -320,20 +339,26 @@ export const CommitteePlanner = () => {
       }
 
       const responseData = (await response.json()) as CommitteeResponse;
+      if (isStale()) return;
 
       if (isDegenerateResponse(responseData)) {
         setSubmission(errorState(t('committee.error.emptyCommittee')));
         return;
       }
 
-      setSubmission({ kind: 'success', response: responseData });
+      setSubmission({
+        form: nextForm,
+        kind: 'success',
+        response: responseData,
+      });
     } catch {
+      if (isStale()) return;
       setSubmission(errorState(t('committee.error.networkError')));
     }
   };
 
   const handleSubmit = async () => {
-    if (!validate()) return;
+    if (!validate(form)) return;
     await requestCommittee(form, refinements);
   };
 
@@ -341,7 +366,7 @@ export const CommitteePlanner = () => {
     nextRefinements: CommitteeRefinements,
     nextForm: FormState = form,
   ) => {
-    if (!validate()) return;
+    if (!validate(nextForm)) return;
     setForm(nextForm);
     setRefinements(nextRefinements);
     void requestCommittee(nextForm, nextRefinements);
@@ -403,6 +428,8 @@ export const CommitteePlanner = () => {
   }, [submission]);
 
   const handleRestart = () => {
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
     setSubmission({ kind: 'idle' });
     setForm(EMPTY_FORM);
     setRefinements(EMPTY_REFINEMENTS);
@@ -593,12 +620,17 @@ export const CommitteePlanner = () => {
               <div className="mt-4 flex flex-col flex-wrap gap-2 sm:flex-row">
                 <CopyButton
                   getText={() =>
-                    buildMentorMessage(form, submission.response.mentor.name)
+                    buildMentorMessage(
+                      submission.form,
+                      submission.response.mentor.name,
+                    )
                   }
                   label={t('committee.copyMessage')}
                 />
                 <CopyButton
-                  getText={() => buildSummary(form, submission.response)}
+                  getText={() =>
+                    buildSummary(submission.form, submission.response)
+                  }
                   label={t('committee.copySummary')}
                 />
                 <Button

@@ -172,6 +172,7 @@ def _full_alternatives(
         if name not in constraints.exclude
         and (constraints.allowed is None or name in constraints.allowed)
         and (constraints.mentor_allowed is None or name in constraints.mentor_allowed)
+        and not (constraints.include_as_members and name in constraints.include)
     ][:mentor_topk]
     alternatives: list[CommitteeAlternative] = []
     selected_member_scores: dict[str, float] = {}

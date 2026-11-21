@@ -673,6 +673,12 @@ const createShortlistResponse = (): CommitteeResponse => ({
   mode: 'full',
 });
 
+const withMentor = (name: string): CommitteeResponse => {
+  const response = createShortlistResponse();
+  response.mentor.name = name;
+  return response;
+};
+
 describe('CommitteePlanner shortlist and refinement', () => {
   beforeEach(() => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
@@ -768,9 +774,97 @@ describe('CommitteePlanner shortlist and refinement', () => {
 
     await waitFor(() => {
       expect(committeeBodies(fetchMock)[1]).toMatchObject({
+        include_as_members: true,
         include_professors: [MENTOR_VLADIMIR],
       });
     });
+  });
+
+  it('applies a shortlist mentor while the mentor picker is still empty', async () => {
+    const fetchMock = setupFetchMock(createShortlistResponse());
+    const user = userEvent.setup();
+    render(<CommitteePlanner />);
+
+    await submitTitle(user);
+    await user.click(screen.getByLabelText(MENTOR_GIVEN_LABEL));
+    await user.click(
+      screen.getByRole('button', {
+        name: `${t('committee.action.chooseMentor')}: ${OTHER_MENTOR}`,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(committeeBodies(fetchMock)[1]).toMatchObject({
+        mentor: OTHER_MENTOR,
+      });
+    });
+  });
+
+  it('ignores a slower response from a superseded refinement', async () => {
+    const staleMentor = 'Застарен Ментор';
+    const freshMentor = 'Нов Ментор';
+    const { promise: stalePromise, resolve: resolveStale } =
+      Promise.withResolvers<Response>();
+    let committeeCalls = 0;
+    const fetchMock = vi.fn<typeof fetch>((input) => {
+      if (getFetchUrl(input).includes(URL_PROFESSORS)) {
+        return Promise.resolve(Response.json(PROFESSORS));
+      }
+      committeeCalls += 1;
+      if (committeeCalls === 2) return stalePromise;
+      return Promise.resolve(
+        Response.json(
+          committeeCalls === 1
+            ? createShortlistResponse()
+            : withMentor(freshMentor),
+        ),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<CommitteePlanner />);
+
+    await submitTitle(user);
+    await user.click(
+      screen.getByRole('button', {
+        name: `${t('committee.action.exclude')}: ${MENTOR_BOJAN}`,
+      }),
+    );
+    await user.click(
+      await screen.findByRole('button', {
+        name: `${t('committee.refine.remove')}: ${MENTOR_BOJAN}`,
+      }),
+    );
+
+    await expect(screen.findByText(freshMentor)).resolves.toBeVisible();
+
+    resolveStale(Response.json(withMentor(staleMentor)));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(screen.getByText(freshMentor)).toBeVisible();
+    expect(screen.queryByText(staleMentor)).not.toBeInTheDocument();
+  });
+
+  it('copies the topic the result was generated for after later edits', async () => {
+    setupFetchMock(createShortlistResponse());
+    const user = userEvent.setup();
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue();
+    render(<CommitteePlanner />);
+
+    await submitTitle(user);
+    await user.type(screen.getByLabelText(TITLE_LABEL), ' Изменета');
+    await user.click(
+      screen.getByRole('button', { name: t('committee.copyMessage') }),
+    );
+
+    const message = writeText.mock.calls[0]?.[0];
+
+    expect(message).toContain(TITLE_SIMPLE);
+    expect(message).not.toContain('Изменета');
   });
 
   it('restores a saved draft and clears it on start over', async () => {
