@@ -115,3 +115,22 @@ class ChatMessage(BaseModel):
 class ChatConversationWithMessages(BaseModel):
     conversation: ChatConversation
     messages: list[ChatMessage]
+
+
+class ChatSearchMessage(BaseModel):
+    id: UUID
+    role: ChatMessageRole
+    created_at: datetime
+
+
+class ChatSearchResult(BaseModel):
+    conversation_id: UUID
+    conversation_title: str | None
+    conversation_updated_at: datetime
+    message: ChatSearchMessage | None
+    snippet: str | None
+
+
+class ChatSearchResponse(BaseModel):
+    query: str
+    results: list[ChatSearchResult]

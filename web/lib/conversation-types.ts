@@ -12,6 +12,20 @@ export type ChatConversationHistory = {
   readonly messages: readonly MyUIMessage[];
 };
 
+export type ChatSearchMessage = {
+  readonly createdAt: string;
+  readonly id: string;
+  readonly role: 'assistant' | 'user';
+};
+
+export type ChatSearchResult = {
+  readonly conversationId: string;
+  readonly conversationTitle: null | string;
+  readonly conversationUpdatedAt: string;
+  readonly message: ChatSearchMessage | null;
+  readonly snippet: null | string;
+};
+
 export type ConversationRow = {
   readonly id: string;
   readonly model: null | string;

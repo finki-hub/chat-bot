@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
 
@@ -18,9 +18,12 @@ export type ThreadProps = {
   activeError?: ErrorNotice;
   activeStatus?: StatusPart;
   conversationId?: null | string;
+  hydrating?: boolean;
+  jumpToMessageId?: string;
   messages: MyUIMessage[];
   // Edit-and-resend for sent questions; offered only while nothing streams.
   onEditMessage?: (messageId: string, text: string) => void;
+  onJumpHandled?: () => void;
   onManageCredentials?: (returnFocusTarget: HTMLElement) => void;
   onPickSuggestion?: (text: string) => unknown;
   onRetry?: () => void;
@@ -37,6 +40,7 @@ const SUGGESTIONS = [
 ] as const;
 
 const NON_BREAKING_SPACE = '\u{A0}';
+const JUMP_TIMEOUT_MS = 2_000;
 
 const CHIP =
   'group rounded-xl border border-border bg-card/60 px-4 py-3 text-left text-pretty text-sm text-foreground/90 shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -115,8 +119,11 @@ export const Thread = ({
   activeError,
   activeStatus,
   conversationId,
+  hydrating = false,
+  jumpToMessageId,
   messages,
   onEditMessage,
+  onJumpHandled,
   onManageCredentials,
   onPickSuggestion,
   onRetry,
@@ -124,6 +131,12 @@ export const Thread = ({
   retryPending,
   status,
 }: ThreadProps) => {
+  const [highlightedId, setHighlightedId] = useState<null | string>(null);
+  const jumpStartRef = useRef<null | {
+    messages: readonly MyUIMessage[];
+    startedAt: number;
+    target: string;
+  }>(null);
   const lastAssistantId = messages.findLast((m) => m.role === 'assistant')?.id;
   const streaming = status === 'streaming' || status === 'submitted';
   const lastMessage = messages.at(-1);
@@ -135,10 +148,82 @@ export const Thread = ({
         !hasText(lastMessage) &&
         !hasReasoning(lastMessage) &&
         !hasToolCalls(lastMessage)));
+
+  useEffect(() => {
+    if (jumpToMessageId === undefined) {
+      jumpStartRef.current = null;
+      return () => {};
+    }
+    if (jumpStartRef.current?.target !== jumpToMessageId) {
+      jumpStartRef.current = {
+        messages,
+        startedAt: Date.now(),
+        target: jumpToMessageId,
+      };
+    }
+    if (hydrating) {
+      return () => {};
+    }
+    const element = document.querySelector<HTMLElement>(
+      `[data-message-id="${CSS.escape(jumpToMessageId)}"]`,
+    );
+    if (element === null) {
+      // Right after a switch, the previous conversation can still be loaded,
+      // so give up only once different messages arrive or the wait times out.
+      const start = jumpStartRef.current;
+      const remaining = JUMP_TIMEOUT_MS - (Date.now() - start.startedAt);
+      if (messages.length > 0 && messages !== start.messages) {
+        onJumpHandled?.();
+        return () => {};
+      }
+      const timeout = setTimeout(
+        () => {
+          onJumpHandled?.();
+        },
+        Math.max(remaining, 0),
+      );
+      return () => {
+        clearTimeout(timeout);
+      };
+    }
+
+    const timer = setTimeout(() => {
+      element.scrollIntoView({ block: 'center' });
+      element.focus({ preventScroll: true });
+      setHighlightedId(jumpToMessageId);
+      onJumpHandled?.();
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [hydrating, jumpToMessageId, messages, onJumpHandled]);
+
+  useEffect(() => {
+    if (highlightedId === null) {
+      return () => {};
+    }
+    const timer = setTimeout(() => {
+      setHighlightedId(null);
+    }, 2_000);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [highlightedId]);
+
+  const messageAnchorClass = (id: string): string =>
+    highlightedId === id
+      ? 'rounded-xl outline-none ring-2 ring-primary/50 ring-offset-2 ring-offset-background'
+      : 'rounded-xl outline-none';
+  // A pending jump scrolls on its own, so skip the scroll to the bottom.
+  const conversationInitial =
+    jumpToMessageId === undefined && messages.length > 0 ? 'instant' : false;
+
   return (
     <Conversation
       className="flex-1"
-      initial={messages.length === 0 ? false : 'instant'}
+      initial={conversationInitial}
       key={`${messages.at(0)?.id ?? conversationId ?? 'unscoped'}:${messages.length === 0 ? 'welcome' : 'messages'}`}
     >
       <ConversationContent>
@@ -173,6 +258,7 @@ export const Thread = ({
                         ? MESSAGE_ENTRANCE
                         : undefined
                     }
+                    highlighted={highlightedId === m.id}
                     key={m.id}
                     message={m}
                     onEdit={editQuestion}
@@ -187,8 +273,16 @@ export const Thread = ({
                 (streaming || activeStatus !== undefined);
               return (
                 <div
-                  className={activeAssistant ? MESSAGE_ENTRANCE : undefined}
+                  className={[
+                    messageAnchorClass(m.id),
+                    activeAssistant ? MESSAGE_ENTRANCE : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  data-message-id={m.id}
+                  id={`message-${m.id}`}
                   key={m.id}
+                  tabIndex={-1}
                 >
                   <AssistantMessage
                     actions={renderActions ? renderActions(m) : undefined}

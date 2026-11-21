@@ -4,6 +4,7 @@ from datetime import datetime
 import anyio
 import pytest
 
+from app.constants.db import MIGRATIONS_PATH
 from app.data.connection import Database
 from tests.integration.embedding_postgres_test_support import database as _database
 from tests.integration.embedding_postgres_test_support import (
@@ -87,7 +88,9 @@ def test_real_postgres_adds_exact_lifecycle_columns_when_migrations_run() -> Non
                 for column, data_type, nullable, default in LIFECYCLE_COLUMNS
             }
             assert {tuple(row) for row in rows} == expected
-            assert applied_version == "0015_add_feedback_reason.sql"
+            assert applied_version == max(
+                path.name for path in MIGRATIONS_PATH.glob("*.sql")
+            )
 
     anyio.run(run)
 

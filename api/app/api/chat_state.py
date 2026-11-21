@@ -18,6 +18,7 @@ from app.data.chat_persistence import (
     get_conversation_owner,
     list_conversations,
     load_conversation,
+    search_conversations,
     set_active_stream,
     update_conversation,
     upsert_message,
@@ -48,6 +49,7 @@ from app.schemas.chat_persistence import (
     ChatMessage,
     ChatMessageRole,
     ChatMessageUpsert,
+    ChatSearchResponse,
 )
 from app.schemas.chat_state import (
     AssistantMessageReplacementRequest,
@@ -68,6 +70,9 @@ db_dep = Depends(get_db)
 api_key_dep = Depends(verify_api_key)
 UserIdQuery = Annotated[UUID, Query()]
 ConversationLimitQuery = Annotated[int, Query(ge=1, le=100)]
+SearchQuery = Annotated[str, Query(min_length=2, max_length=200)]
+SearchLimitQuery = Annotated[int, Query(ge=1, le=50)]
+SearchOffsetQuery = Annotated[int, Query(ge=0)]
 
 router = APIRouter(
     prefix="/chat/state",
@@ -227,6 +232,31 @@ async def list_conversation_state(
     db: ChatPersistenceDatabase = db_dep,
 ) -> list[ChatConversation]:
     return await list_conversations(db, user_id=user_id, limit=limit)
+
+
+@router.get(
+    "/search",
+    status_code=status.HTTP_200_OK,
+    operation_id="searchChatState",
+)
+async def search_conversation_state(
+    user_id: UserIdQuery,
+    q: SearchQuery,
+    limit: SearchLimitQuery = 20,
+    offset: SearchOffsetQuery = 0,
+    db: ChatPersistenceDatabase = db_dep,
+) -> ChatSearchResponse:
+    query = q.strip()
+    return ChatSearchResponse(
+        query=query,
+        results=await search_conversations(
+            db,
+            user_id=user_id,
+            query=query,
+            limit=limit,
+            offset=offset,
+        ),
+    )
 
 
 @router.delete(
