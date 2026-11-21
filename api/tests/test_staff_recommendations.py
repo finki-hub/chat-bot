@@ -136,13 +136,11 @@ def test_select_committee_filters_inactive_mentor_candidates() -> None:
 
 def test_check_staff_rejects_active_but_ineligible_mentor() -> None:
     payload = RecommendationRequestSchema(title="Test", mentor="Secretary")
+    active_staff = frozenset({"Professor", "Secretary"})
+    mentor_eligible = frozenset({"Professor"})
 
     with pytest.raises(InactiveStaffRequestedError) as exc_info:
-        _check_active_staff(
-            payload,
-            frozenset({"Professor", "Secretary"}),
-            frozenset({"Professor"}),
-        )
+        _check_active_staff(payload, active_staff, mentor_eligible)
 
     assert exc_info.value.field == "mentor"
     assert exc_info.value.names == ("Secretary",)
