@@ -31,7 +31,7 @@ router = APIRouter(
 def _inactive_staff_detail(exc: InactiveStaffRequestedError) -> str:
     match exc.field:
         case "mentor":
-            return "mentor must be an active staff member"
+            return "mentor must be an active staff member eligible to mentor"
         case "include_professors":
             return (
                 "include_professors must contain only active staff members: "

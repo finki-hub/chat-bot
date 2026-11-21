@@ -55,6 +55,15 @@ export const MentorPicker = ({
     );
   }
 
+  const eligible = professors.filter((professor) => professor.mentor_eligible);
+  if (eligible.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t('committee.error.noEligibleMentors')}
+      </p>
+    );
+  }
+
   return (
     <>
       <Select
@@ -71,13 +80,13 @@ export const MentorPicker = ({
           <SelectValue placeholder={t('committee.mentorPicker')} />
         </SelectTrigger>
         <SelectContent className="max-h-72">
-          {professors.map((professor) => (
+          {eligible.map((professor) => (
             <SelectItem
               key={professor.name}
               value={professor.name}
             >
               {professor.name}
-              {professor.title ? ` · ${professor.title}` : null}
+              {professor.position ? ` · ${professor.position}` : null}
             </SelectItem>
           ))}
         </SelectContent>

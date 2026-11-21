@@ -9,6 +9,11 @@ from app.recommenders.types import (
     RankedPeople,
     SelectionConstraints,
 )
+from app.schemas.recommendations import RecommendationRequestSchema
+from app.services.recommendations import (
+    InactiveStaffRequestedError,
+    _check_active_staff,
+)
 
 
 class FakeStaffClient:
@@ -133,3 +138,27 @@ def test_select_committee_filters_inactive_mentor_candidates() -> None:
 
     assert rec.mentor == "Active Mentor"
     assert rec.members == ("Active Member One", "Active Member Two")
+
+
+def test_check_staff_rejects_active_but_ineligible_mentor() -> None:
+    payload = RecommendationRequestSchema(title="Test", mentor="Secretary")
+
+    with pytest.raises(InactiveStaffRequestedError) as exc_info:
+        _check_active_staff(
+            payload,
+            frozenset({"Professor", "Secretary"}),
+            frozenset({"Professor"}),
+        )
+
+    assert exc_info.value.field == "mentor"
+    assert exc_info.value.names == ("Secretary",)
+
+
+def test_check_staff_accepts_mentor_eligible_name() -> None:
+    payload = RecommendationRequestSchema(title="Test", mentor="Professor")
+
+    _check_active_staff(
+        payload,
+        frozenset({"Professor", "Secretary"}),
+        frozenset({"Professor"}),
+    )

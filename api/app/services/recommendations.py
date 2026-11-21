@@ -13,7 +13,11 @@ from app.api.recommendation_presenters import (
     recommendation_evidence,
 )
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
-from app.data import StaffDirectoryUnavailableError, get_active_staff_names
+from app.data import (
+    StaffDirectoryUnavailableError,
+    get_active_staff_names,
+    get_mentor_eligible_names,
+)
 from app.data.connection import Database
 from app.data.diplomas import get_defended_committees
 from app.data.professor_documents import get_all_paper_authors
@@ -97,11 +101,19 @@ async def _active_staff_names() -> frozenset[str]:
         raise ActiveStaffDirectoryUnavailableError from exc
 
 
+async def _mentor_eligible_names() -> frozenset[str]:
+    try:
+        return await get_mentor_eligible_names()
+    except StaffDirectoryUnavailableError as exc:
+        raise ActiveStaffDirectoryUnavailableError from exc
+
+
 def _check_active_staff(
     payload: RecommendationRequestSchema,
     active_staff: frozenset[str],
+    mentor_eligible: frozenset[str],
 ) -> None:
-    if payload.mentor is not None and payload.mentor not in active_staff:
+    if payload.mentor is not None and payload.mentor not in mentor_eligible:
         raise InactiveStaffRequestedError("mentor", (payload.mentor,))
 
     inactive_includes = _inactive_requested_names(
@@ -141,7 +153,8 @@ async def generate_committee_recommendation(
 ) -> RecommendationResponseSchema:
     mode = Mode.MEMBERS_ONLY if payload.mentor else Mode.FULL
     active_staff = await _active_staff_names()
-    _check_active_staff(payload, active_staff)
+    mentor_eligible = await _mentor_eligible_names()
+    _check_active_staff(payload, active_staff, mentor_eligible)
 
     text = proposal_text(payload)
     query_embedding = await generate_embeddings(

@@ -42,6 +42,7 @@ async def test_recommendation_tool_invokes_internal_service(monkeypatch) -> None
     async def fake_generate_committee_recommendation(payload, actual_db):
         captured["title"] = payload.title
         captured["db"] = actual_db
+        captured["include_prior"] = payload.include_prior
         return _response()
 
     monkeypatch.setattr(
@@ -52,9 +53,15 @@ async def test_recommendation_tool_invokes_internal_service(monkeypatch) -> None
 
     tool = build_recommendation_tools(db)[0]
 
-    result = await tool.ainvoke({"title": "AI систем за дипломска"})
+    result = await tool.ainvoke(
+        {"include_prior": False, "title": "AI систем за дипломска"},
+    )
 
-    assert captured == {"title": "AI систем за дипломска", "db": db}
+    assert captured == {
+        "db": db,
+        "include_prior": True,
+        "title": "AI систем за дипломска",
+    }
     assert json.loads(result)["mentor"]["name"] == "Active Professor"
 
 

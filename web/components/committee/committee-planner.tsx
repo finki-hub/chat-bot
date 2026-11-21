@@ -83,8 +83,7 @@ const buildRequestBody = (form: FormState, keywords: string[]) => {
 };
 
 const isMentorError = (detail: string): boolean =>
-  detail.toLowerCase().includes('mentor') ||
-  detail.toLowerCase().includes('active staff');
+  detail.toLowerCase().includes('mentor must');
 
 type SubmissionState =
   | { kind: 'error'; message: string; status?: number }
@@ -284,16 +283,27 @@ export const CommitteePlanner = () => {
     setMentorError(false);
   };
 
-  const filteredAlternatives = useMemo<CommitteeAlternative[]>(
-    () =>
-      submission.kind === 'success'
-        ? submission.response.alternatives.filter(
-            (alternative) =>
-              alternative.mentor !== null && alternative.members.length === 2,
-          )
-        : [],
-    [submission],
-  );
+  const filteredAlternatives = useMemo<CommitteeAlternative[]>(() => {
+    if (submission.kind !== 'success') return [];
+
+    const selected = submission.response;
+    const selectedMembers = new Set(
+      selected.members.map((member) => member.name),
+    );
+
+    return selected.alternatives.filter((alternative) => {
+      if (alternative.mentor === null || alternative.members.length !== 2) {
+        return false;
+      }
+
+      const sameMentor = alternative.mentor === selected.mentor.name;
+      const sameMembers =
+        alternative.members.length === selectedMembers.size &&
+        alternative.members.every((member) => selectedMembers.has(member));
+
+      return !(sameMentor && sameMembers);
+    });
+  }, [submission]);
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-4 py-6 sm:px-6 lg:py-10">

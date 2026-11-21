@@ -48,3 +48,9 @@ class ProfessorSchema(BaseModel):
         default=None,
         description="Public staff photo URL.",
     )
+    mentor_eligible: bool = Field(
+        description=(
+            "Whether this staff member holds a teaching-scientific title that "
+            "allows them to mentor a diploma thesis."
+        ),
+    )

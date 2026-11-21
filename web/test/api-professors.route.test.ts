@@ -42,6 +42,7 @@ describe('GET /api/professors', () => {
 
     expect(url).toBe('https://api:8880/professors/');
     expect(new Headers(init.headers).get('x-api-key')).toBe('super-secret-key');
+    expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toContain('max-age=300');
     await expect(response.json()).resolves.toStrictEqual(professors);

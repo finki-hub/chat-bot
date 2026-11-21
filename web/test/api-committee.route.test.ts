@@ -6,12 +6,16 @@ vi.mock('@/lib/env', () => ({
   CHAT_API_KEY: 'super-secret-key',
 }));
 
-const committeeRequest = (body: unknown): Request =>
+const committeeRequest = (
+  body: unknown,
+  headers: Record<string, string> = {},
+): Request =>
   new Request('https://localhost/api/committee', {
     body: JSON.stringify(body),
     headers: {
       'content-type': 'application/json',
       'x-forwarded-for': '203.0.113.7',
+      ...headers,
     },
     method: 'POST',
   });
@@ -143,5 +147,67 @@ describe('POST /api/committee', () => {
     expect(limited.status).toBe(429);
     expect(limited.headers.get('retry-after')).toBe('60');
     expect(fetchMock).toHaveBeenCalledTimes(6);
+  });
+
+  it('prefers the proxy-set X-Real-IP over a rotated forwarded prefix', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { POST } = await importRoute();
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const response = await POST(
+        committeeRequest(
+          { title: `Test ${attempt}` },
+          {
+            'x-forwarded-for': `client-${attempt}`,
+            'x-real-ip': '203.0.113.7',
+          },
+        ),
+      );
+
+      expect(response.status).toBe(200);
+    }
+
+    const limited = await POST(
+      committeeRequest(
+        { title: 'Test 7' },
+        {
+          'x-forwarded-for': 'client-99',
+          'x-real-ip': '203.0.113.7',
+        },
+      ),
+    );
+
+    expect(limited.status).toBe(429);
+  });
+
+  it('uses the last forwarded hop when X-Real-IP is absent', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { POST } = await importRoute();
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const response = await POST(
+        committeeRequest(
+          { title: `Test ${attempt}` },
+          { 'x-forwarded-for': `client-${attempt}, 203.0.113.8` },
+        ),
+      );
+
+      expect(response.status).toBe(200);
+    }
+
+    const limited = await POST(
+      committeeRequest(
+        { title: 'Test 7' },
+        { 'x-forwarded-for': 'client-99, 203.0.113.8' },
+      ),
+    );
+
+    expect(limited.status).toBe(429);
   });
 });

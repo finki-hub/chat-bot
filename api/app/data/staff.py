@@ -18,6 +18,26 @@ class StaffDirectoryUnavailableError(Exception):
     pass
 
 
+# FINKI's diploma procedure requires the mentor to be a teacher in a
+# teaching-scientific title. Keep this list aligned with the faculty's
+# staff positions; administrative, demonstrator, and external roles are not
+# eligible to mentor.
+MENTOR_ELIGIBLE_POSITIONS: Final[frozenset[str]] = frozenset(
+    {
+        "Редовен професор",
+        "Вонреден професор",
+        "Доцент",
+        "Визитинг професор",
+        "Насловен вонреден професор",
+        "Насловен редовен професор",
+    },
+)
+
+
+def is_mentor_eligible(position: str | None) -> bool:
+    return position is not None and position in MENTOR_ELIGIBLE_POSITIONS
+
+
 class StaffMember(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -32,6 +52,10 @@ class StaffMember(BaseModel):
     courses: str | None = None
     consultations: str | None = None
     photo: str | None = None
+
+    @property
+    def mentor_eligible(self) -> bool:
+        return is_mentor_eligible(self.position)
 
     @field_validator("active", mode="before")
     @classmethod
@@ -124,3 +148,9 @@ async def get_staff_directory() -> tuple[StaffMember, ...]:
 
 async def get_active_staff_names() -> frozenset[str]:
     return frozenset(member.name for member in await get_staff_directory())
+
+
+async def get_mentor_eligible_names() -> frozenset[str]:
+    return frozenset(
+        member.name for member in await get_staff_directory() if member.mentor_eligible
+    )

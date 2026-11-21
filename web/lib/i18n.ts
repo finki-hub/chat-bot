@@ -30,7 +30,7 @@ export const messages = {
   'committee.confidence.weakTopicMatch': 'Слабо совпаѓање на темата',
   'committee.consultations': 'Консултации',
   'committee.copySummary': 'Копирај резиме',
-  'committee.diplomasLink': 'Архива на дипломски',
+  'committee.diplomasLink': 'Дипломски систем',
   'committee.disclaimer':
     'Ова е предлог за разговор со менторот, не официјална одлука. Комисијата ја предлага менторот, а ја одобрува продеканот за настава.',
   'committee.error.directoryUnavailable':
@@ -41,13 +41,15 @@ export const messages = {
     'Провери ги внесените податоци и обиди се повторно.',
   'committee.error.networkError':
     'Се случи грешка при поврзувањето. Обиди се повторно.',
+  'committee.error.noEligibleMentors':
+    'Нема достапни ментори со наставно-научно звање во каталогот.',
   'committee.error.notFound':
     'Нема доволно слични одбранети теми. Додај апстракт, клучни зборови или област и пробај повторно.',
   'committee.error.titleRequired': 'Внеси наслов на темата.',
   'committee.error.tooManyRequests':
     'Испратени се премногу барања. Почекај една минута пред повторен обид.',
   'committee.error.unknownMentor':
-    'Избраниот ментор не е активен во каталогот. Провери го името.',
+    'Избраниот ментор не е активен или не е наставник во наставно-научно звање. Провери го изборот.',
   'committee.evidence.committee': 'Комисија',
   'committee.evidence.empty': 'Нема прикажани слични одбранети теми.',
   'committee.evidence.mentor': 'Ментор',
@@ -67,7 +69,6 @@ export const messages = {
   'committee.required': 'Задолжително.',
   'committee.researchArea': 'Истражувачка област',
   'committee.result.alternativeConsider': 'Исто така разгледај',
-  'committee.result.alternativeRecommended': 'Предложена',
   'committee.result.alternatives': 'Алтернативни предлози',
   'committee.result.membersLabel': 'Членови на комисија',
   'committee.result.mentorLabel': 'Ментор',

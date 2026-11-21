@@ -65,9 +65,14 @@ const ProfessorLinks = ({
         </a>
       ) : null}
       {professor.consultations ? (
-        <span className="text-muted-foreground">
-          {t('committee.consultations')}: {professor.consultations}
-        </span>
+        <a
+          className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
+          href={professor.consultations}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          {t('committee.consultations')}
+        </a>
       ) : null}
       {professor.cabinet ? (
         <span className="text-muted-foreground">

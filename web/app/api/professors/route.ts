@@ -3,6 +3,8 @@ import { API_BASE_URL, CHAT_API_KEY } from '@/lib/env';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const PROFESSORS_TIMEOUT_MS = 30_000;
+
 const upstreamError = (status: number): Response =>
   Response.json(
     { error: 'Professor directory is unavailable' },
@@ -14,6 +16,7 @@ export const GET = async (): Promise<Response> => {
     const response = await fetch(`${API_BASE_URL}/professors/`, {
       cache: 'no-store',
       headers: { 'x-api-key': CHAT_API_KEY },
+      signal: AbortSignal.timeout(PROFESSORS_TIMEOUT_MS),
     });
 
     if (!response.ok) {

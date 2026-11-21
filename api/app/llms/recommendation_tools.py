@@ -29,7 +29,9 @@ def _error_json(message: str, **extra: list[str]) -> str:
 def _inactive_staff_error(exc: InactiveStaffRequestedError) -> str:
     match exc.field:
         case "mentor":
-            return _error_json("mentor must be an active staff member")
+            return _error_json(
+                "mentor must be an active staff member eligible to mentor",
+            )
         case "include_professors":
             return _error_json(
                 "include_professors must contain only active staff members",
@@ -52,6 +54,9 @@ def build_recommendation_tools(db: Database) -> list[BaseTool]:
         alternatives: int = 3,
         include_prior: bool = True,
     ) -> str:
+        # Chat keeps the historical prior. The planner's switch is an API-only
+        # concern; the shared tool schema still accepts the field for compatibility.
+        del include_prior
         payload = RecommendationRequestSchema(
             title=title,
             abstract=abstract,
@@ -63,7 +68,7 @@ def build_recommendation_tools(db: Database) -> list[BaseTool]:
             exclude_professors=exclude_professors or [],
             include_professors=include_professors or [],
             alternatives=alternatives,
-            include_prior=include_prior,
+            include_prior=True,
         )
         try:
             response = await generate_committee_recommendation(payload, db)

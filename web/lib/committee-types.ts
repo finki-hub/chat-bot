@@ -48,6 +48,7 @@ export type Professor = {
   courses: null | string;
   email: null | string;
   id: null | number;
+  mentor_eligible: boolean;
   name: string;
   photo: null | string;
   position: null | string;

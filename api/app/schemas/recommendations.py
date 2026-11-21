@@ -37,7 +37,8 @@ class RecommendationRequestSchema(BaseModel):
         description=(
             "Optional canonical mentor name. Provided -> MEMBERS-ONLY: recommend only "
             "the two members; the mentor is fixed, excluded from candidates, and used as "
-            "a signal. Omitted -> FULL: recommend mentor + two members."
+            "a signal. Omitted -> FULL: recommend mentor + two members. The mentor must "
+            "be active staff eligible to mentor (teaching-scientific title)."
         ),
     )
     mentor_topk: int = Field(

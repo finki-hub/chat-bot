@@ -1,7 +1,6 @@
 import type { CommitteeAlternative, Professor } from '@/lib/committee-types';
 
 import { t } from '@/lib/i18n';
-import { cn } from '@/lib/utils';
 
 const findProfessor = (
   name: string,
@@ -12,12 +11,10 @@ const findProfessor = (
 const AlternativeRow = ({
   alternative,
   index,
-  isRecommended,
   professors,
 }: {
   alternative: CommitteeAlternative;
   index: number;
-  isRecommended: boolean;
   professors: Professor[];
 }) => {
   const mentorProfessor = alternative.mentor
@@ -25,26 +22,10 @@ const AlternativeRow = ({
     : undefined;
 
   return (
-    <div
-      className={cn(
-        'rounded-lg border p-3',
-        isRecommended
-          ? 'border-primary/40 bg-primary/5'
-          : 'border-border bg-card',
-      )}
-    >
+    <div className="rounded-lg border border-border bg-card p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
-            isRecommended
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground',
-          )}
-        >
-          {isRecommended
-            ? t('committee.result.alternativeRecommended')
-            : t('committee.result.alternativeConsider')}
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          {t('committee.result.alternativeConsider')}
         </span>
         <span className="text-xs text-muted-foreground">#{index + 1}</span>
       </div>
@@ -84,8 +65,6 @@ export const AlternativesSection = ({
           <AlternativeRow
             alternative={alternative}
             index={index}
-            // The API includes the selected committee first.
-            isRecommended={index === 0}
             key={`${alternative.mentor ?? 'none'}-${alternative.members.join('-')}`}
             professors={professors}
           />

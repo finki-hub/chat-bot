@@ -32,6 +32,8 @@ const LOADING_TEXT = t('committee.loadingStaff');
 const MENTOR_BOJAN = 'Бојан Илиевски';
 const MENTOR_VLADIMIR = 'Владимир Трајковиќ';
 const PROFESSOR_NAME = 'Ана Богоевска';
+const PROFESSOR_NAME_PATTERN = new RegExp(PROFESSOR_NAME, 'u');
+const SECRETARY_NAME_PATTERN = /Секретар Тест/u;
 const TITLE_DIPLOMA = 'Систем за препорака на ментори';
 const TITLE_THESIS = 'Тема за дипломска';
 const TITLE_SIMPLE = 'Тема';
@@ -69,10 +71,11 @@ vi.mock('next/link', () => ({
 const PROFESSORS: Professor[] = [
   {
     cabinet: '226',
-    consultations: 'Вторник, 12:00',
+    consultations: 'https://consultations.finki.ukim.mk/display/ana',
     courses: null,
     email: 'ana@example.com',
     id: 1,
+    mentor_eligible: true,
     name: PROFESSOR_NAME,
     photo: null,
     position: 'Доцент',
@@ -85,6 +88,7 @@ const PROFESSORS: Professor[] = [
     courses: null,
     email: null,
     id: 2,
+    mentor_eligible: true,
     name: MENTOR_BOJAN,
     photo: null,
     position: 'Професор',
@@ -97,6 +101,7 @@ const PROFESSORS: Professor[] = [
     courses: null,
     email: null,
     id: 3,
+    mentor_eligible: true,
     name: MENTOR_VLADIMIR,
     photo: null,
     position: 'Доцент',
@@ -175,7 +180,6 @@ const getFetchUrl = (input: RequestInfo | URL): string => {
 
 const setupFetchMock = (
   committeeResponse?: CommitteeResponse | Response,
-  // eslint-disable-next-line unicorn/no-unnecessary-parameters -- default is the standard fixture; callers may override
   professors: Professor[] = PROFESSORS,
 ): Mock<typeof fetch> => {
   const fetchMock = vi.fn<typeof fetch>();
@@ -283,7 +287,7 @@ describe('CommitteePlanner', () => {
 
     await user.click(screen.getByTestId(TESTID_MENTOR_SELECT));
     fireEvent.click(
-      screen.getByRole('option', { name: new RegExp(PROFESSOR_NAME, 'u') }),
+      screen.getByRole('option', { name: PROFESSOR_NAME_PATTERN }),
     );
 
     await user.click(screen.getByTestId(TESTID_SUBMIT));
@@ -344,6 +348,12 @@ describe('CommitteePlanner', () => {
     expect(screen.getByText(MENTOR_VLADIMIR)).toBeVisible();
     expect(screen.getByText(TITLE_DIPLOMA)).toBeVisible();
     expect(screen.getByText(t('committee.disclaimer'))).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: t('committee.consultations') }),
+    ).toHaveAttribute(
+      'href',
+      'https://consultations.finki.ukim.mk/display/ana',
+    );
 
     const result = screen.getByTestId(TESTID_RESULT);
 
@@ -407,7 +417,7 @@ describe('CommitteePlanner', () => {
     await user.type(screen.getByLabelText(TITLE_LABEL), TITLE_SIMPLE);
     await user.click(screen.getByTestId(TESTID_MENTOR_SELECT));
     fireEvent.click(
-      screen.getByRole('option', { name: new RegExp(PROFESSOR_NAME, 'u') }),
+      screen.getByRole('option', { name: PROFESSOR_NAME_PATTERN }),
     );
     await user.click(screen.getByTestId(TESTID_SUBMIT));
 
@@ -579,7 +589,37 @@ describe('CommitteePlanner', () => {
     });
   });
 
-  it('marks the first alternative as recommended', async () => {
+  it('offers only mentor-eligible staff in the picker', async () => {
+    const ineligible: Professor = {
+      cabinet: null,
+      consultations: null,
+      courses: null,
+      email: null,
+      id: 99,
+      mentor_eligible: false,
+      name: 'Секретар Тест',
+      photo: null,
+      position: 'Секретар',
+      profile: null,
+      title: null,
+    };
+    setupFetchMock(undefined, [...PROFESSORS, ineligible]);
+    const user = userEvent.setup();
+    render(<CommitteePlanner />);
+
+    await waitForProfessors();
+    await user.click(screen.getByLabelText(MENTOR_GIVEN_LABEL));
+    await user.click(screen.getByTestId(TESTID_MENTOR_SELECT));
+
+    expect(
+      screen.getByRole('option', { name: PROFESSOR_NAME_PATTERN }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: SECRETARY_NAME_PATTERN }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows only true alternatives and does not repeat the selected committee', async () => {
     const response = createSuccessResponse();
     response.alternatives.push({
       members: [MENTOR_BOJAN, MENTOR_VLADIMIR],
@@ -599,11 +639,11 @@ describe('CommitteePlanner', () => {
       expect(screen.getByTestId(TESTID_RESULT)).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByText(t('committee.result.alternativeRecommended')),
-    ).toBeVisible();
+    expect(screen.getByText('Друг Професор')).toBeVisible();
     expect(
       screen.getByText(t('committee.result.alternativeConsider')),
     ).toBeVisible();
+    expect(screen.queryByText('Предложена')).not.toBeInTheDocument();
+    expect(screen.getAllByText(PROFESSOR_NAME)).toHaveLength(1);
   });
 });
