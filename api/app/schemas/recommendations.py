@@ -179,6 +179,10 @@ class CommitteeAlternativeSchema(BaseModel):
         default_factory=list,
         description="Diploma ids supporting this alternative",
     )
+    mentor_basis: Literal["defenses", "papers"] = Field(
+        default="defenses",
+        description="Whether the mentor comes from similar defenses or topical papers.",
+    )
 
 
 class RecommendationEvidenceSchema(BaseModel):

@@ -101,7 +101,9 @@ export const messages = {
   'committee.result.memberLabel': 'Член на комисија',
   'committee.result.membersLabel': 'Членови на комисија',
   'committee.result.mentorLabel': 'Ментор',
-  'committee.result.noMatches': 'Нема дополнителни информации во каталогот.',
+  'committee.result.noMatches':
+    'Во нашите податоци нема слични теми или трудови за ова лице.',
+  'committee.result.paperBasis': 'Предложено според научни трудови на темата',
   'committee.result.shortlist': 'Други можни ментори',
   'committee.result.shortlistHint':
     'Секој ментор е прикажан со комисијата што најдобро одговара на темата.',

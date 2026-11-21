@@ -29,6 +29,7 @@ const AlternativeRow = ({
     ? findProfessor(alternative.mentor, professors)
     : undefined;
   const defenses = alternative.supporting_diploma_ids.length;
+  const isPaperBased = alternative.mentor_basis === 'papers';
 
   return (
     <li className="flex flex-col rounded-lg border border-border bg-card p-3">
@@ -48,7 +49,12 @@ const AlternativeRow = ({
           {alternative.members.join(', ')}
         </p>
       ) : null}
-      {defenses > 0 ? (
+      {isPaperBased ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {t('committee.result.paperBasis')}
+        </p>
+      ) : null}
+      {!isPaperBased && defenses > 0 ? (
         <p className="mt-2 text-xs text-muted-foreground">
           {formatDefenseCount(defenses)}
         </p>

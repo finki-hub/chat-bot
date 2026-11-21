@@ -45,7 +45,7 @@ def mentor_score(rec: Recommendation, ranked: RankedPeople) -> PersonScoreSchema
             defense_score=0.0,
             expertise_score=0.0,
             buddy_score=0.0,
-            supporting_diploma_ids=[],
+            supporting_diploma_ids=ranked.supporting.get(name, []),
             supporting_paper_titles=ranked.expertise_supporting.get(name, [])[
                 :_EVIDENCE_K
             ],
@@ -97,6 +97,7 @@ def committee_alternative(
         members=list(alternative.members),
         score=alternative.score,
         supporting_diploma_ids=alternative.supporting_diploma_ids,
+        mentor_basis=alternative.mentor_basis,
     )
 
 

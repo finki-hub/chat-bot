@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 from enum import Enum
+from typing import Literal
 from uuid import UUID
 
 
@@ -38,6 +39,7 @@ class RetrievedPaper:
 class ExpertiseIndex:
     by_professor: dict[str, float]
     supporting: dict[str, list[str]]
+    best_similarity: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,10 @@ class RankedPeople:
     coauthor_weight: float = 0.0
     mentor_prior_weight: float = 0.0
     coauthor_prior_weight: float = 0.0
+    paper_scores: dict[str, float] = field(default_factory=dict)
+    paper_similarity: dict[str, float] = field(default_factory=dict)
+    paper_mentor_min_similarity: float = 0.0
+    paper_mentor_min_relative: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -84,6 +90,7 @@ class CommitteeAlternative:
     members: tuple[str, ...]
     score: float
     supporting_diploma_ids: list[UUID] = field(default_factory=list)
+    mentor_basis: Literal["defenses", "papers"] = "defenses"
 
 
 @dataclass(frozen=True)

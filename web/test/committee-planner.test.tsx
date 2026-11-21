@@ -705,6 +705,21 @@ describe('CommitteePlanner shortlist and refinement', () => {
     expect(screen.getByText(t('committee.result.shortlist'))).toBeVisible();
   });
 
+  it('labels shortlist mentors found through papers', async () => {
+    const response = createShortlistResponse();
+    response.alternatives = response.alternatives.map((alternative) => ({
+      ...alternative,
+      mentor_basis: 'papers',
+    }));
+    setupFetchMock(response);
+    const user = userEvent.setup();
+    render(<CommitteePlanner />);
+
+    await submitTitle(user);
+
+    expect(screen.getByText(t('committee.result.paperBasis'))).toBeVisible();
+  });
+
   it('refines around a mentor chosen from the shortlist', async () => {
     const fetchMock = setupFetchMock(createShortlistResponse());
     const user = userEvent.setup();
