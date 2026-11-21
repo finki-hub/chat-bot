@@ -28,20 +28,18 @@ class FakeStaffClient:
 async def test_active_staff_names_include_only_active_entries(monkeypatch) -> None:
     monkeypatch.setattr("app.data.staff._active_staff_cache", None)
     monkeypatch.setattr(
-        "app.data.staff.settings.STAFF_API_URL",
-        "https://staff.example.test",
-    )
-    monkeypatch.setattr(
         "app.data.staff.get_http_client",
         lambda: FakeStaffClient(
             httpx.Response(
                 200,
                 request=httpx.Request("GET", "https://staff.example.test"),
-                content=(
-                    b'[{"name":"Active Professor","active":"1"},'
-                    b'{"name":"Inactive Professor","active":"0"},'
-                    b'{"name":"  Spaced Active  ","active":"1"}]'
-                ),
+                json={
+                    "data": [
+                        {"name": "Active Professor", "active": "1"},
+                        {"name": "Inactive Professor", "active": "0"},
+                        {"name": "  Spaced Active  ", "active": "1"},
+                    ],
+                },
             ),
         ),
     )
@@ -55,16 +53,12 @@ async def test_active_staff_names_include_only_active_entries(monkeypatch) -> No
 async def test_active_staff_names_reject_empty_active_directory(monkeypatch) -> None:
     monkeypatch.setattr("app.data.staff._active_staff_cache", None)
     monkeypatch.setattr(
-        "app.data.staff.settings.STAFF_API_URL",
-        "https://staff.example.test",
-    )
-    monkeypatch.setattr(
         "app.data.staff.get_http_client",
         lambda: FakeStaffClient(
             httpx.Response(
                 200,
                 request=httpx.Request("GET", "https://staff.example.test"),
-                content=b'[{"name":"Inactive Professor","active":"0"}]',
+                json={"data": [{"name": "Inactive Professor", "active": "0"}]},
             ),
         ),
     )

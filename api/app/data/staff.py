@@ -63,7 +63,6 @@ class _DirectusStaffResponse(BaseModel):
     data: list[StaffMember]
 
 
-_LEGACY_ADAPTER: Final = TypeAdapter(list[StaffMember])
 _DIRECTUS_ADAPTER: Final = TypeAdapter(_DirectusStaffResponse)
 
 settings = Settings()
@@ -92,22 +91,6 @@ async def _fetch_directus_staff(
         return None
 
 
-async def _fetch_legacy_staff(client: httpx.AsyncClient) -> list[StaffMember]:
-    try:
-        response = await client.get(settings.STAFF_API_URL)
-        response.raise_for_status()
-        return _LEGACY_ADAPTER.validate_json(response.content)
-    except httpx.HTTPStatusError as exc:
-        msg = "Staff directory returned an error status"
-        raise StaffDirectoryUnavailableError(msg) from exc
-    except httpx.RequestError as exc:
-        msg = "Staff directory is unreachable"
-        raise StaffDirectoryUnavailableError(msg) from exc
-    except ValidationError as exc:
-        msg = "Staff directory returned an invalid payload"
-        raise StaffDirectoryUnavailableError(msg) from exc
-
-
 async def get_staff_directory() -> tuple[StaffMember, ...]:
     global _active_staff_cache  # ruff: ignore[PLW0603] -- this function owns the process-local TTL cache
 
@@ -118,13 +101,11 @@ async def get_staff_directory() -> tuple[StaffMember, ...]:
 
     client = get_http_client()
     staff = await _fetch_directus_staff(client)
-    if staff is None or not any(member.active for member in staff):
-        try:
-            staff = await _fetch_legacy_staff(client)
-        except StaffDirectoryUnavailableError:
-            if cached is not None:
-                return cached[1]
-            raise
+    if staff is None:
+        if cached is not None:
+            return cached[1]
+        msg = "Staff directory is unavailable"
+        raise StaffDirectoryUnavailableError(msg)
 
     active_staff = tuple(
         member.model_copy(update={"name": member.name.strip()})

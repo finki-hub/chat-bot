@@ -26,26 +26,18 @@ def _response(
 
 
 class FakeStaffClient:
-    def __init__(
-        self,
-        *,
-        directus: httpx.Response,
-        legacy: httpx.Response,
-    ) -> None:
-        self.directus = directus
-        self.legacy = legacy
+    def __init__(self, response: httpx.Response) -> None:
+        self.response = response
 
     async def get(self, url: str) -> httpx.Response:
-        if "items/staff" in url:
-            return self.directus
-        return self.legacy
+        return self.response
 
 
 @pytest.mark.anyio
-async def test_staff_directory_prefers_directus(monkeypatch) -> None:
+async def test_staff_directory_reads_directus(monkeypatch) -> None:
     monkeypatch.setattr("app.data.staff._active_staff_cache", None)
     client = FakeStaffClient(
-        directus=_response(
+        _response(
             "https://data.example.test/items/staff",
             200,
             json={
@@ -66,11 +58,6 @@ async def test_staff_directory_prefers_directus(monkeypatch) -> None:
                 ],
             },
         ),
-        legacy=_response(
-            "https://staff.example.test",
-            200,
-            content=b'[{"name":"Legacy Professor","active":"1"}]',
-        ),
     )
     monkeypatch.setattr("app.data.staff.get_http_client", lambda: client)
 
@@ -84,29 +71,10 @@ async def test_staff_directory_prefers_directus(monkeypatch) -> None:
 
 
 @pytest.mark.anyio
-async def test_staff_directory_falls_back_to_legacy(monkeypatch) -> None:
+async def test_staff_directory_raises_when_directus_fails(monkeypatch) -> None:
     monkeypatch.setattr("app.data.staff._active_staff_cache", None)
     client = FakeStaffClient(
-        directus=_response("https://data.example.test/items/staff", 503),
-        legacy=_response(
-            "https://staff.example.test",
-            200,
-            content=b'[{"name":"Legacy Professor","active":"1"}]',
-        ),
-    )
-    monkeypatch.setattr("app.data.staff.get_http_client", lambda: client)
-
-    staff = await get_staff_directory()
-
-    assert [member.name for member in staff] == ["Legacy Professor"]
-
-
-@pytest.mark.anyio
-async def test_staff_directory_raises_when_both_sources_fail(monkeypatch) -> None:
-    monkeypatch.setattr("app.data.staff._active_staff_cache", None)
-    client = FakeStaffClient(
-        directus=_response("https://data.example.test/items/staff", 503),
-        legacy=_response("https://staff.example.test", 503),
+        _response("https://data.example.test/items/staff", 503),
     )
     monkeypatch.setattr("app.data.staff.get_http_client", lambda: client)
 
@@ -118,7 +86,7 @@ async def test_staff_directory_raises_when_both_sources_fail(monkeypatch) -> Non
 async def test_active_staff_names_use_directus_active_flag(monkeypatch) -> None:
     monkeypatch.setattr("app.data.staff._active_staff_cache", None)
     client = FakeStaffClient(
-        directus=_response(
+        _response(
             "https://data.example.test/items/staff",
             200,
             json={
@@ -128,7 +96,6 @@ async def test_active_staff_names_use_directus_active_flag(monkeypatch) -> None:
                 ],
             },
         ),
-        legacy=_response("https://staff.example.test", 503),
     )
     monkeypatch.setattr("app.data.staff.get_http_client", lambda: client)
 
@@ -139,7 +106,7 @@ async def test_active_staff_names_use_directus_active_flag(monkeypatch) -> None:
 async def test_mentor_eligible_names_exclude_non_teaching_roles(monkeypatch) -> None:
     monkeypatch.setattr("app.data.staff._active_staff_cache", None)
     client = FakeStaffClient(
-        directus=_response(
+        _response(
             "https://data.example.test/items/staff",
             200,
             json={
@@ -177,7 +144,6 @@ async def test_mentor_eligible_names_exclude_non_teaching_roles(monkeypatch) -> 
                 ],
             },
         ),
-        legacy=_response("https://staff.example.test", 503),
     )
     monkeypatch.setattr("app.data.staff.get_http_client", lambda: client)
 
