@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-class RecommendationRequestSchema(BaseModel):
+class RecommendationToolRequestSchema(BaseModel):
     title: str = Field(
         min_length=1,
         examples=["Систем за препорака на ментори базиран на вградувања"],
@@ -61,13 +61,6 @@ class RecommendationRequestSchema(BaseModel):
         le=10,
         description="Number of committee alternatives to return, including the selected one.",
     )
-    include_prior: bool = Field(
-        default=True,
-        description=(
-            "Whether to include historical mentor co-membership and pair-affinity "
-            "signals. The committee planner sends false; chat keeps the default."
-        ),
-    )
 
     @field_validator("title", "mentor", "abstract", "study_program", "research_area")
     @classmethod
@@ -90,7 +83,7 @@ class RecommendationRequestSchema(BaseModel):
         return list(seen)
 
     @model_validator(mode="after")
-    def _validate_constraints(self) -> RecommendationRequestSchema:
+    def _validate_constraints(self) -> Self:
         overlap = set(self.exclude_professors) & set(self.include_professors)
         if overlap:
             raise ValueError(
@@ -99,6 +92,18 @@ class RecommendationRequestSchema(BaseModel):
         if self.mentor is not None and self.mentor in self.exclude_professors:
             raise ValueError("mentor must not be listed in exclude_professors")
         return self
+
+
+class RecommendationRequestSchema(RecommendationToolRequestSchema):
+    """API request, including the student-facing diversity switch."""
+
+    include_prior: bool = Field(
+        default=True,
+        description=(
+            "Whether to include historical mentor co-membership and pair-affinity "
+            "signals. The committee planner sends false; chat never exposes this field."
+        ),
+    )
 
 
 class PersonScoreSchema(BaseModel):

@@ -3,7 +3,10 @@ import json
 from langchain_core.tools import BaseTool, StructuredTool
 
 from app.data.connection import Database
-from app.schemas.recommendations import RecommendationRequestSchema
+from app.schemas.recommendations import (
+    RecommendationRequestSchema,
+    RecommendationToolRequestSchema,
+)
 from app.services.recommendations import (
     ActiveStaffDirectoryUnavailableError,
     InactiveStaffRequestedError,
@@ -52,11 +55,7 @@ def build_recommendation_tools(db: Database) -> list[BaseTool]:
         exclude_professors: list[str] | None = None,
         include_professors: list[str] | None = None,
         alternatives: int = 3,
-        include_prior: bool = True,
     ) -> str:
-        # Chat keeps the historical prior. The planner's switch is an API-only
-        # concern; the shared tool schema still accepts the field for compatibility.
-        del include_prior
         payload = RecommendationRequestSchema(
             title=title,
             abstract=abstract,
@@ -89,6 +88,6 @@ def build_recommendation_tools(db: Database) -> list[BaseTool]:
             coroutine=recommend_diploma_committee,
             name=_RECOMMENDATION_TOOL_NAME,
             description=_RECOMMENDATION_TOOL_DESCRIPTION,
-            args_schema=RecommendationRequestSchema,
+            args_schema=RecommendationToolRequestSchema,
         ),
     ]
