@@ -7,13 +7,6 @@ import type { Professor } from '@/lib/committee-types';
 import { MentorPicker } from '@/components/committee/committee-mentor-picker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { t } from '@/lib/i18n';
@@ -38,7 +31,6 @@ type CommitteeFormProps = {
 
 type FormState = {
   abstract: string;
-  alternatives: 1 | 2 | 3;
   hasMentor: boolean;
   keywords: string[];
   mentor: string;
@@ -47,8 +39,27 @@ type FormState = {
   title: string;
 };
 
-const ALTERNATIVE_OPTIONS = [1, 2, 3] as const;
 const keywordInputId = 'committee-keywords';
+
+const OptionalLabel = ({
+  children,
+  htmlFor,
+}: {
+  children: string;
+  htmlFor: string;
+}) => (
+  <div className="flex items-baseline justify-between gap-2">
+    <label
+      className="text-sm font-medium text-foreground"
+      htmlFor={htmlFor}
+    >
+      {children}
+    </label>
+    <span className="text-xs text-muted-foreground">
+      {t('committee.optional')}
+    </span>
+  </div>
+);
 
 export const CommitteeForm = ({
   form,
@@ -71,7 +82,6 @@ export const CommitteeForm = ({
   const researchAreaId = 'committee-research-area';
   const studyProgramId = 'committee-study-program';
   const mentorFieldsetId = 'committee-mentor-mode';
-  const alternativesId = 'committee-alternatives';
   const titleDescription = titleError
     ? `${titleId}-help ${titleId}-error`
     : `${titleId}-help`;
@@ -114,7 +124,7 @@ export const CommitteeForm = ({
 
   return (
     <form
-      className="space-y-5"
+      className="space-y-5 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6"
       data-testid="committee-form"
       onSubmit={(event) => {
         event.preventDefault();
@@ -157,12 +167,9 @@ export const CommitteeForm = ({
       </div>
 
       <div className="space-y-1.5">
-        <label
-          className="text-sm font-medium text-foreground"
-          htmlFor={abstractId}
-        >
+        <OptionalLabel htmlFor={abstractId}>
           {t('committee.abstract')}
-        </label>
+        </OptionalLabel>
         <Textarea
           aria-describedby={`${abstractId}-help`}
           id={abstractId}
@@ -185,12 +192,9 @@ export const CommitteeForm = ({
       </div>
 
       <div className="space-y-1.5">
-        <label
-          className="text-sm font-medium text-foreground"
-          htmlFor={keywordInputId}
-        >
+        <OptionalLabel htmlFor={keywordInputId}>
           {t('committee.keywords')}
-        </label>
+        </OptionalLabel>
         <div className="flex min-h-[2.25rem] flex-wrap items-center gap-1.5 rounded-md border border-input bg-transparent px-2 py-1.5 shadow-xs focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
           {form.keywords.map((keyword) => (
             <span
@@ -200,7 +204,7 @@ export const CommitteeForm = ({
               {keyword}
               <button
                 aria-label={`${t('committee.removeKeyword')} ${keyword}`}
-                className="inline-flex size-4 items-center justify-center rounded-sm hover:bg-secondary-foreground/10"
+                className="inline-flex size-4 items-center justify-center rounded-sm hover:bg-secondary-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:size-7"
                 onClick={() => {
                   removeKeyword(keyword);
                 }}
@@ -241,12 +245,9 @@ export const CommitteeForm = ({
 
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <label
-            className="text-sm font-medium text-foreground"
-            htmlFor={researchAreaId}
-          >
+          <OptionalLabel htmlFor={researchAreaId}>
             {t('committee.researchArea')}
-          </label>
+          </OptionalLabel>
           <Input
             id={researchAreaId}
             onChange={(event: ChangeEvent<HTMLInputElement>) => {
@@ -260,12 +261,9 @@ export const CommitteeForm = ({
         </div>
 
         <div className="space-y-1.5">
-          <label
-            className="text-sm font-medium text-foreground"
-            htmlFor={studyProgramId}
-          >
+          <OptionalLabel htmlFor={studyProgramId}>
             {t('committee.studyProgram')}
-          </label>
+          </OptionalLabel>
           <Input
             id={studyProgramId}
             onChange={(event: ChangeEvent<HTMLInputElement>) => {
@@ -298,6 +296,7 @@ export const CommitteeForm = ({
               checked={!form.hasMentor}
               className="size-4"
               id={`${mentorFieldsetId}-none`}
+              name={mentorFieldsetId}
               onChange={() => {
                 setForm((previous) => ({
                   ...previous,
@@ -325,6 +324,7 @@ export const CommitteeForm = ({
               checked={form.hasMentor}
               className="size-4"
               id={`${mentorFieldsetId}-given`}
+              name={mentorFieldsetId}
               onChange={() => {
                 setForm((previous) => ({ ...previous, hasMentor: true }));
               }}
@@ -359,42 +359,6 @@ export const CommitteeForm = ({
           />
         </div>
       ) : null}
-
-      <div className="space-y-1.5">
-        <label
-          className="text-sm font-medium text-foreground"
-          htmlFor={alternativesId}
-        >
-          {t('committee.alternatives')}
-        </label>
-        <Select
-          onValueChange={(value) => {
-            setForm((previous) => ({
-              ...previous,
-              alternatives: Number(value) as 1 | 2 | 3,
-            }));
-          }}
-          value={String(form.alternatives)}
-        >
-          <SelectTrigger
-            className="w-full"
-            data-testid="committee-alternatives-select"
-            id={alternativesId}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ALTERNATIVE_OPTIONS.map((option) => (
-              <SelectItem
-                key={option}
-                value={String(option)}
-              >
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
 
       <Button
         aria-busy={submitting}

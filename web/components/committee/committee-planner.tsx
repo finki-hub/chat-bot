@@ -1,6 +1,13 @@
 'use client';
 
-import { ArrowLeft, Copy, GraduationCap, RefreshCw, Users } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  GraduationCap,
+  RefreshCw,
+  Users,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -18,9 +25,11 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { t } from '@/lib/i18n';
 
+const COMMITTEE_OPTIONS = 3;
+const COPY_FEEDBACK_MS = 2_000;
+
 type FormState = {
   abstract: string;
-  alternatives: 1 | 2 | 3;
   hasMentor: boolean;
   keywords: string[];
   mentor: string;
@@ -64,7 +73,7 @@ const ConfidenceSection = ({ reasons }: { reasons: string[] }) => {
 
 const buildRequestBody = (form: FormState, keywords: string[]) => {
   const body: Record<string, unknown> = {
-    alternatives: form.alternatives,
+    alternatives: COMMITTEE_OPTIONS,
     title: form.title.trim(),
   };
 
@@ -118,6 +127,7 @@ const isDegenerateResponse = (response: CommitteeResponse): boolean =>
   (!response.mentor_is_given && response.mentor.name === '');
 
 export const CommitteePlanner = () => {
+  type CopyState = 'copied' | 'failed' | 'idle';
   const resultRef = useRef<HTMLDivElement>(null);
 
   const [professors, setProfessors] = useState<Professor[]>([]);
@@ -126,7 +136,6 @@ export const CommitteePlanner = () => {
 
   const [form, setForm] = useState<FormState>({
     abstract: '',
-    alternatives: 3,
     hasMentor: false,
     keywords: [],
     mentor: '',
@@ -141,6 +150,16 @@ export const CommitteePlanner = () => {
   });
   const [titleError, setTitleError] = useState(false);
   const [mentorError, setMentorError] = useState(false);
+  const [copyState, setCopyState] = useState<CopyState>('idle');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCopyState('idle');
+    }, COPY_FEEDBACK_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [copyState]);
 
   const professorCollator = useMemo(
     () => new Intl.Collator('mk', { sensitivity: 'base' }),
@@ -177,6 +196,11 @@ export const CommitteePlanner = () => {
     const isMentorValid = !form.hasMentor || form.mentor !== '';
     setTitleError(!isTitleValid);
     setMentorError(!isMentorValid);
+    if (!isTitleValid) {
+      document.querySelector<HTMLElement>('#committee-title')?.focus();
+    } else if (!isMentorValid) {
+      document.querySelector<HTMLElement>('#committee-mentor-mode')?.focus();
+    }
     return isTitleValid && isMentorValid;
   };
 
@@ -192,6 +216,7 @@ export const CommitteePlanner = () => {
       if (!keywords.includes(keyword)) keywords.push(keyword);
     }
 
+    setCopyState('idle');
     setSubmission({ kind: 'loading' });
 
     try {
@@ -263,8 +288,9 @@ export const CommitteePlanner = () => {
       await navigator.clipboard.writeText(
         [form.title.trim(), mentorLine, membersLine, disclaimer].join('\n'),
       );
+      setCopyState('copied');
     } catch {
-      // Clipboard access can be denied by the browser; the summary stays visible.
+      setCopyState('failed');
     }
   };
 
@@ -281,6 +307,8 @@ export const CommitteePlanner = () => {
     setKeywordDraft('');
     setTitleError(false);
     setMentorError(false);
+    setCopyState('idle');
+    document.querySelector<HTMLElement>('#committee-title')?.focus();
   };
 
   const filteredAlternatives = useMemo<CommitteeAlternative[]>(() => {
@@ -326,21 +354,21 @@ export const CommitteePlanner = () => {
         </a>
       </div>
 
-      <header className="mb-8 space-y-2">
-        <div className="flex items-center gap-3">
-          <img
-            alt=""
-            aria-hidden="true"
-            className="h-10 w-10 object-contain"
-            src="/logo.png"
-          />
-          <h1 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+      <header className="mb-6 flex items-start gap-3 sm:mb-8 sm:gap-4">
+        <img
+          alt=""
+          aria-hidden="true"
+          className="mt-1 size-8 shrink-0 object-contain sm:size-10"
+          src="/logo.png"
+        />
+        <div className="space-y-1">
+          <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-4xl">
             {t('committee.title')}
           </h1>
+          <p className="text-pretty text-sm text-muted-foreground sm:text-lg">
+            {t('committee.pageTitle')}
+          </p>
         </div>
-        <p className="text-pretty text-base text-muted-foreground sm:text-lg">
-          {t('committee.pageTitle')}
-        </p>
       </header>
 
       <CommitteeForm
@@ -362,7 +390,7 @@ export const CommitteePlanner = () => {
 
       <div
         aria-live="polite"
-        className="mt-8"
+        className="mt-8 scroll-mt-4 outline-none"
         data-testid="committee-result-region"
         ref={resultRef}
         tabIndex={-1}
@@ -410,9 +438,9 @@ export const CommitteePlanner = () => {
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <PersonCard
-                  evidence={submission.response.evidence}
+                  featured
                   label={
                     submission.response.mentor_is_given
                       ? t('committee.result.yourMentor')
@@ -421,22 +449,47 @@ export const CommitteePlanner = () => {
                   person={submission.response.mentor}
                   professors={professors}
                 />
-                <div>
-                  <h3 className="mb-2 text-sm font-medium text-muted-foreground">
-                    {t('committee.result.membersLabel')}
-                  </h3>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {submission.response.members.map((member) => (
-                      <PersonCard
-                        evidence={submission.response.evidence}
-                        key={member.name}
-                        label={t('committee.result.membersLabel')}
-                        person={member}
-                        professors={professors}
-                      />
-                    ))}
-                  </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {submission.response.members.map((member) => (
+                    <PersonCard
+                      key={member.name}
+                      label={t('committee.result.memberLabel')}
+                      person={member}
+                      professors={professors}
+                    />
+                  ))}
                 </div>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <Button
+                  className="pointer-coarse:min-h-11"
+                  onClick={() => {
+                    void handleCopySummary();
+                  }}
+                  type="button"
+                  variant="outline"
+                >
+                  {copyState === 'copied' ? (
+                    <Check className="size-4" />
+                  ) : (
+                    <Copy className="size-4" />
+                  )}
+                  <output>
+                    {copyState === 'copied' ? t('committee.copied') : null}
+                    {copyState === 'failed' ? t('committee.copyFailed') : null}
+                    {copyState === 'idle' ? t('committee.copySummary') : null}
+                  </output>
+                </Button>
+                <Button
+                  className="pointer-coarse:min-h-11"
+                  onClick={handleRestart}
+                  type="button"
+                  variant="outline"
+                >
+                  <RefreshCw className="size-4" />
+                  {t('committee.startOver')}
+                </Button>
               </div>
             </div>
 
@@ -448,43 +501,6 @@ export const CommitteePlanner = () => {
             <EvidenceBlock
               diplomas={submission.response.evidence.similar_diplomas}
             />
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button
-                className="pointer-coarse:min-h-11"
-                onClick={() => {
-                  void handleCopySummary();
-                }}
-                type="button"
-                variant="outline"
-              >
-                <Copy className="size-4" />
-                {t('committee.copySummary')}
-              </Button>
-              <Button
-                className="pointer-coarse:min-h-11"
-                onClick={handleRestart}
-                type="button"
-                variant="outline"
-              >
-                <RefreshCw className="size-4" />
-                {t('committee.startOver')}
-              </Button>
-              <Button
-                asChild
-                className="pointer-coarse:min-h-11"
-                variant="outline"
-              >
-                <a
-                  href="https://diplomski.finki.ukim.mk/"
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  <GraduationCap className="size-4" />
-                  {t('committee.diplomasLink')}
-                </a>
-              </Button>
-            </div>
           </div>
         ) : null}
       </div>

@@ -1,5 +1,6 @@
 import type { CommitteeAlternative, Professor } from '@/lib/committee-types';
 
+import { formatDefenseCount } from '@/lib/committee-format';
 import { t } from '@/lib/i18n';
 
 const findProfessor = (
@@ -10,39 +11,40 @@ const findProfessor = (
 
 const AlternativeRow = ({
   alternative,
-  index,
   professors,
 }: {
   alternative: CommitteeAlternative;
-  index: number;
   professors: Professor[];
 }) => {
   const mentorProfessor = alternative.mentor
     ? findProfessor(alternative.mentor, professors)
     : undefined;
+  const defenses = alternative.supporting_diploma_ids.length;
 
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-          {t('committee.result.alternativeConsider')}
-        </span>
-        <span className="text-xs text-muted-foreground">#{index + 1}</span>
-      </div>
-      <div className="mt-2 space-y-1">
-        {alternative.mentor ? (
-          <p className="text-sm font-medium text-foreground">
-            {mentorProfessor?.title ? `${mentorProfessor.title} ` : null}
+    <li className="rounded-lg border border-border bg-card p-3">
+      {alternative.mentor ? (
+        <>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {t('committee.result.mentorLabel')}
+            {mentorProfessor?.title ? ` · ${mentorProfessor.title}` : null}
+          </p>
+          <p className="text-sm font-semibold text-foreground">
             {alternative.mentor}
           </p>
-        ) : null}
-        {alternative.members.length > 0 ? (
-          <p className="text-sm text-muted-foreground">
-            {alternative.members.join(', ')}
-          </p>
-        ) : null}
-      </div>
-    </div>
+        </>
+      ) : null}
+      {alternative.members.length > 0 ? (
+        <p className="mt-1 text-sm text-muted-foreground">
+          {alternative.members.join(', ')}
+        </p>
+      ) : null}
+      {defenses > 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {formatDefenseCount(defenses)}
+        </p>
+      ) : null}
+    </li>
   );
 };
 
@@ -56,20 +58,24 @@ export const AlternativesSection = ({
   if (alternatives.length === 0) return null;
 
   return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-foreground">
-        {t('committee.result.alternatives')}
-      </h3>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {alternatives.map((alternative, index) => (
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-foreground">
+          {t('committee.result.alternatives')}
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          {t('committee.result.alternativeConsider')}
+        </p>
+      </div>
+      <ul className="grid gap-3 sm:grid-cols-2">
+        {alternatives.map((alternative) => (
           <AlternativeRow
             alternative={alternative}
-            index={index}
             key={`${alternative.mentor ?? 'none'}-${alternative.members.join('-')}`}
             professors={professors}
           />
         ))}
-      </div>
-    </div>
+      </ul>
+    </section>
   );
 };

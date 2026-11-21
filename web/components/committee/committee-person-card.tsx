@@ -1,14 +1,10 @@
-import type { ReactNode } from 'react';
+import { BookOpen, ChevronDown, FileText } from 'lucide-react';
 
-import { Check } from 'lucide-react';
+import type { CommitteePerson, Professor } from '@/lib/committee-types';
 
-import type {
-  CommitteePerson,
-  CommitteeResponse,
-  Professor,
-} from '@/lib/committee-types';
-
+import { formatDefenseCount, formatPaperCount } from '@/lib/committee-format';
 import { t } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 
 const NAME_PARTS = /\s+/u;
 
@@ -32,7 +28,7 @@ const ProfessorAvatar = ({
   name: string;
   photo: null | string;
 }) => (
-  <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-sm font-semibold text-muted-foreground ring-1 ring-border">
+  <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-sm font-semibold text-muted-foreground ring-1 ring-border">
     {photo ? (
       <img
         alt=""
@@ -53,10 +49,10 @@ const ProfessorLinks = ({
   if (!professor) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm pointer-coarse:gap-y-0">
       {professor.profile ? (
         <a
-          className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
+          className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline pointer-coarse:min-h-11"
           href={professor.profile}
           rel="noopener noreferrer"
           target="_blank"
@@ -66,7 +62,7 @@ const ProfessorLinks = ({
       ) : null}
       {professor.consultations ? (
         <a
-          className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
+          className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline pointer-coarse:min-h-11"
           href={professor.consultations}
           rel="noopener noreferrer"
           target="_blank"
@@ -83,58 +79,11 @@ const ProfessorLinks = ({
   );
 };
 
-const WhyBullet = ({ children }: { children: ReactNode }) => (
-  <li className="flex items-start gap-2 text-sm text-muted-foreground">
-    <Check className="mt-0.5 size-4 shrink-0 text-success" />
-    <span className="flex-1">{children}</span>
-  </li>
-);
+const PersonSignals = ({ person }: { person: CommitteePerson }) => {
+  const defenses = person.supporting_diploma_ids.length;
+  const papers = person.supporting_paper_titles;
 
-const WhySection = ({
-  evidence,
-  person,
-}: {
-  evidence: CommitteeResponse['evidence'];
-  person: CommitteePerson;
-}) => {
-  const bullets: ReactNode[] = [];
-
-  if (person.supporting_diploma_ids.length > 0) {
-    bullets.push(
-      <WhyBullet key="diploma-count">
-        {t('committee.why.similarDefenses')}:{' '}
-        {person.supporting_diploma_ids.length}
-      </WhyBullet>,
-    );
-  }
-
-  for (const title of person.supporting_paper_titles.slice(0, 3)) {
-    bullets.push(
-      <WhyBullet key={`paper-${title}`}>
-        {t('committee.why.supportingPapers')}: {title}
-      </WhyBullet>,
-    );
-  }
-
-  const matchingDiplomas = evidence.similar_diplomas.filter((diploma) =>
-    [diploma.mentor, ...diploma.members].includes(person.name),
-  );
-
-  for (const diploma of matchingDiplomas.slice(0, 3)) {
-    bullets.push(
-      <WhyBullet key={`diploma-${diploma.id}`}>
-        {diploma.title}
-        {diploma.mentor
-          ? ` · ${t('committee.why.mentor')}: ${diploma.mentor}`
-          : null}
-        {diploma.members.length > 0
-          ? ` · ${t('committee.why.members')}: ${diploma.members.join(', ')}`
-          : null}
-      </WhyBullet>,
-    );
-  }
-
-  if (bullets.length === 0) {
+  if (defenses === 0 && papers.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
         {t('committee.result.noMatches')}
@@ -142,16 +91,48 @@ const WhySection = ({
     );
   }
 
-  return <ul className="space-y-1.5">{bullets}</ul>;
+  return (
+    <div className="space-y-2">
+      {defenses > 0 ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <BookOpen
+            aria-hidden="true"
+            className="size-4 shrink-0 text-primary"
+          />
+          {formatDefenseCount(defenses)}
+        </p>
+      ) : null}
+      {papers.length > 0 ? (
+        <details className="group text-sm text-muted-foreground">
+          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden">
+            <FileText
+              aria-hidden="true"
+              className="size-4 shrink-0 text-primary"
+            />
+            {formatPaperCount(papers.length)}
+            <ChevronDown
+              aria-hidden="true"
+              className="size-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none"
+            />
+          </summary>
+          <ul className="mt-2 list-disc space-y-1 pl-10">
+            {papers.slice(0, 3).map((title) => (
+              <li key={title}>{title}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
 };
 
 export const PersonCard = ({
-  evidence,
+  featured = false,
   label,
   person,
   professors,
 }: {
-  evidence: CommitteeResponse['evidence'];
+  featured?: boolean;
   label: string;
   person: CommitteePerson;
   professors: Professor[];
@@ -159,7 +140,12 @@ export const PersonCard = ({
   const professor = findProfessor(person.name, professors);
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <div
+      className={cn(
+        'rounded-xl border p-4',
+        featured ? 'border-primary/40 bg-primary/5' : 'border-border bg-card',
+      )}
+    >
       <div className="flex items-start gap-3">
         <ProfessorAvatar
           name={person.name}
@@ -169,7 +155,7 @@ export const PersonCard = ({
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {label}
           </p>
-          <p className="truncate text-base font-semibold text-foreground">
+          <p className="text-base font-semibold text-pretty wrap-anywhere text-foreground">
             {person.name}
           </p>
           {professor && (professor.title || professor.position) ? (
@@ -179,19 +165,13 @@ export const PersonCard = ({
                 .join(' · ')}
             </p>
           ) : null}
-          <div className="mt-2">
+          <div className="mt-1.5">
             <ProfessorLinks professor={professor} />
           </div>
         </div>
       </div>
-      <div className="mt-4 border-t border-border/60 pt-3">
-        <p className="mb-2 text-xs font-medium text-foreground">
-          {t('committee.result.why')}
-        </p>
-        <WhySection
-          evidence={evidence}
-          person={person}
-        />
+      <div className="mt-3 border-t border-border/60 pt-3">
+        <PersonSignals person={person} />
       </div>
     </div>
   );

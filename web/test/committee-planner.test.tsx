@@ -23,6 +23,7 @@ import type { CommitteeResponse, Professor } from '@/lib/committee-types';
 
 import { CommitteePlanner } from '@/components/committee/committee-planner';
 import { t } from '@/lib/i18n';
+import { ResizeObserverStub } from '@/test/helpers/dom-stubs';
 
 const TITLE_LABEL = t('committee.titleField');
 const ABSTRACT_LABEL = t('committee.abstract');
@@ -206,9 +207,17 @@ const waitForProfessors = async () => {
   });
 };
 
+const submitTitle = async (user: ReturnType<typeof userEvent.setup>) => {
+  await waitForProfessors();
+  await user.type(screen.getByLabelText(TITLE_LABEL), TITLE_SIMPLE);
+  await user.click(screen.getByTestId(TESTID_SUBMIT));
+  await screen.findByTestId(TESTID_RESULT);
+};
+
 describe('CommitteePlanner', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn<typeof fetch>());
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   });
 
   afterEach(() => {
@@ -637,5 +646,103 @@ describe('CommitteePlanner', () => {
     ).toBeVisible();
     expect(screen.queryByText('Предложена')).not.toBeInTheDocument();
     expect(screen.getAllByText(PROFESSOR_NAME)).toHaveLength(1);
+  });
+});
+
+describe('CommitteePlanner interactions', () => {
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('counts only the diplomas that support each person', async () => {
+    const response = createSuccessResponse();
+    response.mentor.supporting_diploma_ids = ['d1'];
+    response.evidence.similar_diplomas.push({
+      external_id: '2023-002',
+      id: 'd2',
+      members: [MENTOR_BOJAN],
+      mentor: PROFESSOR_NAME,
+      rerank_score: 0.5,
+      similarity: 0.5,
+      title: 'Друга тема',
+    });
+    setupFetchMock(response);
+    const user = userEvent.setup();
+    render(<CommitteePlanner />);
+
+    await submitTitle(user);
+
+    expect(
+      screen.getAllByText(`1 ${t('committee.why.defenseOne')}`),
+    ).toHaveLength(2);
+    expect(screen.getAllByText('Друга тема')).toHaveLength(1);
+  });
+
+  it('confirms when the summary is copied', async () => {
+    setupFetchMock();
+    const user = userEvent.setup();
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue();
+    render(<CommitteePlanner />);
+
+    await submitTitle(user);
+    await user.click(
+      screen.getByRole('button', { name: t('committee.copySummary') }),
+    );
+
+    expect(writeText).toHaveBeenCalledOnce();
+    await expect(
+      screen.findByText(t('committee.copied')),
+    ).resolves.toBeVisible();
+  });
+
+  it('moves focus to the title when it is missing', async () => {
+    setupFetchMock();
+    const user = userEvent.setup();
+    render(<CommitteePlanner />);
+
+    await waitForProfessors();
+    await user.click(screen.getByTestId(TESTID_SUBMIT));
+
+    expect(screen.getByLabelText(TITLE_LABEL)).toHaveFocus();
+  });
+
+  it('filters the mentor picker by search text', async () => {
+    setupFetchMock();
+    const user = userEvent.setup();
+    render(<CommitteePlanner />);
+
+    await waitForProfessors();
+    await user.click(screen.getByLabelText(MENTOR_GIVEN_LABEL));
+    await user.click(screen.getByTestId(TESTID_MENTOR_SELECT));
+    await user.type(
+      screen.getByPlaceholderText(t('committee.mentorSearch')),
+      'Бојан',
+    );
+
+    expect(
+      screen.getByRole('option', { name: new RegExp(MENTOR_BOJAN, 'u') }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: PROFESSOR_NAME_PATTERN }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('groups the mentor mode radios', async () => {
+    setupFetchMock();
+    render(<CommitteePlanner />);
+
+    await waitForProfessors();
+
+    const radios = screen.getAllByRole('radio');
+
+    expect(radios[0]).toHaveAttribute('name', 'committee-mentor-mode');
+    expect(radios[1]).toHaveAttribute('name', 'committee-mentor-mode');
   });
 });

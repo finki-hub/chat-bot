@@ -1,14 +1,21 @@
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { Popover } from 'radix-ui';
+import { useState } from 'react';
+
 import type { Professor } from '@/lib/committee-types';
 
+import { Button } from '@/components/ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { Spinner } from '@/components/ui/spinner';
 import { t } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 
 type MentorPickerProps = {
   mentor: string;
@@ -31,6 +38,8 @@ export const MentorPicker = ({
   professorsLoading,
   selectId,
 }: MentorPickerProps) => {
+  const [open, setOpen] = useState(false);
+
   if (professorsLoading) {
     return (
       <div className="flex h-9 items-center gap-2 text-sm text-muted-foreground">
@@ -66,31 +75,74 @@ export const MentorPicker = ({
 
   return (
     <>
-      <Select
-        onValueChange={onSelect}
-        value={mentor}
+      <Popover.Root
+        onOpenChange={setOpen}
+        open={open}
       >
-        <SelectTrigger
-          aria-describedby={mentorError ? `${selectId}-error` : undefined}
-          aria-invalid={mentorError}
-          className="w-full"
-          data-testid="committee-mentor-select"
-          id={selectId}
-        >
-          <SelectValue placeholder={t('committee.mentorPicker')} />
-        </SelectTrigger>
-        <SelectContent className="max-h-72">
-          {eligible.map((professor) => (
-            <SelectItem
-              key={professor.name}
-              value={professor.name}
+        <Popover.Trigger asChild>
+          <Button
+            aria-describedby={mentorError ? `${selectId}-error` : undefined}
+            aria-invalid={mentorError}
+            className="w-full justify-between font-normal pointer-coarse:min-h-11"
+            data-testid="committee-mentor-select"
+            id={selectId}
+            type="button"
+            variant="outline"
+          >
+            <span
+              className={cn('truncate', !mentor && 'text-muted-foreground')}
             >
-              {professor.name}
-              {professor.position ? ` · ${professor.position}` : null}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+              {mentor || t('committee.mentorPicker')}
+            </span>
+            <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+          </Button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            align="start"
+            className="z-50 w-(--radix-popover-trigger-width) overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md"
+            sideOffset={4}
+          >
+            <Command>
+              <CommandInput placeholder={t('committee.mentorSearch')} />
+              <CommandList className="max-h-72">
+                <CommandEmpty>{t('committee.mentorSearchEmpty')}</CommandEmpty>
+                <CommandGroup>
+                  {eligible.map((professor) => (
+                    <CommandItem
+                      className="group pointer-coarse:min-h-11"
+                      key={professor.name}
+                      keywords={professor.position ? [professor.position] : []}
+                      onSelect={() => {
+                        onSelect(professor.name);
+                        setOpen(false);
+                      }}
+                      value={professor.name}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{professor.name}</span>
+                        {professor.position ? (
+                          <span className="block truncate text-xs text-muted-foreground group-data-[selected=true]:text-accent-foreground">
+                            {professor.position}
+                          </span>
+                        ) : null}
+                      </span>
+                      <Check
+                        className={cn(
+                          'size-4',
+                          mentor === professor.name
+                            ? 'opacity-100'
+                            : 'opacity-0',
+                        )}
+                      />
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
       {mentorError ? (
         <p
           className="text-xs text-destructive"
