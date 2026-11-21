@@ -159,6 +159,21 @@ async def test_mentor_eligible_names_exclude_non_teaching_roles(monkeypatch) -> 
                         "active": True,
                         "position": "Асистент докторанд",
                     },
+                    {
+                        "name": "Visiting Professor",
+                        "active": True,
+                        "position": "Визитинг професор",
+                    },
+                    {
+                        "name": "Titled Associate Professor",
+                        "active": True,
+                        "position": "Насловен вонреден професор",
+                    },
+                    {
+                        "name": "Titled Regular Professor",
+                        "active": True,
+                        "position": "Насловен редовен професор",
+                    },
                 ],
             },
         ),

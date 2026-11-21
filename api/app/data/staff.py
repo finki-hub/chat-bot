@@ -18,18 +18,15 @@ class StaffDirectoryUnavailableError(Exception):
     pass
 
 
-# FINKI's diploma procedure requires the mentor to be a teacher in a
-# teaching-scientific title. Keep this list aligned with the faculty's
-# staff positions; administrative, demonstrator, and external roles are not
-# eligible to mentor.
+# FINKI's diploma procedure allows a mentor who is a teacher elected to a
+# teaching-scientific title at the Faculty. Only the core titles are
+# unambiguously covered; visiting and titled professors require faculty
+# confirmation before they are added here.
 MENTOR_ELIGIBLE_POSITIONS: Final[frozenset[str]] = frozenset(
     {
         "Редовен професор",
         "Вонреден професор",
         "Доцент",
-        "Визитинг професор",
-        "Насловен вонреден професор",
-        "Насловен редовен професор",
     },
 )
 
