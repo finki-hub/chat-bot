@@ -199,7 +199,9 @@ async def test_discord_non_sponsored_model_requires_the_web_app(monkeypatch):
 
     error = _json_events(chunks)[0]
     assert error["code"] == "credential_required"
-    assert "веб-апликацијата" in error["message"]
+    message = error["message"]
+    assert isinstance(message, str)
+    assert "веб-апликацијата" in message
     assert released == []
     assert captured == []
 

@@ -826,6 +826,7 @@ def test_go_chat_request_session_reaches_main_and_retrieval(session, monkeypatch
     monkeypatch.setattr(chat_api, "handle_chat", main)
     payload = ChatSchema(
         user_id=USER_ID,
+        interface="web",
         inference_model=Model.OPENCODE_GO_GPT_6_LUNA,
         messages=[ConversationTurn(role="user", content="test")],
     )
@@ -885,6 +886,7 @@ def test_go_missing_user_key_is_a_safe_credential_denial(monkeypatch):
     monkeypatch.setattr(chat_api, "handle_chat", main)
     payload = ChatSchema(
         user_id=USER_ID,
+        interface="web",
         inference_model=Model.OPENCODE_GO_GPT_6_LUNA,
         messages=[ConversationTurn(role="user", content="test")],
     )
