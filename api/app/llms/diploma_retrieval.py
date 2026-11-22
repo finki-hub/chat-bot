@@ -15,10 +15,16 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
+# Short titles can score below the floor on every defense; keep a few so the
+# planner still answers, marked for manual review.
+_BELOW_FLOOR_FALLBACK_K = 3
+
 
 def _to_retrieved(
     diploma: DiplomaSchema,
     rerank_score: float | None,
+    *,
+    below_rerank_floor: bool = False,
 ) -> RetrievedDiploma:
     distance = diploma.distance if diploma.distance is not None else 1.0
     return RetrievedDiploma(
@@ -31,6 +37,7 @@ def _to_retrieved(
         similarity=1.0 - distance,
         rerank_score=rerank_score,
         date_of_submission=diploma.date_of_submission,
+        below_rerank_floor=below_rerank_floor,
     )
 
 
@@ -73,6 +80,7 @@ async def retrieve_similar_diplomas(
         ranked = response.json()["reranked_documents"]
 
         selected: list[RetrievedDiploma] = []
+        below_floor: list[RetrievedDiploma] = []
         for item in ranked:
             idx = item["index"]
             if not 0 <= idx < len(candidates):
@@ -83,6 +91,14 @@ async def retrieve_similar_diplomas(
                 )
                 continue
             if item["score"] < settings.DIPLOMA_RERANKER_MIN_SCORE:
+                if len(below_floor) < _BELOW_FLOOR_FALLBACK_K:
+                    below_floor.append(
+                        _to_retrieved(
+                            candidates[idx],
+                            item["score"],
+                            below_rerank_floor=True,
+                        ),
+                    )
                 continue
             selected.append(_to_retrieved(candidates[idx], item["score"]))
             if len(selected) >= top_k:
@@ -95,4 +111,4 @@ async def retrieve_similar_diplomas(
         )
         return [_to_retrieved(d, None) for d in candidates[:top_k]]
 
-    return selected
+    return selected or below_floor[:top_k]

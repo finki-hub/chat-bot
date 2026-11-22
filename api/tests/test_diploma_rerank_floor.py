@@ -5,9 +5,11 @@ from uuid import uuid4
 
 import pytest
 
+from app.api.recommendation_presenters import confidence
 from app.data.connection import Database
 from app.llms import diploma_retrieval
 from app.llms.models import Model
+from app.recommenders.types import Mode, Recommendation
 from app.schemas.diplomas import DiplomaSchema
 
 
@@ -61,3 +63,53 @@ async def test_diploma_retrieval_uses_its_own_rerank_floor(monkeypatch):
     )
 
     assert [d.external_id for d in selected] == ["a"]
+    assert selected[0].below_rerank_floor is False
+
+
+@pytest.mark.anyio
+async def test_diploma_retrieval_falls_back_when_all_scores_are_below_floor(
+    monkeypatch,
+):
+    candidates = [_diploma(name) for name in "abcd"]
+
+    async def closest(*_args, **_kwargs):
+        return candidates
+
+    async def rerank(_payload):
+        return SimpleNamespace(
+            json=lambda: {
+                "reranked_documents": [
+                    {"index": 2, "score": 0.02},
+                    {"index": 0, "score": 0.015},
+                    {"index": 3, "score": 0.01},
+                    {"index": 1, "score": 0.005},
+                ],
+            },
+        )
+
+    monkeypatch.setattr(diploma_retrieval, "get_closest_diplomas", closest)
+    monkeypatch.setattr(diploma_retrieval, "post_rerank", rerank)
+    monkeypatch.setattr(diploma_retrieval.settings, "DIPLOMA_RERANKER_MIN_SCORE", 0.03)
+
+    selected = await diploma_retrieval.retrieve_similar_diplomas(
+        cast(Database, None),
+        "query",
+        Model.BGE_M3_LOCAL,
+        initial_k=10,
+        top_k=5,
+        query_embedding=[0.0],
+    )
+
+    assert [d.external_id for d in selected] == ["c", "a", "d"]
+    assert all(d.below_rerank_floor for d in selected)
+
+    rec = Recommendation(
+        mode=Mode.FULL,
+        mentor="Mentor",
+        members=("One", "Two"),
+        mentor_is_given=False,
+    )
+    score, reasons = confidence(selected, rec, 10)
+
+    assert score < 0.45
+    assert "review_manually" in reasons

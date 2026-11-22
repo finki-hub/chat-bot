@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     # emptied their context; 0.03 fixed 17 of 49 such answers and broke none of 21 controls.
     RERANKER_MIN_SCORE: float = 0.03
     # Thesis similarity reranks short proposal texts and was not re-tuned with the above.
-    DIPLOMA_RERANKER_MIN_SCORE: float = 0.1
+    DIPLOMA_RERANKER_MIN_SCORE: float = 0.03
     SOURCE_RERANKER_MIN_SCORE: float = 0.3
     # Adds each tool's output to its `tool_result` event so benchmarks can grade
     # answers against what the tools returned. Keep off in production.
