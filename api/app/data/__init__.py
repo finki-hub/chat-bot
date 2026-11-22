@@ -4,6 +4,7 @@ from .staff import (
     StaffMember,
     get_active_staff_names,
     get_mentor_eligible_names,
+    get_staff_aliases,
     get_staff_directory,
     is_mentor_eligible,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "StaffMember",
     "get_active_staff_names",
     "get_mentor_eligible_names",
+    "get_staff_aliases",
     "get_staff_directory",
     "is_mentor_eligible",
 ]

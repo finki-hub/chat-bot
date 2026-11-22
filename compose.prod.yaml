@@ -21,6 +21,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?CREDENTIAL_ENCRYPTION_KEY is required}
       DIRECTUS_STAFF_URL: ${DIRECTUS_STAFF_URL:-https://data.finki-hub.com/items/staff}
+      DIRECTUS_THESIS_STAFF_URL: ${DIRECTUS_THESIS_STAFF_URL:-https://data.finki-hub.com/items/bachelor_thesis_staff}
       GPU_API_URL: ${GPU_API_URL}
       LOG_LEVEL: ${LOG_LEVEL}
       MCP_API_KEY: ${MCP_API_KEY:-}

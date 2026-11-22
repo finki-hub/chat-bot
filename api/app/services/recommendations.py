@@ -1,6 +1,7 @@
 import asyncio
 import time
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -17,6 +18,7 @@ from app.data import (
     StaffDirectoryUnavailableError,
     get_active_staff_names,
     get_mentor_eligible_names,
+    get_staff_aliases,
 )
 from app.data.connection import Database
 from app.data.diplomas import get_defended_committees
@@ -30,6 +32,7 @@ from app.recommenders.recommend import (
     CoauthorIndex,
     MentorPriorIndex,
     Mode,
+    RetrievedDiploma,
     RetrievedPaper,
     SelectionConstraints,
     _accumulate_coauthor_edges,
@@ -70,21 +73,61 @@ class NoSimilarDefensesError(RecommendationServiceError):
     pass
 
 
-async def _get_mentor_prior(db: Database) -> MentorPriorIndex:
+def _canonical_name(
+    name: str | None,
+    aliases: Mapping[str, str],
+) -> str | None:
+    return aliases.get(name, name) if name is not None else None
+
+
+def _canonical_diploma(
+    diploma: RetrievedDiploma,
+    aliases: Mapping[str, str],
+) -> RetrievedDiploma:
+    return replace(
+        diploma,
+        mentor=aliases.get(diploma.mentor, diploma.mentor),
+        member1=_canonical_name(diploma.member1, aliases),
+        member2=_canonical_name(diploma.member2, aliases),
+    )
+
+
+def _canonical_authors(
+    authors: Iterable[str],
+    aliases: Mapping[str, str],
+) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(aliases.get(name, name) for name in authors))
+
+
+async def _get_mentor_prior(
+    db: Database,
+    aliases: Mapping[str, str],
+) -> MentorPriorIndex:
     cached = _mentor_prior_cache.get("prior")
     now = time.monotonic()
     if cached is not None and now - cached[0] < _PRIOR_CACHE_TTL:
         return cached[1]
     committees = await get_defended_committees(db)
     prior = build_mentor_prior(
-        (row["mentor"], row["member1"], row["member2"]) for row in committees
+        (
+            _canonical_name(row["mentor"], aliases),
+            _canonical_name(row["member1"], aliases),
+            _canonical_name(row["member2"], aliases),
+        )
+        for row in committees
     )
     _mentor_prior_cache["prior"] = (now, prior)
     return prior
 
 
-async def _get_coauthor_prior(db: Database) -> MentorPriorIndex:
-    return build_coauthor_prior(await get_all_paper_authors(db))
+async def _get_coauthor_prior(
+    db: Database,
+    aliases: Mapping[str, str],
+) -> MentorPriorIndex:
+    return build_coauthor_prior(
+        _canonical_authors(authors, aliases)
+        for authors in await get_all_paper_authors(db)
+    )
 
 
 def _inactive_requested_names(
@@ -155,6 +198,7 @@ async def generate_committee_recommendation(
     active_staff = await _active_staff_names()
     mentor_eligible = await _mentor_eligible_names()
     _check_active_staff(payload, active_staff, mentor_eligible)
+    aliases = await get_staff_aliases()
 
     text = proposal_text(payload)
     query_embedding = await generate_embeddings(
@@ -192,12 +236,12 @@ async def generate_committee_recommendation(
         else None
     )
     mentor_prior_task = (
-        asyncio.create_task(_get_mentor_prior(db))
+        asyncio.create_task(_get_mentor_prior(db, aliases))
         if weights.mentor_prior_weight > 0
         else None
     )
     coauthor_prior_task = (
-        asyncio.create_task(_get_coauthor_prior(db))
+        asyncio.create_task(_get_coauthor_prior(db, aliases))
         if weights.coauthor_prior_weight > 0
         else None
     )
@@ -234,6 +278,12 @@ async def generate_committee_recommendation(
     except Exception:
         await _cancel_background_tasks(background_tasks)
         raise
+
+    retrieved = [_canonical_diploma(diploma, aliases) for diploma in retrieved]
+    papers = [
+        replace(paper, coauthors=_canonical_authors(paper.coauthors, aliases))
+        for paper in papers
+    ]
 
     now = datetime.now(UTC).date()
     expertise = build_expertise_index(papers, weights, now_year=now.year)
