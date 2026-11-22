@@ -145,6 +145,8 @@ def confidence(
     if committee_coverage < 1.0:
         reasons.append("incomplete_committee")
         score = min(score, 0.35)
+    if retrieved and all(item.below_rerank_floor for item in retrieved):
+        score = min(score, 0.44)
     if score < 0.45:
         reasons.append("review_manually")
 

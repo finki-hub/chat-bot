@@ -23,6 +23,7 @@ class RetrievedDiploma:
     similarity: float
     rerank_score: float | None = None
     date_of_submission: date | None = None
+    below_rerank_floor: bool = False
 
 
 @dataclass(frozen=True)
