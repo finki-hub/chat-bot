@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily FINKI Hub committee recommender sync
+
+[Timer]
+# After the Directus imports, which also read the theses API at 05:00.
+OnCalendar=*-*-* 05:45:00 UTC
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

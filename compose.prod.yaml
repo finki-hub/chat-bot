@@ -81,6 +81,29 @@ services:
       - finki_stack
     restart: unless-stopped
 
+  # Run by deploy/finki-hub-committee-sync.timer, never started with the stack.
+  committee-sync:
+    command: ["python", "-m", "app.sync_committee_data"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DIPLOMAS_API_URL: ${DIPLOMAS_API_URL:-https://bachelors-api.finki-hub.com/diplomas}
+      LOG_LEVEL: ${LOG_LEVEL}
+      TZ: ${TZ}
+    healthcheck:
+      disable: true
+    image: ghcr.io/finki-hub/chat-bot-api:latest
+    labels:
+      # Watchtower would kill a running sync to update it; the job pulls itself.
+      com.centurylinklabs.watchtower.enable: "false"
+    networks:
+      - finki_stack
+    profiles: [jobs]
+    pull_policy: always
+    restart: "no"
+
   db:
     environment:
       POSTGRES_DB: ${POSTGRES_DB}

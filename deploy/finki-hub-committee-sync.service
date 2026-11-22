@@ -1,0 +1,14 @@
+[Unit]
+Description=Sync FINKI Hub committee recommender defenses
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+# The host's Discord alert (directus-alert@.service in finki-hub/data).
+OnFailure=directus-alert@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/finki-hub-chat-bot
+ExecStart=/usr/bin/docker compose --profile jobs run --rm --no-deps committee-sync
+TimeoutStartSec=30min
+Nice=10

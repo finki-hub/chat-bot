@@ -27,7 +27,8 @@ router = APIRouter(
         "(community detection over the co-occurrence graph, per window). Filter by source "
         "('defense' = committee co-occurrence, 'coauthor' = paper co-authorship), by a year "
         "that falls inside the window, and/or by a professor (every window their cohort "
-        "appears in). Precomputed by scripts/compute_professor_groups.py."
+        "appears in). Precomputed by app.sync_committee_data "
+        "(defense) and scripts/compute_professor_groups.py (coauthor)."
     ),
     status_code=status.HTTP_200_OK,
     operation_id="listProfessorGroups",

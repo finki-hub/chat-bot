@@ -1,6 +1,11 @@
 # mypy: disable-error-code="arg-type"
 
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import date
+
 from asyncpg import Record
+from asyncpg.pool import PoolConnectionProxy
 
 from app.data.connection import Database
 from app.data.embedding_sql import (
@@ -17,23 +22,35 @@ from app.schemas.diplomas import DiplomaSchema
 from app.utils.database import embedding_to_pgvector
 
 
-async def upsert_diploma(
-    db: Database,
-    *,
-    external_id: str,
-    title: str,
-    description: str,
-    mentor: str,
-    member1: str | None,
-    member2: str | None,
-    status: str,
-    date_of_submission: object | None,
-) -> DiplomaSchema | None:
+@dataclass(frozen=True, slots=True)
+class DiplomaUpsert:
+    external_id: str
+    title: str
+    description: str
+    mentor: str
+    member1: str | None
+    member2: str | None
+    status: str
+    date_of_submission: date | None
+
+
+async def count_diplomas(connection: PoolConnectionProxy[Record]) -> int:
+    return int(await connection.fetchval("SELECT count(*) FROM diploma"))
+
+
+async def upsert_changed_diplomas(
+    connection: PoolConnectionProxy[Record],
+    diplomas: Sequence[DiplomaUpsert],
+) -> tuple[int, int]:
+    """Write only new or changed rows and return (inserted, updated)."""
     query = """
     INSERT INTO diploma (
         external_id, title, description, mentor, member1, member2, status, date_of_submission
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    SELECT * FROM unnest(
+        $1::text[], $2::text[], $3::text[], $4::text[],
+        $5::text[], $6::text[], $7::text[], $8::date[]
+    )
     ON CONFLICT (external_id) DO UPDATE SET
         title = EXCLUDED.title,
         description = EXCLUDED.description,
@@ -43,36 +60,28 @@ async def upsert_diploma(
         status = EXCLUDED.status,
         date_of_submission = EXCLUDED.date_of_submission,
         updated_at = NOW()
-    RETURNING *
+    WHERE (
+        diploma.title, diploma.description, diploma.mentor, diploma.member1,
+        diploma.member2, diploma.status, diploma.date_of_submission
+    ) IS DISTINCT FROM (
+        EXCLUDED.title, EXCLUDED.description, EXCLUDED.mentor, EXCLUDED.member1,
+        EXCLUDED.member2, EXCLUDED.status, EXCLUDED.date_of_submission
+    )
+    RETURNING xmax = 0 AS inserted
     """
-    result = await db.fetchrow(
+    rows = await connection.fetch(
         query,
-        external_id,
-        title,
-        description,
-        mentor,
-        member1,
-        member2,
-        status,
-        date_of_submission,
+        [diploma.external_id for diploma in diplomas],
+        [diploma.title for diploma in diplomas],
+        [diploma.description for diploma in diplomas],
+        [diploma.mentor for diploma in diplomas],
+        [diploma.member1 for diploma in diplomas],
+        [diploma.member2 for diploma in diplomas],
+        [diploma.status for diploma in diplomas],
+        [diploma.date_of_submission for diploma in diplomas],
     )
-
-    if result is None:
-        return None
-
-    return DiplomaSchema(
-        id=result["id"],
-        external_id=result["external_id"],
-        title=result["title"],
-        description=result["description"],
-        mentor=result["mentor"],
-        member1=result["member1"],
-        member2=result["member2"],
-        status=result["status"],
-        date_of_submission=result["date_of_submission"],
-        created_at=result["created_at"],
-        updated_at=result["updated_at"],
-    )
+    inserted = sum(1 for row in rows if row["inserted"])
+    return inserted, len(rows) - inserted
 
 
 async def get_closest_diplomas(
