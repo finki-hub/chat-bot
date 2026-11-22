@@ -8,6 +8,7 @@ from app.data.staff import (
     StaffMember,
     get_active_staff_names,
     get_mentor_eligible_names,
+    get_staff_aliases,
     get_staff_directory,
 )
 
@@ -148,6 +149,77 @@ async def test_mentor_eligible_names_exclude_non_teaching_roles(monkeypatch) -> 
     monkeypatch.setattr("app.data.staff.get_http_client", lambda: client)
 
     assert await get_mentor_eligible_names() == frozenset({"Eligible Professor"})
+
+
+def test_non_finki_professor_is_not_mentor_eligible() -> None:
+    member = StaffMember(
+        name="External Professor",
+        active=True,
+        position="Редовен професор",
+        finki=False,
+    )
+
+    assert member.mentor_eligible is False
+
+
+class FakeRoutedStaffClient:
+    def __init__(self, thesis_response: httpx.Response) -> None:
+        self.thesis_response = thesis_response
+
+    async def get(self, url: str) -> httpx.Response:
+        if "bachelor_thesis_staff" in url:
+            return self.thesis_response
+        return _response(
+            url,
+            200,
+            json={
+                "data": [
+                    {"id": 1, "name": "Ana Long Surname", "active": True},
+                    {"id": 2, "name": "Same Name", "active": True},
+                    {"id": 3, "name": "Shared One", "active": True},
+                    {"id": 4, "name": "Shared Two", "active": True},
+                ],
+            },
+        )
+
+
+@pytest.mark.anyio
+async def test_staff_aliases_resolve_only_unambiguous_active_links(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.data.staff._active_staff_cache", None)
+    monkeypatch.setattr("app.data.staff._staff_aliases_cache", None)
+    client = FakeRoutedStaffClient(
+        _response(
+            "https://data.example.test/items/bachelor_thesis_staff",
+            200,
+            json={
+                "data": [
+                    {"name": "Ana Long", "staff": 1, "count": 9},
+                    {"name": "Same Name", "staff": 2, "count": 4},
+                    {"name": "Shared", "staff": 3, "count": 2},
+                    {"name": "Shared", "staff": 4, "count": 1},
+                    {"name": "Former", "staff": 99, "count": 1},
+                    {"name": "Unlinked", "staff": None, "count": 1},
+                ],
+            },
+        ),
+    )
+    monkeypatch.setattr("app.data.staff.get_http_client", lambda: client)
+
+    assert await get_staff_aliases() == {"Ana Long": "Ana Long Surname"}
+
+
+@pytest.mark.anyio
+async def test_staff_aliases_fall_back_when_links_fail(monkeypatch) -> None:
+    monkeypatch.setattr("app.data.staff._active_staff_cache", None)
+    monkeypatch.setattr("app.data.staff._staff_aliases_cache", None)
+    client = FakeRoutedStaffClient(
+        _response("https://data.example.test/items/bachelor_thesis_staff", 503),
+    )
+    monkeypatch.setattr("app.data.staff.get_http_client", lambda: client)
+
+    assert await get_staff_aliases() == {}
 
 
 @pytest.mark.anyio

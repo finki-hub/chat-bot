@@ -14,12 +14,15 @@ from app.recommenders.types import (
     Mode,
     RankedPeople,
     Recommendation,
+    RetrievedDiploma,
     RetrievedPaper,
     SelectionConstraints,
 )
 from app.schemas.recommendations import RecommendationRequestSchema
 from app.services.recommendations import (
     InactiveStaffRequestedError,
+    _canonical_authors,
+    _canonical_diploma,
     _check_active_staff,
 )
 
@@ -73,6 +76,30 @@ async def test_active_staff_names_reject_empty_active_directory(monkeypatch) -> 
 
     with pytest.raises(StaffDirectoryUnavailableError, match="no active staff"):
         await get_active_staff_names()
+
+
+def test_written_names_resolve_so_active_staff_keep_their_history() -> None:
+    aliases = {"Ana Long": "Ana Long Surname"}
+    diploma = _canonical_diploma(
+        RetrievedDiploma(
+            id=uuid4(),
+            external_id="thesis",
+            title="Thesis",
+            mentor="Ana Long",
+            member1="Active Member",
+            member2=None,
+            similarity=0.8,
+        ),
+        aliases,
+    )
+
+    assert diploma.mentor == "Ana Long Surname"
+    assert diploma.member1 == "Active Member"
+    assert diploma.member2 is None
+    assert _canonical_authors(
+        ("Ana Long", "Ana Long Surname", "Other"),
+        aliases,
+    ) == ("Ana Long Surname", "Other")
 
 
 def test_select_committee_filters_inactive_members_and_prior_candidates() -> None:

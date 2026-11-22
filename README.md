@@ -80,6 +80,7 @@ then replace all placeholders before using `compose.prod.yaml`:
 - `RESUMABLE_STREAM_REDIS_URL` - server-only Redis/Valkey URL used by the web BFF for resumable chat streams
 - `RERANKER_MIN_SCORE`, `SOURCE_RERANKER_MIN_SCORE`, `DIPLOMA_RERANKER_MIN_SCORE`, `CHAT_HISTORY_MAX_TURNS` - retrieval and chat tuning
 - `DIRECTUS_STAFF_URL` - staff directory endpoint used by `GET /professors/` and the committee planner.
+- `DIRECTUS_THESIS_STAFF_URL` - thesis-to-staff links used to resolve names written on theses and papers to current staff names.
 - `AGENT_STREAM_TOOL_OUTPUT` - default `false`; adds each tool's output to its `tool_result` chat event, for benchmark containers only
 
 ## Trusted RAG corpus synchronization
