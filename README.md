@@ -146,6 +146,23 @@ the new values:
 docker compose -f compose.prod.yaml up -d --force-recreate api
 ```
 
+## Committee data sync
+
+`deploy/finki-hub-committee-sync.timer` runs the `committee-sync` job from
+`compose.prod.yaml` daily. It validates the upstream defended theses, writes new
+or changed rows in one transaction, and refreshes the defense groups. The embedding
+worker fills new embeddings, and a failed run posts through the host's
+`directus-alert@` unit.
+
+The job refuses an empty or malformed list, or one more than 5% shorter than the
+stored defenses. To run it by hand, or to accept an intentional shrink:
+
+```bash
+systemctl start finki-hub-committee-sync
+docker compose --profile jobs run --rm --no-deps committee-sync \
+  python -m app.sync_committee_data --accept-fewer
+```
+
 The API owns the executable chat catalog. Supported providers are OpenAI, Anthropic,
 Google, OpenRouter, and Ollama. The hosted picker and `GET /chat/models` are the
 authoritative sources for currently available models.
