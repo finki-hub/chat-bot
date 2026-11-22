@@ -51,7 +51,7 @@ async def test_accepted_pre_stream_failure_is_stored_once(discord_prepared):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("phase", ["credentials", "admission", "agent_setup"])
+@pytest.mark.parametrize("phase", ["admission", "agent_setup"])
 async def test_cancellation_persists_only_after_admission(discord_prepared, phase):
     p = discord_prepared
     p.mocks["credentials"].return_value = credentials(openai=False)

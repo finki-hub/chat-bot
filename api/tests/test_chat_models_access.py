@@ -121,6 +121,50 @@ def test_models_endpoint_overlays_user_and_sponsored_capacity(
     assert other["sponsored_quota"] is None
 
 
+def test_models_endpoint_ignores_byok_credentials_for_discord(
+    monkeypatch,
+) -> None:
+    catalog_service = StubCatalogService(base_catalog())
+    monkeypatch.setattr("app.api.chat.model_catalog_service", catalog_service)
+
+    async def resolve_credentials(*args, **kwargs):
+        raise AssertionError("Discord requests must not resolve BYOK credentials")
+
+    async def read_snapshot(
+        db,
+        *,
+        user_id: UUID,
+        user_limit: int,
+        global_limit: int,
+    ) -> SponsoredUsageSnapshot:
+        return usage_snapshot(user_id)
+
+    monkeypatch.setattr(
+        "app.api.chat.resolve_provider_credentials",
+        resolve_credentials,
+    )
+    monkeypatch.setattr(
+        "app.api.chat.get_sponsored_usage_snapshot",
+        read_snapshot,
+    )
+
+    with client(monkeypatch, settings()) as api_client:
+        response = api_client.get(
+            "/chat/models",
+            headers={"x-api-key": "test-api-key"},
+            params={"user_id": str(USER_WITH_KEY), "interface": "discord"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    sponsored = next(model for model in body["models"] if model["id"] == SPONSORED_ID)
+    other = next(model for model in body["models"] if model["id"] == OTHER_MODEL_ID)
+    assert sponsored["availability"] == "sponsored"
+    assert other["availability"] == "unavailable"
+    assert all(model["availability"] != "byok" for model in body["models"])
+    assert USER_CREDENTIAL not in response.text
+
+
 def test_models_endpoint_marks_openrouter_models_byok_with_saved_key(
     monkeypatch,
 ) -> None:

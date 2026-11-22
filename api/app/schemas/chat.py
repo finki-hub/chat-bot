@@ -49,7 +49,10 @@ class ConversationTurn(BaseModel):
 class ChatSchema(BaseModel):
     user_id: UUID | None = Field(
         None,
-        description="Authenticated chat user id used to resolve per-user provider credentials.",
+        description=(
+            "Authenticated chat user id used for sponsored quota, storage, and "
+            "web BYOK credentials. Discord requests ignore saved BYOK credentials."
+        ),
     )
     messages: list[ConversationTurn] = Field(
         min_length=1,
