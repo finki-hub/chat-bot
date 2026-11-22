@@ -163,6 +163,22 @@ docker compose --profile jobs run --rm --no-deps committee-sync \
   python -m app.sync_committee_data --accept-fewer
 ```
 
+## Professor paper refresh
+
+`python -m app.sync_professor_papers` reads the reviewed author profiles from the
+Directus `staff_openalex_profiles` collection and the profiles' works from OpenAlex.
+It needs `OPENALEX_API_KEY`. A staff member is credited only through an authorship
+with a FINKI affiliation, and a profile with a written name counts only papers written
+that way. The refresh adds papers and credits and never removes them.
+
+A run is a dry run unless it is given the plan fingerprint of a reviewed dry run.
+`--report` writes the full plan as JSON. Apply refuses a plan that has changed:
+
+```bash
+python -m app.sync_professor_papers --report /tmp/paper-plan.json
+python -m app.sync_professor_papers --apply <plan-fingerprint>
+```
+
 The API owns the executable chat catalog. Supported providers are OpenAI, Anthropic,
 Google, OpenRouter, and Ollama. The hosted picker and `GET /chat/models` are the
 authoritative sources for currently available models.
