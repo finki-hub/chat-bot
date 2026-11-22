@@ -100,7 +100,7 @@ describe('GET /api/models', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 
     expect(url).toBe(
-      `https://api:8880/chat/models?user_id=${encodeURIComponent(USER_ID)}`,
+      `https://api:8880/chat/models?user_id=${encodeURIComponent(USER_ID)}&interface=web`,
     );
     expect(init.method ?? 'GET').toBe('GET');
     expect(new Headers(init.headers).get('x-api-key')).toBe('test-key');

@@ -28,7 +28,7 @@ export const GET = async (): Promise<Response> => {
 
   try {
     const userId = await getAuthenticatedChatUserId();
-    const url = `${API_BASE_URL}/chat/models?user_id=${encodeURIComponent(userId)}`;
+    const url = `${API_BASE_URL}/chat/models?user_id=${encodeURIComponent(userId)}&interface=web`;
     upstream = await fetch(url, {
       headers: { accept: 'application/json', 'x-api-key': CHAT_API_KEY },
     });

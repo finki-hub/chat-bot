@@ -60,10 +60,10 @@ describe('GET /api/models user-specific cache contract', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      'https://api:8880/chat/models?user_id=user-a',
+      'https://api:8880/chat/models?user_id=user-a&interface=web',
     );
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
-      'https://api:8880/chat/models?user_id=user-b',
+      'https://api:8880/chat/models?user_id=user-b&interface=web',
     );
     expect(first.headers.get('cache-control')).toBe(CACHE_HEADER);
     expect(second.headers.get('cache-control')).toBe(CACHE_HEADER);

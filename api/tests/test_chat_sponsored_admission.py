@@ -47,6 +47,7 @@ def _payload(
     user_id: UUID | None = USER_ID,
     inference_model: Model = Model.GPT_6_LUNA,
     interface: str = "web",
+    embeddings_model: Model = Model.BGE_M3_LOCAL,
 ):
     query_transform_model = (
         Model.GEMINI_3_8_FLASH
@@ -57,6 +58,7 @@ def _payload(
         {
             "user_id": user_id,
             "interface": interface,
+            "embeddings_model": embeddings_model,
             "inference_model": inference_model,
             "query_transform_model": query_transform_model,
             "messages": [{"role": "user", "content": "Question"}],
@@ -95,6 +97,7 @@ async def _run_stream(
     resolve_func=None,
     inference_model: Model = Model.GPT_6_LUNA,
     interface: str = "web",
+    embeddings_model: Model = Model.BGE_M3_LOCAL,
     conversation_id: str | None = None,
     legacy_vendor_session_id: str | None = None,
 ):
@@ -139,7 +142,11 @@ async def _run_stream(
     chunks = [
         str(chunk)
         async for chunk in chat_api._chat_response_stream(  # noqa: SLF001
-            _payload(inference_model=inference_model, interface=interface),
+            _payload(
+                inference_model=inference_model,
+                interface=interface,
+                embeddings_model=embeddings_model,
+            ),
             _request(
                 current_settings,
                 conversation_id=conversation_id,
@@ -177,6 +184,36 @@ async def test_discord_sponsored_request_ignores_stored_byok(monkeypatch):
     assert released == [(USER_ID, response_id)]
     assert captured[-1][1]["mode"] == "sponsored"
     assert captured[-1][1]["client_interface"] == "discord"
+
+
+@pytest.mark.anyio
+async def test_discord_pins_the_local_embeddings_model(monkeypatch):
+    payloads: list[ChatSchema] = []
+
+    async def admit(db, **kwargs):
+        return _admission(kwargs["request_id"])
+
+    async def resolve_credentials(*args, **kwargs):
+        raise AssertionError("Discord requests must not resolve BYOK credentials")
+
+    async def handle(payload, *args, **kwargs):
+        payloads.append(payload)
+        return StreamingResponse(_body(), media_type="text/event-stream")
+
+    chunks, _, captured, _ = await _run_stream(
+        monkeypatch,
+        current_settings=settings(),
+        user_credentials=None,
+        admit=admit,
+        resolve_func=resolve_credentials,
+        interface="discord",
+        embeddings_model=Model.TEXT_EMBEDDING_3_LARGE,
+        handle_func=handle,
+    )
+
+    assert any('"text":"answer"' in chunk for chunk in chunks)
+    assert payloads[0].embeddings_model == Model.BGE_M3_LOCAL
+    assert captured[-1][1]["mode"] == "sponsored"
 
 
 @pytest.mark.anyio

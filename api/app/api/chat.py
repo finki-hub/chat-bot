@@ -27,6 +27,7 @@ from app.api.provider_credentials import (
 from app.api.sponsored_access import (
     resolve_sponsored_inference,
 )
+from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.data.connection import Database
 from app.data.db import get_db
 from app.data.discord_conversations import DiscordExchange
@@ -661,6 +662,15 @@ async def _prepare_chat_response_stream(
     preparation: _PreparationOutcome,
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Build context (streaming retrieval status), then yield the agent answer stream."""
+    if (
+        payload.interface == "discord"
+        and payload.embeddings_model != DEFAULT_EMBEDDINGS_MODEL
+    ):
+        # Discord is free-pool-only; hosted embeddings need a user key, so pin
+        # the server-side local model instead of failing the request.
+        payload = payload.model_copy(
+            update={"embeddings_model": DEFAULT_EMBEDDINGS_MODEL},
+        )
     logger.info(
         "Received chat request: %s",
         json.dumps(_chat_request_log_fields(payload), sort_keys=True),
