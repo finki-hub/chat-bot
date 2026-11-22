@@ -57,9 +57,14 @@ _FINKI_AFFILIATION: Final = re.compile(
     re.IGNORECASE,
 )
 _WHITESPACE: Final = re.compile(r"\s+")
+_DOI_URL_PREFIX: Final = re.compile(r"^https?://doi\.org/")
 
 
 class PaperRefreshError(Exception):
+    pass
+
+
+class _RetryableRequestError(Exception):
     pass
 
 
@@ -120,10 +125,7 @@ class RefreshPlan:
 
 
 def normalize_doi(value: str | None) -> str:
-    doi = (value or "").strip().lower()
-    for prefix in ("https://doi.org/", "http://doi.org/"):
-        doi = doi.removeprefix(prefix)
-    return doi
+    return _DOI_URL_PREFIX.sub("", (value or "").strip().lower())
 
 
 def title_external_id(title: str) -> str:
@@ -314,36 +316,46 @@ def unsupported_credits(
     return findings
 
 
+async def _request_json(
+    client: httpx.AsyncClient,
+    url: str,
+    params: Mapping[str, str | int] | None,
+    label: str,
+) -> Any:  # ruff: ignore[ANN401] -- callers read known keys from external JSON
+    # Errors are raised "from None": a chained one could carry the API key.
+    try:
+        response = await client.get(url, params=params)
+    except httpx.TransportError:
+        msg = f"Could not reach {label}"
+        raise _RetryableRequestError(msg) from None
+    if response.status_code in _RETRY_STATUSES:
+        msg = f"{label} returned status {response.status_code}"
+        raise _RetryableRequestError(msg)
+    if response.status_code >= 400:
+        msg = f"{label} returned status {response.status_code}"
+        raise PaperRefreshError(msg)
+    try:
+        return response.json()
+    except ValueError:
+        msg = f"{label} returned invalid JSON"
+        raise PaperRefreshError(msg) from None
+
+
 async def _get_json(
     client: httpx.AsyncClient,
     url: str,
     params: Mapping[str, str | int] | None = None,
 ) -> Any:  # ruff: ignore[ANN401] -- callers read known keys from external JSON
-    label = httpx.URL(url).host
-    for attempt in range(_MAX_ATTEMPTS):
+    label = str(httpx.URL(url).host)
+    for attempt in range(_MAX_ATTEMPTS - 1):
         try:
-            response = await client.get(url, params=params)
-        except httpx.TransportError:
-            # Chained errors could carry the request URL and its API key.
-            if attempt == _MAX_ATTEMPTS - 1:
-                msg = f"Could not reach {label}"
-                raise PaperRefreshError(msg) from None
-        else:
-            if response.status_code < 400:
-                try:
-                    return response.json()
-                except ValueError:
-                    msg = f"{label} returned invalid JSON"
-                    raise PaperRefreshError(msg) from None
-            if (
-                response.status_code not in _RETRY_STATUSES
-                or attempt == _MAX_ATTEMPTS - 1
-            ):
-                msg = f"{label} returned status {response.status_code}"
-                raise PaperRefreshError(msg)
-        await asyncio.sleep(2 + attempt * 3)
-    msg = f"Could not read {label}"
-    raise PaperRefreshError(msg)
+            return await _request_json(client, url, params, label)
+        except _RetryableRequestError:
+            await asyncio.sleep(2 + attempt * 3)
+    try:
+        return await _request_json(client, url, params, label)
+    except _RetryableRequestError as exc:
+        raise PaperRefreshError(str(exc)) from None
 
 
 async def load_directus_identity(

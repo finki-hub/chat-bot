@@ -1,8 +1,13 @@
 from typing import Any
 
+import httpx
+import pytest
+
 from app.sync_professor_papers import (
     Profile,
     StoredPaper,
+    _request_json,
+    _RetryableRequestError,
     abstract_from_index,
     build_refresh_plan,
     credited_staff,
@@ -159,6 +164,25 @@ def test_fingerprint_changes_with_the_plan() -> None:
 
     assert first.fingerprint == same.fingerprint
     assert first.fingerprint != other.fingerprint
+
+
+@pytest.mark.anyio
+async def test_request_errors_do_not_expose_the_api_key() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(f"failed {request.url}", request=request)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(_RetryableRequestError) as raised:
+            await _request_json(
+                client,
+                "https://api.openalex.org/works",
+                {"api_key": "secret-key"},
+                "api.openalex.org",
+            )
+
+    assert "secret-key" not in str(raised.value)
+    assert raised.value.__cause__ is None
 
 
 def test_abstract_is_rebuilt_in_position_order() -> None:

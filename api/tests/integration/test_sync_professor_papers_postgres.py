@@ -95,11 +95,12 @@ async def test_dry_run_writes_nothing_and_apply_writes_the_reviewed_plan(
 @pytest.mark.anyio
 async def test_apply_refuses_a_plan_that_changed(database) -> None:
     reviewed = build_refresh_plan([_work(1)], PROFILES, [], {})
+    changed_works = [_work(1), _work(2)]
 
     with pytest.raises(PaperRefreshError, match="changed since it was reviewed"):
         await refresh_papers(
             database,
-            [_work(1), _work(2)],
+            changed_works,
             PROFILES,
             {},
             expected_plan=reviewed.fingerprint,
