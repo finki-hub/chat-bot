@@ -207,11 +207,78 @@ def _paper_mentor_alternatives(
     return alternatives
 
 
+def _prior_for_members(
+    mentor: str | None,
+    mentor_prior: MentorPriorIndex | None,
+    member_prior: MentorPriorIndex | None,
+) -> MentorPriorIndex | None:
+    if member_prior is not None and mentor and member_prior.by_mentor.get(mentor):
+        return member_prior
+    return mentor_prior
+
+
+def _committees_for_mentor(
+    ranked: RankedPeople,
+    mentor: str | None,
+    mentor_component: float,
+    priors: tuple[
+        MentorPriorIndex | None,
+        MentorPriorIndex | None,
+        MentorPriorIndex | None,
+    ],
+    constraints: SelectionConstraints,
+) -> tuple[list[CommitteeAlternative], dict[str, float]]:
+    """Rank a mentor with the full prior, then pick members with the member prior."""
+    mentor_prior, member_prior, coauthor_prior = priors
+    ranking_candidates = _candidates_for_mentor(
+        ranked,
+        mentor,
+        mentor_prior,
+        coauthor_prior,
+        constraints,
+    )
+    ranking = _member_alternatives(
+        ranking_candidates,
+        ranked,
+        constraints,
+        mentor,
+        mentor_component,
+    )
+    prior = _prior_for_members(mentor, mentor_prior, member_prior)
+    if prior is mentor_prior or not ranking:
+        return ranking, ranking_candidates
+
+    candidates = _candidates_for_mentor(
+        ranked,
+        mentor,
+        prior,
+        coauthor_prior,
+        constraints,
+    )
+    committees = _member_alternatives(
+        candidates,
+        ranked,
+        constraints,
+        mentor,
+        mentor_component,
+    )
+    if not committees:
+        return ranking, ranking_candidates
+    # Keep this mentor's rank against the others unchanged.
+    offset = ranking[0].score - committees[0].score
+    return [
+        replace(committee, score=committee.score + offset) for committee in committees
+    ], candidates
+
+
 def _full_alternatives(
     ranked: RankedPeople,
     mentor_topk: int,
-    mentor_prior: MentorPriorIndex | None,
-    coauthor_prior: MentorPriorIndex | None,
+    priors: tuple[
+        MentorPriorIndex | None,
+        MentorPriorIndex | None,
+        MentorPriorIndex | None,
+    ],
     constraints: SelectionConstraints,
 ) -> tuple[list[CommitteeAlternative], dict[str, float]]:
     mentor_norm = _minmax(ranked.mentor_score)
@@ -225,27 +292,21 @@ def _full_alternatives(
         if _can_mentor(name, constraints)
     ][:mentor_topk]
     alternatives: list[CommitteeAlternative] = []
-    selected_member_scores: dict[str, float] = {}
+    candidates_by_mentor: dict[str, dict[str, float]] = {}
 
-    for mentor in mentors:
-        candidates = _candidates_for_mentor(
+    def committees_for(mentor: str, component: float) -> list[CommitteeAlternative]:
+        committees, candidates = _committees_for_mentor(
             ranked,
             mentor,
-            mentor_prior,
-            coauthor_prior,
+            component,
+            priors,
             constraints,
         )
-        alternatives.extend(
-            _member_alternatives(
-                candidates,
-                ranked,
-                constraints,
-                mentor,
-                mentor_norm.get(mentor, 0.0),
-            ),
-        )
-        if not selected_member_scores:
-            selected_member_scores = candidates
+        candidates_by_mentor[mentor] = candidates
+        return committees
+
+    for mentor in mentors:
+        alternatives.extend(committees_for(mentor, mentor_norm.get(mentor, 0.0)))
 
     alternatives.sort(key=lambda alt: alt.score, reverse=True)
     if constraints.distinct_mentors:
@@ -254,59 +315,19 @@ def _full_alternatives(
             mentor_topk - len(mentors),
             frozenset(mentors),
             constraints,
-            lambda mentor: _member_alternatives(
-                _candidates_for_mentor(
-                    ranked,
-                    mentor,
-                    mentor_prior,
-                    coauthor_prior,
-                    constraints,
-                ),
-                ranked,
-                constraints,
-                mentor,
-                0.0,
-            ),
+            lambda mentor: committees_for(mentor, 0.0),
         )
         # Cap scores so defense-backed mentors stay first for any consumer.
         ceiling = alternatives[-1].score if alternatives else float("inf")
         for alternative in paper_alternatives:
             ceiling = min(ceiling, alternative.score)
             alternatives.append(replace(alternative, score=ceiling))
-    if alternatives:
-        best_mentor = alternatives[0].mentor
-        selected_member_scores = _candidates_for_mentor(
-            ranked,
-            best_mentor,
-            mentor_prior,
-            coauthor_prior,
-            constraints,
-        )
-    return alternatives, selected_member_scores
-
-
-def _members_only_alternatives(
-    ranked: RankedPeople,
-    given_mentor: str | None,
-    mentor_prior: MentorPriorIndex | None,
-    coauthor_prior: MentorPriorIndex | None,
-    constraints: SelectionConstraints,
-) -> tuple[list[CommitteeAlternative], dict[str, float]]:
-    candidates = _candidates_for_mentor(
-        ranked,
-        given_mentor,
-        mentor_prior,
-        coauthor_prior,
-        constraints,
+    if alternatives and alternatives[0].mentor is not None:
+        return alternatives, candidates_by_mentor[alternatives[0].mentor]
+    first_mentor = next(iter(candidates_by_mentor), None)
+    return alternatives, (
+        candidates_by_mentor[first_mentor] if first_mentor is not None else {}
     )
-    alternatives = _member_alternatives(
-        candidates,
-        ranked,
-        constraints,
-        given_mentor,
-        0.0,
-    )
-    return alternatives, candidates
 
 
 def _best_per_mentor(
@@ -328,26 +349,27 @@ def select_committee(
     mentor_prior: MentorPriorIndex | None = None,
     coauthor_prior: MentorPriorIndex | None = None,
     constraints: SelectionConstraints | None = None,
+    member_prior: MentorPriorIndex | None = None,
 ) -> Recommendation:
     active_constraints = constraints or SelectionConstraints(exclude=frozenset(exclude))
     if constraints is None and exclude:
         active_constraints = SelectionConstraints(exclude=frozenset(exclude))
+    priors = (mentor_prior, member_prior, coauthor_prior)
 
     match mode:
         case Mode.MEMBERS_ONLY:
-            alternatives, candidates = _members_only_alternatives(
+            alternatives, candidates = _committees_for_mentor(
                 ranked,
                 given_mentor,
-                mentor_prior,
-                coauthor_prior,
+                0.0,
+                priors,
                 active_constraints,
             )
         case Mode.FULL:
             alternatives, candidates = _full_alternatives(
                 ranked,
                 mentor_topk,
-                mentor_prior,
-                coauthor_prior,
+                priors,
                 active_constraints,
             )
         case unreachable:

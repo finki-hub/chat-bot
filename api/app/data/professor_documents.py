@@ -85,6 +85,8 @@ async def get_closest_professor_documents(
     model: Model,
     limit: int = 50,
     threshold: float | None = None,
+    *,
+    published_through: int | None = None,
 ) -> list[Record]:
     embedding = embedding_vector_sql(model, embedded_query)
     predicate = current_embedding_predicate(
@@ -94,6 +96,20 @@ async def get_closest_professor_documents(
     )
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
+
+    args: list[object] = [
+        embedding_to_pgvector(embedded_query),
+        limit,
+        threshold,
+        *predicate.parameters,
+    ]
+    year_clause = ""
+    order_by = "distance"
+    if published_through is not None:
+        args.append(published_through)
+        year_clause = f"AND (year IS NULL OR year <= ${len(args)})"
+        # An approximate index scan would filter too late and return too few rows.
+        order_by = f"({embedding.distance_operand} <=> {embedding.query_operand}) + 0"
 
     # ruff: ignore[S608] -- fragments come from closed model mappings
     sql = f"""
@@ -106,14 +122,9 @@ async def get_closest_professor_documents(
     FROM professor_document
     WHERE {predicate.sql}
         AND {embedding.distance_operand} <=> {embedding.query_operand} < $3
-    ORDER BY distance
+        {year_clause}
+    ORDER BY {order_by}
     LIMIT $2
     """
 
-    return await db.fetch(
-        sql,
-        embedding_to_pgvector(embedded_query),
-        limit,
-        threshold,
-        *predicate.parameters,
-    )
+    return await db.fetch(sql, *args)

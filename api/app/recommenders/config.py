@@ -8,6 +8,8 @@ class ScoringWeights:
     recency_half_life_days: float = 1825.0
     pair_affinity_weight: float = 0.5
     mentor_prior_weight: float = 1.5
+    # Members follow recent committees; mentor ranking keeps the full history.
+    member_prior_years: int = 2
     mentor_topk: int = 3
     expertise_weight: float = (
         0.5  # swept; >~1 overrides the prior with non-habitual people

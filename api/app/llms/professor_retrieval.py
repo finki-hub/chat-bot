@@ -22,6 +22,7 @@ async def retrieve_professor_papers(
     *,
     threshold: float = PAPER_DISTANCE_CEILING,
     query_embedding: list[float] | None = None,
+    published_through: int | None = None,
 ) -> list[RetrievedPaper]:
     embedded = (
         query_embedding
@@ -38,6 +39,7 @@ async def retrieve_professor_papers(
         model,
         limit=limit,
         threshold=threshold,
+        published_through=published_through,
     )
 
     papers: list[RetrievedPaper] = []

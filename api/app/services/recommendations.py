@@ -2,7 +2,7 @@ import asyncio
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from app.api.recommendation_presenters import (
@@ -39,6 +39,7 @@ from app.recommenders.recommend import (
     build_coauthor_prior,
     build_expertise_index,
     build_mentor_prior,
+    build_recent_member_prior,
     score_people,
     select_committee,
 )
@@ -52,7 +53,9 @@ _TOP_K = 10
 _PAPER_K = 50
 
 _PRIOR_CACHE_TTL = 3600.0
-_mentor_prior_cache: dict[str, tuple[float, MentorPriorIndex]] = {}
+type CommitteePriors = tuple[MentorPriorIndex, MentorPriorIndex]
+
+_mentor_prior_cache: dict[str, tuple[float, CommitteePriors]] = {}
 
 
 class RecommendationServiceError(Exception):
@@ -102,22 +105,31 @@ def _canonical_authors(
 async def _get_mentor_prior(
     db: Database,
     aliases: Mapping[str, str],
-) -> MentorPriorIndex:
+) -> CommitteePriors:
+    """Return the all-time mentor prior and the recent member prior."""
     cached = _mentor_prior_cache.get("prior")
     now = time.monotonic()
     if cached is not None and now - cached[0] < _PRIOR_CACHE_TTL:
         return cached[1]
-    committees = await get_defended_committees(db)
-    prior = build_mentor_prior(
+    committees = [
         (
             _canonical_name(row["mentor"], aliases),
             _canonical_name(row["member1"], aliases),
             _canonical_name(row["member2"], aliases),
+            row["date_of_submission"],
         )
-        for row in committees
+        for row in await get_defended_committees(db)
+    ]
+    priors = (
+        build_mentor_prior(row[:3] for row in committees),
+        build_recent_member_prior(
+            committees,
+            datetime.now(UTC).date() + timedelta(days=1),
+            ScoringWeights().member_prior_years,
+        ),
     )
-    _mentor_prior_cache["prior"] = (now, prior)
-    return prior
+    _mentor_prior_cache["prior"] = (now, priors)
+    return priors
 
 
 async def _get_coauthor_prior(
@@ -168,7 +180,9 @@ def _check_active_staff(
 
 
 type RecommendationBackgroundTask = (
-    asyncio.Task[MentorPriorIndex] | asyncio.Task[list[RetrievedPaper]]
+    asyncio.Task[CommitteePriors]
+    | asyncio.Task[MentorPriorIndex]
+    | asyncio.Task[list[RetrievedPaper]]
 )
 
 
@@ -268,8 +282,8 @@ async def generate_committee_recommendation(
 
     try:
         papers = await paper_task if paper_task is not None else []
-        mentor_prior = (
-            await mentor_prior_task if mentor_prior_task is not None else None
+        mentor_prior, member_prior = (
+            await mentor_prior_task if mentor_prior_task is not None else (None, None)
         )
         coauthor_prior = await coauthor_prior_task if coauthor_prior_task else None
     except asyncio.CancelledError:
@@ -307,6 +321,7 @@ async def generate_committee_recommendation(
         given_mentor=payload.mentor,
         mentor_topk=payload.mentor_topk,
         mentor_prior=mentor_prior,
+        member_prior=member_prior,
         coauthor_prior=coauthor_prior,
         constraints=SelectionConstraints(
             exclude=frozenset(payload.exclude_professors),

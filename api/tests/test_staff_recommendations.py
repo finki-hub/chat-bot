@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import date
 from uuid import uuid4
 
 import httpx
@@ -8,7 +9,11 @@ from app.api.recommendation_presenters import mentor_score
 from app.data import StaffDirectoryUnavailableError, get_active_staff_names
 from app.recommenders.config import ScoringWeights
 from app.recommenders.selection import _eligible_paper_mentors, select_committee
-from app.recommenders.signals import build_expertise_index, score_people
+from app.recommenders.signals import (
+    build_expertise_index,
+    build_recent_member_prior,
+    score_people,
+)
 from app.recommenders.types import (
     MentorPriorIndex,
     Mode,
@@ -100,6 +105,73 @@ def test_written_names_resolve_so_active_staff_keep_their_history() -> None:
         ("Ana Long", "Ana Long Surname", "Other"),
         aliases,
     ) == ("Ana Long Surname", "Other")
+
+
+def _member_prior_ranked() -> RankedPeople:
+    return RankedPeople(
+        blended={"Old One": 0.1, "Old Two": 0.1, "New One": 0.1, "New Two": 0.1},
+        defense={},
+        expertise={},
+        coauthor={},
+        mentor_score={"First": 2.0, "Second": 1.0},
+        pair_score={},
+        supporting={},
+        expertise_supporting={},
+        mentor_prior_weight=1.5,
+    )
+
+
+def test_member_prior_changes_members_but_not_mentor_order() -> None:
+    all_time = MentorPriorIndex(
+        by_mentor={
+            "First": {"Old One": 9.0, "Old Two": 8.0, "New One": 1.0},
+            "Second": {"Old One": 9.0, "Old Two": 9.0, "New Two": 1.0},
+        },
+    )
+    recent = MentorPriorIndex(
+        by_mentor={"First": {"New One": 3.0, "New Two": 2.0, "Old One": 1.0}},
+    )
+    constraints = SelectionConstraints(alternative_count=3, distinct_mentors=True)
+
+    baseline = select_committee(
+        _member_prior_ranked(),
+        Mode.FULL,
+        None,
+        mentor_topk=3,
+        mentor_prior=all_time,
+        constraints=constraints,
+    )
+    updated = select_committee(
+        _member_prior_ranked(),
+        Mode.FULL,
+        None,
+        mentor_topk=3,
+        mentor_prior=all_time,
+        member_prior=recent,
+        constraints=constraints,
+    )
+
+    assert [a.mentor for a in updated.alternatives] == [
+        a.mentor for a in baseline.alternatives
+    ]
+    assert set(baseline.members) == {"Old One", "Old Two"}
+    assert set(updated.members) == {"New One", "New Two"}
+    assert set(updated.alternatives[1].members) == {"Old One", "Old Two"}
+
+
+def test_recent_member_prior_uses_only_the_window_before_the_date() -> None:
+    prior = build_recent_member_prior(
+        [
+            ("Mentor", "Too Old", "Too Old Two", date(2021, 1, 1)),
+            ("Mentor", "Kept", "Kept Two", date(2025, 1, 1)),
+            ("Mentor", "Future", "Future Two", date(2026, 2, 1)),
+            ("Mentor", "Undated", "Undated Two", None),
+        ],
+        date(2026, 1, 1),
+        3,
+    )
+
+    assert prior.by_mentor == {"Mentor": {"Kept": 1.0, "Kept Two": 1.0}}
 
 
 def test_select_committee_filters_inactive_members_and_prior_candidates() -> None:

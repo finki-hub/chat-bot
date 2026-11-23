@@ -9,8 +9,9 @@ import asyncio
 import random
 import sys
 from collections import Counter, defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import date
 from pathlib import Path
 
 if (Path.cwd() / "app").is_dir() and str(Path.cwd()) not in sys.path:
@@ -19,12 +20,19 @@ if (Path.cwd() / "app").is_dir() and str(Path.cwd()) not in sys.path:
 from asyncpg import Record
 
 from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
+from app.data import (
+    get_active_staff_names,
+    get_mentor_eligible_names,
+    get_staff_aliases,
+)
 from app.data.connection import Database
 from app.data.diplomas import get_backtest_population
 from app.data.professor_documents import get_all_paper_authors
 from app.llms.diploma_retrieval import retrieve_similar_diplomas
+from app.llms.embeddings import generate_embeddings
 from app.llms.models import Model
 from app.llms.professor_retrieval import retrieve_professor_papers
+from app.llms.text_utils import _prepare_text_for_embedding
 from app.recommenders.config import ScoringWeights
 from app.recommenders.recommend import (
     CoauthorIndex,
@@ -32,10 +40,13 @@ from app.recommenders.recommend import (
     MentorPriorIndex,
     Mode,
     RetrievedDiploma,
+    RetrievedPaper,
+    SelectionConstraints,
     _accumulate_coauthor_edges,
     build_coauthor_prior,
     build_expertise_index,
     build_mentor_prior,
+    build_recent_member_prior,
     score_people,
     select_committee,
 )
@@ -55,6 +66,7 @@ class HeldOut:
     mentor: str
     member1: str
     member2: str
+    submitted: date | None = None
 
     @property
     def true_pair(self) -> frozenset[str]:
@@ -103,6 +115,7 @@ def build_population(rows: list[Record]) -> list[HeldOut]:
             mentor=row["mentor"],
             member1=row["member1"],
             member2=row["member2"],
+            submitted=row["date_of_submission"],
         )
         for row in rows
     ]
@@ -316,7 +329,7 @@ def report(
         f"model={model_value}  population={population_size}  evaluated={n}  "
         f"cold_start={len(cold)}",
         f"initial_k={initial_k}  top_k={top_k}  mentor_topk={mentor_topk}  "
-        f"reranker_min={settings.RERANKER_MIN_SCORE}",
+        f"reranker_min={settings.DIPLOMA_RERANKER_MIN_SCORE}",
         f"weights: sim={weights.similarity_weight} rerank={weights.rerank_weight} "
         f"recency_hl_days={weights.recency_half_life_days} "
         f"pair_affinity={weights.pair_affinity_weight} "
@@ -527,6 +540,288 @@ async def main_async(ns: argparse.Namespace) -> int:
     return 0
 
 
+@dataclass(frozen=True)
+class TimedCase:
+    held: HeldOut
+    submitted: date
+    retrieved: list[RetrievedDiploma]
+    papers: list[RetrievedPaper]
+
+
+@dataclass(frozen=True)
+class TimedScore:
+    recommended: bool
+    mentor_hit1: bool
+    shortlist_hit: bool
+    members_jaccard: float
+
+
+type Committee = tuple[str, str, str, date]
+
+
+def _canonical_held(held: HeldOut, aliases: Mapping[str, str]) -> HeldOut:
+    return replace(
+        held,
+        mentor=aliases.get(held.mentor, held.mentor),
+        member1=aliases.get(held.member1, held.member1),
+        member2=aliases.get(held.member2, held.member2),
+    )
+
+
+def _canonical_retrieved(
+    diploma: RetrievedDiploma,
+    aliases: Mapping[str, str],
+) -> RetrievedDiploma:
+    return replace(
+        diploma,
+        mentor=aliases.get(diploma.mentor, diploma.mentor),
+        member1=aliases.get(diploma.member1, diploma.member1)
+        if diploma.member1
+        else None,
+        member2=aliases.get(diploma.member2, diploma.member2)
+        if diploma.member2
+        else None,
+    )
+
+
+def score_timed_case(
+    case: TimedCase,
+    weights: ScoringWeights,
+    committees: Sequence[Committee],
+    *,
+    active: frozenset[str],
+    eligible: frozenset[str],
+    use_history: bool,
+    member_years: int,
+) -> TimedScore:
+    """Score one defense using only what was known before its date."""
+    as_of = case.submitted
+    earlier = [row for row in committees if row[3] < as_of]
+    profile = (
+        weights
+        if use_history
+        else replace(weights, mentor_prior_weight=0.0, pair_affinity_weight=0.0)
+    )
+    mentor_prior = (
+        build_mentor_prior(row[:3] for row in earlier) if use_history else None
+    )
+    member_prior = (
+        build_recent_member_prior(earlier, as_of, member_years)
+        if use_history and member_years > 0
+        else None
+    )
+    expertise = build_expertise_index(case.papers, profile, now_year=as_of.year)
+
+    recommended = mentor_hit1 = shortlist_hit = False
+    if case.retrieved:
+        ranked = score_people(
+            case.retrieved,
+            expertise,
+            None,
+            profile,
+            Mode.FULL,
+            now=as_of,
+        )
+        full = select_committee(
+            ranked,
+            Mode.FULL,
+            None,
+            mentor_topk=3,
+            mentor_prior=mentor_prior,
+            member_prior=member_prior,
+            constraints=SelectionConstraints(
+                allowed=active,
+                mentor_allowed=eligible,
+                alternative_count=3,
+                distinct_mentors=True,
+            ),
+        )
+        recommended = full.mentor is not None and len(full.members) == 2
+        mentor_hit1 = full.mentor == case.held.mentor
+        shortlist_hit = case.held.mentor in {
+            alternative.mentor for alternative in full.alternatives
+        }
+
+    ranked_members = score_people(
+        case.retrieved,
+        expertise,
+        None,
+        profile,
+        Mode.MEMBERS_ONLY,
+        given_mentor=case.held.mentor,
+        now=as_of,
+    )
+    members = select_committee(
+        ranked_members,
+        Mode.MEMBERS_ONLY,
+        case.held.mentor,
+        mentor_topk=3,
+        mentor_prior=mentor_prior,
+        member_prior=member_prior,
+        constraints=SelectionConstraints(allowed=active, mentor_allowed=eligible),
+    )
+    return TimedScore(
+        recommended,
+        mentor_hit1,
+        shortlist_hit,
+        _jaccard(members.members, case.held.true_pair),
+    )
+
+
+def _bootstrap_interval(
+    deltas: Sequence[float],
+    rng: random.Random,
+    rounds: int = 2000,
+) -> tuple[float, float]:
+    size = len(deltas)
+    means = sorted(sum(rng.choices(deltas, k=size)) / size for _ in range(rounds))
+    return means[int(rounds * 0.025)], means[int(rounds * 0.975)]
+
+
+def _timed_line(label: str, scores: Sequence[TimedScore]) -> str:
+    return (
+        f"{label:24} recs={_mean([float(s.recommended) for s in scores]):.3f} "
+        f"hit1={_mean([float(s.mentor_hit1) for s in scores]):.3f} "
+        f"shortlist={_mean([float(s.shortlist_hit) for s in scores]):.3f} "
+        f"members={_mean([s.members_jaccard for s in scores]):.3f}"
+    )
+
+
+async def _load_timed_case(
+    db: Database,
+    held: HeldOut,
+    model: Model,
+    ns: argparse.Namespace,
+    aliases: Mapping[str, str],
+) -> TimedCase | None:
+    if held.submitted is None:
+        return None
+    try:
+        embedding = await generate_embeddings(
+            _prepare_text_for_embedding(held.title, model, is_document=False),
+            model,
+        )
+        retrieved = await retrieve_similar_diplomas(
+            db,
+            held.title,
+            model,
+            ns.initial_k,
+            ns.top_k,
+            exclude_external_id=held.external_id,
+            query_embedding=embedding,
+            submitted_before=held.submitted,
+        )
+        papers = await retrieve_professor_papers(
+            db,
+            held.title,
+            model,
+            ns.paper_k,
+            query_embedding=embedding,
+            published_through=held.submitted.year,
+        )
+    except Exception as exc:  # one bad case shouldn't abort the run
+        print(f"  ! retrieval error: {type(exc).__name__}", file=sys.stderr)
+        return None
+    return TimedCase(
+        held,
+        held.submitted,
+        [_canonical_retrieved(diploma, aliases) for diploma in retrieved],
+        [
+            replace(
+                paper,
+                coauthors=tuple(
+                    dict.fromkeys(aliases.get(name, name) for name in paper.coauthors),
+                ),
+            )
+            for paper in papers
+        ],
+    )
+
+
+async def time_aware_async(ns: argparse.Namespace) -> int:
+    """Replay production staff rules without letting a case see its future."""
+    model = _resolve_model(ns.embedding_model)
+    weights = weights_from_args(ns)
+    rng = random.Random(ns.seed)  # noqa: S311
+    init_http_client()
+    db = Database(dsn=settings.DATABASE_URL)
+    await db.init()
+    try:
+        aliases = await get_staff_aliases()
+        active = await get_active_staff_names()
+        eligible = await get_mentor_eligible_names()
+        population = [
+            _canonical_held(held, aliases)
+            for held in build_population(await get_backtest_population(db, model))
+        ]
+        committees: list[Committee] = [
+            (held.mentor, held.member1, held.member2, held.submitted)
+            for held in population
+            if held.submitted is not None
+        ]
+        selected = [
+            held
+            for held in population
+            if held.submitted is not None
+            and ns.from_date <= held.submitted < ns.to_date
+            and held.mentor in eligible
+            and {held.member1, held.member2} <= active
+        ]
+        if 0 < ns.sample_size < len(selected):
+            selected = rng.sample(selected, ns.sample_size)
+
+        semaphore = asyncio.Semaphore(ns.concurrency)
+
+        async def load(held: HeldOut) -> TimedCase | None:
+            async with semaphore:
+                return await _load_timed_case(db, held, model, ns, aliases)
+
+        loaded = await asyncio.gather(*(load(held) for held in selected))
+    finally:
+        await db.disconnect()
+        await close_http_client()
+
+    cases = [case for case in loaded if case is not None]
+    if not cases:
+        print("No time-aware cases produced a result.", file=sys.stderr)
+        return 1
+
+    def run(*, use_history: bool, member_years: int) -> list[TimedScore]:
+        return [
+            score_timed_case(
+                case,
+                weights,
+                committees,
+                active=active,
+                eligible=eligible,
+                use_history=use_history,
+                member_years=member_years,
+            )
+            for case in cases
+        ]
+
+    print(
+        f"TIME-AWARE BACKTEST {ns.from_date}..{ns.to_date} cases={len(cases)} "
+        f"failed={len(selected) - len(cases)} "
+        f"floor={settings.DIPLOMA_RERANKER_MIN_SCORE}",
+    )
+    print(_timed_line("planner (no history)", run(use_history=False, member_years=0)))
+    chat = run(use_history=True, member_years=0)
+    print(_timed_line("chat (all history)", chat))
+    for years in ns.member_prior_years:
+        scores = run(use_history=True, member_years=years)
+        deltas = [
+            score.members_jaccard - base.members_jaccard
+            for score, base in zip(scores, chat, strict=True)
+        ]
+        low, high = _bootstrap_interval(deltas, rng)
+        print(
+            f"{_timed_line(f'chat, members {years}y', scores)} "
+            f"delta={_mean(deltas):+.3f} ci95=[{low:+.3f},{high:+.3f}]",
+        )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Committee-recommender backtest (GATE A: defenses-only).",
@@ -593,6 +888,20 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="force coauthor_weight=0 and coauthor_member_boost=0 (composes with --no-papers)",
     )
+    p.add_argument(
+        "--time-aware",
+        action="store_true",
+        help="replay production staff rules using only data from before each defense",
+    )
+    p.add_argument("--from-date", type=date.fromisoformat, default=date(2025, 7, 1))
+    p.add_argument("--to-date", type=date.fromisoformat, default=date.max)
+    p.add_argument(
+        "--member-prior-years",
+        type=int,
+        nargs="*",
+        default=[2, 3, 4, 5],
+        help="recent-history windows to compare for member selection",
+    )
     return p
 
 
@@ -604,4 +913,5 @@ def _resolve_sample_size(ns: argparse.Namespace) -> None:
 if __name__ == "__main__":
     namespace = build_parser().parse_args()
     _resolve_sample_size(namespace)
-    raise SystemExit(asyncio.run(main_async(namespace)))
+    entrypoint = time_aware_async if namespace.time_aware else main_async
+    raise SystemExit(asyncio.run(entrypoint(namespace)))

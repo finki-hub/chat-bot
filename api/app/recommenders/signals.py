@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 from app.recommenders.config import ScoringWeights
@@ -29,6 +29,19 @@ def build_mentor_prior(
             if member:
                 bucket[member] = bucket.get(member, 0.0) + 1.0
     return MentorPriorIndex(by_mentor=by_mentor)
+
+
+def build_recent_member_prior(
+    defenses: Iterable[tuple[str | None, str | None, str | None, date | None]],
+    as_of: date,
+    years: int,
+) -> MentorPriorIndex:
+    start = as_of - timedelta(days=round(365.25 * years))
+    return build_mentor_prior(
+        (mentor, member1, member2)
+        for mentor, member1, member2, submitted in defenses
+        if submitted is not None and start <= submitted < as_of
+    )
 
 
 def build_coauthor_prior(papers: Iterable[Sequence[str]]) -> MentorPriorIndex:
