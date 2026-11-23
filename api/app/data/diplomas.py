@@ -92,21 +92,33 @@ async def get_closest_diplomas(
     threshold: float | None = None,
     *,
     exclude_external_id: str | None = None,
+    submitted_before: date | None = None,
 ) -> list[DiplomaSchema]:
     embedding = embedding_vector_sql(model, embedded_query)
-    version_parameter = 5 if exclude_external_id is not None else 4
-    predicate = current_embedding_predicate(
-        model,
-        embedding.column_ref,
-        version_parameter=version_parameter,
-    )
-
     if threshold is None:
         threshold = MODEL_DISTANCE_THRESHOLDS.get(model, 0.5)
 
-    exclude_clause = ""
+    args: list[object] = [
+        embedding_to_pgvector(embedded_query),
+        limit,
+        threshold,
+    ]
+    filter_clauses: list[str] = []
     if exclude_external_id is not None:
-        exclude_clause = "AND external_id <> $4"
+        args.append(exclude_external_id)
+        filter_clauses.append(f"AND external_id <> ${len(args)}")
+    order_by = "distance"
+    if submitted_before is not None:
+        args.append(submitted_before)
+        filter_clauses.append(f"AND date_of_submission < ${len(args)}")
+        # An approximate index scan would filter too late and return too few rows.
+        order_by = f"({embedding.distance_operand} <=> {embedding.query_operand}) + 0"
+    exclude_clause = " ".join(filter_clauses)
+    predicate = current_embedding_predicate(
+        model,
+        embedding.column_ref,
+        version_parameter=len(args) + 1,
+    )
 
     # ruff: ignore[S608] -- fragments come from closed model mappings
     sql = f"""
@@ -128,17 +140,10 @@ async def get_closest_diplomas(
         AND status = 'Одбрана'
         AND {embedding.distance_operand} <=> {embedding.query_operand} < $3
         {exclude_clause}
-    ORDER BY distance
+    ORDER BY {order_by}
     LIMIT $2
     """
 
-    args: list[object] = [
-        embedding_to_pgvector(embedded_query),
-        limit,
-        threshold,
-    ]
-    if exclude_external_id is not None:
-        args.append(exclude_external_id)
     args.extend(predicate.parameters)
 
     result = await db.fetch(sql, *args)
@@ -202,7 +207,7 @@ async def fetch_diploma_rows_for_fill(
 
 async def get_defended_committees(db: Database) -> list[Record]:
     query = (
-        "SELECT mentor, member1, member2 FROM diploma "
+        "SELECT mentor, member1, member2, date_of_submission FROM diploma "
         "WHERE status = 'Одбрана' AND mentor IS NOT NULL"
     )
     return await db.fetch(query)
@@ -226,7 +231,7 @@ async def get_backtest_population(
     )
     # ruff: ignore[S608] -- predicate comes from a closed model mapping
     query = f"""
-    SELECT external_id, title, mentor, member1, member2
+    SELECT external_id, title, mentor, member1, member2, date_of_submission
     FROM diploma
     WHERE status = 'Одбрана'
         AND {predicate.sql}

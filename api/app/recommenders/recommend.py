@@ -4,6 +4,7 @@ from app.recommenders.signals import (
     build_coauthor_prior,
     build_expertise_index,
     build_mentor_prior,
+    build_recent_member_prior,
     score_people,
 )
 from app.recommenders.types import (
@@ -34,6 +35,7 @@ __all__ = [
     "build_coauthor_prior",
     "build_expertise_index",
     "build_mentor_prior",
+    "build_recent_member_prior",
     "score_people",
     "select_committee",
 ]

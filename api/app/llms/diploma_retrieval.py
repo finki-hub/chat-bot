@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 
 from app.data.connection import Database
 from app.data.diplomas import get_closest_diplomas
@@ -50,6 +51,7 @@ async def retrieve_similar_diplomas(
     *,
     exclude_external_id: str | None = None,
     query_embedding: list[float] | None = None,
+    submitted_before: date | None = None,
 ) -> list[RetrievedDiploma]:
     embedded = (
         query_embedding
@@ -66,6 +68,7 @@ async def retrieve_similar_diplomas(
         model,
         limit=initial_k,
         exclude_external_id=exclude_external_id,
+        submitted_before=submitted_before,
     )
 
     if not candidates:
