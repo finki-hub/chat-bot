@@ -108,7 +108,7 @@ requires-dist = [
     { name = "langchain-mcp-adapters", specifier = ">=0.3.2" },
     { name = "langchain-ollama", specifier = ">=1.1.0" },
     { name = "langchain-openai", specifier = ">=1.8.0" },
-    { name = "langchain-openrouter", specifier = ">=0.2.9" },
+    { name = "langchain-openrouter", specifier = ">=0.3.0" },
     { name = "langchain-text-splitters", specifier = ">=1.1.3" },
     { name = "langgraph", specifier = ">=1.2.24" },
     { name = "posthog", specifier = ">=7.91.2" },
@@ -1026,15 +1026,15 @@ wheels = [
 
 [[package]]
 name = "langchain-openrouter"
-version = "0.2.9"
+version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain-core" },
     { name = "openrouter" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b6/ad/c908cc9161858fe0c720e8e0d32d64462c5a09bf64e463e1709d679919bc/langchain_openrouter-0.2.9.tar.gz", hash = "sha256:e3c130bfc58a517811044b6cb56e13b2e7d1ee219c38e025f4522aa0400f9c8e", size = 183837, upload-time = "2026-09-22T04:15:59.13Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/81/bc/71a55fbc2c0f987e7a0116b4ea278c4e34ff8effc7d7144c40d9c9acba1a/langchain_openrouter-0.3.0.tar.gz", hash = "sha256:673f00f19ff34e1d173b9d4b2269e525c4971c2a405f8a56cc63aeb46f80b02e", size = 159616, upload-time = "2026-11-19T15:03:05.778Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/65/ad/7a0f0f39b92d0b93123d6e11e4bf35a560a07cbf59bfee7ab0c6052d251f/langchain_openrouter-0.2.9-py3-none-any.whl", hash = "sha256:375a79a4a849069d2254627185210b2f2b9fe84c69326e10d71c3d48f8b41f06", size = 30170, upload-time = "2026-09-22T04:15:57.853Z" },
+    { url = "https://files.pythonhosted.org/packages/91/db/4459e08ce4789c12df13dcb09df61932fd92055c4c9e06d894b819d3f63b/langchain_openrouter-0.3.0-py3-none-any.whl", hash = "sha256:9bf007157ca80d21f7ded48afab803064a2f51a71d3d28d600b8076f62911552", size = 30583, upload-time = "2026-11-19T15:03:04.663Z" },
 ]
 
 [[package]]
