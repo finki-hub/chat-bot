@@ -25,7 +25,7 @@
   "dependencies": {
     "@ai-sdk/react": "^4.0.177",
     "@streamdown/cjk": "^1.0.5",
-    "@streamdown/code": "^2.0.0",
+    "@streamdown/code": "^2.0.1",
     "@streamdown/math": "^1.0.3",
     "@streamdown/mermaid": "^1.0.3",
     "@tanstack/react-query": "^5.107.1",
