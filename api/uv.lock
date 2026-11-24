@@ -104,7 +104,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=1.5.2" },
     { name = "langchain-anthropic", specifier = ">=1.7.12" },
-    { name = "langchain-google-genai", specifier = ">=4.5.0" },
+    { name = "langchain-google-genai", specifier = ">=4.5.2" },
     { name = "langchain-mcp-adapters", specifier = ">=0.3.2" },
     { name = "langchain-ollama", specifier = ">=1.1.0" },
     { name = "langchain-openai", specifier = ">=1.8.5" },
@@ -969,7 +969,7 @@ wheels = [
 
 [[package]]
 name = "langchain-google-genai"
-version = "4.5.0"
+version = "4.5.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filetype" },
@@ -977,9 +977,9 @@ dependencies = [
     { name = "langchain-core" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3e/b5/735a935a72ee93538035efea8893e7782041e03b9f6f1b28271e94b5e000/langchain_google_genai-4.5.0.tar.gz", hash = "sha256:54f2d887b454ff94635af13c5edca7ec4d1b8f4ad77cb51f63d3443ce4a83514", size = 370586, upload-time = "2026-11-11T19:20:20.991Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8b/e1/50e3293479a3f217a0fa8fa85717b9ed9ca860a32e8cf57d8868156ae7a1/langchain_google_genai-4.5.2.tar.gz", hash = "sha256:e098d1d52fe6107e7230316da1cf2caed55a52344c4f5351ade6a8b08de5d190", size = 375141, upload-time = "2026-11-19T23:11:04.937Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/dc/6f/7e95c6c06cdcf6f13ac42a65b39c36d4483498a352342582782daa2049b0/langchain_google_genai-4.5.0-py3-none-any.whl", hash = "sha256:0b04ca96696b41dba1e1fa29e4dd7132afab9cb6ae7d8fc173fd0b3858bdaf72", size = 89965, upload-time = "2026-11-11T19:20:19.652Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/b5/a8892d7ce65e1a74a2b7b10c4e40c6b1a41e590d4564d5d852caaaf3a3b4/langchain_google_genai-4.5.2-py3-none-any.whl", hash = "sha256:8e7ab6d8fc0799ea25d845fd717fec1a80cfcb24f95e16b9799cb58c171ec152", size = 91354, upload-time = "2026-11-19T23:11:03.789Z" },
 ]
 
 [[package]]
