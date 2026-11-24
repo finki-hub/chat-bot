@@ -88,7 +88,9 @@ async def _consume(prepared):
 def _events(prepared, event):
     return [
         call.kwargs
-        for call in prepared.sdk.capture.call_args_list
+        for call in (
+            prepared.sdk.capture.call_args_list + prepared.sdk.capture_ai.call_args_list
+        )
         if call.kwargs["event"] == event
     ]
 
