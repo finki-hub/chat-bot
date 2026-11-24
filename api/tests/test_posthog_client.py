@@ -20,6 +20,13 @@ def client(monkeypatch):
     return client
 
 
+def test_ai_events_use_ai_lane(client):
+    posthog_client.capture("d", "$ai_generation", {"$ai_trace_id": "t"})
+    posthog_client.capture("d", "chat_feedback")
+    assert client.capture_ai.call_args.kwargs["event"] == "$ai_generation"
+    assert client.capture.call_args.kwargs["event"] == "chat_feedback"
+
+
 def test_exception_payload_is_metadata_only(client):
     sentinel = "sk-secret person@example.test private prompt answer https://host/path?key=secret"
     request = Request(
