@@ -83,7 +83,8 @@ def test_inference_trace_is_preserved_and_failures_are_nonblocking(analytics):
         request, stage="embed", ms=20, props={"model": "embedding-model", "count": 2}
     )
     client = analytics._state.client
-    call = client.capture.call_args.kwargs
+    client.capture.assert_not_called()
+    call = client.capture_ai.call_args.kwargs
     assert call["event"] == "$ai_embedding"
     assert call["properties"]["$ai_trace_id"] == "opaque-response"
     client.capture.side_effect = RuntimeError("offline")
