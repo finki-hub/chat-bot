@@ -23,7 +23,7 @@
     "e2e:install": "playwright install chromium"
   },
   "dependencies": {
-    "@ai-sdk/react": "^4.0.181",
+    "@ai-sdk/react": "^4.0.183",
     "@streamdown/cjk": "^1.0.5",
     "@streamdown/code": "^2.0.1",
     "@streamdown/math": "^1.0.3",
