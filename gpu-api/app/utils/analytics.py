@@ -66,7 +66,9 @@ def capture(
         return
 
     try:
-        client.capture(
+        # PostHog ingests $ai_* events only on the AI lane; others on analytics.
+        send = client.capture_ai if event.startswith("$ai_") else client.capture
+        send(
             distinct_id=distinct_id,
             event=event,
             properties={
