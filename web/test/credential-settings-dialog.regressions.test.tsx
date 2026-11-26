@@ -32,6 +32,8 @@ const SAVING_CREDENTIALS_LABEL = 'Се зачувуваат клучевите�
 const BASE_URL_FIELD = 'base_url';
 const HAS_API_KEY_FIELD = 'has_api_key';
 const USER_ID_FIELD = 'user_id';
+const OPENAI_SAVE_FAILED_DESCRIPTION = /Клучот не можеше да се зачува/u;
+const REJECTED_BASE_URL_DESCRIPTION = /Base URL адресата не е дозволена/u;
 
 const credential = (
   provider: ChatCredentialProvider,
@@ -435,11 +437,11 @@ describe('CredentialSettingsDialog save reconciliation', () => {
     });
 
     expect(openaiKey).toHaveAccessibleDescription(
-      expect.stringContaining('Клучот не можеше да се зачува.'),
+      OPENAI_SAVE_FAILED_DESCRIPTION,
     );
 
     expect(googleBaseUrl).toHaveAccessibleDescription(
-      expect.stringContaining('Base URL адресата не е дозволена.'),
+      REJECTED_BASE_URL_DESCRIPTION,
     );
 
     await waitFor(() => {
