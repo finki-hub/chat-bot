@@ -63,7 +63,9 @@ def parse_suggestions(raw: str, question: str) -> list[str]:
     seen = {_normalize(question)}
     suggestions: list[str] = []
     for line in raw.splitlines():
-        text = " ".join(_LIST_MARKER.sub("", line).strip("'\"`“”‘’„ ").split())
+        text = " ".join(
+            _LIST_MARKER.sub("", line).strip("'\"`“”‘’„*_# ").split(),
+        )
         key = _normalize(text)
         if not key or key in seen or len(text) > MAX_SUGGESTION_LENGTH:
             continue
@@ -96,6 +98,19 @@ async def _answerable(db: Database, suggestion: str) -> bool:
     )
 
 
+async def _first_answerable(db: Database, candidates: list[str]) -> list[str]:
+    """The first answerable candidates, in order, checking only as many at once as
+    are still needed, so the usual cost is MAX_SUGGESTIONS searches."""
+    kept: list[str] = []
+    remaining = candidates
+    while remaining and len(kept) < MAX_SUGGESTIONS:
+        needed = MAX_SUGGESTIONS - len(kept)
+        batch, remaining = remaining[:needed], remaining[needed:]
+        checks = await asyncio.gather(*(_answerable(db, c) for c in batch))
+        kept.extend(c for c, ok in zip(batch, checks, strict=True) if ok)
+    return kept
+
+
 async def generate_chat_suggestions(
     payload: ChatSuggestionsSchema,
     db: Database,
@@ -126,12 +141,7 @@ async def generate_chat_suggestions(
     )
     # transform_query hands the prompt back when the provider call fails.
     candidates = [] if raw == prompt else parse_suggestions(raw, payload.question)
-    checks = await asyncio.gather(
-        *(_answerable(db, candidate) for candidate in candidates),
-    )
-    suggestions = [
-        candidate for candidate, ok in zip(candidates, checks, strict=True) if ok
-    ][:MAX_SUGGESTIONS]
+    suggestions = await _first_answerable(db, candidates)
     capture(
         "chat-suggestions",
         "chat_suggestions",

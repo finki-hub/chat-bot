@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ErrorNotice, ModelId, MyUIMessage } from '@/lib/api-types';
 
@@ -22,36 +22,50 @@ type UseFollowUpSuggestionsOptions = {
 };
 
 // Follow-up questions for an answer that just finished streaming here; opening
-// an older conversation asks for none.
+// an older conversation or stopping the answer asks for none.
 export const useFollowUpSuggestions = ({
   activeError,
   conversationId,
   messages,
   model,
   status,
-}: UseFollowUpSuggestionsOptions): FollowUps | null => {
+}: UseFollowUpSuggestionsOptions): {
+  readonly followUps: FollowUps | null;
+  readonly markStopped: () => void;
+} => {
   const [followUps, setFollowUps] = useState<FollowUps | null>(null);
   const previousStatusRef = useRef(status);
-  const conversationRef = useRef(conversationId);
-  conversationRef.current = conversationId;
+  const stoppedRef = useRef(false);
+  // Bumped by every new turn or conversation, so a late reply is dropped.
+  const turnRef = useRef(0);
 
   useEffect(() => {
+    turnRef.current += 1;
     setFollowUps(null);
   }, [conversationId]);
+
+  const markStopped = useCallback(() => {
+    stoppedRef.current = true;
+  }, []);
 
   useEffect(() => {
     const previous = previousStatusRef.current;
     previousStatusRef.current = status;
     if (status === 'submitted' || status === 'streaming') {
+      if (previous !== 'submitted' && previous !== 'streaming') {
+        turnRef.current += 1;
+        stoppedRef.current = false;
+      }
       setFollowUps(null);
       return;
     }
     const justFinished = previous === 'streaming' || previous === 'submitted';
     if (
+      !justFinished ||
       status !== 'ready' ||
       activeError !== undefined ||
       conversationId === null ||
-      !justFinished
+      stoppedRef.current
     ) {
       return;
     }
@@ -71,6 +85,7 @@ export const useFollowUpSuggestions = ({
       return;
     }
 
+    const turn = turnRef.current;
     const run = async (): Promise<void> => {
       const suggestions = await fetchChatSuggestions({
         answer: answerContent,
@@ -78,15 +93,12 @@ export const useFollowUpSuggestions = ({
         providerModel: model,
         question: questionContent,
       });
-      if (
-        suggestions.length > 0 &&
-        conversationRef.current === conversationId
-      ) {
+      if (suggestions.length > 0 && turnRef.current === turn) {
         setFollowUps({ messageId: answer.id, suggestions });
       }
     };
     fireAndForget(run());
   }, [activeError, conversationId, messages, model, status]);
 
-  return followUps;
+  return { followUps, markStopped };
 };

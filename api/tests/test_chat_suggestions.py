@@ -136,6 +136,39 @@ async def test_caps_suggestions_at_three(monkeypatch) -> None:
     assert response.suggestions == lines[:3]
 
 
+def test_parse_strips_markdown_emphasis() -> None:
+    assert chat_suggestions.parse_suggestions("**Кој е рокот?**\n_Каде?_", "q") == [
+        "Кој е рокот?",
+        "Каде?",
+    ]
+
+
+@pytest.mark.anyio
+async def test_stops_checking_once_three_suggestions_pass(monkeypatch) -> None:
+    lines = [f"Прашање {n}?" for n in range(5)]
+    _mock(monkeypatch, output="\n".join(lines))
+    searched: list[str] = []
+
+    async def retrieve(*, query: str, **kwargs) -> RetrievedContext:
+        searched.append(query)
+        return _strong()
+
+    monkeypatch.setattr(
+        chat_suggestions,
+        "get_retrieved_context_with_sources",
+        retrieve,
+    )
+
+    response = await chat_suggestions.generate_chat_suggestions(
+        _PAYLOAD,
+        _DB,
+        _REQUEST,
+    )
+
+    assert response.suggestions == lines[:3]
+    assert searched == lines[:3]
+
+
 @pytest.mark.anyio
 async def test_a_failed_search_drops_the_suggestion(monkeypatch) -> None:
     _mock(monkeypatch, output="Прво?")

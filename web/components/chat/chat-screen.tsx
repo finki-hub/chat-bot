@@ -235,13 +235,17 @@ export const ChatScreen = () => {
     pendingJump !== null && pendingJump.conversationId === activeId
       ? pendingJump.messageId
       : undefined;
-  const followUps = useFollowUpSuggestions({
+  const { followUps, markStopped } = useFollowUpSuggestions({
     activeError,
     conversationId: activeId,
     messages,
     model,
     status,
   });
+  const handleStop = useCallback(() => {
+    markStopped();
+    onStop();
+  }, [markStopped, onStop]);
   // One share state for the header (phones) and the context bar (wider screens).
   const sharing = useConversationSharing(activeId);
 
@@ -341,7 +345,7 @@ export const ChatScreen = () => {
             modelsLoading={modelsLoading}
             onModelChange={setModel}
             onReasoningChange={setReasoning}
-            onStop={onStop}
+            onStop={handleStop}
             onSubmit={submitMessage}
             reasoning={reasoningActive}
             showDisclaimer={messages.length === 0}

@@ -1,4 +1,10 @@
-import { render, renderHook, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -48,7 +54,7 @@ const renderFollowUps = (
         messages,
         model: 'claude-sonnet-5-5',
         status,
-      }),
+      }).followUps,
     { initialProps: { status: initialStatus } },
   );
 
@@ -76,6 +82,50 @@ describe('useFollowUpSuggestions', () => {
       providerModel: 'claude-sonnet-5-5',
       question: 'Колку чини уписот?',
     });
+  });
+
+  it('does not ask for a stopped answer, but does for the next one', async () => {
+    const { rerender, result } = renderHook(
+      ({ status }: { status: Status }) =>
+        useFollowUpSuggestions({
+          activeError: undefined,
+          conversationId: 'c1',
+          messages: [QUESTION, ANSWER],
+          model: 'claude-sonnet-5-5',
+          status,
+        }),
+      { initialProps: { status: 'streaming' as Status } },
+    );
+
+    result.current.markStopped();
+    rerender({ status: 'ready' });
+
+    expect(fetchChatSuggestions).not.toHaveBeenCalled();
+
+    rerender({ status: 'submitted' });
+    rerender({ status: 'streaming' });
+    rerender({ status: 'ready' });
+    await waitFor(() => {
+      expect(fetchChatSuggestions).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('drops a reply that arrives after the next question was sent', async () => {
+    const pending = Promise.withResolvers<readonly string[]>();
+    fetchChatSuggestions.mockReturnValue(pending.promise);
+    const { rerender, result } = renderFollowUps('streaming');
+    rerender({ status: 'ready' });
+    rerender({ status: 'submitted' });
+
+    await act(async () => {
+      pending.resolve(SUGGESTIONS);
+      await pending.promise;
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    });
+
+    expect(result.current).toBeNull();
   });
 
   it('does not ask for an answer loaded from history', () => {
