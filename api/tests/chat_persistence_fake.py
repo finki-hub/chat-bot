@@ -531,9 +531,9 @@ class FakeChatDatabase:
                 if row["conversation_id"] in conversation_ids
                 and row["role"] == "assistant"
             }
-            deleted = self.retrieval_gaps & response_ids
-            self.retrieval_gaps -= deleted
-            return f"DELETE {len(deleted)}"
+            deleted_gaps = self.retrieval_gaps & response_ids
+            self.retrieval_gaps -= deleted_gaps
+            return f"DELETE {len(deleted_gaps)}"
         if "INSERT INTO chat_conversation_tombstone" in query:
             assert isinstance(args[0], list)
             self.tombstones.update(args[0])

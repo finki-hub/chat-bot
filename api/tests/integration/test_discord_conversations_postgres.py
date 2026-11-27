@@ -222,6 +222,9 @@ async def _database():
         await database.execute(
             (migrations / "0015_add_feedback_reason.sql").read_text(encoding="utf-8"),
         )
+        await database.execute(
+            (migrations / "0017_add_retrieval_gap.sql").read_text(encoding="utf-8"),
+        )
         yield database
     finally:
         await database.disconnect()
