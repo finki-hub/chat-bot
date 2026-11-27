@@ -24,14 +24,15 @@ const TYPEAHEAD_CONTROL_SELECTOR =
   'input, textarea, select, [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"], [role="tree"], [role="treeitem"]';
 
 // Touch keyboards have no Shift+Enter, so Enter adds a line there and the
-// send button submits; IME composition also uses Enter to confirm a word.
+// send button submits. A tablet with a trackpad or mouse attached hovers, so
+// Enter sends there. IME composition also uses Enter to confirm a word.
+const TOUCH_ONLY_QUERY = '(pointer: coarse) and (any-hover: none)';
+
 const submitsOnEnter = (e: KeyboardEvent<HTMLTextAreaElement>): boolean =>
   e.key === 'Enter' &&
   !e.shiftKey &&
   !e.nativeEvent.isComposing &&
-  !(
-    typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
-  );
+  !(typeof matchMedia === 'function' && matchMedia(TOUCH_ONLY_QUERY).matches);
 
 export type ComposerProps = {
   availableProviders: ReadonlySet<string>;

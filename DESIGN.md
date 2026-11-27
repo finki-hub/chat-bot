@@ -14,7 +14,7 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 
 - Sidebar rows use `text-sm`; section labels use `text-xs`, uppercase, and tracking-wide.
 - Conversation titles are single-line, truncated, and left-aligned.
-- Assistant answers render at 15px with relaxed leading for long-form reading; user bubbles stay `text-sm`.
+- Assistant answer Markdown renders at 15px with relaxed leading for long-form reading; user bubbles stay `text-sm`.
 - Shared conversation messages use pretty wrapping to avoid orphaning short words and may break unbroken URLs, hashes, or tokens anywhere rather than clip them on narrow screens.
 - Auth copy leads with the student task and concrete study value, not authentication mechanics or server terminology. The sign-in surface carries one question-form headline plus one supporting sentence — no benefit lists or badge elements. Keep the auth headline balanced at `text-4xl` and `sm:text-5xl`.
 
@@ -41,8 +41,8 @@ The chat UI is an operational product surface: fast, quiet, and readable for stu
 - Diagnostics hover card: preserve the existing hover/focus interaction, keep the card inside the dynamic viewport with the standard 16px outer gutter, and make the card the single vertical scroll owner when its full diagnostics content is taller than the available screen. The preferred minimum width must yield to Radix's available width on ultra-narrow viewports. While the trigger has keyboard focus, Arrow, Page Up/Down, Home, and End keys scroll the card without moving the conversation. Desktop-sized content remains unchanged and the surrounding conversation does not become a second scroll owner.
 - Compact sidebar: viewports below `lg` use a modal Radix dialog that traps focus, closes on Escape or overlay interaction, and restores focus to the header trigger. Desktop viewports from `lg` retain the static complementary landmark so tablet-width chat content keeps enough reading space.
 - Conversation loading state: preserve the current list/thread during transient failures and present an inline alert with a retry action. Only a confirmed missing conversation clears the selection.
-- Composer input: the textarea uses `text-base` below `md` so iOS does not zoom on focus. Enter sends on fine pointers; on coarse pointers Enter inserts a newline and the send button submits. Enter never submits during IME composition.
-- Composer model trigger: a selected free model shows its remaining quota (`remaining/limit`) beside the model name.
+- Composer input: the textarea uses `text-base` below `md` so iOS does not zoom on focus. Enter sends unless the device is touch-only (`(pointer: coarse) and (any-hover: none)`); there Enter inserts a newline and the send button submits. Enter never submits during IME composition.
+- Composer model trigger: a selected free model shows its remaining quota (`remaining/limit`) beside the model name, exposed to assistive technology as the trigger's description.
 - Composer submission failure: retain the draft and show an inline retryable error; clear the draft only after the message is accepted.
 - Mobile composer layout: reserve the bottom safe-area inset around the composer. On viewports no taller than `500px`, keep the full disclaimer available to assistive technology but visually clamp it to one line and reduce the conversation context bar to a 44px control row so the message thread retains a practical reading area.
 - Sponsored quota notice: present the exhausted state and localized reset time as passive information, then offer `Додај API клуч` as the only recovery action. Use the existing primary `Button` treatment with a coarse-pointer 44px target. Do not render wait, dismiss, or retry controls that cannot change the quota state.

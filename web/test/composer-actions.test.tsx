@@ -100,6 +100,9 @@ describe('ComposerActions Luna availability', () => {
     expect(screen.getByTestId('composer-model-quota')).toHaveTextContent(
       '8/10',
     );
+    expect(screen.getByTestId('composer-model')).toHaveAccessibleDescription(
+      'Преостанато: 8/10',
+    );
   });
 
   it('keeps the both quota unchanged after selecting Luna', async () => {

@@ -6,6 +6,7 @@ import {
   Sparkles,
   Square,
 } from 'lucide-react';
+import { useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -75,25 +76,73 @@ const getOptionAccess = (
 };
 
 // Free models show their remaining quota up front, not only in the menu.
-const SelectedQuota = ({
-  availableProviders,
-  model,
-}: {
-  availableProviders: ReadonlySet<string>;
-  model: ModelGroup['models'][number] | undefined;
-}) => {
-  const quota =
-    model === undefined || !isSponsoredModel(model)
+const useSelectedQuota = (
+  model: ModelGroup['models'][number] | undefined,
+  availableProviders: ReadonlySet<string>,
+  hidden: boolean,
+) => {
+  const id = useId();
+  const label =
+    hidden || model === undefined || !isSponsoredModel(model)
       ? null
       : getOptionAccess(model, availableProviders).quotaLabel;
-  return quota === null ? null : (
+  return { describedBy: label === null ? undefined : id, id, label };
+};
+
+// The trigger's aria-label replaces its content as the name, so the quota is
+// exposed as its description instead.
+const SelectedQuota = ({
+  descriptionId,
+  quota,
+}: {
+  descriptionId: string;
+  quota: string;
+}) => (
+  <>
     <span
-      aria-label={`${t('composer.quotaRemaining')}: ${quota}`}
+      aria-hidden="true"
       className="shrink-0 tabular-nums text-muted-foreground/80"
       data-testid="composer-model-quota"
     >
       {quota}
     </span>
+    <span
+      hidden
+      id={descriptionId}
+    >
+      {`${t('composer.quotaRemaining')}: ${quota}`}
+    </span>
+  </>
+);
+
+const SubmitIcon = ({
+  isBusy,
+  status,
+}: {
+  isBusy: boolean;
+  status: ComposerStatus;
+}) => {
+  if (status === 'submitted') {
+    return (
+      <Loader2
+        aria-hidden="true"
+        className="size-4 animate-spin"
+      />
+    );
+  }
+  if (isBusy) {
+    return (
+      <Square
+        aria-hidden="true"
+        className="size-4 fill-current"
+      />
+    );
+  }
+  return (
+    <ArrowUp
+      aria-hidden="true"
+      className="size-4"
+    />
   );
 };
 
@@ -114,34 +163,14 @@ export const ComposerActions = ({
   status,
   submitDisabled,
 }: ComposerActionsProps) => {
-  const renderSubmitIcon = () => {
-    if (status === 'submitted') {
-      return (
-        <Loader2
-          aria-hidden="true"
-          className="size-4 animate-spin"
-        />
-      );
-    }
-    if (isBusy) {
-      return (
-        <Square
-          aria-hidden="true"
-          className="size-4 fill-current"
-        />
-      );
-    }
-    return (
-      <ArrowUp
-        aria-hidden="true"
-        className="size-4"
-      />
-    );
-  };
-
   const selectedModel = groups
     .flatMap((group) => group.models)
     .find((entry) => entry.id === model);
+  const quota = useSelectedQuota(
+    selectedModel,
+    availableProviders,
+    showModelPlaceholder,
+  );
   const mandatoryReasoning = isReasoningMandatoryModel(model);
   const reasoningEnabled = isReasoningEnabledForModel(model, reasoning);
   const triggerLabel = showModelPlaceholder
@@ -181,6 +210,7 @@ export const ComposerActions = ({
           value={model}
         >
           <SelectTrigger
+            aria-describedby={quota.describedBy}
             aria-label={t('composer.model')}
             className="min-h-11 min-w-0 w-fit max-w-[calc(100vw-14.5rem)] shrink-0 gap-1.5 overflow-hidden rounded-full border-0 bg-transparent px-3 text-xs font-medium text-muted-foreground shadow-none *:data-[slot=select-value]:min-w-0 hover:bg-muted hover:text-foreground sm:max-w-[240px] sm:pointer-fine:min-h-8"
             data-testid="composer-model"
@@ -200,10 +230,10 @@ export const ComposerActions = ({
             <SelectValue placeholder={modelPlaceholder}>
               {triggerLabel}
             </SelectValue>
-            {showModelPlaceholder ? null : (
+            {quota.label === null ? null : (
               <SelectedQuota
-                availableProviders={availableProviders}
-                model={selectedModel}
+                descriptionId={quota.id}
+                quota={quota.label}
               />
             )}
           </SelectTrigger>
@@ -288,7 +318,10 @@ export const ComposerActions = ({
         size="icon"
         type="button"
       >
-        {renderSubmitIcon()}
+        <SubmitIcon
+          isBusy={isBusy}
+          status={status}
+        />
       </Button>
     </div>
   );

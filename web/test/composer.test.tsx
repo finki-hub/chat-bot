@@ -132,7 +132,9 @@ describe('Composer', () => {
   it('keeps Enter as a newline on touch keyboards', () => {
     vi.stubGlobal(
       'matchMedia',
-      vi.fn((query: string) => ({ matches: query === '(pointer: coarse)' })),
+      vi.fn((query: string) => ({
+        matches: query === '(pointer: coarse) and (any-hover: none)',
+      })),
     );
     try {
       const { onSubmit } = setup();
