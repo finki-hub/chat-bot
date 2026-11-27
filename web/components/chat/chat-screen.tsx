@@ -25,6 +25,7 @@ import { isReasoningEnabledForModel } from '@/lib/reasoning';
 import { DEFAULT_MODEL, useUiStore } from '@/lib/ui-store';
 import { useConversations } from '@/lib/use-conversations';
 import { useCredentials } from '@/lib/use-credentials';
+import { useFollowUpSuggestions } from '@/lib/use-follow-up-suggestions';
 import { useHealth } from '@/lib/use-health';
 import { useModels } from '@/lib/use-models';
 
@@ -234,6 +235,17 @@ export const ChatScreen = () => {
     pendingJump !== null && pendingJump.conversationId === activeId
       ? pendingJump.messageId
       : undefined;
+  const { followUps, markStopped } = useFollowUpSuggestions({
+    activeError,
+    conversationId: activeId,
+    messages,
+    model,
+    status,
+  });
+  const handleStop = useCallback(() => {
+    markStopped();
+    onStop();
+  }, [markStopped, onStop]);
   // One share state for the header (phones) and the context bar (wider screens).
   const sharing = useConversationSharing(activeId);
 
@@ -302,6 +314,7 @@ export const ChatScreen = () => {
             activeError={activeError}
             activeStatus={activeStatus}
             conversationId={activeId}
+            followUps={followUps}
             hydrating={hydratingConversation}
             jumpToMessageId={jumpToMessageId}
             messages={messages}
@@ -332,7 +345,7 @@ export const ChatScreen = () => {
             modelsLoading={modelsLoading}
             onModelChange={setModel}
             onReasoningChange={setReasoning}
-            onStop={onStop}
+            onStop={handleStop}
             onSubmit={submitMessage}
             reasoning={reasoningActive}
             showDisclaimer={messages.length === 0}

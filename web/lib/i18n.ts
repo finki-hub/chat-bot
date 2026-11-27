@@ -336,6 +336,7 @@ export const messages = {
   'thread.emptyDescription': 'Прашај нешто за студиите на\u{A0}ФИНКИ.',
   'thread.emptyTitle': 'Започни разговор',
   'thread.firstToken': 'почеток за',
+  'thread.followUps': 'Следни прашања',
   'thread.reasoning': 'Размислување',
   'thread.thinking': 'Размислување…',
   'toolCall.done': 'Завршено',

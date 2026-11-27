@@ -36,6 +36,16 @@ export type ChatRequestBody = {
   top_p?: number;
 };
 
+export type ChatSuggestionsClientPayload = {
+  readonly answer: string;
+  readonly providerModel?: ModelId;
+  readonly question: string;
+};
+
+export type ChatSuggestionsResponse = {
+  readonly suggestions: readonly string[];
+};
+
 export type ChatTitleClientPayload = {
   readonly messages: readonly ConversationTurn[];
   readonly providerModel?: ModelId;

@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import type { ErrorNotice, MyUIMessage, StatusPart } from '@/lib/api-types';
+import type { FollowUps } from '@/lib/use-follow-up-suggestions';
 
 import {
   Conversation,
@@ -9,6 +10,7 @@ import {
 } from '@/components/ai-elements/conversation';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { ActivityLine } from '@/components/chat/activity-line';
+import { FollowUpSuggestions } from '@/components/chat/follow-up-suggestions';
 import { AssistantMessage, MessageError } from '@/components/chat/message';
 import { UserMessage } from '@/components/chat/user-message';
 import { t } from '@/lib/i18n';
@@ -18,6 +20,8 @@ export type ThreadProps = {
   activeError?: ErrorNotice;
   activeStatus?: StatusPart;
   conversationId?: null | string;
+  // Shown under the last answer while nothing streams.
+  followUps?: FollowUps | null;
   hydrating?: boolean;
   jumpToMessageId?: string;
   messages: MyUIMessage[];
@@ -119,6 +123,7 @@ export const Thread = ({
   activeError,
   activeStatus,
   conversationId,
+  followUps,
   hydrating = false,
   jumpToMessageId,
   messages,
@@ -141,6 +146,7 @@ export const Thread = ({
   const streaming = status === 'streaming' || status === 'submitted';
   const lastMessage = messages.at(-1);
   const editQuestion = streaming ? undefined : onEditMessage;
+  const settledLastMessageId = streaming ? undefined : lastMessage?.id;
   const awaitingReply =
     streaming &&
     (lastMessage?.role !== 'assistant' ||
@@ -299,6 +305,12 @@ export const Thread = ({
                     pending={activeAssistant}
                     retryPending={isLastAssistant ? retryPending : undefined}
                     statusPart={activeAssistant ? activeStatus : undefined}
+                  />
+                  <FollowUpSuggestions
+                    followUps={followUps}
+                    message={m}
+                    onPick={onPickSuggestion}
+                    settledLastMessageId={settledLastMessageId}
                   />
                 </div>
               );
