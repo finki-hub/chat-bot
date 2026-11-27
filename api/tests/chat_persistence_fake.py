@@ -525,13 +525,13 @@ class FakeChatDatabase:
         if "DELETE FROM retrieval_gap" in query:
             (conversation_ids,) = args
             assert isinstance(conversation_ids, list)
-            response_ids = {
+            gap_response_ids = {
                 row["response_id"]
                 for row in self.messages.values()
                 if row["conversation_id"] in conversation_ids
                 and row["role"] == "assistant"
             }
-            deleted_gaps = self.retrieval_gaps & response_ids
+            deleted_gaps = self.retrieval_gaps & gap_response_ids
             self.retrieval_gaps -= deleted_gaps
             return f"DELETE {len(deleted_gaps)}"
         if "INSERT INTO chat_conversation_tombstone" in query:
