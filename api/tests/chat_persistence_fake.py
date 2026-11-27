@@ -13,6 +13,7 @@ class FakeChatDatabase:
         self.users: dict[tuple[object, object], dict[str, object]] = {}
         self.credentials: dict[tuple[object, object], dict[str, object]] = {}
         self.tombstones: set[object] = set()
+        self.retrieval_gaps: set[object] = set()
         self.now = datetime(2026, 7, 7, tzinfo=UTC)
 
     @asynccontextmanager
@@ -521,6 +522,18 @@ class FakeChatDatabase:
                     assert isinstance(generation, int)
                     user["history_generation"] = generation + 1
             return "UPDATE 1"
+        if "DELETE FROM retrieval_gap" in query:
+            (conversation_ids,) = args
+            assert isinstance(conversation_ids, list)
+            response_ids = {
+                row["response_id"]
+                for row in self.messages.values()
+                if row["conversation_id"] in conversation_ids
+                and row["role"] == "assistant"
+            }
+            deleted = self.retrieval_gaps & response_ids
+            self.retrieval_gaps -= deleted
+            return f"DELETE {len(deleted)}"
         if "INSERT INTO chat_conversation_tombstone" in query:
             assert isinstance(args[0], list)
             self.tombstones.update(args[0])

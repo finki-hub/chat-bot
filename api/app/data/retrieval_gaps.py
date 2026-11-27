@@ -25,7 +25,8 @@ def retrieval_gap_reason(
     searches: Sequence[SearchAttempt],
 ) -> RetrievalGapReason | None:
     """Why an answer's searches found nothing usable; None when one found a match
-    above the reranker floor, or when nothing was searched."""
+    above the reranker floor, or when nothing was searched. A search whose reranker
+    failed counts as a match: that is an outage, not a missing topic."""
     if not searches:
         return None
     if not any(search.hit for search in searches):
@@ -33,6 +34,22 @@ def retrieval_gap_reason(
     if all(search.weak or not search.hit for search in searches):
         return "weak_results"
     return None
+
+
+async def delete_orphaned_retrieval_gaps(db: Database) -> None:
+    """Drop rows whose answer was never stored (suppressed Discord storage, a
+    deletion racing the write) or was replaced by a regeneration or an edit."""
+    await db.execute(
+        """
+        DELETE FROM retrieval_gap AS gap
+        WHERE gap.created_at < NOW() - INTERVAL '1 hour'
+          AND NOT EXISTS (
+              SELECT 1 FROM chat_message AS message
+              WHERE message.response_id = gap.response_id
+                AND message.role = 'assistant'
+          )
+        """,
+    )
 
 
 async def insert_retrieval_gap(db: Database, gap: RetrievalGap) -> None:

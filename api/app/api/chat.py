@@ -518,7 +518,8 @@ async def _instrument_stream(
                 },
             ),
         )
-        if gap_writes is not None:
+        # A cancelled or failed answer may have stopped before its later searches.
+        if gap_writes is not None and outcome in _FINISHED_OUTCOMES:
             _schedule_retrieval_gap(
                 gap_writes,
                 payload=payload,
@@ -610,6 +611,9 @@ async def _instrument_stream(
                 ),
             )
     yield meta_event(meta_payload)
+
+
+_FINISHED_OUTCOMES = frozenset({"completed", "empty_answer"})
 
 
 def _schedule_retrieval_gap(

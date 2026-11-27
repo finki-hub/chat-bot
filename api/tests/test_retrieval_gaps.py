@@ -185,11 +185,17 @@ async def _body() -> AsyncIterator[str]:
     yield "event: done\ndata: {}\n\n"
 
 
+async def _failed_body() -> AsyncIterator[str]:
+    yield 'event: error\ndata: {"code":"agent_error"}\n\n'
+    yield "event: done\ndata: {}\n\n"
+
+
 def _run_stream(
     monkeypatch,
     searches: list[SearchAttempt],
     *,
     interface: str = "discord",
+    body: AsyncIterator[str] | None = None,
 ) -> tuple[UUID, list[RetrievalGap]]:
     monkeypatch.setattr(chat_api, "capture", lambda *args, **kwargs: None)
     writes = _RecordingWrites()
@@ -206,7 +212,7 @@ def _run_stream(
 
     async def collect() -> list[str]:
         stream = chat_api._instrument_stream(  # noqa: SLF001
-            _body(),
+            _body() if body is None else body,
             payload=payload,
             response_id=response_id,
             timings=RequestTimings(),
@@ -248,6 +254,13 @@ def test_stream_records_no_gap_when_answered_or_not_searched(
     assert scheduled == []
 
 
+def test_stream_records_no_gap_for_a_failed_answer(monkeypatch) -> None:
+    # It may have stopped before the searches that would have found something.
+    _, scheduled = _run_stream(monkeypatch, [MISS], body=_failed_body())
+
+    assert scheduled == []
+
+
 def _gap() -> RetrievalGap:
     return RetrievalGap(
         response_id=uuid4(),
@@ -270,7 +283,8 @@ async def test_writes_insert_the_gap_and_drain() -> None:
     writes.schedule(cast("Database", db), gap)
     await writes.drain()
 
-    sql, *args = db.execute.await_args.args
+    insert, sweep = [call.args for call in db.execute.await_args_list]
+    sql, *args = insert
     assert "INSERT INTO retrieval_gap" in sql
     assert "ON CONFLICT (response_id) DO NOTHING" in sql
     assert args == [
@@ -283,6 +297,8 @@ async def test_writes_insert_the_gap_and_drain() -> None:
         None,
         "completed",
     ]
+    assert "DELETE FROM retrieval_gap" in sweep[0]
+    assert "NOT EXISTS" in sweep[0]
     assert not writes.pending
 
     writes.schedule(cast("Database", db), gap)

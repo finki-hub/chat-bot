@@ -128,6 +128,17 @@ async def delete_history_on_connection(
     )
     await connection.execute(
         """
+        DELETE FROM retrieval_gap
+        WHERE response_id IN (
+            SELECT response_id FROM chat_message
+            WHERE conversation_id = ANY($1::uuid[]) AND role = 'assistant'
+              AND response_id IS NOT NULL
+        )
+        """,
+        conversation_ids,
+    )
+    await connection.execute(
+        """
         INSERT INTO chat_conversation_tombstone (id, user_id)
         SELECT id, user_id FROM chat_conversation
         WHERE id = ANY($1::uuid[]) AND user_id = $2

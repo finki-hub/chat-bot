@@ -2,7 +2,11 @@ import asyncio
 import logging
 
 from app.data.connection import Database
-from app.data.retrieval_gaps import RetrievalGap, insert_retrieval_gap
+from app.data.retrieval_gaps import (
+    RetrievalGap,
+    delete_orphaned_retrieval_gaps,
+    insert_retrieval_gap,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +43,7 @@ class RetrievalGapWrites:
 async def _store(db: Database, gap: RetrievalGap) -> None:
     try:
         await insert_retrieval_gap(db, gap)
+        await delete_orphaned_retrieval_gaps(db)
     # ruff: ignore[BLE001] -- a failed diagnostic write must never surface to the answer
     except Exception as exc:
         logger.warning(
