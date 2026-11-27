@@ -116,15 +116,18 @@ def _build_title_prompt(transcript: str) -> str:
 </conversation_transcript>"""
 
 
-def _title_candidate_models(payload: ChatTitleSchema) -> tuple[ChatModel, ...]:
+def _title_candidate_models(
+    provider_model: ChatModel,
+    query_transform_model: ChatModel | None,
+) -> tuple[ChatModel, ...]:
     """The models that may write the title, cheapest first."""
-    if payload.query_transform_model is not None:
-        return (payload.query_transform_model,)
-    if not isinstance(payload.provider_model, Model):
-        return (payload.provider_model,)
-    provider = provider_for_model(payload.provider_model)
+    if query_transform_model is not None:
+        return (query_transform_model,)
+    if not isinstance(provider_model, Model):
+        return (provider_model,)
+    provider = provider_for_model(provider_model)
     if provider in {"openrouter", "opencode-go"}:
-        return (payload.provider_model,)
+        return (provider_model,)
     return tuple(
         model
         for model in _TITLE_MODELS_BY_COST
@@ -133,13 +136,13 @@ def _title_candidate_models(payload: ChatTitleSchema) -> tuple[ChatModel, ...]:
 
 
 async def _title_credentials(
-    payload: ChatTitleSchema,
+    user_id: UUID | None,
     db: ChatCredentialDatabase | None,
     settings: Settings | None,
     candidate_models: tuple[ChatModel, ...],
 ) -> LlmProviderCredentials | None:
     """The user's own provider credentials for the candidate models."""
-    if payload.user_id is None:
+    if user_id is None:
         return None
     if db is None:
         msg = "db is required when user_id is present"
@@ -149,7 +152,7 @@ async def _title_credentials(
         raise TypeError(msg)
     return await resolve_provider_credentials(
         db,
-        user_id=payload.user_id,
+        user_id=user_id,
         providers=credential_providers_for_models(*candidate_models),
         settings=settings,
     )
@@ -179,15 +182,19 @@ def _sponsored_title_model(
     )
 
 
-async def generate_chat_title(
-    payload: ChatTitleSchema,
-    db: ChatCredentialDatabase | None = None,
-    settings: Settings | None = None,
+async def select_helper_model(
     *,
-    conversation_id: str | None = None,
-) -> ChatTitleResponse:
-    candidate_models = _title_candidate_models(payload)
-    credentials = await _title_credentials(payload, db, settings, candidate_models)
+    provider_model: ChatModel,
+    query_transform_model: ChatModel | None,
+    user_id: UUID | None,
+    db: ChatCredentialDatabase | None,
+    settings: Settings | None,
+    conversation_id: str | None,
+) -> tuple[ChatModel, LlmProviderCredentials | None] | None:
+    """The cheapest model, with credentials, for a small side task like a title:
+    the user's own key for the active provider first, then the sponsored model."""
+    candidate_models = _title_candidate_models(provider_model, query_transform_model)
+    credentials = await _title_credentials(user_id, db, settings, candidate_models)
     if credentials is not None and conversation_id is not None:
         credentials = replace(credentials, conversation_id=conversation_id)
     selected_model = next(
@@ -205,7 +212,28 @@ async def generate_chat_title(
         if sponsored is not None:
             selected_model, credentials = sponsored
     if selected_model is None:
+        return None
+    return selected_model, credentials
+
+
+async def generate_chat_title(
+    payload: ChatTitleSchema,
+    db: ChatCredentialDatabase | None = None,
+    settings: Settings | None = None,
+    *,
+    conversation_id: str | None = None,
+) -> ChatTitleResponse:
+    selection = await select_helper_model(
+        provider_model=payload.provider_model,
+        query_transform_model=payload.query_transform_model,
+        user_id=payload.user_id,
+        db=db,
+        settings=settings,
+        conversation_id=conversation_id,
+    )
+    if selection is None:
         return _fallback_title(payload, "no_model", None)
+    selected_model, credentials = selection
     prompt = _build_title_prompt(payload.transcript)
     raw_title = await transform_query(
         prompt,
