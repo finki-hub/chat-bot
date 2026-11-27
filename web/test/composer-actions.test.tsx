@@ -94,6 +94,17 @@ describe('ComposerActions Luna availability', () => {
     },
   );
 
+  it('shows the selected free model quota on the trigger', () => {
+    render(<ComposerActions {...createProps('sponsored')} />);
+
+    expect(screen.getByTestId('composer-model-quota')).toHaveTextContent(
+      '8/10',
+    );
+    expect(screen.getByTestId('composer-model')).toHaveAccessibleDescription(
+      'Преостанато: 8/10',
+    );
+  });
+
   it('keeps the both quota unchanged after selecting Luna', async () => {
     const props = { ...createProps('both'), model: 'another-model' };
     render(<ComposerActions {...props} />);

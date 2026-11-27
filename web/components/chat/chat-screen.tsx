@@ -246,6 +246,7 @@ export const ChatScreen = () => {
             : undefined
         }
         onToggleSidebar={toggleSidebar}
+        sidebarOpen={sidebarSynced && sidebarOpen}
         sidebarTriggerRef={sidebarTriggerRef}
       />
       <CredentialSettingsDialog

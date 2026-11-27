@@ -76,7 +76,7 @@ test('keeps complete diagnostics reachable inside a small viewport', async ({
     );
     await expect(submit).toHaveAccessibleName('Испрати');
     await expect(
-      page.getByText('Се случи неочекувана грешка. Обидете се повторно.', {
+      page.getByText('Се случи неочекувана грешка. Обиди се повторно.', {
         exact: true,
       }),
     ).toHaveCount(0);

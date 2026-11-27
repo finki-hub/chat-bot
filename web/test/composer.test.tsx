@@ -120,6 +120,34 @@ describe('Composer', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('does NOT submit on Enter while an IME composition is active', () => {
+    const { onSubmit } = setup();
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'ред' } });
+    fireEvent.keyDown(textarea, { isComposing: true, key: 'Enter' });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('keeps Enter as a newline on touch keyboards', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query === '(pointer: coarse) and (any-hover: none)',
+      })),
+    );
+    try {
+      const { onSubmit } = setup();
+      const textarea = screen.getByRole('textbox');
+      fireEvent.change(textarea, { target: { value: 'ред' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(onSubmit).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('does not submit empty/whitespace-only input', () => {
     const { onSubmit } = setup();
     const textarea = screen.getByRole('textbox');

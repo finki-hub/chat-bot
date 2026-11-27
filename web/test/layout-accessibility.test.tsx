@@ -18,6 +18,12 @@ import {
 import { IconButton } from '@/components/ui/icon-controls';
 import { InputGroupButton } from '@/components/ui/input-group';
 
+vi.mock('next/font/google', () => {
+  const font = () => ({ className: '', style: {}, variable: '' });
+  // eslint-disable-next-line camelcase -- next/font export name
+  return { Inter: font, JetBrains_Mono: font };
+});
+
 vi.mock('next/script', () => ({
   default: ({ children }: { readonly children: ReactNode }) => children,
 }));

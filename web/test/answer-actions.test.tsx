@@ -158,8 +158,8 @@ describe('AnswerActions feedback', () => {
       expect(like).toHaveAttribute(PRESSED, 'true');
     });
 
-    expect(like.className).toContain('bg-primary');
-    expect(like.className).toContain('text-primary-foreground');
+    expect(like.className).toContain('bg-success/15');
+    expect(like.className).toContain('text-success');
     expect(like.className).not.toContain('text-muted-foreground');
   });
 
