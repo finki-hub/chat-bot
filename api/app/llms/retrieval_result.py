@@ -81,6 +81,9 @@ class RetrievalSource:
 class RetrievedContext:
     text: str
     sources: tuple[RetrievalSource, ...] = ()
+    # Nothing passed the reranker floor; the text is the best match, flagged as weak.
+    weak: bool = False
+    top_score: float | None = None
 
     def sources_payload(self) -> list[RetrievalSourcePayload]:
         return [source.as_payload() for source in self.sources]

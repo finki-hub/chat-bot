@@ -37,6 +37,8 @@ class SearchResult:
     content: str
     sources: list[RetrievalSourcePayload]
     hit: bool
+    weak: bool = False
+    top_score: float | None = None
 
 
 def _search_summary(source_count: int, *, hit: bool) -> str:
@@ -87,7 +89,13 @@ class KnowledgeSearch:
             len(retrieved.text),
             bool(links),
         )
-        return SearchResult(content=content, sources=sources, hit=bool(retrieved.text))
+        return SearchResult(
+            content=content,
+            sources=sources,
+            hit=bool(retrieved.text),
+            weak=retrieved.weak,
+            top_score=retrieved.top_score,
+        )
 
     def tools(self) -> list[BaseTool]:
         async def search_knowledge_base(
@@ -106,6 +114,9 @@ class KnowledgeSearch:
                 return _SEARCH_FAILED, {"failed": True}
             return result.content or _NO_RESULTS, {
                 "hit": result.hit,
+                "weak": result.weak,
+                "top_score": result.top_score,
+                "query": query,
                 "sources": result.sources,
                 "summary": _search_summary(len(result.sources), hit=result.hit),
                 "context_chars": len(result.content),

@@ -3,7 +3,7 @@ import logging
 from fastapi.responses import StreamingResponse
 
 from app.data.connection import Database
-from app.llms.agents import StreamObservation
+from app.llms.agents import SearchAttempt, StreamObservation
 from app.llms.models import model_id
 from app.llms.prompts import (
     AGENT_ANNOUNCEMENTS_PROMPT,
@@ -112,6 +112,15 @@ async def handle_chat(
             if search is not None
             else None
         )
+        if found is not None and observation is not None:
+            observation.searches.append(
+                SearchAttempt(
+                    query=None,
+                    hit=found.hit,
+                    weak=found.weak,
+                    top_score=found.top_score,
+                ),
+            )
         sources = found.content if found is not None and found.content else NO_SOURCES
         return (
             PROMPT_SEPARATOR.join([DEFAULT_AGENT_SYSTEM_PROMPT, interface_format]),

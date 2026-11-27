@@ -24,6 +24,7 @@ from app.api.provider_credentials import (
     missing_mandatory_credential,
     resolve_provider_credentials,
 )
+from app.api.retrieval_gap_writes import RetrievalGapWrites
 from app.api.sponsored_access import (
     resolve_sponsored_inference,
 )
@@ -31,6 +32,7 @@ from app.constants.defaults import DEFAULT_EMBEDDINGS_MODEL
 from app.data.connection import Database
 from app.data.db import get_db
 from app.data.discord_conversations import DiscordExchange
+from app.data.retrieval_gaps import RetrievalGap, retrieval_gap_reason
 from app.data.sponsored_usage import (
     SponsoredQuotaExceededError,
     SponsoredRequestInProgressError,
@@ -430,6 +432,7 @@ async def _instrument_stream(
     sponsored_mode: str | None = None,
     model_access_mode: Literal["sponsored", "byok", "ordinary"] = "ordinary",
     storage: DiscordStorage | None = None,
+    gap_writes: tuple[RetrievalGapWrites, Database] | None = None,
 ) -> AsyncGenerator[bytes | str | memoryview]:
     """Pass the SSE body through untouched, stamping TTFT, thinking and total, then
     log one chat.timing line and emit a trailing ``meta`` frame with the same breakdown.
@@ -515,6 +518,14 @@ async def _instrument_stream(
                 },
             ),
         )
+        if gap_writes is not None:
+            _schedule_retrieval_gap(
+                gap_writes,
+                payload=payload,
+                response_id=response_id,
+                observation=observation,
+                outcome=outcome,
+            )
         effective_usage = (
             observation.usage if any(observation.usage.values()) else usage
         )
@@ -599,6 +610,44 @@ async def _instrument_stream(
                 ),
             )
     yield meta_event(meta_payload)
+
+
+def _schedule_retrieval_gap(
+    gap_writes: tuple[RetrievalGapWrites, Database],
+    *,
+    payload: ChatSchema,
+    response_id: UUID,
+    observation: StreamObservation,
+    outcome: str,
+) -> None:
+    reason = retrieval_gap_reason(observation.searches)
+    if reason is None:
+        return
+    writes, db = gap_writes
+    writes.schedule(
+        db,
+        RetrievalGap(
+            response_id=response_id,
+            interface=payload.interface,
+            reason=reason,
+            search_queries=[search.query for search in observation.searches],
+            inference_model=model_id(payload.inference_model),
+            embeddings_model=payload.embeddings_model.value,
+            reranker_score_max=max(
+                (s.top_score for s in observation.searches if s.top_score is not None),
+                default=None,
+            ),
+            outcome=outcome,
+        ),
+    )
+
+
+def _retrieval_gap_writes(
+    request: Request,
+    db: Database,
+) -> tuple[RetrievalGapWrites, Database] | None:
+    writes = getattr(request.app.state, "retrieval_gap_writes", None)
+    return (writes, db) if isinstance(writes, RetrievalGapWrites) else None
 
 
 db_dep = Depends(get_db)
@@ -950,6 +999,7 @@ async def _prepare_chat_response_stream(
             sponsored_mode=sponsored_mode,
             model_access_mode=model_access_mode,
             storage=storage,
+            gap_writes=_retrieval_gap_writes(request, db),
         )
 
         # No suspension between handoff and first iteration: generation owns all

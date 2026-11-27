@@ -226,6 +226,9 @@ async def test_search_tool_returns_context_and_source_artifact(monkeypatch) -> N
     assert message.content == "блок"
     assert message.artifact == {
         "hit": True,
+        "weak": False,
+        "top_score": None,
+        "query": "префрлување",
         "sources": [{"id": "1", "kind": "faq", "title": "Префрлување"}],
         "summary": "Пронајдени извори: 1",
         "context_chars": 4,
@@ -255,6 +258,9 @@ async def test_search_tool_without_results_says_so(monkeypatch) -> None:
     assert message.content == "Нема пронајдени извори за ова барање."
     assert message.artifact == {
         "hit": False,
+        "weak": False,
+        "top_score": None,
+        "query": "q",
         "sources": [],
         "summary": "Нема пронајдени извори",
         "context_chars": 0,

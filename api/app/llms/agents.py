@@ -125,6 +125,15 @@ RESET_EVENT = _sse("reset", {})
 DONE_EVENT = _sse("done", {})
 
 
+@dataclass(frozen=True, slots=True)
+class SearchAttempt:
+    # None when the search ran on the user's question itself (tool-less fallback).
+    query: str | None
+    hit: bool
+    weak: bool
+    top_score: float | None = None
+
+
 @dataclass
 class StreamObservation:
     distinct_id: str
@@ -146,6 +155,7 @@ class StreamObservation:
     finish_reason: str = ""
     context_chars: int = 0
     search_hit: bool = False
+    searches: list[SearchAttempt] = field(default_factory=list)
     sources: list[RetrievalSourcePayload] = field(default_factory=list)
 
 
@@ -225,6 +235,10 @@ def _tool_label(name: str, tool_input: object) -> str:
         (label for fragment, label in _TOOL_LABELS if fragment in name),
         _FALLBACK_TOOL_LABEL,
     )
+
+
+def _float_or_none(value: object) -> float | None:
+    return float(value) if isinstance(value, int | float) else None
 
 
 def _tool_artifact(output: object) -> dict[str, object]:
@@ -618,6 +632,18 @@ async def create_agent_token_generator[ResponseT](
                             observation.tool_names.add(name)
                             if artifact.get("hit") is True:
                                 observation.search_hit = True
+                            query = artifact.get("query")
+                            if succeeded and isinstance(query, str):
+                                observation.searches.append(
+                                    SearchAttempt(
+                                        query=query,
+                                        hit=artifact.get("hit") is True,
+                                        weak=artifact.get("weak") is True,
+                                        top_score=_float_or_none(
+                                            artifact.get("top_score"),
+                                        ),
+                                    ),
+                                )
                             context_chars = artifact.get("context_chars")
                             if isinstance(context_chars, int):
                                 observation.context_chars += context_chars
