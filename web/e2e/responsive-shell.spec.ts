@@ -9,7 +9,7 @@ const CONVERSATION_ID = 'conversation-1';
 const CONVERSATION_TITLE = 'Услови за запишување семестар';
 const MINIMUM_SHORT_THREAD_HEIGHT = 160;
 const VIEWPORT_FIT_COVER_PATTERN = /viewport-fit=cover/u;
-const DISCLAIMER_PATTERN = /Не внесувајте лични/u;
+const DISCLAIMER_PATTERN = /Не внесувај лични/u;
 const LONG_UNBROKEN_TEXT = 'x'.repeat(300);
 const LONG_HISTORY = Array.from({ length: 12 }, (_, index) => ({
   id: `message-${index}`,

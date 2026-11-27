@@ -1,12 +1,23 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
+import { Inter, JetBrains_Mono as JetBrainsMono } from 'next/font/google';
 import Script from 'next/script';
 
 import './globals.css';
 
 import { Providers } from '@/app/providers';
 import { t } from '@/lib/i18n';
+
+// Self-hosted at build time, so visitors never contact Google Fonts.
+const inter = Inter({
+  subsets: ['latin', 'cyrillic'],
+  variable: '--font-inter',
+});
+const jetBrainsMono = JetBrainsMono({
+  subsets: ['latin', 'cyrillic'],
+  variable: '--font-jetbrains-mono',
+});
 
 const TITLE = 'ФИНКИ Хаб / Чат';
 const DESCRIPTION =
@@ -80,6 +91,7 @@ const noFlashTheme = `(() => {
 
 const RootLayout = ({ children }: Readonly<{ children: ReactNode }>) => (
   <html
+    className={`${inter.variable} ${jetBrainsMono.variable}`}
     lang="mk"
     suppressHydrationWarning
   >

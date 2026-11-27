@@ -394,7 +394,7 @@ export const Sidebar = ({
       className={`${mobile ? 'w-full min-w-0' : 'w-64'} flex h-full flex-col gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))]`}
     >
       <button
-        className="group inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-medium shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-200 hover:border-primary/40 hover:bg-muted hover:shadow active:scale-[0.99]"
+        className="group inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-medium shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-200 hover:border-primary/40 hover:bg-muted hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99]"
         onClick={handleNewChat}
         type="button"
       >

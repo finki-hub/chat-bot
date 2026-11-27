@@ -17,6 +17,7 @@ export type HeaderProps = {
     readonly title: string;
   };
   onToggleSidebar: () => void;
+  sidebarOpen?: boolean;
   sidebarTriggerRef?: Ref<HTMLButtonElement>;
 };
 
@@ -34,11 +35,13 @@ const GitHubIcon = () => (
 export const Header = ({
   conversation,
   onToggleSidebar,
+  sidebarOpen,
   sidebarTriggerRef,
 }: HeaderProps) => (
   <header className="z-30 shrink-0 border-b border-border/60 bg-background pt-[env(safe-area-inset-top)]">
     <div className="flex min-h-14 flex-wrap items-center gap-2 px-3 py-1.5 sm:h-14 sm:flex-nowrap sm:gap-3 sm:px-4 sm:py-0">
       <IconButton
+        aria-expanded={sidebarOpen}
         aria-label={t('header.toggleSidebar')}
         onClick={onToggleSidebar}
         ref={sidebarTriggerRef}

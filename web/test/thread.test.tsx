@@ -231,7 +231,7 @@ describe('AssistantMessage', () => {
     const alert = screen.getByRole('alert');
 
     expect(alert).toHaveTextContent(
-      'Се случи неочекувана грешка. Обидете се повторно.',
+      'Се случи неочекувана грешка. Обиди се повторно.',
     );
     expect(alert).not.toHaveTextContent(rawMessage);
 
@@ -347,7 +347,7 @@ describe('AssistantMessage', () => {
     ],
     [
       'no_answer' as const,
-      'Не е пронајден одговор. Обидете се да го преформулирате прашањето.',
+      'Не е пронајден одговор. Обиди се да го преформулираш прашањето.',
     ],
   ])(
     'renders safe guidance for %s without retry or raw backend text',
@@ -859,7 +859,7 @@ describe('Thread', () => {
     const alert = screen.getByRole('alert');
 
     expect(alert).toHaveTextContent(
-      'Се случи неочекувана грешка. Обидете се повторно.',
+      'Се случи неочекувана грешка. Обиди се повторно.',
     );
     expect(alert).not.toHaveTextContent('provider secret: persisted detail');
   });
@@ -887,7 +887,7 @@ describe('Thread', () => {
     const alert = screen.getByRole('alert');
 
     expect(alert).toHaveTextContent(
-      'Се случи неочекувана грешка. Обидете се повторно.',
+      'Се случи неочекувана грешка. Обиди се повторно.',
     );
     expect(alert).not.toHaveTextContent('Не е пронајден одговор.');
   });

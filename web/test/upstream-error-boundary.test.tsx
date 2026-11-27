@@ -189,7 +189,7 @@ describe('upstream SSE error boundary characterization', () => {
       expect(screen.queryByTestId('answer-text')).not.toBeInTheDocument();
       expect(screen.queryByTestId('activity-line')).not.toBeInTheDocument();
       expect(screen.getByRole('alert')).toHaveTextContent(
-        'Се случи неочекувана грешка. Обидете се повторно.',
+        'Се случи неочекувана грешка. Обиди се повторно.',
       );
       expect(
         screen.queryByRole('button', { name: ADD_KEY }),

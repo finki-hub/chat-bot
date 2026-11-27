@@ -23,6 +23,16 @@ import {
 const TYPEAHEAD_CONTROL_SELECTOR =
   'input, textarea, select, [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"], [role="tree"], [role="treeitem"]';
 
+// Touch keyboards have no Shift+Enter, so Enter adds a line there and the
+// send button submits; IME composition also uses Enter to confirm a word.
+const submitsOnEnter = (e: KeyboardEvent<HTMLTextAreaElement>): boolean =>
+  e.key === 'Enter' &&
+  !e.shiftKey &&
+  !e.nativeEvent.isComposing &&
+  !(
+    typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+  );
+
 export type ComposerProps = {
   availableProviders: ReadonlySet<string>;
   credentialsError?: boolean;
@@ -178,7 +188,7 @@ export const Composer = ({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key !== 'Enter' || e.shiftKey) {
+    if (!submitsOnEnter(e)) {
       return;
     }
 
@@ -201,7 +211,7 @@ export const Composer = ({
           <textarea
             aria-label={t('composer.message')}
             autoComplete="off"
-            className="field-sizing-content max-h-48 min-h-11 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
+            className="field-sizing-content max-h-48 min-h-11 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-base outline-none placeholder:text-muted-foreground disabled:opacity-50 md:text-sm"
             data-testid="composer-input"
             disabled={disabled}
             name="message"

@@ -536,6 +536,27 @@ describe('ChatPage persistence', () => {
     expect(matchMediaMock).toHaveBeenCalledWith('(min-width: 1024px)');
   });
 
+  it('exposes the sidebar open state on the header toggle', async () => {
+    vi.stubGlobal('matchMedia', () => ({
+      addEventListener: vi.fn<MediaQueryList['addEventListener']>(),
+      matches: true,
+      removeEventListener: vi.fn<MediaQueryList['removeEventListener']>(),
+    }));
+    renderChatPage();
+
+    const toggle = await screen.findByRole('button', {
+      name: 'Прикажи/сокриј странична лента',
+    });
+    await waitFor(() => {
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    });
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    });
+  });
+
   it('keeps contextual and account actions out of the global header', async () => {
     renderChatPage();
 

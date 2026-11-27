@@ -74,6 +74,29 @@ const getOptionAccess = (
   return { accessLabel, available, quotaLabel, sponsored };
 };
 
+// Free models show their remaining quota up front, not only in the menu.
+const SelectedQuota = ({
+  availableProviders,
+  model,
+}: {
+  availableProviders: ReadonlySet<string>;
+  model: ModelGroup['models'][number] | undefined;
+}) => {
+  const quota =
+    model === undefined || !isSponsoredModel(model)
+      ? null
+      : getOptionAccess(model, availableProviders).quotaLabel;
+  return quota === null ? null : (
+    <span
+      aria-label={`${t('composer.quotaRemaining')}: ${quota}`}
+      className="shrink-0 tabular-nums text-muted-foreground/80"
+      data-testid="composer-model-quota"
+    >
+      {quota}
+    </span>
+  );
+};
+
 export const ComposerActions = ({
   availableProviders,
   disabled = false,
@@ -177,6 +200,12 @@ export const ComposerActions = ({
             <SelectValue placeholder={modelPlaceholder}>
               {triggerLabel}
             </SelectValue>
+            {showModelPlaceholder ? null : (
+              <SelectedQuota
+                availableProviders={availableProviders}
+                model={selectedModel}
+              />
+            )}
           </SelectTrigger>
           <SelectContent
             align="end"

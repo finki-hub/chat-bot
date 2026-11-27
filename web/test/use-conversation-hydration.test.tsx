@@ -242,7 +242,7 @@ describe('useConversationHydration', () => {
 
     expect(historyErrorUpdate(undefined)).toStrictEqual({
       code: 'history_load',
-      message: 'Разговорот не можеше да се вчита. Обидете се повторно.',
+      message: 'Разговорот не можеше да се вчита. Обиди се повторно.',
     });
   });
 
