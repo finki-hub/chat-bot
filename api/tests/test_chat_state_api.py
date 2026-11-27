@@ -697,6 +697,40 @@ def test_chat_state_delete_removes_owned_conversation_and_messages() -> None:
     assert message_id not in db.messages
 
 
+def test_chat_state_delete_removes_the_conversations_retrieval_gaps() -> None:
+    db = FakeChatDatabase()
+    client = _client(db)
+    conversation_id = uuid4()
+    user_message_id = uuid4()
+    client.post(
+        "/chat/state/conversations",
+        headers=_auth_headers(),
+        json={"id": str(conversation_id), "user_id": OWNER_ID},
+    )
+    client.post(
+        f"/chat/state/conversations/{conversation_id}/messages/user",
+        headers=_auth_headers(),
+        json={"content": "упис?", "id": str(user_message_id), "user_id": OWNER_ID},
+    )
+    response_id = uuid4()
+    db.messages[uuid4()] = {
+        **db.messages[user_message_id],
+        "role": "assistant",
+        "response_id": response_id,
+    }
+    other_response_id = uuid4()
+    db.retrieval_gaps.update({response_id, other_response_id})
+
+    deleted = client.delete(
+        f"/chat/state/conversations/{conversation_id}",
+        headers=_auth_headers(),
+        params={"user_id": OWNER_ID},
+    )
+
+    assert deleted.status_code == 200
+    assert db.retrieval_gaps == {other_response_id}
+
+
 def test_chat_state_lists_and_updates_owned_conversations() -> None:
     # Given: two conversations owned by the same authenticated web user.
     db = FakeChatDatabase()

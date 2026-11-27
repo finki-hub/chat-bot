@@ -24,6 +24,7 @@ from app.api.links import router as links_router
 from app.api.professors import router as professors_router
 from app.api.questions import router as questions_router
 from app.api.recommendations import router as recommendations_router
+from app.api.retrieval_gap_writes import RetrievalGapWrites
 from app.data.connection import Database
 from app.utils.exceptions import RetrievalError
 from app.utils.http_client import close_http_client, init_http_client
@@ -60,6 +61,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     current_settings: Settings = app.state.settings
     app.state.discord_writes = DiscordWriteRegistry()
+    app.state.retrieval_gap_writes = RetrievalGapWrites()
     _warn_on_insecure_defaults(current_settings)
 
     db = Database(
@@ -80,6 +82,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         try:
             with anyio.CancelScope(shield=True):
                 await app.state.discord_writes.drain()
+                await app.state.retrieval_gap_writes.drain()
         finally:
             await db.disconnect()
 
@@ -121,6 +124,7 @@ def make_app(settings: Settings) -> FastAPI:
     )
     app.state.settings = settings
     app.state.discord_writes = DiscordWriteRegistry()
+    app.state.retrieval_gap_writes = RetrievalGapWrites()
 
     # Wildcard origin + credentials is browser-rejected and unsafe; enable credentials
     # only for an explicit allowlist.

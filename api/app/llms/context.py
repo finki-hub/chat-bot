@@ -681,6 +681,7 @@ async def get_retrieved_context_with_sources(
     dense_fallback = False
     reranker_fallback_reason: RerankerFallbackReason = "none"
     invalid_result_count = 0
+    top_score: float | None = None
     final: list[_Candidate] = []
     sources: tuple[RetrievalSource, ...] = ()
 
@@ -745,6 +746,7 @@ async def get_retrieved_context_with_sources(
             [score for _, score in ranked],
             above_threshold=len(ranked_candidates),
         )
+        top_score = max((score for _, score in ranked), default=None)
 
         if dropped:
             logger.info(
@@ -860,9 +862,15 @@ async def get_retrieved_context_with_sources(
         )
     with timed("retrieval.expand"):
         text = await _expand_and_render(db, final, embedding_model, cite)
-    if text and reranker_fallback_reason == "score_floor":
+    weak = bool(text) and reranker_fallback_reason == "score_floor"
+    if weak:
         text = f"{_WEAK_MATCH_NOTICE}\n\n{text}"
-    return RetrievedContext(text=text, sources=sources)
+    return RetrievedContext(
+        text=text,
+        sources=sources,
+        weak=weak,
+        top_score=top_score,
+    )
 
 
 _CITATION_LABEL = "Ознака за цитат"
